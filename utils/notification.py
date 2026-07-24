@@ -1,52 +1,52 @@
 # ==========================================================
 # utils/notification.py
-# ERP ENTERPRISE NOTIFICATION ENGINE
+# ERP ENTERPRISE NOTIFICATION ENGINE v2
 # ==========================================================
 
 import streamlit as st
 
 
-def notify_success(message):
+def _notify(msg_type, message):
     st.session_state["notification"] = {
-        "type": "success",
+        "type": msg_type,
         "message": message
     }
+
+
+def notify_success(message):
+    _notify("success", message)
 
 
 def notify_error(message):
-    st.session_state["notification"] = {
-        "type": "error",
-        "message": message
-    }
+    _notify("error", message)
 
 
 def notify_warning(message):
-    st.session_state["notification"] = {
-        "type": "warning",
-        "message": message
-    }
+    _notify("warning", message)
+
+
+def notify_info(message):
+    _notify("info", message)
 
 
 def show_notification():
 
-    if "notification" not in st.session_state:
+    data = st.session_state.pop("notification", None)
+
+    if not data:
         return
-
-
-    data = st.session_state["notification"]
 
     msg_type = data.get("type")
     message = data.get("message")
 
-
     if msg_type == "success":
-        st.success(message)
+        st.success(message, icon="✅")
 
     elif msg_type == "error":
-        st.error(message)
+        st.error(message, icon="❌")
 
     elif msg_type == "warning":
-        st.warning(message)
+        st.warning(message, icon="⚠️")
 
-
-    del st.session_state["notification"]
+    elif msg_type == "info":
+        st.info(message, icon="ℹ️")
