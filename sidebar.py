@@ -1,6 +1,6 @@
 import streamlit as st
 from auth import is_authenticated, logout, ROLE_ADMIN, ROLE_MANAGER, ROLE_CASHIER
-
+from utils.notification import show_notification_history
 # ==========================================================
 # ERP MENU MASTER
 # ==========================================================
@@ -81,6 +81,12 @@ def show_sidebar():
         if st.button("👤 My Profile", use_container_width=True):
             st.session_state.active_page = "13_Profile"
             st.rerun()
+# ==========================================================
+# NOTIFICATIONS
+# ==========================================================
+
+   with st.expander("🔔 Notifications", expanded=False):
+    show_notification_history()            
             
         st.divider()
 
