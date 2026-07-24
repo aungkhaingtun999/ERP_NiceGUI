@@ -1,6 +1,12 @@
 import streamlit as st
 from supabase_client import supabase
 from utils.ui import show_table
+from utils.notification import (
+    notify_success,
+    notify_error,
+    notify_warning
+)
+
 def run():
     # =========================
     # 🔐 SECURITY GUARD
@@ -40,7 +46,7 @@ def run():
                 on_conflict="key"
             ).execute()
         except Exception as e:
-            st.error(f"Failed to save {key}: {e}")
+            notify_error(f"Failed to save {key}: {e}")
             st.stop()
 
     def get_bool(key, default=False):
@@ -69,21 +75,16 @@ def run():
     )
 
     if st.button("💾 Save Accounting Settings", use_container_width=True):
-        save_setting("default_tax_rate", tax_rate)
-        save_setting("discount_policy", discount_policy)
-        
-        st.cache_data.clear()
-        
-        st.success(
-            f"""
-✅ Accounting Settings Updated
-
-• Tax Rate: {tax_rate}%
-• Discount Policy: {discount_policy}
-
-These settings are now active and will be applied to new POS transactions.
-"""
-        )
+        try:
+            save_setting("default_tax_rate", tax_rate)
+            save_setting("discount_policy", discount_policy)
+            
+            st.cache_data.clear()
+            
+            notify_success("🧾 Accounting settings updated successfully.")
+            st.rerun()
+        except Exception as e:
+            notify_error(f"Accounting settings save failed: {e}")
 
     st.divider()
 
@@ -94,11 +95,15 @@ These settings are now active and will be applied to new POS transactions.
     branch_mode = st.toggle("Enable Multi-Branch", value=get_bool("multi_branch", False))
     warehouse_mode = st.toggle("Enable Multi-Warehouse", value=get_bool("multi_warehouse", True))
 
-    if st.button("Save Organization Settings"):
-        save_setting("multi_branch", branch_mode)
-        save_setting("multi_warehouse", warehouse_mode)
-        st.success("Organization settings updated")
-        st.rerun()
+    if st.button("💾 Save Organization Settings", use_container_width=True):
+        try:
+            save_setting("multi_branch", branch_mode)
+            save_setting("multi_warehouse", warehouse_mode)
+            
+            notify_success("🏢 Organization settings updated successfully.")
+            st.rerun()
+        except Exception as e:
+            notify_error(f"Organization settings save failed: {e}")
 
     st.divider()
 
@@ -108,10 +113,14 @@ These settings are now active and will be applied to new POS transactions.
     st.subheader("👤 Security & Permissions")
     rls_enabled = st.toggle("Enable Row Level Security (RLS)", value=get_bool("rls", False))
 
-    if st.button("Save Security Settings"):
-        save_setting("rls", rls_enabled)
-        st.success("Security settings updated")
-        st.rerun()
+    if st.button("💾 Save Security Settings", use_container_width=True):
+        try:
+            save_setting("rls", rls_enabled)
+            
+            notify_success("👤 Security settings updated successfully.")
+            st.rerun()
+        except Exception as e:
+            notify_error(f"Security settings save failed: {e}")
 
     st.info("⚠️ RLS changes require Supabase policy update")
     st.divider()
@@ -123,11 +132,15 @@ These settings are now active and will be applied to new POS transactions.
     min_stock_alert = st.number_input("Default Minimum Stock Alert", value=get_float("min_stock", 10))
     reorder_auto = st.toggle("Enable Auto Reorder", value=get_bool("auto_reorder", False))
 
-    if st.button("Save Inventory Rules"):
-        save_setting("min_stock", min_stock_alert)
-        save_setting("auto_reorder", reorder_auto)
-        st.success("Inventory rules updated")
-        st.rerun()
+    if st.button("💾 Save Inventory Rules", use_container_width=True):
+        try:
+            save_setting("min_stock", min_stock_alert)
+            save_setting("auto_reorder", reorder_auto)
+            
+            notify_success("📦 Inventory rules saved successfully.")
+            st.rerun()
+        except Exception as e:
+            notify_error(f"Inventory rules save failed: {e}")
 
     st.divider()
 
@@ -148,11 +161,15 @@ These settings are now active and will be applied to new POS transactions.
         default=settings_map.get("payment_methods", "Cash,Bank Transfer").split(",")
     )
 
-    if st.button("Save Finance Settings"):
-        save_setting("currency", currency)
-        save_setting("payment_methods", ",".join(payment_methods))
-        st.success("Finance settings updated")
-        st.rerun()
+    if st.button("💾 Save Finance Settings", use_container_width=True):
+        try:
+            save_setting("currency", currency)
+            save_setting("payment_methods", ",".join(payment_methods))
+            
+            notify_success("💰 Finance settings saved successfully.")
+            st.rerun()
+        except Exception as e:
+            notify_error(f"Finance settings save failed: {e}")
 
     st.divider()
 
@@ -163,4 +180,3 @@ These settings are now active and will be applied to new POS transactions.
 if __name__ == "__main__":
     st.set_page_config(page_title="ERP Control Center", layout="wide")
     run()
-
