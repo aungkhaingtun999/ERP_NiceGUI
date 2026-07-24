@@ -88,7 +88,20 @@ def run():
     else:
       df[col] = 0
 
-  df["created_at"] = pd.to_datetime(df["created_at"])
+  # =====================================================
+# MYANMAR TIMEZONE CONVERSION
+# =====================================================
+
+df["created_at"] = pd.to_datetime(
+    df["created_at"],
+    utc=True
+)
+
+df["created_at"] = (
+    df["created_at"]
+    .dt.tz_convert("Asia/Yangon")
+    .dt.tz_localize(None)
+)
 
   # =====================================================
   # CASHIER DISPLAY NAME (Safe check & Professional naming)
