@@ -129,11 +129,8 @@ def show_notification_history():
     )
 
     if not history:
-
         st.info("No notifications.")
-
         return
-
 
     for item in history:
 
@@ -148,5 +145,5 @@ def show_notification_history():
         )
 
         st.write(
-            f"{icon} {item.get('message')}"
-        )
+            f"{icon} {item.get('message','')}"
+    )
