@@ -22,6 +22,9 @@ from sidebar import (
     show_sidebar
 )
 
+from utils.notification import (
+    show_notification
+)
 
 
 # ==============================================================================
@@ -326,31 +329,25 @@ def page_router():
 # MAIN APPLICATION
 # ==============================================================================
 
-
 def main():
-
 
     init_state()
 
-
-
     if not is_authenticated():
-
 
         login_page()
 
         st.stop()
 
+    # ==========================================
+    # GLOBAL NOTIFICATION
+    # ==========================================
 
-
-
+    show_notification()
 
     try:
 
-
         show_sidebar()
-
-
 
     except Exception as e:
 
