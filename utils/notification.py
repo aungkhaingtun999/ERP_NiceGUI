@@ -119,7 +119,9 @@ def _add_history(msg_type, message):
     st.session_state.notification_history = (
         st.session_state.notification_history[:MAX_HISTORY]
     )
-    def show_notification_history():
+
+
+def show_notification_history():
 
     history = st.session_state.get(
         "notification_history",
@@ -132,6 +134,7 @@ def _add_history(msg_type, message):
 
         return
 
+
     for item in history:
 
         icon = {
@@ -139,8 +142,11 @@ def _add_history(msg_type, message):
             "error": "❌",
             "warning": "⚠️",
             "info": "ℹ️"
-        }.get(item["type"], "•")
+        }.get(
+            item.get("type"),
+            "•"
+        )
 
         st.write(
-            f"{icon} {item['message']}"
+            f"{icon} {item.get('message')}"
         )
