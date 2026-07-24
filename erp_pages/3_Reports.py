@@ -89,19 +89,14 @@ def run():
       df[col] = 0
 
   # =====================================================
-# MYANMAR TIMEZONE CONVERSION
-# =====================================================
+  # MYANMAR TIMEZONE CONVERSION
+  # =====================================================
 
-df["created_at"] = pd.to_datetime(
-    df["created_at"],
-    utc=True
-)
+  df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
 
-df["created_at"] = (
-    df["created_at"]
-    .dt.tz_convert("Asia/Yangon")
-    .dt.tz_localize(None)
-)
+  df["created_at"] = (
+      df["created_at"].dt.tz_convert("Asia/Yangon").dt.tz_localize(None)
+  )
 
   # =====================================================
   # CASHIER DISPLAY NAME (Safe check & Professional naming)
@@ -109,31 +104,28 @@ df["created_at"] = (
 
   def format_cashier(user):
     if isinstance(user, dict):
-        code = user.get("employee_code", "UNKNOWN")
-        name = user.get("username", "")
-        return f"{code} ({name})"
+      code = user.get("employee_code", "UNKNOWN")
+      name = user.get("username", "")
+      return f"{code} ({name})"
     return "SYSTEM"
 
-# function ပြီးသွားပြီဖြစ်လို့ အရှေ့မှာ spaces လုံးဝမပါဘဲ (Edge မှာ) ပြန်စရပါမယ်
-if "users" in df.columns:
+  if "users" in df.columns:
     df["Cashier"] = df["users"].apply(format_cashier)
-else:
+  else:
     df["Cashier"] = "SYSTEM"
 
-df["Cashier Name"] = df["Cashier"]  # For professional Excel export
+  df["Cashier Name"] = df["Cashier"]  # For professional Excel export
 
-# =====================================================
-# FILTER PANEL (Odoo Style Flow)
-# =====================================================
+  # =====================================================
+  # FILTER PANEL (Odoo Style Flow)
+  # =====================================================
 
-st.sidebar.markdown("### 🔎 Report Filters")
-cashier_list = ["All"] + sorted(df["Cashier"].unique().tolist())
-selected_cashier = st.sidebar.selectbox("👨‍💼 Cashier Filter", cashier_list)
+  st.sidebar.markdown("### 🔎 Report Filters")
+  cashier_list = ["All"] + sorted(df["Cashier"].unique().tolist())
+  selected_cashier = st.sidebar.selectbox("👨‍💼 Cashier Filter", cashier_list)
 
-# ပြတ်နေတဲ့ if ကိုလည်း အပြည့်အစုံ ဆက်ပေးထားပါတယ်
-if selected_cashier != "All":
+  if selected_cashier != "All":
     df = df[df["Cashier"] == selected_cashier]
-
 
   if df.empty:
     st.warning("No sales data found for the selected filter.")
