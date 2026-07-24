@@ -39,7 +39,7 @@ def run():
           .select(
               """
                 id,
-                total_amount,
+                total,
                 discount,
                 tax,
                 subtotal,
@@ -76,7 +76,7 @@ def run():
   # =====================================================
 
   numeric_cols = [
-      "total_amount",
+      "total",
       "discount",
       "tax",
       "subtotal",
@@ -124,10 +124,10 @@ def run():
     return
 
   # =====================================================
-  # KPI (Safe Calculation)
+  # KPI (Standard Total Calculation)
   # =====================================================
 
-  revenue = df["total_amount"].sum()
+  revenue = df["total"].sum()
   discount = df["discount"].sum()
   tax = df["tax"].sum()
   bills = len(df)
@@ -153,18 +153,12 @@ def run():
 
   with tab1:
     st.subheader("Daily Sales")
-    daily = (
-        df.groupby(df["created_at"].dt.date)["total_amount"]
-        .sum()
-        .reset_index()
-    )
+    daily = df.groupby(df["created_at"].dt.date)["total"].sum().reset_index()
     show_table(daily)
 
     st.subheader("Monthly Sales")
     monthly = (
-        df.groupby(df["created_at"].dt.to_period("M").astype(str))[
-            "total_amount"
-        ]
+        df.groupby(df["created_at"].dt.to_period("M").astype(str))["total"]
         .sum()
         .reset_index()
     )
@@ -174,7 +168,7 @@ def run():
     st.subheader("👨‍💼 Cashier Performance")
     cashier = (
         df.groupby("Cashier")
-        .agg(Bills=("id", "count"), Sales=("total_amount", "sum"))
+        .agg(Bills=("id", "count"), Sales=("total", "sum"))
         .reset_index()
     )
     show_table(cashier)
@@ -183,7 +177,7 @@ def run():
     st.subheader("💳 Payment Methods")
     payment = (
         df.groupby("payment_method")
-        .agg(Bills=("id", "count"), Amount=("total_amount", "sum"))
+        .agg(Bills=("id", "count"), Amount=("total", "sum"))
         .reset_index()
     )
     show_table(payment)
