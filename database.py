@@ -139,4 +139,12 @@ __all__ = [  # Fixed from 'all =' to '__all__ ='
     "safe_execute",
 ]
 
-print("DATABASE GATEWAY v32 READY")
+print(
+    "stock_adjustment_rpc loaded from:",
+    stock_adjustment_rpc.__module__
+)
+
+print(
+    "signature:",
+    stock_adjustment_rpc.__code__.co_varnames
+)
