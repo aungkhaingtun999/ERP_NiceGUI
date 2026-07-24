@@ -30,9 +30,15 @@ def stock_adjustment_rpc(
     warehouse_id: int,
     quantity: int,
     reason: str,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
+    created_by: Optional[str] = None
 
 ) -> Dict[str, Any]:
+
+
+    # Compatibility
+    if created_by and not user_id:
+        user_id = created_by
 
 
     try:
@@ -73,6 +79,8 @@ def stock_adjustment_rpc(
             "data": None
 
         }
+
+
 # ==============================================================================
 # PRODUCT UPDATE RPC
 # ==============================================================================
