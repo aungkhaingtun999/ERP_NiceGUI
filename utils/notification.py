@@ -1,10 +1,34 @@
 # ==========================================================
 # utils/notification.py
-# ERP ENTERPRISE NOTIFICATION ENGINE v2
+# ERP ENTERPRISE NOTIFICATION ENGINE v3
 # ==========================================================
 
 import streamlit as st
 
+
+# ----------------------------------------------------------
+# TOAST (Auto Hide)
+# ----------------------------------------------------------
+
+def toast_success(message):
+    st.toast(message, icon="✅")
+
+
+def toast_error(message):
+    st.toast(message, icon="❌")
+
+
+def toast_warning(message):
+    st.toast(message, icon="⚠️")
+
+
+def toast_info(message):
+    st.toast(message, icon="ℹ️")
+
+
+# ----------------------------------------------------------
+# STICKY NOTIFICATION
+# ----------------------------------------------------------
 
 def _notify(msg_type, message):
     st.session_state["notification"] = {
@@ -29,24 +53,37 @@ def notify_info(message):
     _notify("info", message)
 
 
+# ----------------------------------------------------------
+# SHOW STICKY MESSAGE
+# ----------------------------------------------------------
+
 def show_notification():
 
-    data = st.session_state.pop("notification", None)
+    data = st.session_state.get("notification")
 
     if not data:
         return
 
-    msg_type = data.get("type")
-    message = data.get("message")
+    t = data["type"]
+    m = data["message"]
 
-    if msg_type == "success":
-        st.success(message, icon="✅")
+    if t == "success":
+        st.success(m)
 
-    elif msg_type == "error":
-        st.error(message, icon="❌")
+    elif t == "error":
+        st.error(m)
 
-    elif msg_type == "warning":
-        st.warning(message, icon="⚠️")
+    elif t == "warning":
+        st.warning(m)
 
-    elif msg_type == "info":
-        st.info(message, icon="ℹ️")
+    else:
+        st.info(m)
+
+
+# ----------------------------------------------------------
+# CLEAR
+# ----------------------------------------------------------
+
+def clear_notification():
+
+    st.session_state.pop("notification", None)
