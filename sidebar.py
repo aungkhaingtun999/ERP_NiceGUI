@@ -31,6 +31,7 @@ MENU = {
         ("✅", "Refund Approval", "6_Refund_Approval"),
         ("📊", "Refund Report", "6_Refund_Report"),
         ("📈", "Reports", "3_Reports"),
+        ("💰", "Pricing Report", "11_Pricing_Report"),
         ("👤", "Users", "4_Users"),
         ("⚙️", "Settings", "12_Settings"),
         ("👤", "My Profile", "13_Profile"),
@@ -49,6 +50,8 @@ MENU = {
         ("✅", "Refund Approval", "6_Refund_Approval"),
         ("📊", "Refund Report", "6_Refund_Report"),
         ("📈", "Reports", "3_Reports"),
+        ("💰", "Pricing Report", "11_Pricing_Report"),
+
         ("👤", "My Profile", "13_Profile"),
     ],
     ROLE_CASHIER: [
@@ -56,6 +59,8 @@ MENU = {
         ("🧾", "Receipt Viewer", "6_Receipt_Viewer"),
         ("↩️", "Refund", "5_Refund"),
         ("👤", "My Profile", "13_Profile"),
+        ("💰", "Pricing Report", "11_Pricing_Report"),
+
     ]
 }
 
