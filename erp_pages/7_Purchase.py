@@ -176,11 +176,14 @@ def run():
         
         col1, col2 = st.columns(2)
         with col1:
-            quantity = st.number_input("Quantity", min_value=Decimal("0.01"), value=Decimal("1.00"), step=Decimal("1.00"))
+            quantity_float = st.number_input("Quantity", min_value=0.01, value=1.00, step=1.00)
         with col2:
-            cost_price = st.number_input("Unit Cost", min_value=Decimal("0.00"), value=Decimal("0.00"), step=Decimal("1.00"))
+            cost_float = st.number_input("Unit Cost", min_value=0.0, value=0.0, step=1.0)
 
         if st.button("Add to Cart", use_container_width=True):
+            quantity = Decimal(str(quantity_float))
+            cost_price = Decimal(str(cost_float))
+            
             cart_item = {
                 "product_id": product["id"],
                 "product_name": product_name(product),
