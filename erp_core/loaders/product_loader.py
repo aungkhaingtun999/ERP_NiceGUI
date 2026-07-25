@@ -1,34 +1,25 @@
-# ==============================================================================
+# =====================================================================
 # erp_core/loaders/product_loader.py
-# ERP ENTERPRISE PRODUCT LOADER v30
-# ==============================================================================
-
+# =====================================================================
 
 import streamlit as st
 
-
-from ..base_repo import (
+from erp_core.base_repo import (
     db,
     log_error
 )
 
-
-from ..context import (
+from erp_core.context import (
     CacheManager
 )
 
-
-from ..config import (
+from erp_core.config import (
     DEFAULT_PAGE_SIZE
 )
 
-
-from ..repositories import (
+from erp_core.repositories import (
     RepositoryCoordinator
 )
-
-
-
 
 
 @st.cache_data(ttl=300)
@@ -51,7 +42,6 @@ def _get_products_cached(
                 limit
             )
 
-
     except Exception as e:
 
         log_error(
@@ -62,13 +52,28 @@ def _get_products_cached(
 
 
 
+def get_products(
+    warehouse_id=None,
+    offset=0,
+    limit=DEFAULT_PAGE_SIZE
+):
+
+    return _get_products_cached(
+
+        warehouse_id,
+
+        offset,
+
+        limit,
+
+        CacheManager.get_version(
+            "inventory_version"
+        )
+    )
+
 
 
 def get_active_products():
-    """
-    Get active products for general selection.
-    Backward compatible wrapper.
-    """
 
     return get_products(
         warehouse_id=None,
