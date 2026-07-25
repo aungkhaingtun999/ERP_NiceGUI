@@ -1,6 +1,7 @@
 # ==============================================================================
 # reports/pricing_report_excel.py
-# ERP ENTERPRISE PRICING EXCEL REPORT ENGINE v1.0
+# ERP ENTERPRISE PRICING EXCEL REPORT ENGINE v2.0
+# Product / Category / Global Markup Analysis
 # ==============================================================================
 
 
@@ -16,7 +17,8 @@ from openpyxl.styles import (
     Font,
     Alignment,
     Border,
-    Side
+    Side,
+    PatternFill
 )
 
 
@@ -45,6 +47,26 @@ thin_border = Border(
 
 
 
+header_font = Font(
+    bold=True
+)
+
+
+
+title_font = Font(
+    bold=True,
+    size=16
+)
+
+
+
+center = Alignment(
+    horizontal="center",
+    vertical="center"
+)
+
+
+
 # ==============================================================================
 # CREATE EXCEL REPORT
 # ==============================================================================
@@ -55,23 +77,37 @@ def create_pricing_excel_report(
     company_name="MYANMAR ERP"
 ):
 
-    """
-    Generate Product Pricing Report Excel
-
-    products:
-
-    [
-        {
-            "name":"Earphones",
-            "sku":"EP001",
-            "category":"Personal Care",
-            "purchase_price":7000,
-            "markup_percent":15,
-            "selling_price":8050
-        }
-    ]
 
     """
+    ERP Enterprise Product Pricing Report
+
+
+    Expected product format:
+
+    {
+        name,
+        sku,
+        category,
+
+        purchase_price,
+
+        product_markup,
+
+        category_markup,
+
+        default_markup,
+
+        final_markup,
+
+        markup_source,
+
+        selling_price,
+
+        profit
+    }
+
+    """
+
 
 
     wb = Workbook()
@@ -88,41 +124,45 @@ def create_pricing_excel_report(
     # TITLE
     # ==========================================================================
 
-    ws.merge_cells("A1:H1")
+
+    ws.merge_cells(
+        "A1:L1"
+    )
 
 
-    title = ws["A1"]
+    ws["A1"] = (
 
-    title.value = (
         company_name
+
         +
+
         " - PRODUCT PRICING REPORT"
+
     )
 
 
-    title.font = Font(
-        bold=True,
-        size=16
+    ws["A1"].font = title_font
+
+
+    ws["A1"].alignment = center
+
+
+
+
+    ws.merge_cells(
+        "A2:L2"
     )
-
-
-    title.alignment = Alignment(
-        horizontal="center"
-    )
-
-
-
-    ws.merge_cells("A2:H2")
 
 
     ws["A2"] = (
 
-        "Generated Date : "
+        "Generated : "
 
         +
 
-        datetime.now().strftime(
-            "%Y-%m-%d %H:%M"
+        datetime.now()
+        .strftime(
+            "%Y-%m-%d %H:%M:%S"
         )
 
     )
@@ -138,15 +178,23 @@ def create_pricing_excel_report(
 
         "No",
 
-        "Product Name",
+        "Product",
 
         "SKU",
 
         "Category",
 
-        "Purchase Cost",
+        "Cost",
 
-        "Markup %",
+        "Product Markup %",
+
+        "Category Markup %",
+
+        "Default Markup %",
+
+        "Applied Source",
+
+        "Final Markup %",
 
         "Selling Price",
 
@@ -167,25 +215,25 @@ def create_pricing_excel_report(
 
 
         cell = ws.cell(
+
             row=row,
+
             column=col
+
         )
 
 
         cell.value = header
 
 
-        cell.font = Font(
-            bold=True
-        )
+        cell.font = header_font
 
 
-        cell.alignment = Alignment(
-            horizontal="center"
-        )
+        cell.alignment = center
 
 
         cell.border = thin_border
+
 
 
 
@@ -197,10 +245,19 @@ def create_pricing_excel_report(
     total_profit = 0
 
 
+    total_sales_value = 0
+
+
+
+    row += 1
+
+
+
     for index, product in enumerate(
         products,
         start=1
     ):
+
 
 
         cost = float(
@@ -214,6 +271,7 @@ def create_pricing_excel_report(
         )
 
 
+
         selling = float(
 
             product.get(
@@ -225,10 +283,24 @@ def create_pricing_excel_report(
         )
 
 
-        profit = selling - cost
+
+        profit = (
+
+            selling
+
+            -
+
+            cost
+
+        )
+
 
 
         total_profit += profit
+
+
+        total_sales_value += selling
+
 
 
 
@@ -248,25 +320,49 @@ def create_pricing_excel_report(
 
             product.get(
                 "category",
-                ""
+                "-"
             ),
+
 
             cost,
 
+
             product.get(
-                "markup_percent",
+                "product_markup",
                 0
             ),
 
+
+            product.get(
+                "category_markup",
+                0
+            ),
+
+
+            product.get(
+                "default_markup",
+                0
+            ),
+
+
+            product.get(
+                "markup_source",
+                "GLOBAL"
+            ),
+
+
+            product.get(
+                "final_markup",
+                0
+            ),
+
+
             selling,
+
 
             profit
 
         ]
-
-
-
-        row += 1
 
 
 
@@ -292,11 +388,37 @@ def create_pricing_excel_report(
 
 
 
-            if col in [5,7,8]:
+
+            if col in [
+
+                5,
+                11,
+                12
+
+            ]:
 
                 cell.number_format = (
                     '#,##0.00'
                 )
+
+
+
+            if col in [
+
+                6,
+                7,
+                8,
+                10
+
+            ]:
+
+                cell.number_format = (
+                    '0.00"%"'
+                )
+
+
+
+        row += 1
 
 
 
@@ -309,40 +431,60 @@ def create_pricing_excel_report(
 
 
 
-    ws.cell(
-        row=row,
-        column=1
-    ).value = "Total Products"
+    summary = [
+
+        (
+            "Total Products",
+            len(products)
+        ),
+
+        (
+            "Total Selling Value",
+            total_sales_value
+        ),
+
+        (
+            "Total Profit",
+            total_profit
+        )
+
+    ]
 
 
 
-    ws.cell(
-        row=row,
-        column=2
-    ).value = len(products)
+    for label, value in summary:
+
+
+        ws.cell(
+            row=row,
+            column=1
+        ).value = label
 
 
 
-    ws.cell(
-        row=row + 1,
-        column=1
-    ).value = "Total Profit"
+        ws.cell(
+            row=row,
+            column=2
+        ).value = value
 
 
 
-    ws.cell(
-        row=row + 1,
-        column=2
-    ).value = total_profit
+        if isinstance(
+            value,
+            float
+        ):
+
+            ws.cell(
+                row=row,
+                column=2
+            ).number_format = (
+                '#,##0.00'
+            )
 
 
 
-    ws.cell(
-        row=row + 1,
-        column=2
-    ).number_format = (
-        '#,##0.00'
-    )
+        row += 1
+
 
 
 
@@ -357,9 +499,13 @@ def create_pricing_excel_report(
         max_length = 0
 
 
+
         column_letter = get_column_letter(
+
             column[0].column
+
         )
+
 
 
         for cell in column:
@@ -367,13 +513,18 @@ def create_pricing_excel_report(
 
             try:
 
-                if len(
-                    str(cell.value)
-                ) > max_length:
-
-                    max_length = len(
-                        str(cell.value)
+                length = len(
+                    str(
+                        cell.value
                     )
+                )
+
+
+                if length > max_length:
+
+                    max_length = length
+
+
 
             except:
 
@@ -381,18 +532,22 @@ def create_pricing_excel_report(
 
 
 
+
         ws.column_dimensions[
             column_letter
-        ].width = max_length + 3
+        ].width = max_length + 4
+
+
 
 
 
     # ==========================================================================
-    # RETURN EXCEL FILE
+    # RETURN FILE
     # ==========================================================================
 
 
     output = BytesIO()
+
 
 
     wb.save(
@@ -400,9 +555,11 @@ def create_pricing_excel_report(
     )
 
 
+
     output.seek(
         0
     )
+
 
 
     return output
