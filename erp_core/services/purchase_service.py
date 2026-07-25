@@ -105,17 +105,12 @@ class PurchaseService:
             # ------------------------------------------------------
 
             selling_price = (
-
-                self.pricing
-
-                .calculate_selling_price(
-
-                    cost
-
-                )
-
+    self.pricing
+    .calculate_selling_price(
+        cost,
+        product_id
+    )
             )
-
 
 
             # ------------------------------------------------------
@@ -199,6 +194,12 @@ class PurchaseService:
                 }
 
             )
+            if result.get("success"):
+
+    self.pricing.update_product_price(
+        product_id,
+        selling_price
+    )
 
 
 
