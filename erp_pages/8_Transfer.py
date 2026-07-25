@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v32 PRODUCT ACCESS DEBUG
+# ERP ENTERPRISE WAREHOUSE TRANSFER v31 STABLE
 # ==============================================================================
 
 import streamlit as st
@@ -9,46 +9,13 @@ from erp_core.base_repo import db, log_error
 from erp_core.loaders.warehouse_loader import get_warehouses
 
 
+
 def run():
 
     st.title("🔁 Enterprise Warehouse Transfer")
 
-    # ==================================================
-    # RESET OLD SELECTBOX STATE
-    # ==================================================
-    if "source_wh" in st.session_state:
-        del st.session_state["source_wh"]
-
-    if "dest_wh" in st.session_state:
-        del st.session_state["dest_wh"]
-
     supabase = db()
 
-    # ==================================================
-    # DEBUG PRODUCT ACCESS
-    # ==================================================
-    try:
-        test_products = (
-            supabase
-            .table("products")
-            .select(
-                "id, name"
-            )
-            .limit(10)
-            .execute()
-        )
-
-        st.write(
-            "DEBUG TEST PRODUCTS:",
-            test_products.data
-        )
-
-    except Exception as e:
-        st.error(
-            f"PRODUCT QUERY ERROR: {e}"
-        )
-
-    st.markdown("---")
 
     # ==================================================
     # LOAD WAREHOUSES
@@ -56,55 +23,72 @@ def run():
 
     warehouses = get_warehouses()
 
+
     if not warehouses:
+
         st.error("No warehouses found.")
         return
 
+
+
     warehouse_options = {
-        w["id"]: w["name"]
+        int(w["id"]): w["name"]
         for w in warehouses
     }
 
+
+
     st.subheader("Transfer Details")
+
 
     col1, col2 = st.columns(2)
 
-    warehouse_ids = list(warehouse_options.keys())
-    source_default = 0
 
-    for i, wid in enumerate(warehouse_ids):
-        if warehouse_options[wid] == "Main Warehouse":
-            source_default = i
 
     with col1:
+
         source_warehouse_id = st.selectbox(
             "Source Warehouse",
-            options=warehouse_ids,
-            index=source_default,
-            format_func=lambda x: warehouse_options[x]
-        )
-        source_warehouse_id = int(source_warehouse_id)
-
-    with col2:
-        dest_list = [
-            x for x in warehouse_options.keys()
-            if x != source_warehouse_id
-        ]
-
-        dest_warehouse_id = st.selectbox(
-            "Destination Warehouse",
-            options=dest_list,
+            options=list(warehouse_options.keys()),
             index=0,
             format_func=lambda x: warehouse_options[x]
         )
-        dest_warehouse_id = int(dest_warehouse_id)
+
+
+
+    with col2:
+
+        destination_list = [
+            x
+            for x in warehouse_options.keys()
+            if x != source_warehouse_id
+        ]
+
+
+        if not destination_list:
+
+            st.warning(
+                "Need at least two warehouses."
+            )
+            return
+
+
+        dest_warehouse_id = st.selectbox(
+            "Destination Warehouse",
+            options=destination_list,
+            format_func=lambda x: warehouse_options[x]
+        )
+
+
 
     # ==================================================
-    # LOAD PRODUCTS WITH STOCK
+    # LOAD SOURCE STOCK
     # ==================================================
 
     try:
+
         stock_rows = (
+
             supabase
             .table("warehouse_stock")
             .select(
@@ -116,123 +100,217 @@ def run():
             )
             .eq(
                 "warehouse_id",
-                int(source_warehouse_id)
+                source_warehouse_id
+            )
+            .gt(
+                "available_qty",
+                0
             )
             .execute()
             .data
             or []
+
         )
 
+
     except Exception as e:
-        st.error(f"Stock loading error: {e}")
+
+        st.error(
+            f"Stock loading error: {e}"
+        )
         return
+
+
 
     if not stock_rows:
-        st.warning("Source warehouse has no stock records.")
+
+        st.warning(
+            "Source warehouse has no available stock."
+        )
         return
 
+
+
     # ==================================================
-    # LOAD PRODUCT NAMES
+    # LOAD PRODUCTS
     # ==================================================
+
+    product_ids = [
+        int(x["product_id"])
+        for x in stock_rows
+    ]
+
 
     product_options = {}
 
-    for row in stock_rows:
-        try:
-            product_id = int(row["product_id"])
 
-            product = (
-                supabase
-                .table("products")
-                .select(
-                    "id, name"
-                )
-                .eq(
-                    "id",
-                    product_id
-                )
-                .execute()
-                .data
-                or []
-            )
 
-            if product:
-                product_options[product_id] = product[0]["name"]
-            else:
-                st.warning(
-                    f"Product ID {product_id} not found in products table"
-                )
-
-        except Exception as e:
-            st.warning(
-                f"Product loading error: {e}"
-            )
-
-    if not product_options:
-        st.warning("No products with stock found.")
-        return
-
-    selected_product_id = st.selectbox(
-        "Select Product",
-        options=list(product_options.keys()),
-        format_func=lambda x: product_options[x]
-    )
-
-    # ==================================================
-    # STOCK DETAIL
-    # ==================================================
-
-    source_stock = next(
-        (
-            x for x in stock_rows
-            if x["product_id"] == selected_product_id
-        ),
-        None
-    )
-
-    source_qty = source_stock.get("qty", 0) if source_stock else 0
-    source_available = source_stock.get("available_qty", source_qty) if source_stock else 0
-
-    # Destination stock
     try:
-        dest_stock = (
+
+        products = (
+
             supabase
-            .table("warehouse_stock")
-            .select("qty, available_qty")
-            .eq("warehouse_id", dest_warehouse_id)
-            .eq("product_id", selected_product_id)
+            .table("products")
+            .select(
+                "id,name"
+            )
+            .in_(
+                "id",
+                product_ids
+            )
             .execute()
             .data
             or []
+
         )
 
-        if dest_stock:
-            dest_qty = dest_stock[0].get("qty", 0)
-            dest_available = dest_stock[0].get("available_qty", dest_qty)
-        else:
-            dest_qty = 0
-            dest_available = 0
 
-    except Exception:
+        for p in products:
+
+            product_options[
+                int(p["id"])
+            ] = p["name"]
+
+
+
+    except Exception as e:
+
+        st.error(
+            f"Product loading error: {e}"
+        )
+        return
+
+
+
+    if not product_options:
+
+        st.warning(
+            "No products found."
+        )
+        return
+
+
+
+    # ==================================================
+    # PRODUCT SELECT
+    # ==================================================
+
+    selected_product_id = st.selectbox(
+
+        "Select Product",
+
+        options=list(product_options.keys()),
+
+        format_func=lambda x:
+            product_options[x]
+
+    )
+
+
+
+    # ==================================================
+    # GET SOURCE STOCK
+    # ==================================================
+
+    source_stock = next(
+
+        (
+            x for x in stock_rows
+            if int(x["product_id"]) == selected_product_id
+        ),
+
+        None
+
+    )
+
+
+    source_qty = (
+        source_stock.get("qty",0)
+        if source_stock
+        else 0
+    )
+
+
+    source_available = (
+
+        source_stock.get(
+            "available_qty",
+            source_qty
+        )
+
+        if source_stock
+
+        else 0
+
+    )
+
+
+
+    # ==================================================
+    # GET DESTINATION STOCK
+    # ==================================================
+
+    dest_stock = (
+
+        supabase
+        .table("warehouse_stock")
+        .select(
+            "qty,available_qty"
+        )
+        .eq(
+            "warehouse_id",
+            dest_warehouse_id
+        )
+        .eq(
+            "product_id",
+            selected_product_id
+        )
+        .execute()
+        .data
+        or []
+
+    )
+
+
+    if dest_stock:
+
+        dest_qty = dest_stock[0].get(
+            "qty",
+            0
+        )
+
+        dest_available = dest_stock[0].get(
+            "available_qty",
+            0
+        )
+
+
+    else:
+
         dest_qty = 0
         dest_available = 0
 
+
+
     # ==================================================
-    # DISPLAY STOCK
+    # STOCK DISPLAY
     # ==================================================
 
-    c1, c2 = st.columns(2)
+    c1,c2 = st.columns(2)
+
+
 
     with c1:
+
         st.info(
-            f"""
+f"""
 📤 SOURCE STOCK
 
 Warehouse:
-{warehouse_options.get(source_warehouse_id, '')}
+{warehouse_options[source_warehouse_id]}
 
 Product:
-{product_options.get(selected_product_id, '')}
+{product_options[selected_product_id]}
 
 Current Qty:
 {source_qty}
@@ -242,16 +320,19 @@ Available Qty:
 """
         )
 
+
+
     with c2:
+
         st.success(
-            f"""
+f"""
 📥 DESTINATION STOCK
 
 Warehouse:
-{warehouse_options.get(dest_warehouse_id, '')}
+{warehouse_options[dest_warehouse_id]}
 
 Product:
-{product_options.get(selected_product_id, '')}
+{product_options[selected_product_id]}
 
 Current Qty:
 {dest_qty}
@@ -261,57 +342,101 @@ Available Qty:
 """
         )
 
-    # ==================================================
-    # TRANSFER & PREVIEW
-    # ==================================================
+
 
     if source_available <= 0:
-        st.error("No available stock.")
+
+        st.error(
+            "No available stock."
+        )
         return
 
-    qty = st.number_input(
+
+
+    # ==================================================
+    # TRANSFER QTY
+    # ==================================================
+
+    transfer_qty = st.number_input(
+
         "Transfer Quantity",
+
         min_value=1,
+
         max_value=int(source_available),
+
         value=1
+
     )
 
-    # 📊 After Transfer Preview Section
-    st.subheader("📊 After Transfer Preview")
-    
-    col_p1, col_p2 = st.columns(2)
-    
-    with col_p1:
-        st.markdown(f"**{warehouse_options.get(source_warehouse_id, '')}**")
+
+
+    # ==================================================
+    # PREVIEW
+    # ==================================================
+
+    st.subheader(
+        "📊 Transfer Preview"
+    )
+
+
+    p1,p2 = st.columns(2)
+
+
+    with p1:
+
         st.metric(
-            label="Source Stock Change",
-            value=source_qty - qty,
-            delta=f"-{qty}"
+
+            "After Source Stock",
+
+            source_qty - transfer_qty,
+
+            delta=f"-{transfer_qty}"
+
         )
 
-    with col_p2:
-        st.markdown(f"**{warehouse_options.get(dest_warehouse_id, '')}**")
+
+    with p2:
+
         st.metric(
-            label="Destination Stock Change",
-            value=dest_qty + qty,
-            delta=f"+{qty}"
+
+            "After Destination Stock",
+
+            dest_qty + transfer_qty,
+
+            delta=f"+{transfer_qty}"
+
         )
 
-    st.markdown("---")
+
+
+    # ==================================================
+    # EXECUTE
+    # ==================================================
 
     if st.button(
         "🚚 Execute Transfer",
         type="primary"
     ):
+
+
         try:
-            # Reduce source stock
+
+
+            # Reduce Source
+
             supabase.table(
                 "warehouse_stock"
             ).update(
+
                 {
-                    "qty": source_qty - qty,
-                    "available_qty": source_available - qty
+                    "qty":
+                    source_qty-transfer_qty,
+
+                    "available_qty":
+                    source_available-transfer_qty
                 }
+
             ).eq(
                 "warehouse_id",
                 source_warehouse_id
@@ -320,15 +445,25 @@ Available Qty:
                 selected_product_id
             ).execute()
 
-            # Increase or Insert destination stock
+
+
+            # Add Destination
+
             if dest_stock:
+
+
                 supabase.table(
                     "warehouse_stock"
                 ).update(
+
                     {
-                        "qty": dest_qty + qty,
-                        "available_qty": dest_available + qty
+                        "qty":
+                        dest_qty+transfer_qty,
+
+                        "available_qty":
+                        dest_available+transfer_qty
                     }
+
                 ).eq(
                     "warehouse_id",
                     dest_warehouse_id
@@ -336,25 +471,57 @@ Available Qty:
                     "product_id",
                     selected_product_id
                 ).execute()
+
+
+
             else:
+
+
                 supabase.table(
                     "warehouse_stock"
                 ).insert(
+
                     {
-                        "warehouse_id": dest_warehouse_id,
-                        "product_id": selected_product_id,
-                        "qty": qty,
-                        "available_qty": qty
+                        "warehouse_id":
+                        dest_warehouse_id,
+
+                        "product_id":
+                        selected_product_id,
+
+                        "qty":
+                        transfer_qty,
+
+                        "available_qty":
+                        transfer_qty
                     }
+
                 ).execute()
 
-            st.success("Transfer completed successfully.")
+
+
+            st.success(
+                "✅ Stock transfer completed."
+            )
+
+
             st.rerun()
 
+
+
         except Exception as e:
-            log_error(f"Transfer failed: {e}")
-            st.error(str(e))
+
+
+            log_error(
+                f"warehouse transfer error: {e}"
+            )
+
+            st.error(
+                str(e)
+            )
+
+
 
 
 if __name__ == "__main__":
+
     run()
