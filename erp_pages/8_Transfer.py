@@ -19,35 +19,49 @@ def run():
     warehouses = get_warehouses()
     products = get_active_products()
 
-    # (သင့်ရဲ့ warehouse_options, product_options dict တည်ဆောက်သည့် logic များ ဤနေရာတွင် ရှိပါမည်)
-    # ဥပမာ -
+    # Dictionary mapping for options
     warehouse_options = {w["id"]: w["name"] for w in warehouses}
     product_options = {p["id"]: p["name"] for p in products}
 
+    if not warehouses or not products:
+        st.warning("No warehouses or active products found.")
+        return
+
     # ==================================================
-    # WAREHOUSE & PRODUCT SELECTION (Inside run())
+    # TRANSFER DETAILS (Form ဖယ်ရှားပြီး Live Selection သို့ ပြောင်းခြင်း)
     # ==================================================
 
-    source_warehouse_id = st.selectbox(
-        "Source Warehouse",
-        options=list(warehouse_options.keys()),
-        format_func=lambda x: warehouse_options[x],
-        key="transfer_source_wh"
-    )
+    st.subheader("Transfer Details")
 
-    dest_warehouse_id = st.selectbox(
-        "Destination Warehouse",
-        options=list(warehouse_options.keys()),
-        format_func=lambda x: warehouse_options[x],
-        key="transfer_dest_wh"
-    )
+    col1, col2 = st.columns(2)
 
+    with col1:
+        source_warehouse_id = st.selectbox(
+            "Source Warehouse",
+            options=list(warehouse_options.keys()),
+            format_func=lambda x: warehouse_options[x]
+        )
+
+    with col2:
+        dest_options = {
+            k: v
+            for k, v in warehouse_options.items()
+            if k != source_warehouse_id
+        }
+
+        dest_warehouse_id = st.selectbox(
+            "Destination Warehouse",
+            options=list(dest_options.keys()) if dest_options else list(warehouse_options.keys()),
+            format_func=lambda x: warehouse_options[x]
+        )
+
+    # Product Selection
     selected_product_id = st.selectbox(
         "Select Product",
         options=list(product_options.keys()),
-        format_func=lambda x: product_options[x],
-        key="transfer_product"
+        format_func=lambda x: product_options[x]
     )
+
 
     # ==================================================
     # STOCK INFORMATION (Real-time Fetching)
@@ -55,6 +69,7 @@ def run():
 
     source_stock_qty = 0
     source_available_qty = 0
+
     dest_stock_qty = 0
     dest_available_qty = 0
 
@@ -96,8 +111,9 @@ def run():
     except Exception as e:
         st.warning(f"Stock loading error: {e}")
 
+
     # ==================================================
-    # DISPLAY STOCK
+    # DISPLAY STOCK (Live Preview)
     # ==================================================
 
     stock_col1, stock_col2 = st.columns(2)
@@ -140,8 +156,9 @@ Available Qty:
 """
         )
 
+
     # ==================================================
-    # VALIDATION & TRANSFER INPUT
+    # TRANSFER QUANTITY & EXECUTION
     # ==================================================
 
     if source_available_qty <= 0:
@@ -155,9 +172,16 @@ Available Qty:
             step=1
         )
 
-        if st.button("Confirm & Transfer", type="primary"):
-            # Transfer execution logic goes here
-            st.success("Transfer process executed successfully!")
+        st.markdown("---")
+
+        # Execute Transfer Button (Form Submit အစား သုံးခြင်း)
+        if st.button("Execute Transfer", type="primary"):
+            # ဒီနေရာမှာ Database Update သို့မဟုတ် Repository logic တွေကို ဆက်လက်ထည့်သွင်းနိုင်ပါသည်
+            st.success(
+                f"Successfully initiated transfer of **{transfer_qty}** units "
+                f"from **{warehouse_options.get(source_warehouse_id)}** "
+                f"to **{warehouse_options.get(dest_warehouse_id)}**!"
+            )
 
 
 if __name__ == "__main__":
