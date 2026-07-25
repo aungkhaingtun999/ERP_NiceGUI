@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v30 CONNECTION & DB DEBUG
+# ERP ENTERPRISE WAREHOUSE TRANSFER v30 RLS & STOCK DEBUG
 # ==============================================================================
 
 import streamlit as st
@@ -25,21 +25,10 @@ def run():
     supabase = db()
 
     # ==================================================
-    # DATABASE & CONNECTION DEBUG SECTION
+    # RLS & STOCK DEBUG SECTION
     # ==================================================
-    st.markdown("### 🔍 Database Connection & Data Debug")
-    
-    # 1. Check Supabase URL to verify correct project
-    try:
-        st.write("DEBUG SUPABASE URL:", st.secrets["SUPABASE_URL"])
-    except Exception:
-        st.write("DEBUG SUPABASE URL: Not found in st.secrets")
+    st.markdown("### 🔍 RLS & Warehouse Stock Debug")
 
-    # 2. Check all warehouses data and format
-    warehouses = get_warehouses()
-    st.write("DEBUG WAREHOUSES:", warehouses)
-
-    # 3. Check all raw stock data in database table
     try:
         all_stock = (
             supabase
@@ -51,9 +40,15 @@ def run():
         )
         st.write("DEBUG ALL WAREHOUSE STOCK:", all_stock)
     except Exception as e:
-        st.error(f"Failed to fetch all warehouse stock: {e}")
+        st.error(f"Failed to fetch warehouse stock: {e}")
 
     st.markdown("---")
+
+    # ==================================================
+    # LOAD WAREHOUSES
+    # ==================================================
+
+    warehouses = get_warehouses()
 
     if not warehouses:
         st.error("No warehouses found.")
@@ -99,7 +94,7 @@ def run():
         dest_warehouse_id = int(dest_warehouse_id)
 
     # ==================================================
-    # LOAD PRODUCTS WITH STOCK (Type safe query)
+    # LOAD PRODUCTS WITH STOCK
     # ==================================================
 
     try:
