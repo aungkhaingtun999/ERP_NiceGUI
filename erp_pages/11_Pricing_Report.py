@@ -7,16 +7,27 @@
 
 import streamlit as st
 
-
-from erp_core.loaders.product_loader import (
-    get_products
-)
+from erp_core.loaders.product_loader import get_products
+from reports.pricing_report_excel import create_pricing_excel_report
 
 
-from reports.pricing_report_excel import (
-    create_pricing_excel_report
-)
+def run():
 
+    st.title("💰 Product Pricing Report")
+
+    st.caption(
+        "MYANMAR ERP - Product Cost, Markup & Selling Price Analysis"
+    )
+
+    products = get_products(warehouse_id=None)
+
+    if not products:
+        st.warning("No products found")
+        return
+
+    # အောက်က code အားလုံး (Normalize, Filter, KPI,
+    # Dataframe, Download Button...) ကို
+    # ဒီ run() function အတွင်းကို indent လုပ်ပြီးထည့်ပါ။
 
 
 # ==============================================================================
