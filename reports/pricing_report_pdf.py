@@ -8,7 +8,9 @@ from io import BytesIO
 
 from datetime import datetime
 
+
 from openpyxl import Workbook
+
 
 from openpyxl.styles import (
     Font,
@@ -17,11 +19,9 @@ from openpyxl.styles import (
     Side
 )
 
+
 from openpyxl.utils import (
     get_column_letter
-)
-from reports.pricing_report_excel import (
-    create_pricing_excel_report
 )
 
 
@@ -55,11 +55,10 @@ def create_pricing_excel_report(
     company_name="MYANMAR ERP"
 ):
 
-
     """
     Generate Product Pricing Report Excel
 
-    products example:
+    products:
 
     [
         {
@@ -75,7 +74,6 @@ def create_pricing_excel_report(
     """
 
 
-
     wb = Workbook()
 
 
@@ -86,24 +84,27 @@ def create_pricing_excel_report(
 
 
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # TITLE
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
-
-    ws.merge_cells(
-        "A1:H1"
-    )
+    ws.merge_cells("A1:H1")
 
 
     title = ws["A1"]
 
-    title.value = company_name + " - PRODUCT PRICING REPORT"
+    title.value = (
+        company_name
+        +
+        " - PRODUCT PRICING REPORT"
+    )
+
 
     title.font = Font(
         bold=True,
         size=16
     )
+
 
     title.alignment = Alignment(
         horizontal="center"
@@ -111,24 +112,26 @@ def create_pricing_excel_report(
 
 
 
-    ws.merge_cells(
-        "A2:H2"
-    )
+    ws.merge_cells("A2:H2")
 
 
     ws["A2"] = (
+
         "Generated Date : "
+
         +
+
         datetime.now().strftime(
             "%Y-%m-%d %H:%M"
         )
+
     )
 
 
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # HEADER
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     headers = [
@@ -156,33 +159,39 @@ def create_pricing_excel_report(
     row = 4
 
 
+
     for col, header in enumerate(
         headers,
         start=1
     ):
+
 
         cell = ws.cell(
             row=row,
             column=col
         )
 
+
         cell.value = header
+
 
         cell.font = Font(
             bold=True
         )
 
+
         cell.alignment = Alignment(
             horizontal="center"
         )
+
 
         cell.border = thin_border
 
 
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # DATA
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     total_profit = 0
@@ -195,20 +204,24 @@ def create_pricing_excel_report(
 
 
         cost = float(
+
             product.get(
                 "purchase_price",
                 0
             )
             or 0
+
         )
 
 
         selling = float(
+
             product.get(
                 "selling_price",
                 0
             )
             or 0
+
         )
 
 
@@ -262,6 +275,7 @@ def create_pricing_excel_report(
             start=1
         ):
 
+
             cell = ws.cell(
 
                 row=row,
@@ -273,15 +287,12 @@ def create_pricing_excel_report(
 
             cell.value = value
 
+
             cell.border = thin_border
 
 
 
-            if col in [
-                5,
-                7,
-                8
-            ]:
+            if col in [5,7,8]:
 
                 cell.number_format = (
                     '#,##0.00'
@@ -289,12 +300,13 @@ def create_pricing_excel_report(
 
 
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # SUMMARY
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     row += 2
+
 
 
     ws.cell(
@@ -312,21 +324,21 @@ def create_pricing_excel_report(
 
 
     ws.cell(
-        row=row+1,
+        row=row + 1,
         column=1
     ).value = "Total Profit"
 
 
 
     ws.cell(
-        row=row+1,
+        row=row + 1,
         column=2
     ).value = total_profit
 
 
 
     ws.cell(
-        row=row+1,
+        row=row + 1,
         column=2
     ).number_format = (
         '#,##0.00'
@@ -334,12 +346,13 @@ def create_pricing_excel_report(
 
 
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # AUTO WIDTH
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     for column in ws.columns:
+
 
         max_length = 0
 
@@ -350,6 +363,7 @@ def create_pricing_excel_report(
 
 
         for cell in column:
+
 
             try:
 
@@ -373,10 +387,9 @@ def create_pricing_excel_report(
 
 
 
-
-    # --------------------------------------------------------------------------
-    # RETURN FILE
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # RETURN EXCEL FILE
+    # ==========================================================================
 
 
     output = BytesIO()
