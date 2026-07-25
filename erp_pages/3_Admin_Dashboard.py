@@ -275,13 +275,11 @@ def run():
         )
 
 
-        if "total_amount" in df_sales.columns:
+        if "total" in df_sales.columns:
+    total_sales_col = "total"
 
-            total_sales_col = "total_amount"
-
-        elif "total" in df_sales.columns:
-
-            total_sales_col = "total"
+        elif "total_amount" in df_sales.columns:
+    total_sales_col = "total_amount"
 
 
 
