@@ -4,12 +4,7 @@
 # ==============================================================================
 
 
-from typing import (
-    Optional,
-    Dict,
-    Any
-)
-
+from typing import Optional, Dict, Any
 
 from ..base_repo import (
     db,
@@ -17,20 +12,13 @@ from ..base_repo import (
 )
 
 
-from ..services import (
-    PurchaseService
-)
-
-
-
-
 
 def purchase_receive_rpc(
     product_id: int,
     supplier_id: int,
     warehouse_id: int,
-    qty: int,
-    cost: Any,
+    qty,
+    cost,
     remarks: str = "",
     user_id: Optional[str] = None
 
@@ -39,31 +27,30 @@ def purchase_receive_rpc(
 
     try:
 
-        service = PurchaseService(
+        response = (
             db()
+            .rpc(
+                "purchase_receive_rpc",
+                {
+                    "p_product_id": product_id,
+                    "p_supplier_id": supplier_id,
+                    "p_warehouse_id": warehouse_id,
+                    "p_qty": qty,
+                    "p_cost": cost,
+                    "p_remarks": remarks,
+                    "p_user_id": user_id
+                }
+            )
+            .execute()
         )
 
 
-        return service.receive_stock(
+        return response.data
 
-            product_id,
-
-            supplier_id,
-
-            warehouse_id,
-
-            qty,
-
-            cost,
-
-            remarks,
-
-            user_id
-
-        )
 
 
     except Exception as e:
+
 
         log_error(
             f"purchase_receive_rpc error: {e}"
