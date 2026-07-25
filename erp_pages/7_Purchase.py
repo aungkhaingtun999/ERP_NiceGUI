@@ -458,7 +458,7 @@ def run():
 
 
                         "total":
-    Decimal(str(qty)) * Decimal(str(cost))
+                            qty * cost
 
                     }
 
@@ -472,7 +472,9 @@ def run():
 
 
             st.rerun()
-            # ==============================================================================
+
+
+# ==============================================================================
 # PART 2/3
 # PURCHASE CART + TOTAL + PREVIEW
 # ==============================================================================
@@ -488,19 +490,6 @@ def run():
 
 
     cart = st.session_state.purchase_cart
-    # ==================================================
-# CART DATA MIGRATION FIX
-# ==================================================
-
-    for item in st.session_state.purchase_cart:
-
-        if "total" not in item:
-
-        item["total"] = (
-            Decimal(str(item.get("qty",0)))
-            *
-            Decimal(str(item.get("cost",0)))
-        )
 
 
 
@@ -713,7 +702,9 @@ def run():
         st.info(
             "Purchase Cart is empty."
         )
-        # ==============================================================================
+
+
+# ==============================================================================
 # PART 3/3
 # PURCHASE RECEIVE EXECUTION
 # ==============================================================================
@@ -785,7 +776,7 @@ def run():
 
                         warehouse_id=warehouse_id,
 
-                        qty=item["qty"],
+                        qty=int(item["qty"]),
 
                         cost=item["cost"],
 
