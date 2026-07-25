@@ -1,7 +1,6 @@
 # ==============================================================================
-# pages/2_Products.py
-# ERP ENTERPRISE PRODUCT MANAGEMENT v1.0
-# Pricing Control + Markup Engine UI
+# erp_pages/2_Products.py
+# ERP ENTERPRISE PRODUCT PRICING CONTROL
 # ==============================================================================
 
 
@@ -9,399 +8,397 @@ import streamlit as st
 
 from decimal import Decimal
 
+from erp_core.base_repo import db
 
-from erp_core import (
-    get_products
-)
-
-
-from erp_core.base_repo import (
-    db
-)
-
-
-from erp_core.context import (
-    CacheManager
-)
-
-
-
-# ==============================================================================
-# PAGE CONFIG
-# ==============================================================================
 
 st.set_page_config(
-    page_title="Products Management",
-    page_icon="📦",
+    page_title="Products",
     layout="wide"
 )
 
 
 
-# ==============================================================================
-# HELPERS
-# ==============================================================================
+# ==========================================================
+# CLIENT
+# ==========================================================
 
-def money(value):
-
-    try:
-
-        return f"{Decimal(str(value)):,.2f} MMK"
-
-    except:
-
-        return "0.00 MMK"
+client = db()
 
 
 
-def calculate_preview(
-    cost,
-    markup
-):
+# ==========================================================
+# LOAD PRODUCTS
+# ==========================================================
 
-    try:
+def load_products():
 
-        cost = Decimal(str(cost))
-
-        markup = Decimal(str(markup))
-
-
-        return (
-            cost +
-            (
-                cost *
-                markup /
-                Decimal("100")
-            )
+    result = (
+        client
+        .table("products")
+        .select(
+            """
+            id,
+            name,
+            sku,
+            purchase_price,
+            selling_price,
+            markup_percent,
+            category_id
+            """
         )
-
-
-    except:
-
-        return Decimal("0")
-
-
-
-# ==============================================================================
-# UPDATE PRODUCT
-# ==============================================================================
-
-def update_product_price(
-    product_id,
-    purchase_price,
-    selling_price,
-    markup_percent
-):
-
-    try:
-
-        result = (
-            db()
-            .table("products")
-            .update(
-                {
-
-                    "purchase_price":
-                        float(purchase_price),
-
-
-                    "selling_price":
-                        float(selling_price),
-
-
-                    "markup_percent":
-                        float(markup_percent)
-
-                }
-            )
-            .eq(
-                "id",
-                product_id
-            )
-            .execute()
+        .order(
+            "id"
         )
+        .execute()
+    )
+
+    return result.data or []
 
 
-        CacheManager.bump_version(
-            "inventory_version"
+
+# ==========================================================
+# CATEGORY
+# ==========================================================
+
+def get_category(category_id):
+
+    if not category_id:
+
+        return {
+            "name": "-",
+            "markup": None
+        }
+
+
+    result = (
+        client
+        .table("categories")
+        .select(
+            "name,markup_percent"
         )
-
-
-        return True
-
-
-    except Exception as e:
-
-        st.error(
-            f"Update failed: {e}"
+        .eq(
+            "id",
+            category_id
         )
-
-        return False
-
-
-
-# ==============================================================================
-# MAIN
-# ==============================================================================
-
-def run():
-
-
-    st.title(
-        "📦 Product Management"
+        .execute()
     )
 
 
-    st.caption(
-        "Pricing Control | Markup Engine | Manual Override"
-    )
+    if result.data:
+
+        return {
+
+            "name":
+                result.data[0]["name"],
+
+            "markup":
+                result.data[0]["markup_percent"]
+
+        }
 
 
-
-    # --------------------------------------------------------------------------
-    # LOAD PRODUCTS
-    # --------------------------------------------------------------------------
-
-    products = get_products(
-        limit=500
-    )
-
-
-    if not products:
-
-        st.warning(
-            "No products found"
-        )
-
-        return
-
-
-
-    # --------------------------------------------------------------------------
-    # SELECT PRODUCT
-    # --------------------------------------------------------------------------
-
-    product_names = {
-
-        f"{p.get('name')} (ID:{p.get('id')})":
-            p
-
-        for p in products
-
+    return {
+        "name":"-",
+        "markup":None
     }
 
 
-    selected = st.selectbox(
 
-        "Select Product",
+# ==========================================================
+# TITLE
+# ==========================================================
 
-        options=list(product_names.keys())
 
+st.title(
+    "📦 Product Pricing Control"
+)
+
+
+
+products = load_products()
+
+
+
+if not products:
+
+    st.warning(
+        "No Products Found"
     )
 
-
-    product = product_names[selected]
-
-
-
-    st.divider()
+    st.stop()
 
 
 
-    # --------------------------------------------------------------------------
-    # PRODUCT INFO
-    # --------------------------------------------------------------------------
+# ==========================================================
+# SEARCH
+# ==========================================================
 
-    st.subheader(
-        "📋 Product Information"
+
+search = st.text_input(
+    "🔍 Search Product"
+)
+
+
+
+if search:
+
+
+    products = [
+
+        p for p in products
+
+        if search.lower()
+        in p["name"].lower()
+
+    ]
+
+
+
+product_map = {
+
+    f'{p["id"]} - {p["name"]}':
+    p
+
+    for p in products
+
+}
+
+
+
+selected = st.selectbox(
+
+    "Select Product",
+
+    list(product_map.keys())
+
+)
+
+
+
+product = product_map[selected]
+
+
+
+category = get_category(
+
+    product.get(
+        "category_id"
     )
 
-
-    col1,col2,col3 = st.columns(3)
-
-
-    with col1:
-
-        st.metric(
-            "Product",
-            product.get("name")
-        )
-
-
-    with col2:
-
-        st.metric(
-            "Current Cost",
-            money(
-                product.get(
-                    "purchase_price",
-                    0
-                )
-            )
-        )
-
-
-    with col3:
-
-        st.metric(
-            "Current Selling",
-            money(
-                product.get(
-                    "selling_price",
-                    0
-                )
-            )
-        )
+)
 
 
 
-    st.divider()
+# ==========================================================
+# PRICING PANEL
+# ==========================================================
+
+
+st.divider()
+
+
+col1,col2,col3 = st.columns(3)
 
 
 
-    # --------------------------------------------------------------------------
-    # PRICING CONTROL
-    # --------------------------------------------------------------------------
+with col1:
 
-    st.subheader(
-        "💰 Pricing Control"
-    )
+    st.metric(
 
+        "Purchase Cost",
 
-    purchase_price = st.number_input(
-
-        "Purchase Price",
-
-        value=float(
-            product.get(
-                "purchase_price",
-                0
-            )
-        ),
-
-        step=100.0
-
-    )
-
-
-
-    markup = st.number_input(
-
-        "Markup %",
-
-        value=float(
-            product.get(
-                "markup_percent",
-                0
-            )
-            or 0
-        ),
-
-        min_value=0.0,
-
-        step=1.0
+        f'{product.get("purchase_price",0):,.2f}'
 
     )
 
 
 
-    preview = calculate_preview(
+with col2:
 
-        purchase_price,
+    st.metric(
 
-        markup
+        "Current Selling",
+
+        f'{product.get("selling_price",0):,.2f}'
 
     )
 
 
+
+with col3:
+
+    st.metric(
+
+        "Product Markup",
+
+        f'{product.get("markup_percent") or 0}%'
+
+    )
+
+
+
+st.subheader(
+    "⚙️ Pricing Engine Preview"
+)
+
+
+
+c1,c2,c3 = st.columns(3)
+
+
+
+with c1:
+
+    st.write(
+        "Product Markup"
+    )
 
     st.info(
-        f"🔍 Selling Price Preview : {money(preview)}"
+        f'{product.get("markup_percent") or 0}%'
     )
 
 
 
-    manual_override = st.checkbox(
+with c2:
 
-        "✏️ Manual Override Selling Price",
+    st.write(
+        "Category"
+    )
 
-        value=False
-
+    st.info(
+        category["name"]
     )
 
 
 
-    if manual_override:
+with c3:
+
+    st.write(
+        "Category Markup"
+    )
+
+    st.info(
+        f'{category["markup"] or 0}%'
+    )
 
 
-        selling_price = st.number_input(
 
-            "Manual Selling Price",
+# ==========================================================
+# AUTO CALCULATION
+# ==========================================================
 
-            value=float(
+
+cost = Decimal(
+
+    str(
+        product.get(
+            "purchase_price",
+            0
+        )
+    )
+
+)
+
+
+markup = Decimal(
+
+    str(
+
+        product.get(
+            "markup_percent"
+        )
+        or
+        category["markup"]
+        or
+        20
+
+    )
+
+)
+
+
+auto_price = (
+
+    cost +
+
+    (
+        cost *
+        markup /
+        Decimal("100")
+    )
+
+)
+
+
+
+st.success(
+
+    f"Auto Selling Price: {auto_price:,.2f}"
+
+)
+
+
+
+# ==========================================================
+# MANUAL OVERRIDE
+# ==========================================================
+
+
+manual_price = st.number_input(
+
+    "Manual Selling Price Override",
+
+    min_value=0.0,
+
+    value=float(
+        product.get(
+            "selling_price",
+            auto_price
+        )
+    )
+
+)
+
+
+
+# ==========================================================
+# SAVE
+# ==========================================================
+
+
+if st.button(
+    "💾 Save Pricing",
+    type="primary"
+):
+
+
+    result = client.rpc(
+
+        "update_product_pricing_rpc",
+
+        {
+
+            "p_product_id":
+                product["id"],
+
+            "p_selling_price":
+                manual_price,
+
+            "p_markup_percent":
                 product.get(
-                    "selling_price",
-                    preview
+                    "markup_percent"
                 )
-            ),
 
-            step=100.0
+        }
 
-        )
-
-
-    else:
-
-        selling_price = preview
+    ).execute()
 
 
 
-    st.divider()
+    st.success(
+        result.data
+    )
 
+    st.cache_data.clear()
 
-
-    # --------------------------------------------------------------------------
-    # SAVE
-    # --------------------------------------------------------------------------
-
-    if st.button(
-
-        "💾 Save Product Pricing",
-
-        type="primary",
-
-        use_container_width=True
-
-    ):
-
-
-        success = update_product_price(
-
-            product["id"],
-
-            purchase_price,
-
-            selling_price,
-
-            markup
-
-        )
-
-
-        if success:
-
-            st.success(
-                "✅ Product pricing updated successfully"
-            )
-
-            st.rerun()
-
-
-
-# ==============================================================================
-# RUN
-# ==============================================================================
-
-if __name__ == "__main__":
-
-    run()
+    st.rerun()
