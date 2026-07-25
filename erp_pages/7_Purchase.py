@@ -458,7 +458,7 @@ def run():
 
 
                         "total":
-                            qty * cost
+    Decimal(str(qty)) * Decimal(str(cost))
 
                     }
 
@@ -488,6 +488,19 @@ def run():
 
 
     cart = st.session_state.purchase_cart
+    # ==================================================
+# CART DATA MIGRATION FIX
+# ==================================================
+
+    for item in st.session_state.purchase_cart:
+
+        if "total" not in item:
+
+        item["total"] = (
+            Decimal(str(item.get("qty",0)))
+            *
+            Decimal(str(item.get("cost",0)))
+        )
 
 
 
