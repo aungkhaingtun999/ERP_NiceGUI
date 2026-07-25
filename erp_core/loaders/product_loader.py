@@ -1,6 +1,9 @@
-# =====================================================================
+# ==============================================================================
 # erp_core/loaders/product_loader.py
-# =====================================================================
+# ERP ENTERPRISE PRODUCT LOADER v30
+# ==============================================================================
+
+from typing import Any, Dict, List
 
 import streamlit as st
 
@@ -28,7 +31,7 @@ def _get_products_cached(
     offset,
     limit,
     version
-):
+) -> List[Dict[str, Any]]:
 
     try:
 
@@ -69,6 +72,7 @@ def get_products(
         CacheManager.get_version(
             "inventory_version"
         )
+
     )
 
 
