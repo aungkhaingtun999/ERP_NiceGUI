@@ -6,7 +6,7 @@
 from typing import Any, Dict, List
 import streamlit as st
 
-from ..base_repo import db, log_error
+from erp_core.base_repo import db, log_error
 from ..context import CacheManager
 from ..repositories import RepositoryCoordinator
 
