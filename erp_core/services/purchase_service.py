@@ -196,9 +196,9 @@ class PurchaseService:
             )
             if result.get("success"):
 
-    self.pricing.update_product_price(
-        product_id,
-        selling_price
+             self.pricing.update_product_price(
+             product_id,
+             selling_price
     )
 
 
