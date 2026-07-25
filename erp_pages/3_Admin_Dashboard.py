@@ -1,6 +1,6 @@
 # ==============================================================================
 # pages/3_Dashboard.py
-# ERP ENTERPRISE ANALYTICS DASHBOARD V30
+# ERP ENTERPRISE ANALYTICS DASHBOARD V30.5 FIXED
 # ==============================================================================
 
 import streamlit as st
@@ -21,9 +21,9 @@ from erp_core.base_repo import (
 )
 
 
-# V30 Repository Layer
+# Correct loader
 try:
-    from erp_core.repositories import (
+    from erp_core.loaders.warehouse_loader import (
         get_warehouses
     )
 except Exception:
@@ -32,7 +32,7 @@ except Exception:
 
 
 # ==============================================================================
-# MAIN PAGE
+# MAIN
 # ==============================================================================
 
 def run():
@@ -44,19 +44,15 @@ def run():
     )
 
 
-    # --------------------------------------------------
-    # AUTH
-    # --------------------------------------------------
-
     require_login()
 
     user = current_user()
 
 
 
-    # --------------------------------------------------
+    # ==========================================================================
     # HEADER
-    # --------------------------------------------------
+    # ==========================================================================
 
     st.title(
         "📈 Enterprise Analytics Dashboard"
@@ -70,16 +66,16 @@ def run():
 
 
 
-    # --------------------------------------------------
-    # SIDEBAR FILTER
-    # --------------------------------------------------
+    # ==========================================================================
+    # FILTERS
+    # ==========================================================================
 
     st.sidebar.header(
         "📊 Dashboard Filters"
     )
 
 
-    warehouses = get_warehouses()
+    warehouses = get_warehouses() or []
 
 
     warehouse_options = [
@@ -90,7 +86,7 @@ def run():
     ]
 
 
-    for w in warehouses or []:
+    for w in warehouses:
 
         warehouse_options.append(
             {
@@ -114,9 +110,9 @@ def run():
     period = st.sidebar.selectbox(
         "Time Period",
         [
+            "This Month",
             "Today",
             "Last 7 Days",
-            "This Month",
             "Year to Date"
         ]
     )
@@ -136,27 +132,32 @@ def run():
             microsecond=0
         )
 
+
     elif period == "Last 7 Days":
 
         start_date = now - timedelta(days=7)
 
-    elif period == "This Month":
 
-        start_date = now.replace(
-            day=1,
-            hour=0,
-            minute=0,
-            second=0
-        )
-
-    else:
+    elif period == "Year to Date":
 
         start_date = now.replace(
             month=1,
             day=1,
             hour=0,
             minute=0,
-            second=0
+            second=0,
+            microsecond=0
+        )
+
+
+    else:
+
+        start_date = now.replace(
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0
         )
 
 
@@ -164,67 +165,50 @@ def run():
 
 
 
-
-    if st.sidebar.button(
-        "🔄 Refresh"
-    ):
+    if st.sidebar.button("🔄 Refresh"):
 
         st.cache_data.clear()
-
         st.rerun()
 
 
 
-    # --------------------------------------------------
-# DATABASE
-# --------------------------------------------------
+    # ==========================================================================
+    # DATABASE
+    # ==========================================================================
 
-supabase = db()
+    supabase = db()
 
 
-# DEBUG TEST (TEMPORARY)
-try:
-    test_sales = (
-        supabase
-        .table("sales")
-        .select("id", count="exact")
-        .execute()
-    )
 
-    st.write(
-        "APP SALES COUNT:",
-        test_sales
-    )
-
-except Exception as e:
-    st.error(
-        f"Sales Debug Error: {e}"
-    )
-
-    # --------------------------------------------------
-    # SALES QUERY
-    # --------------------------------------------------
+    # ==========================================================================
+    # SALES DATA
+    # ==========================================================================
 
     df_sales = pd.DataFrame()
 
 
     try:
 
-
-        query = supabase.table(
-            "sales"
-        ).select(
-            """
-            id,
-            total,
-            total_amount,
-            paid_amount,
-            sale_status,
-            warehouse_id,
-            created_at
-            """
+        query = (
+            supabase
+            .table("sales")
+            .select(
+                """
+                id,
+                total,
+                total_amount,
+                paid_amount,
+                sale_status,
+                status,
+                warehouse_id,
+                created_at
+                """
+            )
         )
 
+
+        # Warehouse filter
+        # NULL warehouse sales are included in All Warehouses
 
         if warehouse_id:
 
@@ -244,6 +228,10 @@ except Exception as e:
                 "created_at",
                 end_date.isoformat()
             )
+            .order(
+                "created_at",
+                desc=True
+            )
         )
 
 
@@ -253,63 +241,51 @@ except Exception as e:
         df_sales = pd.DataFrame(
             result.data or []
         )
-        st.write("DEBUG SALES RESULT:", result.data)
-        st.write("DEBUG SALES DF:", df_sales)
+
 
     except Exception as e:
 
-
-        st.warning(
-            "Sales data unavailable"
+        st.error(
+            f"Sales loading error: {e}"
         )
-
-
-
-    # --------------------------------------------------
-    # KPI
-    # --------------------------------------------------
-
-    st.subheader(
-        "📌 Key Performance Indicators"
-    )
-
+            # ==========================================================================
+    # KPI CALCULATION
+    # ==========================================================================
 
     gross_sales = 0
-
     total_paid = 0
-
     refunds = 0
-
     transactions = 0
 
 
-    total_sales_col = None
-
+    sales_column = None
 
 
     if not df_sales.empty:
 
-
-        transactions = len(
-            df_sales
-        )
+        transactions = len(df_sales)
 
 
+        # Prefer real total column
         if "total" in df_sales.columns:
-            total_sales_col = "total"
+
+            sales_column = "total"
+
 
         elif "total_amount" in df_sales.columns:
-            total_sales_col = "total_amount"
+
+            sales_column = "total_amount"
 
 
 
-        if total_sales_col:
+        if sales_column:
 
             gross_sales = (
-                df_sales[total_sales_col]
+                df_sales[sales_column]
                 .apply(safe_float)
                 .sum()
             )
+
 
 
         if "paid_amount" in df_sales.columns:
@@ -321,17 +297,18 @@ except Exception as e:
             )
 
 
-        if "refund_amount" in df_sales.columns:
 
-            refunds = (
-                df_sales["refund_amount"]
-                .apply(safe_float)
-                .sum()
-            )
+    # ==========================================================================
+    # KPI DISPLAY
+    # ==========================================================================
 
+    st.subheader(
+        "📌 Key Performance Indicators"
+    )
 
 
     c1, c2, c3, c4 = st.columns(4)
+
 
 
     c1.metric(
@@ -364,52 +341,44 @@ except Exception as e:
 
 
 
-    # --------------------------------------------------
+    # ==========================================================================
     # SALES TREND
-    # --------------------------------------------------
+    # ==========================================================================
 
     col1, col2 = st.columns(2)
 
 
-
     with col1:
-
 
         st.subheader(
             "📈 Sales Trend"
         )
 
 
-        if not df_sales.empty and "created_at" in df_sales:
+        if not df_sales.empty and sales_column:
 
 
-            df_sales["date"] = (
+            chart = df_sales.copy()
+
+
+            chart["date"] = (
                 pd.to_datetime(
-                    df_sales["created_at"]
+                    chart["created_at"]
                 )
                 .dt.date
             )
 
 
-            chart_col = (
-                total_sales_col
-                or "total"
+            trend = (
+                chart
+                .groupby("date")[sales_column]
+                .sum()
             )
 
 
-            if chart_col in df_sales.columns:
-
-
-                trend = (
-                    df_sales
-                    .groupby("date")[chart_col]
-                    .sum()
-                )
-
-
-                st.line_chart(
-                    trend
-                )
+            st.line_chart(
+                trend
+            )
 
 
         else:
@@ -420,13 +389,11 @@ except Exception as e:
 
 
 
-
-    # --------------------------------------------------
-    # INVENTORY
-    # --------------------------------------------------
+    # ==========================================================================
+    # INVENTORY HEALTH
+    # ==========================================================================
 
     with col2:
-
 
         st.subheader(
             "📦 Inventory Health"
@@ -435,39 +402,53 @@ except Exception as e:
 
         try:
 
-            inv = (
+            inventory = (
                 supabase
                 .table(
-                    "pos_products_view"
+                    "view_inventory_status"
                 )
                 .select(
-                    "name,stock,minimum_stock"
+                    """
+                    warehouse_name,
+                    product_name,
+                    qty,
+                    reorder_level
+                    """
                 )
+                .execute()
+                .data
+                or []
             )
 
 
-            data = inv.execute().data or []
-
-
             df_inv = pd.DataFrame(
-                data
+                inventory
             )
 
 
             if not df_inv.empty:
 
 
-                low = df_inv[
-                    df_inv.stock
+                low_stock = df_inv[
+                    df_inv["qty"]
                     <=
-                    df_inv.minimum_stock
+                    df_inv["reorder_level"]
                 ]
 
 
                 st.metric(
                     "Low Stock Items",
-                    len(low)
+                    len(low_stock)
                 )
+
+
+                if len(low_stock) > 0:
+
+                    st.dataframe(
+                        low_stock,
+                        use_container_width=True,
+                        hide_index=True
+                    )
 
 
             else:
@@ -477,11 +458,10 @@ except Exception as e:
                 )
 
 
-        except Exception:
+        except Exception as e:
 
-
-            st.info(
-                "Inventory view unavailable"
+            st.error(
+                f"Inventory error: {e}"
             )
 
 
@@ -490,9 +470,9 @@ except Exception as e:
 
 
 
-    # --------------------------------------------------
-    # RECENT SALES
-    # --------------------------------------------------
+    # ==========================================================================
+    # RECENT TRANSACTIONS
+    # ==========================================================================
 
     st.subheader(
         "📋 Recent Transactions"
@@ -504,11 +484,13 @@ except Exception as e:
 
         st.dataframe(
             df_sales.head(20),
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
 
 
     else:
+
 
         st.info(
             "No transaction records found."
