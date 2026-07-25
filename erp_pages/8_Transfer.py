@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v30 FIXED & OPTIMIZED
+# ERP ENTERPRISE WAREHOUSE TRANSFER v30 TYPE & SCHEMA FIXED
 # ==============================================================================
 
 import streamlit as st
@@ -11,7 +11,7 @@ from erp_core.loaders.warehouse_loader import get_warehouses
 
 def run():
 
-    # ယာယီ Cache Clear ပြုလုပ်ခြင်းဖြင့် Warehouse/Stock အပြောင်းအလဲများကို ချက်ချင်းမြင်ရစေရန်
+    # Cache clear ယာယီထည့်သွင်းခြင်း
     st.cache_data.clear()
 
     st.title("🔁 Enterprise Warehouse Transfer")
@@ -44,6 +44,8 @@ def run():
             format_func=lambda x: warehouse_options[x],
             key="source_wh"
         )
+        # Type Casting to ensure integer match with database
+        source_warehouse_id = int(source_warehouse_id)
 
     with col2:
         dest_list = [
@@ -57,9 +59,11 @@ def run():
             format_func=lambda x: warehouse_options[x],
             key="dest_wh"
         )
+        # Type Casting to ensure integer match with database
+        dest_warehouse_id = int(dest_warehouse_id)
 
     # ==================================================
-    # LOAD PRODUCTS WITH STOCK (Two-step query to avoid join issues)
+    # LOAD PRODUCTS WITH STOCK (Type safe & No strict is_active dependency)
     # ==================================================
 
     try:
@@ -77,10 +81,6 @@ def run():
                 "warehouse_id",
                 source_warehouse_id
             )
-            .gt(
-                "qty",
-                0
-            )
             .execute()
             .data
             or []
@@ -91,7 +91,7 @@ def run():
         return
 
     if not stock_rows:
-        st.warning("Source warehouse has no stock.")
+        st.warning("Source warehouse has no stock records.")
         return
 
     product_options = {}
@@ -101,19 +101,19 @@ def run():
             product = (
                 supabase
                 .table("products")
-                .select("name, is_active")
+                .select("name")
                 .eq("id", row["product_id"])
                 .execute()
                 .data
             )
 
-            if product and product[0].get("is_active"):
+            if product:
                 product_options[row["product_id"]] = product[0]["name"]
         except Exception:
             continue
 
     if not product_options:
-        st.warning("No active products with stock found.")
+        st.warning("No products with stock found.")
         return
 
     selected_product_id = st.selectbox(
