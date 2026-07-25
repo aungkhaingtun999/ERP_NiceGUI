@@ -1,18 +1,14 @@
 # ==============================================================================
-# pages/11_Pricing_Report.py
-# ERP ENTERPRISE PRICING REPORT v1.0
-# Product Pricing Analysis + Excel Export
+# erp_pages/11_Pricing_Report.py
+# ERP ENTERPRISE PRICING REPORT
+# Excel + Search + Category Filter
 # ==============================================================================
 
 
 import streamlit as st
 
-import pandas as pd
 
-from decimal import Decimal
-
-
-from erp_core import (
+from erp_core.loaders.product_loader import (
     get_products
 )
 
@@ -27,6 +23,7 @@ from reports.pricing_report_excel import (
 # PAGE CONFIG
 # ==============================================================================
 
+
 st.set_page_config(
 
     page_title="Pricing Report",
@@ -40,432 +37,326 @@ st.set_page_config(
 
 
 # ==============================================================================
-# HELPERS
+# TITLE
 # ==============================================================================
 
 
-def money(value):
+st.title(
+    "💰 Product Pricing Report"
+)
 
-    try:
 
-        return f"{Decimal(str(value)):,.2f} MMK"
-
-    except:
-
-        return "0.00 MMK"
+st.caption(
+    "MYANMAR ERP - Product Cost, Markup & Selling Price Analysis"
+)
 
 
 
 # ==============================================================================
-# MAIN
+# LOAD PRODUCTS
 # ==============================================================================
 
 
-def run():
+products = get_products(
+    warehouse_id=None
+)
 
 
-    st.title(
-        "💰 Product Pricing Report"
+
+if not products:
+
+    st.warning(
+        "No products found"
+    )
+
+    st.stop()
+
+
+
+# ==============================================================================
+# NORMALIZE DATA
+# ==============================================================================
+
+
+report_products = []
+
+
+
+for p in products:
+
+
+    cost = float(
+
+        p.get(
+            "purchase_price",
+            0
+        )
+        or 0
+
     )
 
 
-    st.caption(
-        "Markup Analysis | Selling Price Control | Profit Report"
+    selling = float(
+
+        p.get(
+            "selling_price",
+            0
+        )
+        or 0
+
+    )
+
+
+    profit = selling - cost
+
+
+
+    report_products.append(
+
+        {
+
+            "id":
+                p.get("id"),
+
+
+            "name":
+                p.get("name",""),
+
+
+            "sku":
+                p.get("sku",""),
+
+
+            "category":
+                p.get(
+                    "category",
+                    "-"
+                ),
+
+
+            "purchase_price":
+                cost,
+
+
+            "markup_percent":
+                p.get(
+                    "markup_percent",
+                    0
+                ),
+
+
+            "selling_price":
+                selling,
+
+
+            "profit":
+                profit
+
+        }
+
     )
 
 
 
-    # ==========================================================================
-    # LOAD PRODUCTS
-    # ==========================================================================
+# ==============================================================================
+# FILTER
+# ==============================================================================
 
 
-    try:
-
-        products = get_products(
-            limit=5000
-        )
-
-
-    except Exception as e:
-
-        st.error(
-            f"Product loading error : {e}"
-        )
-
-        return
+col1, col2 = st.columns(2)
 
 
 
-    if not products:
+with col1:
 
-        st.warning(
-            "No products found"
-        )
+    search = st.text_input(
 
-        return
+        "🔍 Search Product"
 
-
-
-    # ==========================================================================
-    # SEARCH + FILTER
-    # ==========================================================================
-
-
-    col1, col2 = st.columns(2)
+    )
 
 
 
-    with col1:
+with col2:
 
-        search = st.text_input(
+    categories = sorted(
 
-            "🔍 Search Product",
+        list(
 
-            placeholder="Enter product name..."
+            set(
+
+                p["category"]
+
+                for p in report_products
+
+            )
 
         )
 
+    )
 
 
-    with col2:
+    category_filter = st.selectbox(
 
-        categories = [
+        "📂 Category",
 
+        [
             "All"
-
         ]
-
-
-        for p in products:
-
-            cat = p.get(
-                "category",
-                ""
-            )
-
-            if cat and cat not in categories:
-
-                categories.append(cat)
-
-
-
-        selected_category = st.selectbox(
-
-            "📂 Category",
-
-            categories
-
-        )
-
-
-
-    # ==========================================================================
-    # FILTER
-    # ==========================================================================
-
-
-    filtered = []
-
-
-
-    for p in products:
-
-
-        name = str(
-            p.get(
-                "name",
-                ""
-            )
-        )
-
-
-        category = str(
-            p.get(
-                "category",
-                ""
-            )
-        )
-
-
-
-        if search:
-
-            if search.lower() not in name.lower():
-
-                continue
-
-
-
-        if selected_category != "All":
-
-
-            if category != selected_category:
-
-                continue
-
-
-
-        filtered.append(p)
-
-
-
-    if not filtered:
-
-        st.info(
-            "No matching products"
-        )
-
-        return
-
-
-
-    # ==========================================================================
-    # REPORT DATA
-    # ==========================================================================
-
-
-    rows = []
-
-
-
-    total_profit = Decimal("0")
-
-
-
-    for p in filtered:
-
-
-        cost = Decimal(
-
-            str(
-
-                p.get(
-                    "purchase_price",
-                    0
-                )
-                or 0
-
-            )
-
-        )
-
-
-
-        selling = Decimal(
-
-            str(
-
-                p.get(
-                    "selling_price",
-                    0
-                )
-                or 0
-
-            )
-
-        )
-
-
-
-        profit = selling - cost
-
-
-
-        total_profit += profit
-
-
-
-        rows.append(
-
-            {
-
-                "Product":
-
-                    p.get(
-                        "name",
-                        ""
-                    ),
-
-
-                "SKU":
-
-                    p.get(
-                        "sku",
-                        ""
-                    ),
-
-
-                "Category":
-
-                    p.get(
-                        "category",
-                        ""
-                    ),
-
-
-                "Purchase Cost":
-
-                    float(cost),
-
-
-                "Markup %":
-
-                    p.get(
-                        "markup_percent",
-                        0
-                    )
-                    or 0,
-
-
-                "Selling Price":
-
-                    float(selling),
-
-
-                "Profit":
-
-                    float(profit)
-
-            }
-
-        )
-
-
-
-    df = pd.DataFrame(
-        rows
-    )
-
-
-
-    # ==========================================================================
-    # KPI
-    # ==========================================================================
-
-
-    c1,c2,c3 = st.columns(3)
-
-
-
-    with c1:
-
-        st.metric(
-
-            "Total Products",
-
-            len(filtered)
-
-        )
-
-
-
-    with c2:
-
-        st.metric(
-
-            "Total Profit",
-
-            money(total_profit)
-
-        )
-
-
-
-    with c3:
-
-        avg_markup = (
-
-            df["Markup %"].mean()
-
-            if not df.empty
-
-            else 0
-
-        )
-
-
-        st.metric(
-
-            "Average Markup",
-
-            f"{avg_markup:.2f}%"
-
-        )
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # TABLE
-    # ==========================================================================
-
-
-    st.subheader(
-        "📊 Pricing Details"
-    )
-
-
-
-    st.dataframe(
-
-        df,
-
-        use_container_width=True,
-
-        hide_index=True
+        +
+        categories
 
     )
 
 
 
-    st.divider()
+filtered = report_products
 
 
 
-    # ==========================================================================
-    # EXCEL EXPORT
-    # ==========================================================================
+if search:
 
 
-    st.subheader(
-        "📥 Export Report"
+    filtered = [
+
+        p for p in filtered
+
+        if search.lower()
+
+        in p["name"].lower()
+
+    ]
+
+
+
+if category_filter != "All":
+
+
+    filtered = [
+
+        p for p in filtered
+
+        if p["category"]
+
+        ==
+        category_filter
+
+    ]
+
+
+
+# ==============================================================================
+# SUMMARY KPI
+# ==============================================================================
+
+
+total_products = len(filtered)
+
+
+total_profit = sum(
+
+    p["profit"]
+
+    for p in filtered
+
+)
+
+
+
+c1,c2,c3 = st.columns(3)
+
+
+
+with c1:
+
+    st.metric(
+
+        "Products",
+
+        total_products
+
     )
 
 
 
-    excel_file = create_pricing_excel_report(
+with c2:
 
-        filtered
+    st.metric(
+
+        "Total Profit",
+
+        f"{total_profit:,.2f}"
 
     )
 
 
 
-    st.download_button(
+with c3:
 
-        "📥 Download Excel Pricing Report",
+    avg_margin = (
 
-        excel_file,
+        total_profit / total_products
 
-        "pricing_report.xlsx",
+        if total_products
 
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        else 0
 
-        use_container_width=True
+    )
+
+
+    st.metric(
+
+        "Average Profit",
+
+        f"{avg_margin:,.2f}"
 
     )
 
 
 
 # ==============================================================================
-# RUN
+# TABLE
 # ==============================================================================
 
 
-if __name__ == "__main__":
+st.divider()
 
-    run()
+
+
+st.dataframe(
+
+    filtered,
+
+    use_container_width=True,
+
+    hide_index=True
+
+)
+
+
+
+# ==============================================================================
+# EXCEL EXPORT
+# ==============================================================================
+
+
+excel_file = create_pricing_excel_report(
+
+    filtered
+
+)
+
+
+
+st.download_button(
+
+    label="📥 Download Excel Pricing Report",
+
+    data=excel_file,
+
+    file_name="pricing_report.xlsx",
+
+    mime=
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+)
