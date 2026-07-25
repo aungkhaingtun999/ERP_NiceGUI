@@ -20,7 +20,9 @@ from openpyxl.styles import (
 from openpyxl.utils import (
     get_column_letter
 )
-
+from reports.pricing_report_excel import (
+    create_pricing_excel_report
+)
 
 
 
