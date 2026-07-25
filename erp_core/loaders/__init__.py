@@ -10,7 +10,8 @@ from .settings_loader import (
 
 
 from .product_loader import (
-    get_products
+    get_products,
+    get_active_products
 )
 
 
