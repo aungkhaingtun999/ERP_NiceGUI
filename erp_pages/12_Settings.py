@@ -143,16 +143,35 @@ def run():
             notify_error(f"Inventory rules save failed: {e}")
 
     st.divider()
-        # =========================
+            # =========================
     # 💰 PRICING ENGINE
     # =========================
 
-    st.subheader("💰 Pricing Engine")
+    st.subheader(
+        "💰 Pricing Engine"
+    )
 
+
+    st.caption(
+        """
+        Pricing Priority:
+
+        Product Markup
+              ↓
+        Category Markup
+              ↓
+        Global Default Markup
+        """
+    )
+
+
+    # --------------------------------------------------
+    # GLOBAL DEFAULT MARKUP
+    # --------------------------------------------------
 
     default_markup = st.number_input(
 
-        "Global Default Markup (%)",
+        "🌐 Global Default Markup (%)",
 
         min_value=0.0,
 
@@ -160,7 +179,7 @@ def run():
 
         value=get_float(
             "DEFAULT_MARKUP_PERCENT",
-            30
+            20
         ),
 
         step=1.0
@@ -168,21 +187,128 @@ def run():
     )
 
 
+
+    # --------------------------------------------------
+    # PRIORITY ENGINE
+    # --------------------------------------------------
+
+    priority_options = [
+
+        "PRODUCT_FIRST",
+
+        "CATEGORY_FIRST",
+
+        "GLOBAL_FIRST"
+
+    ]
+
+
+
+    current_priority = settings_map.get(
+
+        "PRICING_PRIORITY",
+
+        "PRODUCT_FIRST"
+
+    )
+
+
+
+    pricing_priority = st.selectbox(
+
+        "⚙️ Pricing Priority",
+
+        priority_options,
+
+        index=
+
+        priority_options.index(
+            current_priority
+        )
+
+        if current_priority in priority_options
+
+        else 0
+
+    )
+
+
+
+    # --------------------------------------------------
+    # ENABLE RULES
+    # --------------------------------------------------
+
+
+    enable_product_markup = st.toggle(
+
+        "☑ Enable Product Markup Override",
+
+        value=get_bool(
+
+            "ENABLE_PRODUCT_MARKUP",
+
+            True
+
+        )
+
+    )
+
+
+
+    enable_category_markup = st.toggle(
+
+        "☑ Enable Category Markup",
+
+        value=get_bool(
+
+            "ENABLE_CATEGORY_MARKUP",
+
+            True
+
+        )
+
+    )
+
+
+
+    # --------------------------------------------------
+    # OTHER PRICE CONTROL
+    # --------------------------------------------------
+
+
     pricing_method = st.selectbox(
 
         "Pricing Method",
 
         [
+
             "MARKUP",
+
             "MARGIN"
+
         ],
 
-        index=0 if settings_map.get(
+
+        index=
+
+        0
+
+        if settings_map.get(
+
             "PRICING_METHOD",
+
             "MARKUP"
-        ) == "MARKUP" else 1
+
+        )
+
+        ==
+
+        "MARKUP"
+
+        else 1
 
     )
+
 
 
     auto_update_price = st.toggle(
@@ -190,11 +316,15 @@ def run():
         "Auto Update Selling Price",
 
         value=get_bool(
+
             "AUTO_UPDATE_SELLING_PRICE",
+
             True
+
         )
 
     )
+
 
 
     manual_override = st.toggle(
@@ -202,12 +332,20 @@ def run():
         "Allow Manual Price Override",
 
         value=get_bool(
+
             "ALLOW_MANUAL_PRICE_OVERRIDE",
+
             True
+
         )
 
     )
 
+
+
+    # --------------------------------------------------
+    # SAVE
+    # --------------------------------------------------
 
 
     if st.button(
@@ -221,43 +359,118 @@ def run():
 
         try:
 
+
             save_setting(
+
                 "DEFAULT_MARKUP_PERCENT",
+
                 default_markup
+
             )
 
 
             save_setting(
+
+                "PRICING_PRIORITY",
+
+                pricing_priority
+
+            )
+
+
+            save_setting(
+
+                "ENABLE_PRODUCT_MARKUP",
+
+                enable_product_markup
+
+            )
+
+
+            save_setting(
+
+                "ENABLE_CATEGORY_MARKUP",
+
+                enable_category_markup
+
+            )
+
+
+            save_setting(
+
                 "PRICING_METHOD",
+
                 pricing_method
+
             )
 
 
             save_setting(
+
                 "AUTO_UPDATE_SELLING_PRICE",
+
                 auto_update_price
+
             )
 
 
             save_setting(
+
                 "ALLOW_MANUAL_PRICE_OVERRIDE",
+
                 manual_override
+
             )
 
 
             notify_success(
-                "💰 Pricing settings updated successfully."
+
+                "💰 Pricing Engine settings saved."
+
             )
 
 
             st.rerun()
 
 
+
         except Exception as e:
 
+
             notify_error(
+
                 f"Pricing save failed: {e}"
+
             )
+
+
+
+    # --------------------------------------------------
+    # PREVIEW
+    # --------------------------------------------------
+
+
+    st.info(
+
+        f"""
+
+        Current Pricing Rule:
+
+        Product Markup : 
+        {'Enabled' if enable_product_markup else 'Disabled'}
+
+        Category Markup :
+        {'Enabled' if enable_category_markup else 'Disabled'}
+
+        Priority :
+        {pricing_priority}
+
+        Global Default :
+        {default_markup} %
+
+        """
+
+    )
 
 
     st.divider()
