@@ -34,12 +34,11 @@ from ..rpc.engine import (
 class PurchaseService:
 
 
-    def __init__(
-        self,
-        client: Any
-    ):
+    def __init__(self, client):
 
-        self.client = client
+    self.client = client
+
+    self.pricing = PricingService(client)
 
 
 
@@ -63,6 +62,10 @@ class PurchaseService:
 
 
         context.rotate_transaction()
+        selling_price = (
+    self.pricing
+    .calculate_selling_price(cost)
+        )
 
 
 
@@ -91,9 +94,15 @@ class PurchaseService:
 
 
                 "p_price":
-                    float(
-                        money(cost)
-                    ),
+    float(
+        money(cost)
+    ),
+
+
+"p_selling_price":
+    float(
+        selling_price
+    ),
 
 
                 "p_notes":
