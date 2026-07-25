@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v30 SESSION & STATE FIXED
+# ERP ENTERPRISE WAREHOUSE TRANSFER v30 CONNECTION & DB DEBUG
 # ==============================================================================
 
 import streamlit as st
@@ -25,10 +25,35 @@ def run():
     supabase = db()
 
     # ==================================================
-    # LOAD WAREHOUSES
+    # DATABASE & CONNECTION DEBUG SECTION
     # ==================================================
+    st.markdown("### 🔍 Database Connection & Data Debug")
+    
+    # 1. Check Supabase URL to verify correct project
+    try:
+        st.write("DEBUG SUPABASE URL:", st.secrets["SUPABASE_URL"])
+    except Exception:
+        st.write("DEBUG SUPABASE URL: Not found in st.secrets")
 
+    # 2. Check all warehouses data and format
     warehouses = get_warehouses()
+    st.write("DEBUG WAREHOUSES:", warehouses)
+
+    # 3. Check all raw stock data in database table
+    try:
+        all_stock = (
+            supabase
+            .table("warehouse_stock")
+            .select("*")
+            .execute()
+            .data
+            or []
+        )
+        st.write("DEBUG ALL WAREHOUSE STOCK:", all_stock)
+    except Exception as e:
+        st.error(f"Failed to fetch all warehouse stock: {e}")
+
+    st.markdown("---")
 
     if not warehouses:
         st.error("No warehouses found.")
@@ -51,7 +76,6 @@ def run():
             source_default = i
 
     with col1:
-        # key ဖြုတ်ထားပြီး session state ငြိမ်စေရန်
         source_warehouse_id = st.selectbox(
             "Source Warehouse",
             options=warehouse_ids,
@@ -66,7 +90,6 @@ def run():
             if x != source_warehouse_id
         ]
 
-        # key ဖြုတ်ထားပြီး session state ငြိမ်စေရန်
         dest_warehouse_id = st.selectbox(
             "Destination Warehouse",
             options=dest_list,
@@ -76,7 +99,7 @@ def run():
         dest_warehouse_id = int(dest_warehouse_id)
 
     # ==================================================
-    # LOAD PRODUCTS WITH STOCK
+    # LOAD PRODUCTS WITH STOCK (Type safe query)
     # ==================================================
 
     try:
@@ -92,7 +115,7 @@ def run():
             )
             .eq(
                 "warehouse_id",
-                source_warehouse_id
+                int(source_warehouse_id)
             )
             .execute()
             .data
@@ -103,7 +126,6 @@ def run():
         st.error(f"Stock loading error: {e}")
         return
 
-    # DEBUGGING SECTION
     st.write("DEBUG SOURCE ID:", source_warehouse_id)
     st.write("DEBUG STOCK:", stock_rows)
 
