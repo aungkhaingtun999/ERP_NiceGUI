@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v30 TYPE & SCHEMA FIXED
+# ERP ENTERPRISE WAREHOUSE TRANSFER v30 FINAL CLEAN
 # ==============================================================================
 
 import streamlit as st
@@ -10,9 +10,6 @@ from erp_core.loaders.warehouse_loader import get_warehouses
 
 
 def run():
-
-    # Cache clear ယာယီထည့်သွင်းခြင်း
-    st.cache_data.clear()
 
     st.title("🔁 Enterprise Warehouse Transfer")
 
@@ -37,14 +34,21 @@ def run():
 
     col1, col2 = st.columns(2)
 
+    warehouse_ids = list(warehouse_options.keys())
+    source_default = 0
+
+    for i, wid in enumerate(warehouse_ids):
+        if warehouse_options[wid] == "Main Warehouse":
+            source_default = i
+
     with col1:
         source_warehouse_id = st.selectbox(
             "Source Warehouse",
-            options=list(warehouse_options.keys()),
+            options=warehouse_ids,
+            index=source_default,
             format_func=lambda x: warehouse_options[x],
             key="source_wh"
         )
-        # Type Casting to ensure integer match with database
         source_warehouse_id = int(source_warehouse_id)
 
     with col2:
@@ -56,14 +60,14 @@ def run():
         dest_warehouse_id = st.selectbox(
             "Destination Warehouse",
             options=dest_list,
+            index=0,
             format_func=lambda x: warehouse_options[x],
             key="dest_wh"
         )
-        # Type Casting to ensure integer match with database
         dest_warehouse_id = int(dest_warehouse_id)
 
     # ==================================================
-    # LOAD PRODUCTS WITH STOCK (Type safe & No strict is_active dependency)
+    # LOAD PRODUCTS WITH STOCK
     # ==================================================
 
     try:
@@ -102,7 +106,10 @@ def run():
                 supabase
                 .table("products")
                 .select("name")
-                .eq("id", row["product_id"])
+                .eq(
+                    "id",
+                    row["product_id"]
+                )
                 .execute()
                 .data
             )
