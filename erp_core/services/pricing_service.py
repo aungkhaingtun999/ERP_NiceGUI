@@ -3,7 +3,6 @@
 # ERP ENTERPRISE PRICING ENGINE v2.0
 # ==============================================================================
 
-
 from decimal import Decimal
 
 
@@ -16,15 +15,11 @@ class PricingService:
 
 
 
-    # ==========================================================
-    # GET SYSTEM SETTING
-    # ==========================================================
+    # --------------------------------------------------------------------------
+    # GET SETTING
+    # --------------------------------------------------------------------------
 
-    def get_setting(
-        self,
-        key,
-        default=None
-    ):
+    def get_setting(self, key, default=None):
 
         result = (
             self.client
@@ -34,24 +29,18 @@ class PricingService:
             .execute()
         )
 
-
         if result.data:
-
             return result.data[0]["value"]
-
 
         return default
 
 
 
-    # ==========================================================
-    # GET PRODUCT DATA
-    # ==========================================================
+    # --------------------------------------------------------------------------
+    # GET PRODUCT PRICING INFO
+    # --------------------------------------------------------------------------
 
-    def get_product(
-        self,
-        product_id
-    ):
+    def get_product_pricing(self, product_id):
 
         result = (
             self.client
@@ -59,111 +48,38 @@ class PricingService:
             .select(
                 """
                 id,
+                markup_percent,
                 category_id,
-                brand_id,
-                selling_price
+                categories(
+                    markup_percent
+                )
                 """
             )
-            .eq(
-                "id",
-                product_id
-            )
+            .eq("id", product_id)
             .single()
             .execute()
         )
-
 
         return result.data
 
 
 
-    # ==========================================================
-    # PRODUCT MARKUP OVERRIDE
-    # ==========================================================
-
-    def get_product_markup(
-        self,
-        product_id
-    ):
-
-        result = (
-            self.client
-            .table("product_pricing")
-            .select("*")
-            .eq(
-                "product_id",
-                product_id
-            )
-            .execute()
-        )
-
-
-        if result.data:
-
-            return Decimal(
-                str(
-                    result.data[0]["markup_percent"]
-                )
-            )
-
-
-        return None
-
-
-
-    # ==========================================================
-    # CATEGORY MARKUP
-    # ==========================================================
-
-    def get_category_markup(
-        self,
-        category_id
-    ):
-
-
-        if not category_id:
-
-            return None
-
-
-        result = (
-            self.client
-            .table("category_pricing")
-            .select("markup_percent")
-            .eq(
-                "category_id",
-                category_id
-            )
-            .execute()
-        )
-
-
-        if result.data:
-
-            return Decimal(
-                str(
-                    result.data[0]["markup_percent"]
-                )
-            )
-
-
-        return None
-
-
-
-    # ==========================================================
+    # --------------------------------------------------------------------------
     # CALCULATE SELLING PRICE
-    # ==========================================================
+    # --------------------------------------------------------------------------
 
     def calculate_selling_price(
         self,
-        cost,
-        product_id=None
+        product_id,
+        cost
     ):
 
 
-        cost = Decimal(
-            str(cost)
+        cost = Decimal(str(cost))
+
+
+        product = self.get_product_pricing(
+            product_id
         )
 
 
@@ -171,33 +87,50 @@ class PricingService:
 
 
 
-        # 1️⃣ Product Override
+        # ==============================================================
+        # 1. PRODUCT MARKUP
+        # ==============================================================
 
-        if product_id:
+        if product:
 
-            markup = self.get_product_markup(
-                product_id
-            )
+            if product.get("markup_percent") is not None:
 
-
-
-        # 2️⃣ Category Override
-
-        if markup is None and product_id:
-
-            product = self.get_product(
-                product_id
-            )
-
-            if product:
-
-                markup = self.get_category_markup(
-                    product.get("category_id")
+                markup = Decimal(
+                    str(
+                        product["markup_percent"]
+                    )
                 )
 
 
 
-        # 3️⃣ Global Default
+        # ==============================================================
+        # 2. CATEGORY MARKUP
+        # ==============================================================
+
+        if markup is None and product:
+
+            category = product.get(
+                "categories"
+            )
+
+
+            if category:
+
+                if category.get(
+                    "markup_percent"
+                ) is not None:
+
+                    markup = Decimal(
+                        str(
+                            category["markup_percent"]
+                        )
+                    )
+
+
+
+        # ==============================================================
+        # 3. GLOBAL DEFAULT MARKUP
+        # ==============================================================
 
         if markup is None:
 
@@ -212,7 +145,11 @@ class PricingService:
 
 
 
-        selling = (
+        # ==============================================================
+        # FINAL PRICE
+        # ==============================================================
+
+        selling_price = (
             cost +
             (
                 cost *
@@ -222,51 +159,4 @@ class PricingService:
         )
 
 
-        return selling.quantize(
-            Decimal("0.01")
-        )
-
-
-
-    # ==========================================================
-    # UPDATE PRODUCT SELLING PRICE
-    # ==========================================================
-
-    def update_product_price(
-        self,
-        product_id,
-        selling_price
-    ):
-
-
-        auto_update = self.get_setting(
-            "AUTO_UPDATE_SELLING_PRICE",
-            "true"
-        )
-
-
-        if str(auto_update).lower() != "true":
-
-            return False
-
-
-
-        self.client.table(
-            "products"
-        ).update(
-
-            {
-                "selling_price":
-                    float(
-                        selling_price
-                    )
-            }
-
-        ).eq(
-            "id",
-            product_id
-        ).execute()
-
-
-
-        return True
+        return selling_price
