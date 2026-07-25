@@ -8,7 +8,7 @@ import streamlit as st
 
 from erp_core.base_repo import db, log_error
 from ..context import CacheManager
-from ..repositories import RepositoryCoordinator
+from erp_core.repositories import ...
 
 
 @st.cache_data(ttl=300)
