@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v31 PRODUCT LOADING FIXED
+# ERP ENTERPRISE WAREHOUSE TRANSFER v32 PRODUCT ACCESS DEBUG
 # ==============================================================================
 
 import streamlit as st
@@ -23,6 +23,32 @@ def run():
         del st.session_state["dest_wh"]
 
     supabase = db()
+
+    # ==================================================
+    # DEBUG PRODUCT ACCESS
+    # ==================================================
+    try:
+        test_products = (
+            supabase
+            .table("products")
+            .select(
+                "id, name"
+            )
+            .limit(10)
+            .execute()
+        )
+
+        st.write(
+            "DEBUG TEST PRODUCTS:",
+            test_products.data
+        )
+
+    except Exception as e:
+        st.error(
+            f"PRODUCT QUERY ERROR: {e}"
+        )
+
+    st.markdown("---")
 
     # ==================================================
     # LOAD WAREHOUSES
@@ -101,15 +127,12 @@ def run():
         st.error(f"Stock loading error: {e}")
         return
 
-    st.write("DEBUG SOURCE ID:", source_warehouse_id)
-    st.write("DEBUG STOCK:", stock_rows)
-
     if not stock_rows:
         st.warning("Source warehouse has no stock records.")
         return
 
     # ==================================================
-    # LOAD PRODUCT NAMES (Fixed & Type-safe)
+    # LOAD PRODUCT NAMES
     # ==================================================
 
     product_options = {}
@@ -144,11 +167,6 @@ def run():
             st.warning(
                 f"Product loading error: {e}"
             )
-
-    st.write(
-        "DEBUG PRODUCT OPTIONS:",
-        product_options
-    )
 
     if not product_options:
         st.warning("No products with stock found.")
