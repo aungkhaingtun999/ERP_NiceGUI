@@ -138,11 +138,7 @@ for p in products:
                 p.get("sku",""),
 
 
-            "category":
-                p.get(
-                    "category",
-                    "-"
-                ),
+            "category": p.get("category") or "Uncategorized",
 
 
             "purchase_price":
@@ -191,19 +187,10 @@ with col1:
 with col2:
 
     categories = sorted(
-
-        list(
-
-            set(
-
-                p["category"]
-
-                for p in report_products
-
-            )
-
-        )
-
+    {
+        p.get("category") or "Uncategorized"
+        for p in report_products
+    }
     )
 
 
