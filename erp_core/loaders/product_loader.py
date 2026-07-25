@@ -64,22 +64,14 @@ def _get_products_cached(
 
 
 
-def get_products(
-    warehouse_id=None,
-    offset=0,
-    limit=DEFAULT_PAGE_SIZE
-):
+def get_active_products():
+    """
+    Get active products for general selection.
+    Backward compatible wrapper.
+    """
 
-    return _get_products_cached(
-
-        warehouse_id,
-
-        offset,
-
-        limit,
-
-        CacheManager.get_version(
-            "inventory_version"
-        )
-
+    return get_products(
+        warehouse_id=None,
+        offset=0,
+        limit=DEFAULT_PAGE_SIZE
     )
