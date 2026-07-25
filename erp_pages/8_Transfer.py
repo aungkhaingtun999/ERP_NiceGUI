@@ -11,7 +11,7 @@ from erp_core.loaders.warehouse_loader import get_warehouses
 
 def run():
 
-    # Clear cache ယာယီထည့်သွင်းခြင်းဖြင့် Warehouse/Stock အပြောင်းအလဲများကို ချက်ချင်းမြင်ရစေရန်
+    # ယာယီ Cache Clear ပြုလုပ်ခြင်းဖြင့် Warehouse/Stock အပြောင်းအလဲများကို ချက်ချင်းမြင်ရစေရန်
     st.cache_data.clear()
 
     st.title("🔁 Enterprise Warehouse Transfer")
@@ -162,7 +162,7 @@ def run():
         dest_available = 0
 
     # ==================================================
-    # DISPLAY STOCK & AFTER TRANSFER PREVIEW
+    # DISPLAY STOCK
     # ==================================================
 
     c1, c2 = st.columns(2)
