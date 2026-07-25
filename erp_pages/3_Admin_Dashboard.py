@@ -176,11 +176,30 @@ def run():
 
 
     # --------------------------------------------------
-    # DATABASE
-    # --------------------------------------------------
+# DATABASE
+# --------------------------------------------------
 
-    supabase = db()
+supabase = db()
 
+
+# DEBUG TEST (TEMPORARY)
+try:
+    test_sales = (
+        supabase
+        .table("sales")
+        .select("id", count="exact")
+        .execute()
+    )
+
+    st.write(
+        "APP SALES COUNT:",
+        test_sales
+    )
+
+except Exception as e:
+    st.error(
+        f"Sales Debug Error: {e}"
+    )
 
     # --------------------------------------------------
     # SALES QUERY
