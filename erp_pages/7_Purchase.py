@@ -770,15 +770,15 @@ def run():
 
                     result = purchase_receive_rpc(
 
-                        product_id=item["product_id"],
+                        product_id=int(item["product_id"]),
 
-                        supplier_id=supplier_id,
+                        supplier_id=int(supplier_id),
 
-                        warehouse_id=warehouse_id,
+                        warehouse_id=int(warehouse_id),
 
                         qty=int(item["qty"]),
 
-                        cost=item["cost"],
+                        cost=float(item["cost"]),
 
                         remarks="Purchase Receive",
 
