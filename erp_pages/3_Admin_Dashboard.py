@@ -103,7 +103,7 @@ def run():
     selected_wh = st.sidebar.selectbox(
         "Select Warehouse",
         warehouse_options,
-        format_func=lambda x:x["name"]
+        format_func=lambda x: x["name"]
     )
 
 
@@ -276,10 +276,10 @@ def run():
 
 
         if "total" in df_sales.columns:
-    total_sales_col = "total"
+            total_sales_col = "total"
 
         elif "total_amount" in df_sales.columns:
-    total_sales_col = "total_amount"
+            total_sales_col = "total_amount"
 
 
 
@@ -311,7 +311,7 @@ def run():
 
 
 
-    c1,c2,c3,c4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
 
     c1.metric(
@@ -335,7 +335,7 @@ def run():
 
     c4.metric(
         "Net Revenue",
-        f"{gross_sales-refunds:,.0f} MMK"
+        f"{gross_sales - refunds:,.0f} MMK"
     )
 
 
@@ -348,7 +348,7 @@ def run():
     # SALES TREND
     # --------------------------------------------------
 
-    col1,col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
 
 
