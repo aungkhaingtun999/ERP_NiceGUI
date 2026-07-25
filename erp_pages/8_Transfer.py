@@ -1,61 +1,151 @@
+# ==============================================================================
+# erp_pages/8_Transfer.py
+# ERP ENTERPRISE WAREHOUSE TRANSFER v30 FIXED
+# ==============================================================================
+
 import streamlit as st
-from datetime import datetime
 
 from erp_core.base_repo import db, log_error
-from erp_core.loaders.warehouse_loader import (
-    get_warehouses,
-    get_default_warehouse_id
-)
-from erp_core.loaders.product_loader import (
-    get_active_products
-)
-from erp_core.repositories import RepositoryCoordinator
+from erp_core.loaders.warehouse_loader import get_warehouses
 
 
 def run():
+
     st.title("🔁 Enterprise Warehouse Transfer")
 
-    # Load Warehouses & Products
+
+    supabase = db()
+
+
+    # ==================================================
+    # LOAD WAREHOUSES
+    # ==================================================
+
     warehouses = get_warehouses()
-    products = get_active_products()
 
-    # Dictionary mapping for options
-    warehouse_options = {w["id"]: w["name"] for w in warehouses}
-    product_options = {p["id"]: p["name"] for p in products}
 
-    if not warehouses or not products:
-        st.warning("No warehouses or active products found.")
+    if not warehouses:
+        st.error("No warehouses found.")
         return
 
-    # ==================================================
-    # TRANSFER DETAILS (Form ဖယ်ရှားပြီး Live Selection သို့ ပြောင်းခြင်း)
-    # ==================================================
+
+    warehouse_options = {
+        w["id"]: w["name"]
+        for w in warehouses
+    }
+
 
     st.subheader("Transfer Details")
 
+
     col1, col2 = st.columns(2)
 
+
     with col1:
+
         source_warehouse_id = st.selectbox(
             "Source Warehouse",
             options=list(warehouse_options.keys()),
-            format_func=lambda x: warehouse_options[x]
+            format_func=lambda x: warehouse_options[x],
+            key="source_wh"
         )
 
+
     with col2:
-        dest_options = {
-            k: v
-            for k, v in warehouse_options.items()
-            if k != source_warehouse_id
-        }
+
+        dest_list = [
+            x for x in warehouse_options.keys()
+            if x != source_warehouse_id
+        ]
+
 
         dest_warehouse_id = st.selectbox(
             "Destination Warehouse",
-            options=list(dest_options.keys()) if dest_options else list(warehouse_options.keys()),
-            format_func=lambda x: warehouse_options[x]
+            options=dest_list,
+            format_func=lambda x: warehouse_options[x],
+            key="dest_wh"
         )
 
-    # Product Selection
+
+
+    # ==================================================
+    # LOAD PRODUCTS WITH STOCK
+    # ==================================================
+
+    try:
+
+        stock_rows = (
+            supabase
+            .table("warehouse_stock")
+            .select(
+                """
+                product_id,
+                qty,
+                available_qty,
+                products(
+                    name,
+                    is_active
+                )
+                """
+            )
+            .eq(
+                "warehouse_id",
+                source_warehouse_id
+            )
+            .gt(
+                "qty",
+                0
+            )
+            .execute()
+            .data
+            or []
+        )
+
+
+    except Exception as e:
+
+        st.error(
+            f"Stock loading error: {e}"
+        )
+        return
+
+
+
+    if not stock_rows:
+
+        st.warning(
+            "Source warehouse has no stock."
+        )
+        return
+
+
+
+    product_options = {}
+
+
+    for row in stock_rows:
+
+        product = row.get("products")
+
+
+        if product and product.get("is_active"):
+
+            product_options[
+                row["product_id"]
+            ] = product["name"]
+
+
+
+    if not product_options:
+
+        st.warning(
+            "No active products with stock found."
+        )
+
+        return
+
+
+
     selected_product_id = st.selectbox(
         "Select Product",
         options=list(product_options.keys()),
@@ -63,125 +153,235 @@ def run():
     )
 
 
+
     # ==================================================
-    # STOCK INFORMATION (Real-time Fetching)
+    # STOCK DETAIL
     # ==================================================
 
-    source_stock_qty = 0
-    source_available_qty = 0
+    source_stock = next(
+        (
+            x for x in stock_rows
+            if x["product_id"] == selected_product_id
+        ),
+        None
+    )
 
-    dest_stock_qty = 0
-    dest_available_qty = 0
+
+    source_qty = source_stock.get(
+        "qty",
+        0
+    )
+
+    source_available = source_stock.get(
+        "available_qty",
+        source_qty
+    )
+
+
+
+    # Destination stock
 
     try:
-        supabase = db()
 
-        # Source Stock Query
-        source_stock = (
-            supabase
-            .table("warehouse_stock")
-            .select("*")
-            .eq("warehouse_id", source_warehouse_id)
-            .eq("product_id", selected_product_id)
-            .execute()
-            .data
-            or []
-        )
-
-        if source_stock:
-            source_stock_qty = source_stock[0].get("qty", 0)
-            source_available_qty = source_stock[0].get("available_qty", source_stock_qty)
-
-        # Destination Stock Query
         dest_stock = (
             supabase
             .table("warehouse_stock")
-            .select("*")
-            .eq("warehouse_id", dest_warehouse_id)
-            .eq("product_id", selected_product_id)
+            .select(
+                "qty,available_qty"
+            )
+            .eq(
+                "warehouse_id",
+                dest_warehouse_id
+            )
+            .eq(
+                "product_id",
+                selected_product_id
+            )
             .execute()
             .data
             or []
         )
 
+
         if dest_stock:
-            dest_stock_qty = dest_stock[0].get("qty", 0)
-            dest_available_qty = dest_stock[0].get("available_qty", dest_stock_qty)
 
-    except Exception as e:
-        st.warning(f"Stock loading error: {e}")
-
-
-    # ==================================================
-    # DISPLAY STOCK (Live Preview)
-    # ==================================================
-
-    stock_col1, stock_col2 = st.columns(2)
-
-    with stock_col1:
-        st.info(
-            f"""
-📤 **Source Stock**
-
-Warehouse:
-{warehouse_options.get(source_warehouse_id, '')}
-
-Product:
-{product_options.get(selected_product_id, '')}
-
-Current Qty:
-{source_stock_qty}
-
-Available Qty:
-{source_available_qty}
-"""
-        )
-
-    with stock_col2:
-        st.success(
-            f"""
-📥 **Destination Stock**
-
-Warehouse:
-{warehouse_options.get(dest_warehouse_id, '')}
-
-Product:
-{product_options.get(selected_product_id, '')}
-
-Current Qty:
-{dest_stock_qty}
-
-Available Qty:
-{dest_available_qty}
-"""
-        )
-
-
-    # ==================================================
-    # TRANSFER QUANTITY & EXECUTION
-    # ==================================================
-
-    if source_available_qty <= 0:
-        st.error("Source warehouse has no available stock to transfer.")
-    else:
-        transfer_qty = st.number_input(
-            "Transfer Quantity",
-            min_value=1,
-            max_value=int(source_available_qty),
-            value=1,
-            step=1
-        )
-
-        st.markdown("---")
-
-        # Execute Transfer Button (Form Submit အစား သုံးခြင်း)
-        if st.button("Execute Transfer", type="primary"):
-            # ဒီနေရာမှာ Database Update သို့မဟုတ် Repository logic တွေကို ဆက်လက်ထည့်သွင်းနိုင်ပါသည်
-            st.success(
-                f"Successfully initiated transfer of **{transfer_qty}** units "
-                f"from **{warehouse_options.get(source_warehouse_id)}** "
-                f"to **{warehouse_options.get(dest_warehouse_id)}**!"
+            dest_qty = dest_stock[0].get(
+                "qty",
+                0
             )
+
+            dest_available = dest_stock[0].get(
+                "available_qty",
+                dest_qty
+            )
+
+        else:
+
+            dest_qty = 0
+            dest_available = 0
+
+
+
+    except Exception:
+
+        dest_qty = 0
+        dest_available = 0
+
+
+
+    # ==================================================
+    # DISPLAY STOCK
+    # ==================================================
+
+    c1, c2 = st.columns(2)
+
+
+    with c1:
+
+        st.info(
+f"""
+📤 SOURCE STOCK
+
+Warehouse:
+{warehouse_options[source_warehouse_id]}
+
+Product:
+{product_options[selected_product_id]}
+
+Current Qty:
+{source_qty}
+
+Available Qty:
+{source_available}
+"""
+        )
+
+
+    with c2:
+
+        st.success(
+f"""
+📥 DESTINATION STOCK
+
+Warehouse:
+{warehouse_options[dest_warehouse_id]}
+
+Product:
+{product_options[selected_product_id]}
+
+Current Qty:
+{dest_qty}
+
+Available Qty:
+{dest_available}
+"""
+        )
+
+
+
+    # ==================================================
+    # TRANSFER
+    # ==================================================
+
+    if source_available <= 0:
+
+        st.error(
+            "No available stock."
+        )
+
+        return
+
+
+
+    qty = st.number_input(
+        "Transfer Quantity",
+        min_value=1,
+        max_value=int(source_available),
+        value=1
+    )
+
+
+
+    if st.button(
+        "🚚 Execute Transfer",
+        type="primary"
+    ):
+
+
+        try:
+
+            # reduce source
+
+            supabase.table(
+                "warehouse_stock"
+            ).update(
+                {
+                    "qty": source_qty - qty,
+                    "available_qty": source_available - qty
+                }
+            ).eq(
+                "warehouse_id",
+                source_warehouse_id
+            ).eq(
+                "product_id",
+                selected_product_id
+            ).execute()
+
+
+
+            # increase destination
+
+            if dest_stock:
+
+                supabase.table(
+                    "warehouse_stock"
+                ).update(
+                    {
+                        "qty": dest_qty + qty,
+                        "available_qty": dest_available + qty
+                    }
+                ).eq(
+                    "warehouse_id",
+                    dest_warehouse_id
+                ).eq(
+                    "product_id",
+                    selected_product_id
+                ).execute()
+
+
+            else:
+
+                supabase.table(
+                    "warehouse_stock"
+                ).insert(
+                    {
+                        "warehouse_id": dest_warehouse_id,
+                        "product_id": selected_product_id,
+                        "qty": qty,
+                        "available_qty": qty
+                    }
+                ).execute()
+
+
+
+            st.success(
+                "Transfer completed successfully."
+            )
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+            log_error(
+                f"Transfer failed: {e}"
+            )
+
+            st.error(
+                str(e)
+            )
+
 
 
 if __name__ == "__main__":
