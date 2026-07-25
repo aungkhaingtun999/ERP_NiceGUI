@@ -1,97 +1,126 @@
-# ==============================================================================
-# erp_core/pages/warehouse_transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v10
-# ==============================================================================
-
-from typing import Any, Dict, List
 import streamlit as st
 
-from erp_core.base_repo import db, log_error
-from erp_core.loaders.warehouse_loader import get_warehouses, get_default_warehouse_id
-from erp_core.loaders.product_loader import get_active_products
-from erp_core.repositories import RepositoryCoordinator
+# ===========================
+# SOURCE & DESTINATION STOCK
+# ===========================
+
+warehouse_ids = [
+    warehouse_map[from_name]["id"],
+    warehouse_map[to_name]["id"]
+]
+
+# Database ခေါ်ဆိုမှုကို တစ်ခါတည်းဖြင့် အကောင်းဆုံးဖြစ်အောင် ပေါင်းထုတ်ထားသည်
+stocks_response = (
+    supabase
+    .table("warehouse_stock")
+    .select("*")
+    .eq("product_id", product["id"])
+    .in_("warehouse_id", warehouse_ids)
+    .execute()
+    .data
+)
+
+stock_map = {item["warehouse_id"]: item for item in stocks_response}
+
+# Source stock
+source_record = stock_map.get(warehouse_map[from_name]["id"], {})
+source_qty = source_record.get("qty", 0)
+source_available = source_record.get("available_qty", source_qty)
+
+# Destination stock
+dest_record = stock_map.get(warehouse_map[to_name]["id"], {})
+dest_qty = dest_record.get("qty", 0)
+dest_available = dest_record.get("available_qty", dest_qty)
 
 
-def run() -> None:
-    """Execute the enterprise warehouse transfer module."""
-    st.title("🔁 Enterprise Warehouse Transfer")
+# ===========================
+# DISPLAY STOCK STATUS
+# ===========================
 
-    # Load warehouses and active products
-    warehouses = get_warehouses()
-    products = get_active_products()
+c1, c2 = st.columns(2)
 
-    if not warehouses:
-        st.error("No warehouses available for transfer.")
-        return
-
-    if len(warehouses) < 2:
-        st.warning("At least two warehouses are required to perform a transfer.")
-        return
-
-    if not products:
-        st.warning("No active products available for transfer.")
-        return
-
-    warehouse_options = {w["id"]: w.get("name", f"Warehouse {w['id']}") for w in warehouses}
-    default_id = get_default_warehouse_id()
-
-    with st.form("warehouse_transfer_form"):
-        st.subheader("Transfer Details")
+with c1:
+    st.info(
+        f"""
+        📤 **Source Warehouse**
         
-        col1, col2 = st.columns(2)
+        {from_name}
         
-        with col1:
-            source_warehouse_id = st.selectbox(
-                "Source Warehouse",
-                options=list(warehouse_options.keys()),
-                format_func=lambda x: warehouse_options[x],
-                index=0
-            )
+        Product: 
+        {product['name']}
+        
+        Current Stock: 
+        {source_qty}
+        
+        Available: 
+        {source_available}
+        """
+    )
 
-        with col2:
-            # Filter out source warehouse for destination options if possible, or keep all
-            dest_options = {k: v for k, v in warehouse_options.items() if k != source_warehouse_id}
-            dest_warehouse_id = st.selectbox(
-                "Destination Warehouse",
-                options=list(dest_options.keys()) if dest_options else list(warehouse_options.keys()),
-                format_func=lambda x: warehouse_options[x],
-                index=0 if not dest_options else 0
-            )
-
-        product_options = {p["id"]: p["name"] for p in products}
-        selected_product_id = st.selectbox(
-            "Select Product",
-            options=list(product_options.keys()),
-            format_func=lambda x: product_options[x]
-        )
-
-        transfer_quantity = st.number_input(
-            "Transfer Quantity",
-            min_value=1,
-            value=1,
-            step=1
-        )
-
-        submitted = st.form_submit_button("Execute Transfer")
-
-        if submitted:
-            if source_warehouse_id == dest_warehouse_id:
-                st.error("Source and destination warehouses cannot be the same.")
-            else:
-                try:
-                    with RepositoryCoordinator(db()) as coord:
-                        # Example execution hook (adjust method based on your repository implementation)
-                        # success = coord.transfers.execute_transfer(...)
-                        st.success(
-                            f"Successfully transferred {transfer_quantity} unit(s) of "
-                            f"'{product_options[selected_product_id]}' from "
-                            f"{warehouse_options[source_warehouse_id]} to "
-                            f"{warehouse_options[dest_warehouse_id]}."
-                        )
-                except Exception as e:
-                    log_error(f"warehouse transfer execution error: {e}")
-                    st.error(f"Failed to execute transfer: {e}")
+with c2:
+    st.success(
+        f"""
+        📥 **Destination Warehouse**
+        
+        {to_name}
+        
+        Product: 
+        {product['name']}
+        
+        Current Stock: 
+        {dest_qty}
+        
+        Available: 
+        {dest_available}
+        """
+    )
 
 
-if __name__ == "__main__":
-    run()
+# ===========================
+# VALIDATION & TRANSFER INPUT
+# ===========================
+
+available = source_available
+
+if available <= 0:
+    st.error("Source warehouse has no available stock.")
+    st.stop()
+
+st.markdown("---")
+
+# Transfer Quantity Input
+transfer_qty = st.number_input(
+    "Transfer Quantity",
+    min_value=1,
+    max_value=int(available),
+    value=1,
+    step=1
+)
+
+
+# ===========================
+# AFTER TRANSFER PREVIEW
+# ===========================
+
+st.subheader("📊 After Transfer Preview")
+
+col_p1, col_p2 = st.columns(2)
+
+new_source_qty = source_qty - transfer_qty
+new_dest_qty = dest_qty + transfer_qty
+
+with col_p1:
+    st.markdown(f"**{from_name}**")
+    st.metric(
+        label="Stock Change",
+        value=new_source_qty,
+        delta=f"-{transfer_qty}"
+    )
+
+with col_p2:
+    st.markdown(f"**{to_name}**")
+    st.metric(
+        label="Stock Change",
+        value=new_dest_qty,
+        delta=f"+{transfer_qty}"
+    )
