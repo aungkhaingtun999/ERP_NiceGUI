@@ -113,13 +113,15 @@ def init_session():
 
     defaults = {
 
-        "purchase_cart": [],
+    "purchase_cart": [],
 
-        "purchase_supplier_id": None,
+    "purchase_supplier_id": None,
 
-        "purchase_warehouse_id": None
+    "purchase_warehouse_id": None,
 
-    }
+    "purchase_message": None
+
+}
 
 
     for key, value in defaults.items():
@@ -153,7 +155,13 @@ def run():
 
     init_session()
 
+    if st.session_state.get("purchase_message"):
 
+    st.success(
+        st.session_state.purchase_message
+    )
+
+    st.session_state.purchase_message = None
 
     st.title(
         "📦 Enterprise Purchase Receive"
@@ -889,30 +897,25 @@ def run():
 
 
 
-                st.success(
+                st.session_state.purchase_message = (
 
-                    "✅ Purchase Completed Successfully\n\n"
+    "✅ Purchase Completed Successfully\n\n"
 
-                    +
+    +
 
-                    ", ".join(success)
+    ", ".join(success)
 
-                )
-
-
-
-                st.session_state.purchase_cart = []
+)
 
 
-                st.session_state.purchase_supplier_id = None
+st.session_state.purchase_cart = []
+
+st.session_state.purchase_supplier_id = None
+
+st.session_state.purchase_warehouse_id = None
 
 
-                st.session_state.purchase_warehouse_id = None
-
-
-
-                st.rerun()
-
+st.rerun()
 
 
             if errors:
