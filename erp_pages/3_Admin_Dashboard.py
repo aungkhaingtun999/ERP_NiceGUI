@@ -234,7 +234,8 @@ def run():
         df_sales = pd.DataFrame(
             result.data or []
         )
-
+        st.write("DEBUG SALES RESULT:", result.data)
+        st.write("DEBUG SALES DF:", df_sales)
 
     except Exception as e:
 
