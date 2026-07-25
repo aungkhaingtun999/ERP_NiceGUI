@@ -57,5 +57,7 @@ __all__ = [
     "get_inventory_view",
 
     "get_default_warehouse_id",
+    "get_products",
+    "get_active_products",
 
 ]
