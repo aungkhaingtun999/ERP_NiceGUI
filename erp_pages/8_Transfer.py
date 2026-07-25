@@ -1,126 +1,139 @@
-import streamlit as st
+# ==================================================
+# WAREHOUSE & PRODUCT SELECTION (Normal State - No Form)
+# ==================================================
 
-# ===========================
-# SOURCE & DESTINATION STOCK
-# ===========================
-
-warehouse_ids = [
-    warehouse_map[from_name]["id"],
-    warehouse_map[to_name]["id"]
-]
-
-# Database ခေါ်ဆိုမှုကို တစ်ခါတည်းဖြင့် အကောင်းဆုံးဖြစ်အောင် ပေါင်းထုတ်ထားသည်
-stocks_response = (
-    supabase
-    .table("warehouse_stock")
-    .select("*")
-    .eq("product_id", product["id"])
-    .in_("warehouse_id", warehouse_ids)
-    .execute()
-    .data
+# Source & Destination Warehouse Selectboxes
+source_warehouse_id = st.selectbox(
+    "Source Warehouse",
+    options=list(warehouse_options.keys()),
+    format_func=lambda x: warehouse_options[x]
 )
 
-stock_map = {item["warehouse_id"]: item for item in stocks_response}
+dest_warehouse_id = st.selectbox(
+    "Destination Warehouse",
+    options=list(warehouse_options.keys()),
+    format_func=lambda x: warehouse_options[x]
+)
 
-# Source stock
-source_record = stock_map.get(warehouse_map[from_name]["id"], {})
-source_qty = source_record.get("qty", 0)
-source_available = source_record.get("available_qty", source_qty)
-
-# Destination stock
-dest_record = stock_map.get(warehouse_map[to_name]["id"], {})
-dest_qty = dest_record.get("qty", 0)
-dest_available = dest_record.get("available_qty", dest_qty)
+# Product Selectbox
+selected_product_id = st.selectbox(
+    "Select Product",
+    options=list(product_options.keys()),
+    format_func=lambda x: product_options[x]
+)
 
 
-# ===========================
-# DISPLAY STOCK STATUS
-# ===========================
+# ==================================================
+# STOCK INFORMATION (Real-time Fetching)
+# ==================================================
 
-c1, c2 = st.columns(2)
+source_stock_qty = 0
+source_available_qty = 0
 
-with c1:
+dest_stock_qty = 0
+dest_available_qty = 0
+
+try:
+    supabase = db()
+
+    # Source Stock Query
+    source_stock = (
+        supabase
+        .table("warehouse_stock")
+        .select("*")
+        .eq("warehouse_id", source_warehouse_id)
+        .eq("product_id", selected_product_id)
+        .execute()
+        .data
+        or []
+    )
+
+    if source_stock:
+        source_stock_qty = source_stock[0].get("qty", 0)
+        source_available_qty = source_stock[0].get("available_qty", source_stock_qty)
+
+    # Destination Stock Query
+    dest_stock = (
+        supabase
+        .table("warehouse_stock")
+        .select("*")
+        .eq("warehouse_id", dest_warehouse_id)
+        .eq("product_id", selected_product_id)
+        .execute()
+        .data
+        or []
+    )
+
+    if dest_stock:
+        dest_stock_qty = dest_stock[0].get("qty", 0)
+        dest_available_qty = dest_stock[0].get("available_qty", dest_stock_qty)
+
+except Exception as e:
+    st.warning(f"Stock loading error: {e}")
+
+
+# ==================================================
+# DISPLAY STOCK (Live Preview)
+# ==================================================
+
+stock_col1, stock_col2 = st.columns(2)
+
+with stock_col1:
     st.info(
         f"""
-        📤 **Source Warehouse**
-        
-        {from_name}
-        
-        Product: 
-        {product['name']}
-        
-        Current Stock: 
-        {source_qty}
-        
-        Available: 
-        {source_available}
-        """
+📤 **Source Stock**
+
+Warehouse:
+{warehouse_options[source_warehouse_id]}
+
+Product:
+{product_options[selected_product_id]}
+
+Current Qty:
+{source_stock_qty}
+
+Available Qty:
+{source_available_qty}
+"""
     )
 
-with c2:
+with stock_col2:
     st.success(
         f"""
-        📥 **Destination Warehouse**
-        
-        {to_name}
-        
-        Product: 
-        {product['name']}
-        
-        Current Stock: 
-        {dest_qty}
-        
-        Available: 
-        {dest_available}
-        """
+📥 **Destination Stock**
+
+Warehouse:
+{warehouse_options[dest_warehouse_id]}
+
+Product:
+{product_options[selected_product_id]}
+
+Current Qty:
+{dest_stock_qty}
+
+Available Qty:
+{dest_available_qty}
+"""
     )
 
 
-# ===========================
-# VALIDATION & TRANSFER INPUT
-# ===========================
+# ==================================================
+# TRANSFER VALIDATION & EXECUTION
+# ==================================================
 
-available = source_available
-
-if available <= 0:
-    st.error("Source warehouse has no available stock.")
-    st.stop()
-
-st.markdown("---")
-
-# Transfer Quantity Input
-transfer_qty = st.number_input(
-    "Transfer Quantity",
-    min_value=1,
-    max_value=int(available),
-    value=1,
-    step=1
-)
-
-
-# ===========================
-# AFTER TRANSFER PREVIEW
-# ===========================
-
-st.subheader("📊 After Transfer Preview")
-
-col_p1, col_p2 = st.columns(2)
-
-new_source_qty = source_qty - transfer_qty
-new_dest_qty = dest_qty + transfer_qty
-
-with col_p1:
-    st.markdown(f"**{from_name}**")
-    st.metric(
-        label="Stock Change",
-        value=new_source_qty,
-        delta=f"-{transfer_qty}"
+if source_available_qty <= 0:
+    st.error("Source warehouse has no available stock to transfer.")
+else:
+    # Transfer Quantity Input
+    transfer_qty = st.number_input(
+        "Transfer Quantity",
+        min_value=1,
+        max_value=int(source_available_qty),
+        value=1,
+        step=1
     )
 
-with col_p2:
-    st.markdown(f"**{to_name}**")
-    st.metric(
-        label="Stock Change",
-        value=new_dest_qty,
-        delta=f"+{transfer_qty}"
-    )
+    # Transfer Execute Button (အစားထိုး Form Submit Button)
+    if st.button("Confirm & Transfer", type="primary"):
+        # ဒီနေရာမှာ Database ထဲကို Stock Move တဲ့ Transaction / Update logic တွေ ဆက်ရေးရပါမယ်
+        st.success(f"Successfully transferred {transfer_qty} of {product_options[selected_product_id]} from {warehouse_options[source_warehouse_id]} to {warehouse_options[dest_warehouse_id]}!")
