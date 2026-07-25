@@ -143,6 +143,124 @@ def run():
             notify_error(f"Inventory rules save failed: {e}")
 
     st.divider()
+        # =========================
+    # 💰 PRICING ENGINE
+    # =========================
+
+    st.subheader("💰 Pricing Engine")
+
+
+    default_markup = st.number_input(
+
+        "Global Default Markup (%)",
+
+        min_value=0.0,
+
+        max_value=500.0,
+
+        value=get_float(
+            "DEFAULT_MARKUP_PERCENT",
+            30
+        ),
+
+        step=1.0
+
+    )
+
+
+    pricing_method = st.selectbox(
+
+        "Pricing Method",
+
+        [
+            "MARKUP",
+            "MARGIN"
+        ],
+
+        index=0 if settings_map.get(
+            "PRICING_METHOD",
+            "MARKUP"
+        ) == "MARKUP" else 1
+
+    )
+
+
+    auto_update_price = st.toggle(
+
+        "Auto Update Selling Price",
+
+        value=get_bool(
+            "AUTO_UPDATE_SELLING_PRICE",
+            True
+        )
+
+    )
+
+
+    manual_override = st.toggle(
+
+        "Allow Manual Price Override",
+
+        value=get_bool(
+            "ALLOW_MANUAL_PRICE_OVERRIDE",
+            True
+        )
+
+    )
+
+
+
+    if st.button(
+
+        "💾 Save Pricing Settings",
+
+        use_container_width=True
+
+    ):
+
+
+        try:
+
+            save_setting(
+                "DEFAULT_MARKUP_PERCENT",
+                default_markup
+            )
+
+
+            save_setting(
+                "PRICING_METHOD",
+                pricing_method
+            )
+
+
+            save_setting(
+                "AUTO_UPDATE_SELLING_PRICE",
+                auto_update_price
+            )
+
+
+            save_setting(
+                "ALLOW_MANUAL_PRICE_OVERRIDE",
+                manual_override
+            )
+
+
+            notify_success(
+                "💰 Pricing settings updated successfully."
+            )
+
+
+            st.rerun()
+
+
+        except Exception as e:
+
+            notify_error(
+                f"Pricing save failed: {e}"
+            )
+
+
+    st.divider()
 
     # =========================
     # 💱 FINANCE
