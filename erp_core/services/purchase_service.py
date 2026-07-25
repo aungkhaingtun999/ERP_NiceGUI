@@ -107,11 +107,10 @@ class PurchaseService:
             selling_price = (
     self.pricing
     .calculate_selling_price(
-        cost,
-        product_id
+        product_id,
+        cost
     )
-            )
-
+)
 
             # ------------------------------------------------------
             # CALL SUPABASE RPC
