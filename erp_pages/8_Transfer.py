@@ -8,16 +8,14 @@ import streamlit as st
 
 from erp_core.base_repo import db, log_error
 from ..context import CacheManager
-from erp_core.repositories import ...
+from erp_core.repositories import RepositoryCoordinator
 
 
 @st.cache_data(ttl=300)
 def _get_active_products_cached(version: int) -> List[Dict[str, Any]]:
     """Fetch active products ordered by name with caching."""
     try:
-        # Assuming your RepositoryCoordinator exposes a products repository
         with RepositoryCoordinator(db()) as coord:
-            # If using Supabase directly via a repository method or client:
             return coord.products.get_active_products()
     except Exception as e:
         log_error(f"product loader error: {e}")
