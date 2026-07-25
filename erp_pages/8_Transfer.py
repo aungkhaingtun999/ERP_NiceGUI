@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/8_Transfer.py
-# ERP ENTERPRISE WAREHOUSE TRANSFER v30 RLS & STOCK DEBUG
+# ERP ENTERPRISE WAREHOUSE TRANSFER v31 PRODUCT LOADING FIXED
 # ==============================================================================
 
 import streamlit as st
@@ -23,26 +23,6 @@ def run():
         del st.session_state["dest_wh"]
 
     supabase = db()
-
-    # ==================================================
-    # RLS & STOCK DEBUG SECTION
-    # ==================================================
-    st.markdown("### 🔍 RLS & Warehouse Stock Debug")
-
-    try:
-        all_stock = (
-            supabase
-            .table("warehouse_stock")
-            .select("*")
-            .execute()
-            .data
-            or []
-        )
-        st.write("DEBUG ALL WAREHOUSE STOCK:", all_stock)
-    except Exception as e:
-        st.error(f"Failed to fetch warehouse stock: {e}")
-
-    st.markdown("---")
 
     # ==================================================
     # LOAD WAREHOUSES
@@ -128,26 +108,47 @@ def run():
         st.warning("Source warehouse has no stock records.")
         return
 
+    # ==================================================
+    # LOAD PRODUCT NAMES (Fixed & Type-safe)
+    # ==================================================
+
     product_options = {}
 
     for row in stock_rows:
         try:
+            product_id = int(row["product_id"])
+
             product = (
                 supabase
                 .table("products")
-                .select("name")
+                .select(
+                    "id, name"
+                )
                 .eq(
                     "id",
-                    row["product_id"]
+                    product_id
                 )
                 .execute()
                 .data
+                or []
             )
 
             if product:
-                product_options[row["product_id"]] = product[0]["name"]
-        except Exception:
-            continue
+                product_options[product_id] = product[0]["name"]
+            else:
+                st.warning(
+                    f"Product ID {product_id} not found in products table"
+                )
+
+        except Exception as e:
+            st.warning(
+                f"Product loading error: {e}"
+            )
+
+    st.write(
+        "DEBUG PRODUCT OPTIONS:",
+        product_options
+    )
 
     if not product_options:
         st.warning("No products with stock found.")
