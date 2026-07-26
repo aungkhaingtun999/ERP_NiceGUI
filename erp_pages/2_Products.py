@@ -1063,3 +1063,644 @@ Global Markup
 
     )
     
+    # ==============================================================================
+# OWNER PRICE SAVE ENGINE
+# ==============================================================================
+
+
+st.divider()
+
+st.subheader(
+    "💾 Save Pricing"
+)
+
+
+
+col_save1, col_save2 = st.columns(2)
+
+
+
+# ==============================================================================
+# SAVE OWNER PRICE
+# ==============================================================================
+
+
+with col_save1:
+
+
+    if st.button(
+        "👑 Save Owner Price",
+        type="primary",
+        use_container_width=True
+    ):
+
+
+        try:
+
+
+            result = client.rpc(
+
+                "save_owner_product_price_rpc",
+
+                {
+
+                    "p_product_id":
+                        product["id"],
+
+                    "p_owner_price":
+                        owner_price
+
+                }
+
+            ).execute()
+
+
+
+            st.success(
+
+                result.data
+
+            )
+
+
+            st.cache_data.clear()
+
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"Save Owner Price Failed : {e}"
+
+            )
+
+
+
+
+# ==============================================================================
+# RESET OWNER PRICE
+# ==============================================================================
+
+
+with col_save2:
+
+
+    if st.button(
+
+        "♻ Reset Owner Price",
+
+        use_container_width=True
+
+    ):
+
+
+        try:
+
+
+            result = client.rpc(
+
+                "save_owner_product_price_rpc",
+
+                {
+
+                    "p_product_id":
+                        product["id"],
+
+                    "p_owner_price":
+                        None
+
+                }
+
+            ).execute()
+
+
+
+            st.success(
+
+                result.data
+
+            )
+
+
+            st.cache_data.clear()
+
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"Reset Failed : {e}"
+
+            )
+
+
+
+
+
+# ==============================================================================
+# RECALCULATE FINAL PRICE
+# ==============================================================================
+
+
+st.divider()
+
+
+st.subheader(
+
+    "🔄 Pricing Engine Test"
+
+)
+
+
+
+if st.button(
+
+    "⚙ Calculate Final Selling Price",
+
+    use_container_width=True
+
+):
+
+
+    try:
+
+
+        result = client.rpc(
+
+            "calculate_final_product_price_rpc",
+
+            {
+
+                "p_product_id":
+
+                    product["id"]
+
+            }
+
+        ).execute()
+
+
+
+        st.success(
+
+            result.data
+
+        )
+
+
+        st.cache_data.clear()
+
+
+        st.rerun()
+
+
+
+    except Exception as e:
+
+
+        st.error(
+
+            f"Calculation Failed : {e}"
+
+        )
+
+
+
+
+
+# ==============================================================================
+# FINAL DATABASE STATUS
+# ==============================================================================
+
+
+st.divider()
+
+
+st.subheader(
+
+    "📌 Database Pricing Status"
+
+)
+
+
+
+st.json(
+
+    {
+
+        "Product ID":
+
+            product.get("id"),
+
+
+        "Owner Price":
+
+            product.get(
+                "owner_selling_price"
+            ),
+
+
+        "Final Price":
+
+            product.get(
+                "final_selling_price"
+            ),
+
+
+        "Price Source":
+
+            product.get(
+                "price_source"
+            ),
+
+
+        "Selling Price":
+
+            product.get(
+                "selling_price"
+            )
+
+    }
+
+)
+# ==============================================================================
+# PART 4
+# OWNER PRICE CSV BULK UPLOAD
+# ==============================================================================
+
+
+st.divider()
+
+st.subheader(
+    "📥 Owner Manual Price CSV Import"
+)
+
+
+st.caption(
+    """
+Fast Pricing Setup
+
+CSV Format:
+
+product_id,owner_selling_price
+
+Example:
+
+2,1500
+37,2000
+15,11500
+
+Owner Price has highest priority.
+"""
+)
+
+
+
+# ==============================================================================
+# TEMPLATE DOWNLOAD
+# ==============================================================================
+
+
+import pandas as pd
+from io import BytesIO
+
+
+
+template_df = pd.DataFrame(
+
+    [
+
+        {
+
+            "product_id":
+                "",
+
+            "owner_selling_price":
+                ""
+
+        }
+
+    ]
+
+)
+
+
+
+template_buffer = BytesIO()
+
+
+template_df.to_csv(
+
+    template_buffer,
+
+    index=False
+
+)
+
+
+template_buffer.seek(0)
+
+
+
+st.download_button(
+
+    label="📄 Download Owner Price CSV Template",
+
+    data=template_buffer,
+
+    file_name="owner_price_template.csv",
+
+    mime="text/csv",
+
+    use_container_width=True
+
+)
+
+
+
+
+
+# ==============================================================================
+# CSV UPLOAD
+# ==============================================================================
+
+
+uploaded_file = st.file_uploader(
+
+    "Upload Owner Price CSV",
+
+    type=["csv"]
+
+)
+
+
+
+if uploaded_file:
+
+
+    try:
+
+
+        df = pd.read_csv(
+
+            uploaded_file
+
+        )
+
+
+
+        required_columns = [
+
+            "product_id",
+
+            "owner_selling_price"
+
+        ]
+
+
+
+        missing = [
+
+            c
+
+            for c in required_columns
+
+            if c not in df.columns
+
+        ]
+
+
+
+        if missing:
+
+
+            st.error(
+
+                f"Missing Columns : {missing}"
+
+            )
+
+
+            st.stop()
+
+
+
+        st.dataframe(
+
+            df,
+
+            use_container_width=True
+
+        )
+
+
+
+        if st.button(
+
+            "🚀 Import Owner Prices",
+
+            type="primary",
+
+            use_container_width=True
+
+        ):
+
+
+
+            success_count = 0
+
+            fail_count = 0
+
+            errors = []
+
+
+
+            for _, row in df.iterrows():
+
+
+
+                try:
+
+
+
+                    product_id = int(
+
+                        row["product_id"]
+
+                    )
+
+
+                    owner_price = float(
+
+                        row["owner_selling_price"]
+
+                    )
+
+
+
+                    result = client.rpc(
+
+                        "save_owner_product_price_rpc",
+
+                        {
+
+                            "p_product_id":
+
+                                product_id,
+
+
+                            "p_owner_price":
+
+                                owner_price
+
+                        }
+
+                    ).execute()
+
+
+
+                    if result.data:
+
+
+                        success_count += 1
+
+
+                    else:
+
+
+                        fail_count += 1
+
+
+
+                except Exception as e:
+
+
+                    fail_count += 1
+
+
+                    errors.append(
+
+                        {
+
+                            "product_id":
+
+                                row.get(
+                                    "product_id"
+                                ),
+
+
+                            "error":
+
+                                str(e)
+
+                        }
+
+                    )
+
+
+
+
+
+            st.success(
+
+                f"""
+✅ Import Completed
+
+Success :
+{success_count}
+
+Failed :
+{fail_count}
+"""
+
+            )
+
+
+
+            if errors:
+
+
+                st.error(
+
+                    "Import Errors"
+
+                )
+
+
+                st.dataframe(
+
+                    errors,
+
+                    use_container_width=True
+
+                )
+
+
+
+            st.cache_data.clear()
+
+
+
+            st.rerun()
+
+
+
+    except Exception as e:
+
+
+        st.error(
+
+            f"CSV Error : {e}"
+
+        )
+
+
+
+
+
+# ==============================================================================
+# END STATUS
+# ==============================================================================
+
+
+st.divider()
+
+
+st.success(
+
+    """
+🚀 Owner Pricing System Ready
+
+
+Priority:
+
+👑 Owner Manual Price
+
+        ↓
+
+🟡 Product Markup
+
+        ↓
+
+🔵 Category Markup
+
+        ↓
+
+🟣 Global Default Markup
+
+
+ERP Pricing Engine Active
+
+"""
+
+)
