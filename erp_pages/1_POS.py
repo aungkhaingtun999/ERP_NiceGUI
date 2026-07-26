@@ -263,8 +263,6 @@ def run():
 
     try:
 
-try:
-
     tax_value = get_setting(
         "DEFAULT_TAX_RATE",
         0
