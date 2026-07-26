@@ -1,14 +1,19 @@
 # ==============================================================================
 # erp_pages/11_Pricing_Report.py
-# ERP ENTERPRISE PRICING REPORT v2.0
-# Product Cost, Markup & Selling Price Analysis
+# ERP ENTERPRISE PRICING REPORT v3.0
+# Product + Category + Global Markup Analysis
 # ==============================================================================
 
 
 import streamlit as st
 
-from reports.pricing_report import get_pricing_report_products
-from reports.pricing_report_excel import create_pricing_excel_report
+from reports.pricing_report import (
+    get_pricing_report_products
+)
+
+from reports.pricing_report_excel import (
+    create_pricing_excel_report
+)
 
 
 
@@ -25,14 +30,40 @@ st.set_page_config(
 
 
 # ==============================================================================
+# HELPERS
+# ==============================================================================
+
+
+def safe_float(value):
+
+    try:
+
+        return float(value or 0)
+
+    except:
+
+        return 0
+
+
+
+def safe_percent(value):
+
+    return f"{safe_float(value):.2f}%"
+
+
+
+# ==============================================================================
 # MAIN
 # ==============================================================================
 
+
 def run():
+
 
     st.title(
         "💰 Product Pricing Report"
     )
+
 
     st.caption(
         "MYANMAR ERP - Product Cost, Markup & Selling Price Analysis"
@@ -41,10 +72,13 @@ def run():
 
 
     # ==========================================================================
-    # LOAD PRODUCTS
+    # LOAD DATA FROM PRICING ENGINE
     # ==========================================================================
 
+
     products = get_pricing_report_products()
+
+
 
     if not products:
 
@@ -57,124 +91,13 @@ def run():
 
 
     # ==========================================================================
-    # NORMALIZE DATA
-    # ==========================================================================
-
-    report_products = []
-
-    for p in products:
-
-        cost = float(
-            p.get("purchase_price", 0)
-        )
-
-        selling = float(
-            p.get("selling_price", 0)
-        )
-
-        profit = selling - cost
-
-
-        # =====================================================
-        # MARKUP ENGINE
-        # Product Override
-        # Else Calculate From Cost
-        # =====================================================
-
-        stored_markup = p.get(
-            "markup_percent"
-        )
-
-        if stored_markup is not None:
-
-            markup = float(
-                stored_markup
-            )
-
-            markup_source = (
-                "Product Override"
-            )
-
-        elif cost > 0:
-
-            markup = (
-                (selling - cost)
-                /
-                cost
-            ) * 100
-
-            markup_source = (
-                "Calculated"
-            )
-
-        else:
-
-            markup = 0
-
-            markup_source = (
-                "No Cost"
-            )
-
-
-        report_products.append(
-
-            {
-
-                "id":
-                    p.get("id"),
-
-                "name":
-                    p.get("name", ""),
-
-                "sku":
-                    p.get("sku", ""),
-
-                "category":
-                    p.get("category")
-                    or
-                    "Uncategorized",
-
-                "purchase_price":
-                    cost,
-
-                "selling_price":
-                    selling,
-
-                "profit":
-                    profit,
-
-                "markup_percent":
-                    round(
-                        markup,
-                        2
-                    ),
-
-                "markup_source":
-                    markup_source,
-
-                "product_markup":
-                    p.get("product_markup", 0),
-
-                "category_markup":
-                    p.get("category_markup", 0),
-
-                "global_markup":
-                    p.get("global_markup", 0),
-
-                "final_markup_percent":
-                    p.get("final_markup_percent", markup)
-
-            }
-
-        )
-
-
-
-    # ==========================================================================
     # FILTER
     # ==========================================================================
 
+
     col1, col2 = st.columns(2)
+
+
 
     with col1:
 
@@ -182,19 +105,30 @@ def run():
             "🔍 Search Product"
         )
 
+
+
     with col2:
+
 
         categories = sorted(
 
-            {
+            list(
 
-                p["category"]
+                set(
 
-                for p in report_products
+                    p.get(
+                        "category",
+                        "Uncategorized"
+                    )
 
-            }
+                    for p in products
+
+                )
+
+            )
 
         )
+
 
         category_filter = st.selectbox(
 
@@ -209,9 +143,13 @@ def run():
         )
 
 
-    filtered = report_products
+
+    filtered = products
+
+
 
     if search:
+
 
         filtered = [
 
@@ -223,11 +161,18 @@ def run():
 
             in
 
-            p["name"].lower()
+            p.get(
+                "name",
+                ""
+            )
+            .lower()
 
         ]
 
+
+
     if category_filter != "All":
+
 
         filtered = [
 
@@ -235,8 +180,9 @@ def run():
 
             for p in filtered
 
-            if p["category"]
-
+            if p.get(
+                "category"
+            )
             ==
             category_filter
 
@@ -248,30 +194,40 @@ def run():
     # KPI
     # ==========================================================================
 
-    total_products = len(
-        filtered
-    )
+
+    total_products = len(filtered)
+
+
 
     total_profit = sum(
 
-        p["profit"]
+        safe_float(
+            p.get("profit")
+        )
 
         for p in filtered
 
     )
 
+
+
     avg_markup = (
 
         sum(
 
-            p["markup_percent"]
+            safe_float(
+
+                p.get(
+                    "final_markup_percent"
+                )
+
+            )
 
             for p in filtered
 
         )
 
         /
-
         total_products
 
         if total_products
@@ -281,7 +237,10 @@ def run():
     )
 
 
-    c1, c2, c3 = st.columns(3)
+
+    c1,c2,c3 = st.columns(3)
+
+
 
     c1.metric(
 
@@ -291,6 +250,8 @@ def run():
 
     )
 
+
+
     c2.metric(
 
         "💰 Total Profit",
@@ -298,6 +259,8 @@ def run():
         f"{total_profit:,.0f} MMK"
 
     )
+
+
 
     c3.metric(
 
@@ -313,57 +276,135 @@ def run():
     # TABLE
     # ==========================================================================
 
+
     st.divider()
+
 
     st.subheader(
         "📋 Pricing Analysis"
     )
 
-    display_rows = []
+
+
+    rows = []
+
+
 
     for p in filtered:
 
-        display_rows.append({
 
-            "Product":
-                p["name"],
 
-            "SKU":
-                p.get("sku", ""),
+        rows.append(
 
-            "Category":
-                p.get("category", "-"),
+            {
 
-            "Cost":
-                f"{p['purchase_price']:,.0f}",
 
-            "Product Markup %":
-                f"{p.get('product_markup', 0):.2f}%",
+                "Product":
 
-            "Category Markup %":
-                f"{p.get('category_markup', 0):.2f}%",
+                    p.get(
+                        "name",
+                        ""
+                    ),
 
-            "Global Markup %":
-                f"{p.get('global_markup', 0):.2f}%",
 
-            "Final Markup %":
-                f"{p.get('final_markup_percent', 0):.2f}%",
 
-            "Source":
-                p.get("markup_source", ""),
+                "SKU":
 
-            "Selling Price":
-                f"{p['selling_price']:,.0f}",
+                    p.get(
+                        "sku",
+                        ""
+                    ),
 
-            "Profit":
-                f"{p['profit']:,.0f}"
 
-        })
+
+                "Category":
+
+                    p.get(
+                        "category",
+                        "-"
+                    ),
+
+
+
+                "Cost":
+
+                    f"{safe_float(p.get('purchase_price')):,.0f}",
+
+
+
+                "Product Markup":
+
+                    safe_percent(
+                        p.get(
+                            "product_markup"
+                        )
+                    ),
+
+
+
+                "Category Markup":
+
+                    safe_percent(
+                        p.get(
+                            "category_markup"
+                        )
+                    ),
+
+
+
+                "Global Markup":
+
+                    safe_percent(
+                        p.get(
+                            "global_markup"
+                        )
+                    ),
+
+
+
+                "Final Markup":
+
+                    safe_percent(
+                        p.get(
+                            "final_markup_percent"
+                        )
+                    ),
+
+
+
+                "Source":
+
+                    p.get(
+                        "markup_source",
+                        ""
+                    ),
+
+
+
+                "Selling Price":
+
+                    f"{safe_float(p.get('selling_price')):,.0f}",
+
+
+
+                "Profit":
+
+                    f"{safe_float(p.get('profit')):,.0f}"
+
+            }
+
+        )
+
+
 
     st.dataframe(
-        display_rows,
+
+        rows,
+
         use_container_width=True,
+
         hide_index=True
+
     )
 
 
@@ -372,11 +413,18 @@ def run():
     # EXCEL EXPORT
     # ==========================================================================
 
+
+    st.divider()
+
+
+
     excel_file = create_pricing_excel_report(
 
         filtered
 
     )
+
+
 
     st.download_button(
 
@@ -396,6 +444,7 @@ def run():
 # ==============================================================================
 # ENTRY
 # ==============================================================================
+
 
 if __name__ == "__main__":
 
