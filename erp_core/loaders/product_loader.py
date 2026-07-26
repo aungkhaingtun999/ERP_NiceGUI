@@ -25,13 +25,13 @@ from erp_core.repositories import (
 )
 
 
-@st.cache_data(ttl=300)
+@st.cache_data
 def _get_products_cached(
     warehouse_id,
     offset,
     limit,
     version
-) -> List[Dict[str, Any]]:
+):-> List[Dict[str, Any]]:
 
     try:
 
