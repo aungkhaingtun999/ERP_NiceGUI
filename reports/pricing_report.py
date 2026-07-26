@@ -80,16 +80,97 @@ def get_pricing_report_products():
 
 
         cost = float(
-            p.get("purchase_price") or 0
-        )
+    p.get("purchase_price") or 0
+)
 
-        selling = float(
-            p.get("selling_price") or 0
-        )
-
-
-        p["profit"] = selling - cost
+selling = float(
+    p.get("selling_price") or 0
+)
 
 
+# Profit
+p["profit"] = selling - cost
 
-    return products
+
+# =====================================================
+# MARKUP ENGINE
+# Priority:
+# 1. Product Markup
+# 2. Category Markup
+# 3. Global Markup
+# =====================================================
+
+product_markup = p.get(
+    "markup_percent"
+)
+
+
+category_markup = p.get(
+    "category_markup"
+)
+
+
+
+if product_markup is not None:
+
+
+    final_markup = float(
+        product_markup
+    )
+
+
+    p["markup_source"] = (
+        "Product Override"
+    )
+
+
+
+elif category_markup is not None:
+
+
+    final_markup = float(
+        category_markup
+    )
+
+
+    p["markup_source"] = (
+        "Category"
+    )
+
+
+
+elif cost > 0:
+
+
+    final_markup = (
+
+        (selling - cost)
+
+        /
+
+        cost
+
+    ) * 100
+
+
+    p["markup_source"] = (
+        "Calculated"
+    )
+
+
+
+else:
+
+
+    final_markup = 0
+
+    p["markup_source"] = (
+        "No Cost"
+    )
+
+
+
+p["final_markup_percent"] = round(
+    final_markup,
+    2
+)
