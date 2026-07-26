@@ -7,7 +7,7 @@
 
 import streamlit as st
 
-from erp_core.loaders.product_loader import get_products
+from reports.pricing_report import get_pricing_report_products
 from reports.pricing_report_excel import create_pricing_excel_report
 
 
@@ -46,9 +46,7 @@ def run():
     # LOAD PRODUCTS
     # ==========================================================================
 
-    products = get_products(
-        warehouse_id=None
-    )
+    products = get_pricing_report_products()
 
 
     if not products:
@@ -65,37 +63,7 @@ def run():
     # NORMALIZE DATA
     # ==========================================================================
 
-    report_products = []
-
-
-
-    for p in products:
-
-
-        cost = float(
-
-            p.get(
-                "purchase_price",
-                0
-            )
-            or 0
-
-        )
-
-
-        selling = float(
-
-            p.get(
-                "selling_price",
-                0
-            )
-            or 0
-
-        )
-
-
-        profit = selling - cost
-
+    
 
 
         # =====================================================
@@ -473,16 +441,53 @@ def run():
 
 
 
-    st.dataframe(
+    display_rows = []
 
-        display_rows,
+for p in filtered:
 
-        use_container_width=True,
+    display_rows.append({
 
-        hide_index=True
+        "Product":
+            p["name"],
 
-    )
+        "SKU":
+            p.get("sku",""),
 
+        "Category":
+            p.get("category","-"),
+
+        "Cost":
+            p["purchase_price"],
+
+        "Product Markup %":
+            p.get("product_markup",0),
+
+        "Category Markup %":
+            p.get("category_markup",0),
+
+        "Global Markup %":
+            p.get("global_markup",0),
+
+        "Final Markup %":
+            p.get("final_markup_percent",0),
+
+        "Source":
+            p.get("markup_source",""),
+
+        "Selling Price":
+            p["selling_price"],
+
+        "Profit":
+            p["profit"]
+
+    })
+
+
+st.dataframe(
+    display_rows,
+    use_container_width=True,
+    hide_index=True
+)
 
 
     # ==========================================================================
