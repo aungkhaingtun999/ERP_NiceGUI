@@ -1,11 +1,12 @@
 # ==============================================================================
 # 1_POS.py
-# ERP ENTERPRISE POS v11.0
+# ERP ENTERPRISE POS v12.0
 # PART 1/4
 #
 # CORE ENGINE
-# PRODUCT SEARCH
-# OWNER PRICE PRIORITY
+# AUTH
+# SESSION
+# PRODUCT PRICE ENGINE
 #
 # OWNER PRICE
 #       ↓
@@ -13,7 +14,7 @@
 #       ↓
 # CATEGORY MARKUP
 #       ↓
-# GLOBAL MARKUP
+# SYSTEM PRICE
 #
 # ==============================================================================
 
@@ -24,14 +25,11 @@ import os
 import pandas as pd
 import streamlit as st
 
-
 from datetime import datetime
 
 
 from utils.timezone import format_datetime
-
 from utils.receipt_pdf import generate_pdf
-
 from utils.thermal_receipt import print_thermal
 
 
@@ -41,12 +39,19 @@ from utils.thermal_receipt import print_thermal
 # ==============================================================================
 
 sys.path.append(
+
     os.path.abspath(
+
         os.path.join(
+
             os.path.dirname(__file__),
+
             ".."
+
         )
+
     )
+
 )
 
 
@@ -72,10 +77,137 @@ from erp_core import (
 
 from auth import is_authenticated
 
+
 from language import (
+
     t,
+
     language_selector
+
 )
+
+
+
+# ==============================================================================
+# PRICE FORMAT
+# ==============================================================================
+
+def money(value):
+
+    try:
+
+        return f"{float(value):,.0f} MMK"
+
+    except:
+
+        return "0 MMK"
+
+
+
+
+
+# ==============================================================================
+# PRICE ENGINE
+# ==============================================================================
+
+
+def get_final_price(product):
+
+    """
+    OWNER PRICE PRIORITY ENGINE
+
+    OWNER
+    PRODUCT MARKUP
+    CATEGORY MARKUP
+    SYSTEM PRICE
+
+    """
+
+
+    # OWNER PRICE
+
+    owner_price = product.get(
+        "owner_selling_price"
+    )
+
+
+    if owner_price is not None:
+
+
+        return {
+
+            "price":
+                float(owner_price),
+
+            "source":
+                "OWNER"
+
+        }
+
+
+
+
+
+    # FINAL VIEW PRICE
+
+    final_price = product.get(
+
+        "final_selling_price"
+
+    )
+
+
+    if final_price is not None:
+
+
+        return {
+
+
+            "price":
+                float(final_price),
+
+
+            "source":
+                product.get(
+                    "price_source",
+                    "SYSTEM"
+                )
+
+
+        }
+
+
+
+
+
+    # FALLBACK
+
+    return {
+
+
+        "price":
+
+            float(
+
+                product.get(
+
+                    "selling_price",
+
+                    0
+
+                )
+
+            ),
+
+
+        "source":
+
+            "SYSTEM"
+
+
+    }
+
+
 
 
 
@@ -97,18 +229,26 @@ def run():
 
 
 
+
+
     # ==========================================================================
-    # AUTH
+    # AUTH CHECK
     # ==========================================================================
 
 
     if not is_authenticated():
 
+
         st.warning(
+
             "Please login first."
+
         )
 
+
         st.stop()
+
+
 
 
 
@@ -117,26 +257,34 @@ def run():
     # ==========================================================================
 
 
-    DEFAULT_STATE = {
+    default_state = {
 
 
-        "cart": [],
+        "cart":
+
+            [],
 
 
-        "sale_data": None,
+        "sale_data":
+
+            None,
 
 
-        "show_receipt": False,
+        "show_receipt":
+
+            False,
 
 
-        "processing": False
+        "processing":
+
+            False
 
 
     }
 
 
 
-    for key,value in DEFAULT_STATE.items():
+    for key,value in default_state.items():
 
 
         if key not in st.session_state:
@@ -155,11 +303,15 @@ def run():
 
     try:
 
+
         st.session_state.tax_rate = float(
 
             get_setting(
+
                 "default_tax_rate",
+
                 0
+
             )
 
         )
@@ -176,11 +328,15 @@ def run():
 
     try:
 
-        st.session_state.discount_policy = (
+
+        st.session_state.discount_policy = str(
 
             get_setting(
+
                 "discount_policy",
+
                 "allowed"
+
             )
 
         )
@@ -208,8 +364,11 @@ def run():
 
 
         st.error(
-            "Default warehouse missing."
+
+            "Default warehouse not configured."
+
         )
+
 
         st.stop()
 
@@ -227,7 +386,9 @@ def run():
 
         products = get_products(
 
-            warehouse_id=warehouse_id
+            warehouse_id=
+
+            warehouse_id
 
         )
 
@@ -241,6 +402,7 @@ def run():
 
         )
 
+
         st.stop()
 
 
@@ -251,8 +413,11 @@ def run():
 
 
         st.warning(
-            "No products available."
+
+            "No Products Found"
+
         )
+
 
         st.stop()
 
@@ -275,8 +440,10 @@ def run():
 
     st.caption(
 
-        """
-ERP Enterprise Pricing Engine
+"""
+ERP ENTERPRISE POS
+
+Pricing Engine
 
 OWNER PRICE
 ↓
@@ -284,27 +451,33 @@ PRODUCT MARKUP
 ↓
 CATEGORY MARKUP
 ↓
-GLOBAL MARKUP
+SYSTEM PRICE
 
 POS uses FINAL SELLING PRICE
+
 """
 
     )
+ # ==============================================================================
+# PART 2/4
+#
+# PRODUCT SEARCH
+# CART ENGINE
+# STOCK CONTROL
+#
+# ==============================================================================
 
 
 
-
-
-    # ==========================================================================
-    # PRODUCT SEARCH
-    # ==========================================================================
+# ==============================================================================
+# PRODUCT SEARCH
+# ==============================================================================
 
 
     if not st.session_state.show_receipt:
 
 
-
-        col1,col2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
 
 
@@ -339,34 +512,40 @@ POS uses FINAL SELLING PRICE
         for product in products:
 
 
-
             name = str(
 
                 product.get(
+
                     "name",
+
                     ""
+
                 )
 
             )
-
 
 
             sku = str(
 
                 product.get(
+
                     "sku",
+
                     ""
+
                 )
 
             )
 
 
-
             barcode = str(
 
                 product.get(
+
                     "barcode",
+
                     ""
+
                 )
 
             )
@@ -402,7 +581,6 @@ POS uses FINAL SELLING PRICE
 
 
                 search = barcode_search.lower()
-
 
 
                 code_ok = (
@@ -448,6 +626,7 @@ POS uses FINAL SELLING PRICE
 
                 format_func=lambda x:
 
+
                 (
 
                     f"{x.get('sku','')} | "
@@ -460,7 +639,7 @@ POS uses FINAL SELLING PRICE
 
                     f"Price: "
 
-                    f"{float(x.get('final_selling_price',0)):,.0f}"
+                    f"{money(get_final_price(x)['price'])}"
 
                 )
 
@@ -497,39 +676,17 @@ POS uses FINAL SELLING PRICE
             # ==============================================================
 
 
-            final_price = float(
+            price_data = get_final_price(
 
-
-                selected.get(
-
-
-                    "final_selling_price",
-
-
-                    selected.get(
-
-                        "selling_price",
-
-                        0
-
-                    )
-
-                )
-
+                selected
 
             )
 
 
+            final_price = price_data["price"]
 
 
-
-            price_source = selected.get(
-
-                "price_source",
-
-                "SYSTEM"
-
-            )
+            price_source = price_data["source"]
 
 
 
@@ -539,9 +696,14 @@ POS uses FINAL SELLING PRICE
 
                 f"""
 
+Product:
+
+{selected['name']}
+
+
 Selling Price:
 
-{final_price:,.0f} MMK
+{money(final_price)}
 
 
 Price Source:
@@ -554,6 +716,11 @@ Price Source:
 
 
 
+
+
+            # ==============================================================
+            # ADD CART
+            # ==============================================================
 
 
             if st.button(
@@ -580,17 +747,19 @@ Price Source:
 
 
 
-                existing_qty = sum(
+
+
+                current_qty = sum(
+
 
                     item["qty"]
 
+
                     for item in st.session_state.cart
 
-                    if item["id"]
 
-                    ==
+                    if item["id"] == selected["id"]
 
-                    selected["id"]
 
                 )
 
@@ -598,21 +767,35 @@ Price Source:
 
 
 
-                if existing_qty + qty > available:
+                if current_qty + qty > available:
+
 
 
                     st.error(
 
-                        f"Stock not enough. Available {available}"
+                        f"""
+
+Insufficient Stock
+
+Available:
+
+{available}
+
+"""
 
                     )
+
+
 
 
 
                 else:
 
 
-                    found=False
+
+                    exists = False
+
+
 
 
 
@@ -626,7 +809,9 @@ Price Source:
 
                             item["qty"] += int(qty)
 
-                            found=True
+
+                            exists = True
+
 
                             break
 
@@ -634,7 +819,8 @@ Price Source:
 
 
 
-                    if not found:
+                    if not exists:
+
 
 
                         st.session_state.cart.append(
@@ -642,14 +828,17 @@ Price Source:
 
                             {
 
+
                             "id":
 
                                 selected["id"],
 
 
+
                             "name":
 
                                 selected["name"],
+
 
 
                             "sku":
@@ -663,25 +852,31 @@ Price Source:
                                 ),
 
 
+
+                            "qty":
+
+                                int(qty),
+
+
+
                             "selling_price":
 
                                 final_price,
 
 
+
                             "price_source":
 
-                                price_source,
+                                price_source
 
-
-                            "qty":
-
-                                int(qty)
 
 
                             }
 
 
                         )
+
+
 
 
 
@@ -692,35 +887,48 @@ Price Source:
                     )
 
 
-
                     st.rerun()
-                        # ==========================================================================
-    # PART 2/4
-    # CART ENGINE + PAYMENT ENGINE
-    # ==========================================================================
+
+
+
+
+
+
+
+# ==============================================================================
+# CART DISPLAY
+# ==============================================================================
 
 
     if (
+
         not st.session_state.show_receipt
-        and st.session_state.cart
+
+        and
+
+        st.session_state.cart
+
     ):
+
 
 
         st.divider()
 
 
+
         st.subheader(
+
             "🛒 Shopping Cart"
+
         )
 
 
 
-        # ==============================================================
-        # CART TABLE
-        # ==============================================================
 
 
         cart_rows = []
+
+
 
 
 
@@ -769,12 +977,20 @@ Price Source:
 
                 "Unit Price":
 
-                    f"{item['selling_price']:,.0f} MMK",
+                    money(
+
+                        item["selling_price"]
+
+                    ),
 
 
                 "Amount":
 
-                    f"{amount:,.0f} MMK"
+                    money(
+
+                        amount
+
+                    )
 
 
                 }
@@ -786,17 +1002,27 @@ Price Source:
 
 
 
-        df = pd.DataFrame(cart_rows)
+        cart_df = pd.DataFrame(
+
+            cart_rows
+
+        )
+
+
 
 
 
         st.dataframe(
 
-            df,
+
+            cart_df,
+
 
             use_container_width=True,
 
+
             hide_index=True
+
 
         )
 
@@ -826,6 +1052,8 @@ Price Source:
 
 
 
+
+
         total_qty = sum(
 
 
@@ -845,19 +1073,19 @@ Price Source:
 
             f"""
 
-Items:
+Total Items:
 
 {len(st.session_state.cart)}
 
 
-Quantity:
+Total Quantity:
 
 {total_qty}
 
 
 Subtotal:
 
-{subtotal:,.0f} MMK
+{money(subtotal)}
 
 """
 
@@ -880,9 +1108,13 @@ Subtotal:
 
 
 
+
+
         for index,item in enumerate(
 
+
             st.session_state.cart
+
 
         ):
 
@@ -912,28 +1144,33 @@ Subtotal:
 
                 if st.button(
 
+
                     "❌",
 
+
                     key=f"remove_{index}"
+
 
                 ):
 
 
                     st.session_state.cart.pop(index)
 
+
                     st.rerun()
-
-
+                    
+# ==============================================================================
+# PART 3/4
+#
+# PAYMENT ENGINE
+# CHECKOUT RPC
+# SALE PROCESS
+#
+# ==============================================================================
 
 
 
         st.divider()
-
-
-
-        # ==============================================================
-        # PAYMENT
-        # ==============================================================
 
 
         st.subheader(
@@ -944,31 +1181,8 @@ Subtotal:
 
 
 
-
-
-        st.info(
-
-            f"""
-
-System Tax Rate:
-
-{st.session_state.tax_rate}%
-
-
-Discount Policy:
-
-{st.session_state.discount_policy}
-
-"""
-
-        )
-
-
-
-
-
         # ==============================================================
-        # DISCOUNT CONTROL
+        # DISCOUNT POLICY
         # ==============================================================
 
 
@@ -988,15 +1202,21 @@ Discount Policy:
 
             discount = st.number_input(
 
+
                 "Discount",
+
 
                 min_value=0.0,
 
+
                 value=0.0,
+
 
                 step=100.0,
 
+
                 disabled=True
+
 
             )
 
@@ -1004,7 +1224,7 @@ Discount Policy:
 
             st.error(
 
-                "⛔ Discount disabled by administrator"
+                "⛔ Discount restricted"
 
             )
 
@@ -1016,13 +1236,18 @@ Discount Policy:
 
             discount = st.number_input(
 
+
                 "Discount",
+
 
                 min_value=0.0,
 
+
                 value=0.0,
 
+
                 step=100.0
+
 
             )
 
@@ -1039,11 +1264,12 @@ Discount Policy:
 
 
         # ==============================================================
-        # TAX + TOTAL
+        # TAX
         # ==============================================================
 
 
         tax_amount = round(
+
 
             subtotal
 
@@ -1055,7 +1281,9 @@ Discount Policy:
 
             100,
 
+
             2
+
 
         )
 
@@ -1065,7 +1293,9 @@ Discount Policy:
 
         grand_total = max(
 
+
             0,
+
 
             subtotal
 
@@ -1076,6 +1306,7 @@ Discount Policy:
             -
 
             discount
+
 
         )
 
@@ -1089,17 +1320,17 @@ Discount Policy:
 
 Subtotal:
 
-{subtotal:,.0f} MMK
+{money(subtotal)}
 
 
 Tax:
 
-{tax_amount:,.0f} MMK
+{money(tax_amount)}
 
 
 Discount:
 
-{discount:,.0f} MMK
+{money(discount)}
 
 
 
@@ -1107,7 +1338,7 @@ Discount:
 
 TOTAL:
 
-{grand_total:,.0f} MMK
+{money(grand_total)}
 
 ====================
 
@@ -1126,15 +1357,17 @@ TOTAL:
 
         payment_method = st.selectbox(
 
+
             "Payment Method",
+
 
             [
 
-                "Cash",
+                "CASH",
 
-                "Card",
+                "CARD",
 
-                "Mobile"
+                "MOBILE"
 
             ]
 
@@ -1144,18 +1377,24 @@ TOTAL:
 
 
 
-        if payment_method == "Cash":
+        if payment_method == "CASH":
+
 
 
             received = st.number_input(
 
+
                 "Received Amount",
+
 
                 min_value=float(grand_total),
 
+
                 value=float(grand_total),
 
+
                 step=100.0
+
 
             )
 
@@ -1171,9 +1410,12 @@ TOTAL:
 
         change = max(
 
+
             0,
 
+
             received - grand_total
+
 
         )
 
@@ -1183,7 +1425,7 @@ TOTAL:
 
         st.write(
 
-            f"Change : {change:,.0f} MMK"
+            f"Change : {money(change)}"
 
         )
 
@@ -1191,20 +1433,26 @@ TOTAL:
 
 
 
+
+
         # ==============================================================
-        # CONFIRM BUTTON
+        # CONFIRM SALE
         # ==============================================================
 
 
         if st.button(
 
+
             "✅ Confirm Sale",
+
 
             disabled=
 
             st.session_state.processing,
 
+
             use_container_width=True
+
 
         ):
 
@@ -1213,28 +1461,6 @@ TOTAL:
             st.session_state.processing = True
 
 
-
-            st.rerun()
-            # ==========================================================================
-# PART 3/4
-# CHECKOUT ENGINE
-# ==========================================================================
-
-
-        if st.button(
-
-            "✅ Confirm Sale",
-
-            disabled=
-
-            st.session_state.processing,
-
-            use_container_width=True
-
-        ):
-
-
-            st.session_state.processing = True
 
 
 
@@ -1242,9 +1468,9 @@ TOTAL:
 
 
 
-                # ==========================================================
-                # CREATE CART PAYLOAD
-                # ==========================================================
+                # ======================================================
+                # CREATE RPC CART PAYLOAD
+                # ======================================================
 
 
                 cart_payload = []
@@ -1260,14 +1486,11 @@ TOTAL:
 
                         {
 
+
                         "id":
 
                             item["id"],
 
-
-                        "name":
-
-                            item["name"],
 
 
                         "qty":
@@ -1279,24 +1502,15 @@ TOTAL:
                             ),
 
 
+
                         "selling_price":
 
                             float(
 
                                 item["selling_price"]
 
-                            ),
-
-
-                        "price_source":
-
-                            item.get(
-
-                                "price_source",
-
-                                "SYSTEM"
-
                             )
+
 
 
                         }
@@ -1308,9 +1522,12 @@ TOTAL:
 
 
 
-                # ==========================================================
-                # CALL CHECKOUT RPC
-                # ==========================================================
+
+
+                # ======================================================
+                # CALL checkout_sale_rpc
+                # SQL MATCH
+                # ======================================================
 
 
                 result = checkout_sale_rpc(
@@ -1321,12 +1538,14 @@ TOTAL:
                     cart_payload,
 
 
-                    paid_amount=
 
-                    received,
+                    warehouse_id=
+
+                    warehouse_id,
 
 
-                    cashier_id=
+
+                    user_id=
 
                     st.session_state.get(
 
@@ -1335,24 +1554,28 @@ TOTAL:
                     ),
 
 
-                    warehouse_id=
-
-                    warehouse_id,
-
 
                     payment_method=
 
                     payment_method,
 
 
-                    tax_rate=
-
-                    st.session_state.tax_rate,
-
 
                     discount=
 
-                    discount
+                    discount,
+
+
+
+                    tax=
+
+                    tax_amount,
+
+
+
+                    paid_amount=
+
+                    received
 
 
                 )
@@ -1361,9 +1584,11 @@ TOTAL:
 
 
 
-                # ==========================================================
+
+
+                # ======================================================
                 # SUCCESS
-                # ==========================================================
+                # ======================================================
 
 
                 if result.get(
@@ -1386,6 +1611,8 @@ TOTAL:
 
 
 
+
+
                     if isinstance(
 
                         data,
@@ -1395,15 +1622,8 @@ TOTAL:
                     ):
 
 
-                        data = (
 
-                            data[0]
-
-                            if data
-
-                            else {}
-
-                        )
+                        data = data[0] if data else {}
 
 
 
@@ -1414,14 +1634,6 @@ TOTAL:
                         data.get(
 
                             "invoice_no"
-
-                        )
-
-                        or
-
-                        data.get(
-
-                            "sale_no"
 
                         )
 
@@ -1449,9 +1661,6 @@ TOTAL:
 
 
 
-                    # ======================================================
-                    # RECEIPT ITEMS
-                    # ======================================================
 
 
                     receipt_items = []
@@ -1462,23 +1671,8 @@ TOTAL:
 
 
 
-                        qty = int(
-
-                            item["qty"]
-
-                        )
-
-
-
-                        price = float(
-
-                            item["selling_price"]
-
-                        )
-
-
-
                         receipt_items.append(
+
 
 
                             {
@@ -1489,19 +1683,23 @@ TOTAL:
                                 item["name"],
 
 
+
                             "product_id":
 
                                 item["id"],
 
 
+
                             "quantity":
 
-                                qty,
+                                item["qty"],
+
 
 
                             "unit_price":
 
-                                price,
+                                item["selling_price"],
+
 
 
                             "price_source":
@@ -1515,11 +1713,14 @@ TOTAL:
                                 ),
 
 
+
                             "total":
 
-                                qty *
+                                item["qty"]
 
-                                price
+                                *
+
+                                item["selling_price"]
 
 
                             }
@@ -1531,12 +1732,11 @@ TOTAL:
 
 
 
-                    # ======================================================
-                    # SAVE SALE DATA
-                    # ======================================================
+
 
 
                     st.session_state.sale_data = {
+
 
 
                         "invoice_no":
@@ -1544,9 +1744,11 @@ TOTAL:
                             invoice_no,
 
 
+
                         "date":
 
                             format_datetime(),
+
 
 
                         "cashier":
@@ -1560,9 +1762,11 @@ TOTAL:
                             ),
 
 
+
                         "items":
 
                             receipt_items,
+
 
 
                         "subtotal":
@@ -1570,9 +1774,11 @@ TOTAL:
                             subtotal,
 
 
+
                         "tax_rate":
 
                             st.session_state.tax_rate,
+
 
 
                         "tax_amount":
@@ -1580,9 +1786,11 @@ TOTAL:
                             tax_amount,
 
 
+
                         "discount":
 
                             discount,
+
 
 
                         "grand_total":
@@ -1590,9 +1798,11 @@ TOTAL:
                             grand_total,
 
 
+
                         "paid":
 
                             received,
+
 
 
                         "change":
@@ -1600,7 +1810,9 @@ TOTAL:
                             change
 
 
+
                     }
+
 
 
 
@@ -1612,8 +1824,8 @@ TOTAL:
                     st.session_state.processing = False
 
 
-
                     st.rerun()
+
 
 
 
@@ -1625,11 +1837,12 @@ TOTAL:
 
                     st.error(
 
+
                         result.get(
 
                             "message",
 
-                            "Sale Failed"
+                            "Checkout Failed"
 
                         )
 
@@ -1638,6 +1851,7 @@ TOTAL:
 
 
                     st.session_state.processing = False
+
 
 
 
@@ -1655,14 +1869,21 @@ TOTAL:
 
                     f"Checkout Error : {e}"
 
-                    )
-# ==========================================================================
+                )
+       # ==============================================================================
 # PART 4/4
-# RECEIPT ENGINE + PRINT + RESET
-# ==========================================================================
+#
+# RECEIPT ENGINE
+# PRINT
+# PDF
+# RESET
+#
+# ==============================================================================
+
 
 
     if st.session_state.show_receipt:
+
 
 
         data = st.session_state.sale_data
@@ -1701,6 +1922,7 @@ TOTAL:
         st.info(
 
             f"""
+
 Invoice No:
 
 {data['invoice_no']}
@@ -1718,6 +1940,8 @@ Cashier:
 """
 
         )
+
+
 
 
 
@@ -1747,17 +1971,14 @@ Cashier:
                     item["name"],
 
 
+
                 "Qty":
 
                     item["quantity"],
 
 
-                "Price":
 
-                    f"{item['unit_price']:,.0f}",
-
-
-                "Source":
+                "Price Source":
 
                     item.get(
 
@@ -1766,6 +1987,13 @@ Cashier:
                         "SYSTEM"
 
                     ),
+
+
+
+                "Unit Price":
+
+                    f"{item['unit_price']:,.0f} MMK",
+
 
 
                 "Amount":
@@ -1794,19 +2022,21 @@ Cashier:
 
         st.dataframe(
 
+
             receipt_df,
+
 
             use_container_width=True,
 
+
             hide_index=True
+
 
         )
 
 
 
 
-
-        st.divider()
 
 
 
@@ -1824,9 +2054,11 @@ Subtotal:
 {data['subtotal']:,.0f} MMK
 
 
+
 Tax ({data['tax_rate']}%)
 
 {data['tax_amount']:,.0f} MMK
+
 
 
 Discount:
@@ -1835,19 +2067,20 @@ Discount:
 
 
 
-======================
+=========================
 
 GRAND TOTAL
 
 {data['grand_total']:,.0f} MMK
 
-======================
+=========================
 
 
 
 Paid:
 
 {data['paid']:,.0f} MMK
+
 
 
 Change:
@@ -1862,9 +2095,6 @@ Change:
 
 
 
-        # ==============================================================
-        # PRINT BUTTONS
-        # ==============================================================
 
 
         c1,c2,c3 = st.columns(3)
@@ -1873,25 +2103,31 @@ Change:
 
 
 
-        # --------------------------------------------------------------
+
+        # ==============================================================
         # THERMAL PRINT
-        # --------------------------------------------------------------
+        # ==============================================================
 
 
         with c1:
 
 
+
             if st.button(
+
 
                 "🖨 Print Receipt",
 
+
                 use_container_width=True
+
 
             ):
 
 
 
                 try:
+
 
 
                     print_thermal(
@@ -1901,6 +2137,7 @@ Change:
                     )
 
 
+
                     st.success(
 
                         "Receipt sent to printer"
@@ -1908,7 +2145,9 @@ Change:
                     )
 
 
+
                 except Exception as e:
+
 
 
                     st.error(
@@ -1923,25 +2162,31 @@ Change:
 
 
 
-        # --------------------------------------------------------------
-        # PDF
-        # --------------------------------------------------------------
+
+        # ==============================================================
+        # PDF GENERATE
+        # ==============================================================
 
 
         with c2:
 
 
+
             if st.button(
+
 
                 "📄 Generate PDF",
 
+
                 use_container_width=True
+
 
             ):
 
 
 
                 try:
+
 
 
                     pdf_bytes, filename = generate_pdf(
@@ -1959,10 +2204,16 @@ Change:
                         st.download_button(
 
 
+                            label=
+
                             "⬇ Download PDF",
 
 
-                            data=pdf_bytes,
+
+                            data=
+
+                            pdf_bytes,
+
 
 
                             file_name=
@@ -1970,12 +2221,15 @@ Change:
                             f"{filename}.pdf",
 
 
+
                             mime=
 
                             "application/pdf",
 
 
+
                             use_container_width=True
+
 
 
                         )
@@ -1983,6 +2237,7 @@ Change:
 
 
                 except Exception as e:
+
 
 
                     st.error(
@@ -1997,19 +2252,25 @@ Change:
 
 
 
-        # --------------------------------------------------------------
+
+
+        # ==============================================================
         # NEW SALE
-        # --------------------------------------------------------------
+        # ==============================================================
 
 
         with c3:
 
 
+
             if st.button(
+
 
                 "🆕 New Sale",
 
+
                 use_container_width=True
+
 
             ):
 
@@ -2018,13 +2279,18 @@ Change:
                 st.session_state.cart = []
 
 
+
                 st.session_state.sale_data = None
+
 
 
                 st.session_state.show_receipt = False
 
 
+
                 st.session_state.processing = False
+
+
 
 
 
@@ -2033,11 +2299,15 @@ Change:
 
                     st.session_state.tax_rate = float(
 
+
                         get_setting(
+
 
                             "default_tax_rate",
 
+
                             0
+
 
                         )
 
@@ -2053,4 +2323,13 @@ Change:
 
 
 
-                st.rerun()
+
+                st.success(
+
+                    "New Sale Ready"
+
+                )
+
+
+
+                st.rerun()         
