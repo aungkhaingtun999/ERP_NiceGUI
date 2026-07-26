@@ -1531,55 +1531,123 @@ TOTAL:
 
 
                 result = checkout_sale_rpc(
+# ======================================================
+# CASHIER UUID RESOLVE
+# ======================================================
 
+cashier_id = (
 
-                    cart=
+    st.session_state.get("user_id")
 
-                    cart_payload,
+    or
 
+    st.session_state.get("id")
 
+    or
 
-                    warehouse_id=
+    st.session_state.get("user", {}).get("id")
 
-                    warehouse_id,
-
-
-
-                    user_id=
-
-                    st.session_state.get(
-
-                        "user_id"
-
-                    ),
+)
 
 
 
-                    payment_method=
+if not cashier_id:
 
-                    payment_method,
+    st.error(
+        "Cashier ID missing. Please login again."
+    )
 
+    st.session_state.processing = False
 
-
-                    discount=
-
-                    discount,
-
-
-
-                    tax=
-
-                    tax_amount,
+    st.stop()
 
 
 
-                    paid_amount=
+# ======================================================
+# CHECKOUT RPC
+# ======================================================
 
-                    received
+
+# ======================================================
+# CASHIER UUID RESOLVE
+# ======================================================
+
+cashier_id = (
+
+    st.session_state.get("user_id")
+
+    or
+
+    st.session_state.get("id")
+
+    or
+
+    st.session_state.get("user", {}).get("id")
+
+)
 
 
-                )
 
+if not cashier_id:
+
+    st.error(
+        "Cashier ID missing. Please login again."
+    )
+
+    st.session_state.processing = False
+
+    st.stop()
+
+
+
+# ======================================================
+# CHECKOUT RPC
+# ======================================================
+
+
+result = checkout_sale_rpc(
+
+
+    cart=
+
+    cart_payload,
+
+
+    paid_amount=
+
+    received,
+
+
+    warehouse_id=
+
+    warehouse_id,
+
+
+    cashier_id=
+
+    cashier_id,
+
+
+    counter_id=
+
+    1,
+
+
+    payment_method=
+
+    payment_method,
+
+
+    tax=
+
+    tax_amount,
+
+
+    discount=
+
+    discount
+
+)
 
 
 
@@ -1753,13 +1821,13 @@ TOTAL:
 
                         "cashier":
 
-                            st.session_state.get(
-
-                                "username",
-
-                                "Unknown"
-
-                            ),
+(
+                   st.session_state.get("username")
+                   or
+                   st.session_state.get("full_name")
+                   or
+                   "Unknown"
+),
 
 
 
