@@ -1,6 +1,17 @@
 # ==============================================================================
 # erp_pages/2_Products.py
-# ERP ENTERPRISE PRODUCT PRICING CONTROL
+# ERP ENTERPRISE PRODUCT PRICING CONTROL v4.0
+#
+# OWNER PRICE PRIORITY ENGINE
+#
+# OWNER MANUAL PRICE
+#        ↓
+# PRODUCT MARKUP
+#        ↓
+# CATEGORY MARKUP
+#        ↓
+# GLOBAL MARKUP
+#
 # ==============================================================================
 
 
@@ -11,108 +22,606 @@ from decimal import Decimal
 from erp_core.base_repo import db
 
 
+
+# ==============================================================================
+# PAGE CONFIG
+# ==============================================================================
+
 st.set_page_config(
-    page_title="Products",
+
+    page_title="Product Pricing Control",
+
+    page_icon="📦",
+
     layout="wide"
+
 )
 
 
 
-# ==========================================================
-# CLIENT
-# ==========================================================
+# ==============================================================================
+# DATABASE CLIENT
+# ==============================================================================
 
 client = db()
 
 
 
-# ==========================================================
+# ==============================================================================
 # LOAD PRODUCTS
-# ==========================================================
+# ==============================================================================
+
+
+@st.cache_data(ttl=60)
 
 def load_products():
 
-    result = (
-        client
-        .table("products")
-        .select(
-            """
-            id,
-            name,
-            sku,
-            purchase_price,
-            selling_price,
-            markup_percent,
-            category_id
-            """
+
+    try:
+
+
+        result = (
+
+            client
+
+            .table("products")
+
+            .select(
+
+                """
+                id,
+                name,
+                sku,
+                barcode,
+
+                purchase_price,
+
+                selling_price,
+
+                owner_selling_price,
+
+                final_selling_price,
+
+                price_source,
+
+                markup_percent,
+
+                category_id
+
+                """
+
+            )
+
+            .order(
+
+                "name"
+
+            )
+
+            .execute()
+
         )
-        .order(
-            "id"
+
+
+        return result.data or []
+
+
+
+    except Exception as e:
+
+
+        st.error(
+
+            f"Product Load Error : {e}"
+
         )
-        .execute()
-    )
-
-    return result.data or []
 
 
+        return []
 
-# ==========================================================
-# CATEGORY
-# ==========================================================
+
+
+
+
+# ==============================================================================
+# LOAD CATEGORY
+# ==============================================================================
+
+
+@st.cache_data(ttl=300)
 
 def get_category(category_id):
 
+
     if not category_id:
 
-        return {
-            "name": "-",
-            "markup": None
-        }
-
-
-    result = (
-        client
-        .table("categories")
-        .select(
-            "name,markup_percent"
-        )
-        .eq(
-            "id",
-            category_id
-        )
-        .execute()
-    )
-
-
-    if result.data:
 
         return {
+
 
             "name":
-                result.data[0]["name"],
+
+                "-",
 
             "markup":
-                result.data[0]["markup_percent"]
+
+                None
+
 
         }
+
+
+
+
+    try:
+
+
+        result = (
+
+            client
+
+            .table("categories")
+
+            .select(
+
+                """
+
+                name,
+
+                markup_percent
+
+                """
+
+            )
+
+            .eq(
+
+                "id",
+
+                category_id
+
+            )
+
+            .execute()
+
+        )
+
+
+
+        if result.data:
+
+
+            row = result.data[0]
+
+
+            return {
+
+
+                "name":
+
+                    row.get(
+                        "name",
+                        "-"
+                    ),
+
+
+                "markup":
+
+                    row.get(
+                        "markup_percent"
+                    )
+
+
+            }
+
+
+
+    except Exception:
+
+
+        pass
+
+
 
 
     return {
-        "name":"-",
-        "markup":None
+
+
+        "name":
+
+            "-",
+
+
+        "markup":
+
+            None
+
+
     }
 
 
 
-# ==========================================================
-# TITLE
-# ==========================================================
+
+
+# ==============================================================================
+# GET GLOBAL MARKUP SETTING
+# ==============================================================================
+
+
+def get_global_markup():
+
+
+    try:
+
+
+        result = (
+
+            client
+
+            .table("settings")
+
+            .select(
+
+                "value"
+
+            )
+
+            .eq(
+
+                "key",
+
+                "DEFAULT_MARKUP_PERCENT"
+
+            )
+
+            .execute()
+
+        )
+
+
+
+        if result.data:
+
+
+            return Decimal(
+
+                str(
+
+                    result.data[0]
+
+                    .get(
+                        "value",
+                        0
+                    )
+
+                )
+
+            )
+
+
+
+    except Exception:
+
+
+        pass
+
+
+
+    # IMPORTANT
+    # NO HARD CODE DEFAULT
+
+    return Decimal("0")
+
+
+
+
+
+# ==============================================================================
+# PRICE CALCULATION PREVIEW
+# ==============================================================================
+
+
+def calculate_preview_price(product):
+
+
+    cost = Decimal(
+
+        str(
+
+            product.get(
+
+                "purchase_price",
+
+                0
+
+            )
+            or 0
+
+        )
+
+    )
+
+
+
+    # --------------------------------------------------
+    # OWNER PRICE FIRST
+    # --------------------------------------------------
+
+
+    owner_price = product.get(
+
+        "owner_selling_price"
+
+    )
+
+
+    if owner_price is not None:
+
+
+        return {
+
+
+            "price":
+
+                Decimal(
+
+                    str(owner_price)
+
+                ),
+
+
+            "source":
+
+                "OWNER"
+
+
+        }
+
+
+
+
+
+    # --------------------------------------------------
+    # PRODUCT MARKUP
+    # --------------------------------------------------
+
+
+    product_markup = product.get(
+
+        "markup_percent"
+
+    )
+
+
+
+    if product_markup is not None:
+
+
+        price = (
+
+            cost +
+
+            (
+
+                cost *
+
+                Decimal(
+
+                    str(product_markup)
+
+                )
+
+                /
+
+                Decimal("100")
+
+            )
+
+        )
+
+
+
+        return {
+
+
+            "price":
+
+                price.quantize(
+                    Decimal("0.01")
+                ),
+
+
+            "source":
+
+                "PRODUCT_MARKUP"
+
+
+        }
+
+
+
+
+
+    # --------------------------------------------------
+    # CATEGORY MARKUP
+    # --------------------------------------------------
+
+
+    category = get_category(
+
+        product.get(
+
+            "category_id"
+
+        )
+
+    )
+
+
+    category_markup = category.get(
+
+        "markup"
+
+    )
+
+
+    if category_markup is not None:
+
+
+        price = (
+
+            cost +
+
+            (
+
+                cost *
+
+                Decimal(
+
+                    str(category_markup)
+
+                )
+
+                /
+
+                Decimal("100")
+
+            )
+
+        )
+
+
+        return {
+
+
+            "price":
+
+                price.quantize(
+                    Decimal("0.01")
+                ),
+
+
+            "source":
+
+                "CATEGORY_MARKUP"
+
+
+        }
+
+
+
+
+
+    # --------------------------------------------------
+    # GLOBAL MARKUP
+    # --------------------------------------------------
+
+
+    global_markup = get_global_markup()
+
+
+
+    if global_markup > 0:
+
+
+        price = (
+
+            cost +
+
+            (
+
+                cost *
+
+                global_markup
+
+                /
+
+                Decimal("100")
+
+            )
+
+        )
+
+
+        return {
+
+
+            "price":
+
+                price.quantize(
+                    Decimal("0.01")
+                ),
+
+
+            "source":
+
+                "GLOBAL_MARKUP"
+
+
+        }
+
+
+
+
+
+    return {
+
+
+        "price":
+
+            Decimal(
+
+                str(
+
+                    product.get(
+
+                        "selling_price",
+
+                        0
+
+                    )
+                    or 0
+
+                )
+
+            ),
+
+
+        "source":
+
+            "CURRENT_PRICE"
+
+
+    }
+    # ==============================================================================
+# MAIN UI
+# ==============================================================================
 
 
 st.title(
     "📦 Product Pricing Control"
 )
 
+
+st.caption(
+    """
+ERP Enterprise Pricing Engine
+
+Owner Manual Price
+        ↓
+Product Markup
+        ↓
+Category Markup
+        ↓
+Global Markup
+"""
+)
+
+
+
+# ==============================================================================
+# LOAD PRODUCTS
+# ==============================================================================
 
 
 products = load_products()
@@ -121,284 +630,436 @@ products = load_products()
 
 if not products:
 
+
     st.warning(
         "No Products Found"
     )
+
 
     st.stop()
 
 
 
-# ==========================================================
-# SEARCH
-# ==========================================================
+
+
+# ==============================================================================
+# SEARCH PRODUCT
+# ==============================================================================
 
 
 search = st.text_input(
+
     "🔍 Search Product"
+
 )
+
+
+
+
+filtered_products = products
 
 
 
 if search:
 
 
-    products = [
+    filtered_products = [
 
-        p for p in products
+        p
+
+        for p in products
 
         if search.lower()
-        in p["name"].lower()
+
+        in
+
+        p.get(
+            "name",
+            ""
+        )
+        .lower()
 
     ]
 
 
 
+
+# ==============================================================================
+# PRODUCT SELECT
+# ==============================================================================
+
+
 product_map = {
 
-    f'{p["id"]} - {p["name"]}':
-    p
 
-    for p in products
+    f"{p['id']} - {p['name']}":
+
+        p
+
+
+    for p in filtered_products
+
 
 }
 
 
 
-selected = st.selectbox(
 
-    "Select Product",
+selected_product = st.selectbox(
 
-    list(product_map.keys())
+    "📦 Select Product",
+
+    list(
+
+        product_map.keys()
+
+    )
 
 )
 
 
 
-product = product_map[selected]
 
+product = product_map[
+
+    selected_product
+
+]
+
+
+
+
+# ==============================================================================
+# CATEGORY
+# ==============================================================================
 
 
 category = get_category(
 
     product.get(
+
         "category_id"
+
     )
 
 )
 
 
 
-# ==========================================================
-# PRICING PANEL
-# ==========================================================
+
+
+# ==============================================================================
+# PRICE ENGINE PREVIEW
+# ==============================================================================
+
+
+preview = calculate_preview_price(
+
+    product
+
+)
+
+
+
+final_preview_price = preview["price"]
+
+preview_source = preview["source"]
+
+
+
+
+
+# ==============================================================================
+# PRODUCT INFORMATION
+# ==============================================================================
 
 
 st.divider()
 
 
-col1,col2,col3 = st.columns(3)
-
-
-
-with col1:
-
-    st.metric(
-
-        "Purchase Cost",
-
-        f'{product.get("purchase_price",0):,.2f}'
-
-    )
-
-
-
-with col2:
-
-    st.metric(
-
-        "Current Selling",
-
-        f'{product.get("selling_price",0):,.2f}'
-
-    )
-
-
-
-with col3:
-
-    st.metric(
-
-        "Product Markup",
-
-        f'{product.get("markup_percent") or 0}%'
-
-    )
-
-
-
 st.subheader(
-    "⚙️ Pricing Engine Preview"
+
+    "📊 Product Information"
+
 )
 
 
 
-c1,c2,c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 
 
 
 with c1:
 
-    st.write(
-        "Product Markup"
-    )
 
-    st.info(
-        f'{product.get("markup_percent") or 0}%'
+    st.metric(
+
+        "Purchase Cost",
+
+        f"{float(product.get('purchase_price') or 0):,.0f}"
+
     )
 
 
 
 with c2:
 
-    st.write(
-        "Category"
-    )
 
-    st.info(
-        category["name"]
+    st.metric(
+
+        "Current Selling",
+
+        f"{float(product.get('selling_price') or 0):,.0f}"
+
     )
 
 
 
 with c3:
 
-    st.write(
-        "Category Markup"
-    )
 
-    st.info(
-        f'{category["markup"] or 0}%'
-    )
+    st.metric(
 
+        "Owner Price",
 
+        (
 
-# ==========================================================
-# AUTO CALCULATION
-# ==========================================================
+            f"{float(product.get('owner_selling_price')):,.0f}"
 
+            if product.get(
+                "owner_selling_price"
+            )
 
-cost = Decimal(
+            else
 
-    str(
-        product.get(
-            "purchase_price",
-            0
+            "Not Set"
+
         )
-    )
-
-)
-
-
-markup = Decimal(
-
-    str(
-
-        product.get(
-            "markup_percent"
-        )
-        or
-        category["markup"]
-        or
-        20
 
     )
 
-)
 
 
-auto_price = (
+with c4:
 
-    cost +
 
-    (
-        cost *
-        markup /
-        Decimal("100")
+    st.metric(
+
+        "Final Price",
+
+        f"{float(final_preview_price):,.0f}"
+
     )
 
-)
+
+
+
+
+# ==============================================================================
+# PRICING SOURCE
+# ==============================================================================
+
+
+source_color = {
+
+
+    "OWNER":
+
+        "🟢 OWNER MANUAL PRICE",
+
+
+    "PRODUCT_MARKUP":
+
+        "🟡 PRODUCT MARKUP",
+
+
+    "CATEGORY_MARKUP":
+
+        "🔵 CATEGORY MARKUP",
+
+
+    "GLOBAL_MARKUP":
+
+        "🟣 GLOBAL MARKUP",
+
+
+    "CURRENT_PRICE":
+
+        "⚪ CURRENT SELLING PRICE"
+
+
+}
+
 
 
 
 st.success(
 
-    f"Auto Selling Price: {auto_price:,.2f}"
+    f"""
+### Pricing Decision
+
+Source:
+
+{source_color.get(
+    preview_source,
+    preview_source
+)}
+
+
+Final Selling Price:
+
+{float(final_preview_price):,.2f}
+
+"""
 
 )
 
 
 
-# ==========================================================
-# MANUAL OVERRIDE
-# ==========================================================
 
 
-manual_price = st.number_input(
+# ==============================================================================
+# OWNER PRICE CONTROL
+# ==============================================================================
 
-    "Manual Selling Price Override",
+
+st.divider()
+
+
+st.subheader(
+
+    "👑 Owner Manual Selling Price"
+
+)
+
+
+
+st.caption(
+
+    """
+Owner Price has highest priority.
+
+If Owner Price exists:
+System will ignore automatic markup calculation.
+"""
+
+)
+
+
+
+
+current_owner_price = product.get(
+
+    "owner_selling_price"
+
+)
+
+
+
+
+owner_price = st.number_input(
+
+    "💰 Set Owner Selling Price",
 
     min_value=0.0,
 
     value=float(
-        product.get(
-            "selling_price",
-            auto_price
-        )
-    )
+
+        current_owner_price or 0
+
+    ),
+
+    step=100.0
 
 )
 
 
 
-# ==========================================================
-# SAVE
-# ==========================================================
 
 
-if st.button(
-    "💾 Save Pricing",
-    type="primary"
-):
+# ==============================================================================
+# MARKUP INFORMATION
+# ==============================================================================
 
 
-    result = client.rpc(
+st.divider()
 
-        "update_product_pricing_rpc",
 
-        {
+st.subheader(
 
-            "p_product_id":
-                product["id"],
+    "⚙ Pricing Rule Preview"
 
-            "p_selling_price":
-                manual_price,
-
-            "p_markup_percent":
-                product.get(
-                    "markup_percent"
-                )
-
-        }
-
-    ).execute()
+)
 
 
 
-    st.success(
-        result.data
+col1, col2, col3 = st.columns(3)
+
+
+
+with col1:
+
+
+    st.info(
+
+        f"""
+Product Markup
+
+{
+    product.get(
+        'markup_percent'
+    )
+    or 0
+}%
+
+"""
+
     )
 
-    st.cache_data.clear()
 
-    st.rerun()
+
+
+with col2:
+
+
+    st.info(
+
+        f"""
+Category
+
+{category.get('name')}
+
+
+Category Markup
+
+{
+    category.get(
+        'markup'
+    )
+    or 0
+}%
+
+"""
+
+    )
+
+
+
+
+with col3:
+
+
+    global_markup = get_global_markup()
+
+
+    st.info(
+
+        f"""
+Global Markup
+
+{global_markup}%
+
+"""
+
+    )
+    
