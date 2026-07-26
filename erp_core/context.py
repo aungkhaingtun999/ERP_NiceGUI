@@ -1,258 +1,124 @@
 # ==============================================================================
 # erp_core/context.py
-# ERP ENTERPRISE CONTEXT & CACHE MANAGER v30
-# Streamlit Session Cache Control
+# ERP ENTERPRISE CACHE CONTEXT v31
 # ==============================================================================
 
-from typing import Any, Dict
 import streamlit as st
 import time
 
 
-# ==============================================================================
-# CACHE MANAGER
-# ==============================================================================
-
 class CacheManager:
-    """
-    Enterprise Cache Version Manager
-
-    Purpose:
-    - Control Streamlit cached data refresh
-    - Inventory change invalidation
-    - Product stock refresh
-    - Dashboard refresh
-    - ERP module synchronization
-    """
 
 
-    # --------------------------------------------------------------------------
-    # GET CACHE VERSION
-    # --------------------------------------------------------------------------
-
-    @staticmethod
-    def get_version(
-        key: str
-    ) -> int:
-
-        """
-        Return current cache version.
-
-        Example:
-            CacheManager.get_version(
-                "inventory_version"
-            )
-        """
-
-        version_key = (
-            f"erp_cache_version_{key}"
-        )
+    VERSION_KEY = "erp_cache_versions"
 
 
-        if version_key not in st.session_state:
+
+    @classmethod
+    def init(cls):
+
+        if cls.VERSION_KEY not in st.session_state:
 
             st.session_state[
-                version_key
-            ] = 0
+                cls.VERSION_KEY
+            ] = {
 
+                "inventory_version": 1,
+
+                "product_version": 1,
+
+                "sales_version": 1,
+
+                "updated_at": time.time()
+
+            }
+
+
+
+    @classmethod
+    def get_version(
+        cls,
+        key
+    ):
+
+        cls.init()
 
         return st.session_state[
-            version_key
+            cls.VERSION_KEY
+        ].get(
+            key,
+            1
+        )
+
+
+
+    @classmethod
+    def bump(
+        cls,
+        key
+    ):
+
+        cls.init()
+
+
+        versions = st.session_state[
+            cls.VERSION_KEY
         ]
 
 
-
-    # --------------------------------------------------------------------------
-    # BUMP CACHE VERSION
-    # --------------------------------------------------------------------------
-
-    @staticmethod
-    def bump_version(
-        key: str
-    ) -> int:
-
-        """
-        Increase cache version.
-
-        Used after:
-        - Sale
-        - Purchase
-        - Transfer
-        - Stock Adjustment
-        - Refund
-        """
-
-
-        version_key = (
-            f"erp_cache_version_{key}"
-        )
-
-
-        current = st.session_state.get(
-            version_key,
-            0
-        )
-
-
-        current += 1
-
-
-        st.session_state[
-            version_key
-        ] = current
-
-
-        return current
-
-
-
-    # --------------------------------------------------------------------------
-    # CLEAR ALL ERP CACHE VERSIONS
-    # --------------------------------------------------------------------------
-
-    @staticmethod
-    def clear_versions():
-
-        keys = [
-            key
-            for key in st.session_state.keys()
-            if key.startswith(
-                "erp_cache_version_"
+        versions[key] = (
+            versions.get(
+                key,
+                1
             )
-        ]
+            + 1
+        )
 
 
-        for key in keys:
-
-            del st.session_state[key]
+        versions["updated_at"] = time.time()
 
 
 
-    # --------------------------------------------------------------------------
-    # INVENTORY REFRESH
-    # --------------------------------------------------------------------------
+    @classmethod
+    def clear_inventory(cls):
 
-    @staticmethod
-    def refresh_inventory():
-
-        """
-        Call after stock movement.
-        """
-
-        return CacheManager.bump_version(
+        cls.bump(
             "inventory_version"
         )
 
 
 
-    # --------------------------------------------------------------------------
-    # PRODUCT REFRESH
-    # --------------------------------------------------------------------------
+    @classmethod
+    def clear_products(cls):
 
-    @staticmethod
-    def refresh_products():
-
-        return CacheManager.bump_version(
+        cls.bump(
             "product_version"
         )
 
 
 
-    # --------------------------------------------------------------------------
-    # DASHBOARD REFRESH
-    # --------------------------------------------------------------------------
+    @classmethod
+    def clear_sales(cls):
 
-    @staticmethod
-    def refresh_dashboard():
-
-        return CacheManager.bump_version(
-            "dashboard_version"
+        cls.bump(
+            "sales_version"
         )
 
 
 
-# ==============================================================================
-# ERP APPLICATION CONTEXT
-# ==============================================================================
-
-class ERPContext:
-    """
-    Global ERP runtime context.
-
-    Stores:
-    - Current user
-    - Warehouse
-    - Language
-    - Session information
-    """
-
-
-    @staticmethod
-    def set(
-        key: str,
-        value: Any
-    ):
+    @classmethod
+    def reset(cls):
 
         st.session_state[
-            f"erp_context_{key}"
-        ] = value
+            cls.VERSION_KEY
+        ] = {
 
+            "inventory_version": 1,
 
+            "product_version": 1,
 
-    @staticmethod
-    def get(
-        key: str,
-        default=None
-    ):
+            "sales_version": 1,
 
-        return st.session_state.get(
-            f"erp_context_{key}",
-            default
-        )
-
-
-
-    @staticmethod
-    def clear():
-
-        keys = [
-            key
-            for key in st.session_state.keys()
-            if key.startswith(
-                "erp_context_"
-            )
-        ]
-
-
-        for key in keys:
-
-            del st.session_state[key]
-
-
-
-# ==============================================================================
-# REQUEST CONTEXT
-# ==============================================================================
-
-class RequestContext:
-    """
-    Temporary request metadata.
-    Useful for:
-    - Audit log
-    - RPC tracking
-    - Debugging
-    """
-
-
-    @staticmethod
-    def create():
-
-        return {
-
-            "request_id":
-                f"REQ-{int(time.time()*1000)}",
-
-            "timestamp":
-                time.time()
+            "updated_at": time.time()
 
         }
