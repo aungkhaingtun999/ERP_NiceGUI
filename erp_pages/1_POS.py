@@ -2429,22 +2429,15 @@ Change:
 
                     st.session_state.tax_rate = float(
 
+                    get_setting(
 
-                        get_setting(
+                    "DEFAULT_TAX_RATE",
 
+                    0
 
-                            "default_tax_rate",
+    )
 
-
-                            0
-
-
-                        )
-
-
-                    )
-
-
+)
 
                 except Exception:
 
