@@ -122,3 +122,29 @@ class CacheManager:
             "updated_at": time.time()
 
         }
+        # ==========================================================
+# LEGACY COMPATIBILITY HELPERS
+# ==========================================================
+
+def get_cache_version(key):
+    return CacheManager.get_version(key)
+
+
+
+def bump_cache(key):
+    return CacheManager.bump(key)
+
+
+
+def bump_inventory_version():
+    return CacheManager.clear_inventory()
+
+
+
+def bump_product_version():
+    return CacheManager.clear_products()
+
+
+
+def bump_sales_version():
+    return CacheManager.clear_sales()
