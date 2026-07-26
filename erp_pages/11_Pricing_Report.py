@@ -1,15 +1,17 @@
 # ==============================================================================
 # erp_pages/11_Pricing_Report.py
-# ERP ENTERPRISE PRICING REPORT v3.0
+# ERP ENTERPRISE PRICING REPORT v4.0
 # Product + Category + Global Markup Analysis
 # ==============================================================================
 
 
 import streamlit as st
 
-from reports.pricing_report import (
+
+from reports.pricing_report_service import (
     get_pricing_report_products
 )
+
 
 from reports.pricing_report_excel import (
     create_pricing_excel_report
@@ -22,9 +24,13 @@ from reports.pricing_report_excel import (
 # ==============================================================================
 
 st.set_page_config(
+
     page_title="Pricing Report",
+
     page_icon="💰",
+
     layout="wide"
+
 )
 
 
@@ -46,14 +52,21 @@ def safe_float(value):
 
 
 
-def safe_percent(value):
+def money(value):
+
+    return f"{safe_float(value):,.0f}"
+
+
+
+def percent(value):
 
     return f"{safe_float(value):.2f}%"
 
 
 
+
 # ==============================================================================
-# MAIN
+# RUN
 # ==============================================================================
 
 
@@ -66,13 +79,15 @@ def run():
 
 
     st.caption(
+
         "MYANMAR ERP - Product Cost, Markup & Selling Price Analysis"
+
     )
 
 
 
     # ==========================================================================
-    # LOAD DATA FROM PRICING ENGINE
+    # LOAD PRICING ENGINE DATA
     # ==========================================================================
 
 
@@ -82,8 +97,9 @@ def run():
 
     if not products:
 
+
         st.warning(
-            "No products found"
+            "No pricing data found"
         )
 
         return
@@ -101,8 +117,11 @@ def run():
 
     with col1:
 
+
         search = st.text_input(
+
             "🔍 Search Product"
+
         )
 
 
@@ -110,18 +129,25 @@ def run():
     with col2:
 
 
-        categories = sorted(
+        category_list = sorted(
 
             list(
 
                 set(
 
-                    p.get(
-                        "category",
-                        "Uncategorized"
-                    )
+                    [
 
-                    for p in products
+                        p.get(
+
+                            "category",
+
+                            "Uncategorized"
+
+                        )
+
+                        for p in products
+
+                    ]
 
                 )
 
@@ -135,16 +161,20 @@ def run():
             "📂 Category",
 
             [
+
                 "All"
+
             ]
+
             +
-            categories
+
+            category_list
 
         )
 
 
 
-    filtered = products
+    filtered = products.copy()
 
 
 
@@ -162,10 +192,12 @@ def run():
             in
 
             p.get(
+
                 "name",
+
                 ""
-            )
-            .lower()
+
+            ).lower()
 
         ]
 
@@ -181,17 +213,35 @@ def run():
             for p in filtered
 
             if p.get(
+
                 "category"
+
             )
+
             ==
+
             category_filter
 
         ]
 
 
 
+    if not filtered:
+
+
+        st.warning(
+
+            "No matching products"
+
+        )
+
+        return
+
+
+
+#ဆက်ပေးပါမယ် (2/2) မှာ KPI + Table + Excel Export အပိုင်းပါ။
     # ==========================================================================
-    # KPI
+    # KPI SUMMARY
     # ==========================================================================
 
 
@@ -202,7 +252,11 @@ def run():
     total_profit = sum(
 
         safe_float(
-            p.get("profit")
+
+            p.get(
+                "profit"
+            )
+
         )
 
         for p in filtered
@@ -211,14 +265,16 @@ def run():
 
 
 
-    avg_markup = (
+    average_markup = (
 
         sum(
 
             safe_float(
 
                 p.get(
+
                     "final_markup_percent"
+
                 )
 
             )
@@ -228,6 +284,7 @@ def run():
         )
 
         /
+
         total_products
 
         if total_products
@@ -238,7 +295,7 @@ def run():
 
 
 
-    c1,c2,c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
 
 
 
@@ -251,7 +308,6 @@ def run():
     )
 
 
-
     c2.metric(
 
         "💰 Total Profit",
@@ -261,27 +317,63 @@ def run():
     )
 
 
-
     c3.metric(
 
         "📈 Average Markup",
 
-        f"{avg_markup:.2f}%"
+        f"{average_markup:.2f}%"
+
+    )
+
+
+    c4.metric(
+
+        "⚙️ Pricing Rule",
+
+        "Dynamic"
 
     )
 
 
 
-    # ==========================================================================
-    # TABLE
-    # ==========================================================================
-
 
     st.divider()
 
 
+
+    # ==========================================================================
+    # MARKUP FLOW INFO
+    # ==========================================================================
+
+
+    st.info(
+
+        """
+        💰 Pricing Priority Engine
+
+        Product Markup
+              ↓
+        Category Markup
+              ↓
+        Global Default Markup
+
+        Controlled from ERP Settings
+        """
+
+    )
+
+
+
+
+    # ==========================================================================
+    # PRICING ANALYSIS TABLE
+    # ==========================================================================
+
+
     st.subheader(
+
         "📋 Pricing Analysis"
+
     )
 
 
@@ -302,8 +394,11 @@ def run():
                 "Product":
 
                     p.get(
+
                         "name",
+
                         ""
+
                     ),
 
 
@@ -311,8 +406,11 @@ def run():
                 "SKU":
 
                     p.get(
+
                         "sku",
+
                         ""
+
                     ),
 
 
@@ -320,80 +418,157 @@ def run():
                 "Category":
 
                     p.get(
+
                         "category",
+
                         "-"
+
                     ),
 
 
 
                 "Cost":
 
-                    f"{safe_float(p.get('purchase_price')):,.0f}",
+                    money(
 
-
-
-                "Product Markup":
-
-                    safe_percent(
                         p.get(
+
+                            "purchase_price"
+
+                        )
+
+                    ),
+
+
+
+                "Product Markup %":
+
+                    percent(
+
+                        p.get(
+
                             "product_markup"
+
                         )
+
                     ),
 
 
 
-                "Category Markup":
+                "Category Markup %":
 
-                    safe_percent(
+                    percent(
+
                         p.get(
+
                             "category_markup"
+
                         )
+
                     ),
 
 
 
-                "Global Markup":
+                "Global Markup %":
 
-                    safe_percent(
+                    percent(
+
                         p.get(
+
                             "global_markup"
+
                         )
+
                     ),
 
 
 
-                "Final Markup":
+                "Final Markup %":
 
-                    safe_percent(
+                    percent(
+
                         p.get(
+
                             "final_markup_percent"
+
                         )
+
                     ),
 
 
 
-                "Source":
+                "Applied Source":
 
                     p.get(
+
                         "markup_source",
-                        ""
+
+                        "GLOBAL_DEFAULT_MARKUP"
+
                     ),
 
 
 
-                "Selling Price":
+                "Current Selling":
 
-                    f"{safe_float(p.get('selling_price')):,.0f}",
+                    money(
+
+                        p.get(
+
+                            "selling_price"
+
+                        )
+
+                    ),
+
+
+
+                "Expected Selling":
+
+                    money(
+
+                        p.get(
+
+                            "expected_selling_price"
+
+                        )
+
+                    ),
+
+
+
+                "Difference":
+
+                    money(
+
+                        p.get(
+
+                            "price_difference"
+
+                        )
+
+                    ),
 
 
 
                 "Profit":
 
-                    f"{safe_float(p.get('profit')):,.0f}"
+                    money(
+
+                        p.get(
+
+                            "profit"
+
+                        )
+
+                    )
+
+
 
             }
 
         )
+
 
 
 
@@ -409,12 +584,22 @@ def run():
 
 
 
+
+
     # ==========================================================================
     # EXCEL EXPORT
     # ==========================================================================
 
 
     st.divider()
+
+
+
+    st.subheader(
+
+        "📥 Export Center"
+
+    )
 
 
 
@@ -428,16 +613,67 @@ def run():
 
     st.download_button(
 
-        label="📥 Download Excel Pricing Report",
+        label=
 
-        data=excel_file,
+            "📥 Download Pricing Excel Report",
 
-        file_name="pricing_report.xlsx",
+
+        data=
+
+            excel_file,
+
+
+        file_name=
+
+            "ERP_Pricing_Report.xlsx",
+
 
         mime=
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 
     )
+
+
+
+    # ==========================================================================
+    # DEBUG / ADMIN VIEW
+    # ==========================================================================
+
+
+    with st.expander(
+
+        "🔍 Pricing Engine Debug"
+
+    ):
+
+
+        st.write(
+
+            {
+
+                "Products":
+
+                    len(products),
+
+
+                "Filtered":
+
+                    len(filtered)
+
+            }
+
+        )
+
+
+
+        st.json(
+
+            filtered[0]
+
+        )
+
 
 
 
@@ -447,5 +683,6 @@ def run():
 
 
 if __name__ == "__main__":
+
 
     run()
