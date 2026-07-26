@@ -1,12 +1,33 @@
 # ==============================================================================
-# ERP ENTERPRISE PRICING REPORT SERVICE v4.0
+# reports/pricing_report_service.py
+# ERP ENTERPRISE PRICING REPORT SERVICE v5.0
 # Product + Category + Global Markup Analysis Engine
+# Settings Controlled Pricing
 # ==============================================================================
 
 
 from decimal import Decimal, ROUND_HALF_UP
 
 from erp_core.base_repo import db
+
+
+
+# ==============================================================================
+# SAFE DECIMAL
+# ==============================================================================
+
+def safe_decimal(value, default="0"):
+
+    try:
+        if value is None:
+            return Decimal(default)
+
+        return Decimal(
+            str(value)
+        )
+
+    except Exception:
+        return Decimal(default)
 
 
 
@@ -59,7 +80,54 @@ def get_setting(
 
 
 # ==============================================================================
-# PRICING REPORT
+# GET CATEGORY CACHE
+# ==============================================================================
+
+def get_categories():
+
+    cache = {}
+
+
+    try:
+
+        result = (
+
+            db()
+
+            .table("categories")
+
+            .select(
+                """
+                id,
+                name,
+                markup_percent
+                """
+            )
+
+            .execute()
+
+        )
+
+
+        for row in result.data or []:
+
+            cache[
+                row["id"]
+            ] = row
+
+
+    except Exception:
+
+        pass
+
+
+    return cache
+
+
+
+
+# ==============================================================================
+# MAIN PRICING REPORT
 # ==============================================================================
 
 
@@ -68,7 +136,6 @@ def get_pricing_report_products():
 
 
     try:
-
 
         result = (
 
@@ -100,9 +167,7 @@ def get_pricing_report_products():
         products = result.data or []
 
 
-
     except Exception:
-
 
         return []
 
@@ -110,23 +175,17 @@ def get_pricing_report_products():
 
 
     # =====================================================
-    # GLOBAL SETTINGS
+    # SETTINGS CONTROLLED VALUES
     # =====================================================
 
 
-    global_markup = Decimal(
+    global_markup = safe_decimal(
 
-        str(
+        get_setting(
+            "DEFAULT_MARKUP_PERCENT"
+        ),
 
-            get_setting(
-
-                "DEFAULT_MARKUP_PERCENT",
-
-                "20"
-
-            )
-
-        )
+        "0"
 
     )
 
@@ -185,6 +244,9 @@ def get_pricing_report_products():
 
 
 
+    categories = get_categories()
+
+
 
     # =====================================================
     # PRODUCT LOOP
@@ -195,34 +257,19 @@ def get_pricing_report_products():
 
 
 
-        # -------------------------------------------------
-        # BASIC PRICE
-        # -------------------------------------------------
+        cost = safe_decimal(
 
-
-        cost = Decimal(
-
-            str(
-
-                p.get(
-                    "purchase_price"
-                )
-                or 0
-
+            p.get(
+                "purchase_price"
             )
 
         )
 
 
-        selling = Decimal(
+        selling = safe_decimal(
 
-            str(
-
-                p.get(
-                    "selling_price"
-                )
-                or 0
-
+            p.get(
+                "selling_price"
             )
 
         )
@@ -231,8 +278,10 @@ def get_pricing_report_products():
 
         p["cost"] = float(cost)
 
-        p["actual_selling_price"] = float(selling)
 
+        p["actual_selling_price"] = float(
+            selling
+        )
 
 
         p["profit"] = float(
@@ -243,100 +292,61 @@ def get_pricing_report_products():
 
 
 
+        # =================================================
+        # CATEGORY DATA
+        # =================================================
 
 
-        # -------------------------------------------------
-        # CATEGORY MARKUP
-        # -------------------------------------------------
+        category = categories.get(
 
+            p.get(
+                "category_id"
+            )
 
-        category_name = "-"
+        )
+
 
         category_markup = None
 
 
-
-        category_id = p.get(
-            "category_id"
-        )
+        category_name = "-"
 
 
 
-        if category_id:
+        if category:
+
+            category_name = category.get(
+                "name",
+                "-"
+            )
 
 
-            try:
-
-
-                category = (
-
-                    db()
-
-                    .table("categories")
-
-                    .select(
-                        """
-                        name,
-                        markup_percent
-                        """
-                    )
-
-                    .eq(
-                        "id",
-                        category_id
-                    )
-
-                    .execute()
-
-                )
-
-
-
-                if category.data:
-
-
-                    category_name = (
-
-                        category.data[0]
-
-                        .get(
-                            "name"
-                        )
-
-                    )
-
-
-                    category_markup = (
-
-                        category.data[0]
-
-                        .get(
-                            "markup_percent"
-                        )
-
-                    )
-
-
-            except Exception:
-
-
-                pass
-
+            category_markup = category.get(
+                "markup_percent"
+            )
 
 
 
         p["category"] = category_name
 
 
-        p["category_markup"] = category_markup
+
+        p["category_markup"] = (
+
+            float(category_markup)
+
+            if category_markup is not None
+
+            else None
+
+        )
 
 
 
 
-
-        # -------------------------------------------------
+        # =================================================
         # PRODUCT MARKUP
-        # -------------------------------------------------
+        # =================================================
 
 
         product_markup = p.get(
@@ -349,30 +359,27 @@ def get_pricing_report_products():
 
         p["product_markup"] = (
 
-
             float(product_markup)
 
             if product_markup is not None
 
             else None
 
-
         )
 
 
 
 
-
-        # -------------------------------------------------
-        # MARKUP PRIORITY ENGINE
+        # =================================================
+        # PRIORITY ENGINE
         #
         # PRODUCT
         #    ↓
         # CATEGORY
         #    ↓
         # GLOBAL
-        # -------------------------------------------------
-
+        #
+        # =================================================
 
 
         final_markup = global_markup
@@ -386,7 +393,6 @@ def get_pricing_report_products():
         if priority == "PRODUCT_FIRST":
 
 
-
             if (
 
                 enable_product
@@ -396,9 +402,9 @@ def get_pricing_report_products():
             ):
 
 
-                final_markup = Decimal(
+                final_markup = safe_decimal(
 
-                    str(product_markup)
+                    product_markup
 
                 )
 
@@ -416,9 +422,9 @@ def get_pricing_report_products():
             ):
 
 
-                final_markup = Decimal(
+                final_markup = safe_decimal(
 
-                    str(category_markup)
+                    category_markup
 
                 )
 
@@ -442,9 +448,9 @@ def get_pricing_report_products():
             ):
 
 
-                final_markup = Decimal(
+                final_markup = safe_decimal(
 
-                    str(category_markup)
+                    category_markup
 
                 )
 
@@ -462,9 +468,9 @@ def get_pricing_report_products():
             ):
 
 
-                final_markup = Decimal(
+                final_markup = safe_decimal(
 
-                    str(product_markup)
+                    product_markup
 
                 )
 
@@ -478,7 +484,6 @@ def get_pricing_report_products():
         elif priority == "GLOBAL_FIRST":
 
 
-
             final_markup = global_markup
 
 
@@ -489,20 +494,26 @@ def get_pricing_report_products():
 
 
 
-        # -------------------------------------------------
-        # PRICE CALCULATION
-        # -------------------------------------------------
+        # =================================================
+        # EXPECTED PRICE
+        # =================================================
 
 
         expected_price = (
 
-            cost +
+            cost
+
+            +
 
             (
 
-                cost *
+                cost
 
-                final_markup /
+                *
+
+                final_markup
+
+                /
 
                 Decimal("100")
 
@@ -520,9 +531,9 @@ def get_pricing_report_products():
 
 
 
-        # -------------------------------------------------
-        # REPORT OUTPUT FIELDS
-        # -------------------------------------------------
+        # =================================================
+        # OUTPUT
+        # =================================================
 
 
         p["global_markup"] = float(
@@ -555,7 +566,6 @@ def get_pricing_report_products():
             selling - expected_price
 
         )
-
 
 
 
