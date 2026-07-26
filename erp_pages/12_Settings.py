@@ -74,11 +74,9 @@ def load_settings():
 
         rows = (
 
-            supabase
-
-            .table(
-                "settings"
-            )
+            supabase.table(
+    "erp_settings"
+)
 
             .select(
                 "*"
