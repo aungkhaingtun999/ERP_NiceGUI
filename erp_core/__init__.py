@@ -254,7 +254,7 @@ _EXPORTS = {
 
 
 
-    # ----------------------------------------------------------
+        # ----------------------------------------------------------
     # HELPERS
     # ----------------------------------------------------------
 
@@ -262,14 +262,16 @@ _EXPORTS = {
         (
             "services",
             "get_fifo_cogs"
+        ),
+
+
+    "create_audit_log":
+        (
+            "services",
+            "create_audit_log"
         )
 
 }
-    "create_audit_log":
-(
-    "services",
-    "create_audit_log"
-),
 
 
 
@@ -431,6 +433,10 @@ __all__ = [
     "CustomerService",
     "ReceiptService",
     "DashboardService",
+        # HELPERS
+
+    "get_fifo_cogs",
+    "create_audit_log",
 
 
     # RPC ENGINE
