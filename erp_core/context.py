@@ -62,6 +62,16 @@ class CacheManager:
                 "updated_at": time.time()
 
             }
+                @classmethod
+    def refresh_inventory(cls):
+        """
+        Legacy compatibility
+        Refresh inventory cache
+        """
+
+        cls.bump(
+            "inventory_version"
+        )
 
 
 
