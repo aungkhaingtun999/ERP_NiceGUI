@@ -1639,7 +1639,7 @@ TOTAL:
 
 
                     tax_rate=
-                    st.session_state.tax_rate,,
+                    st.session_state.tax_rate,
 
 
 
