@@ -189,22 +189,75 @@ def login_user(username, password):
 
 
 def build_session(user):
-    role_id = int(user.get("role_id", ROLE_CASHIER))
+
+    role_id = int(
+        user.get(
+            "role_id",
+            ROLE_CASHIER
+        )
+    )
+
+
+    user_id = user.get("id")
+
+
+    username = (
+        user.get("username")
+        or
+        user.get("email")
+        or
+        "Unknown"
+    )
+
 
     st.session_state.user = {
-        "id": user["id"],
-        "username": user["username"],
-        "full_name": user.get("full_name", user["username"]),
-        "role_id": role_id,
-        "role": ROLE_MAP.get(role_id, "Cashier"),
-        "is_active": bool(user.get("is_active", True)),
-        "last_activity": time.time(),
+
+        "id": user_id,
+
+        "username": username,
+
+        "full_name":
+            user.get(
+                "full_name",
+                username
+            ),
+
+        "role_id":
+            role_id,
+
+        "role":
+            ROLE_MAP.get(
+                role_id,
+                "Cashier"
+            ),
+
+        "is_active":
+            bool(
+                user.get(
+                    "is_active",
+                    True
+                )
+            ),
+
+        "last_activity":
+            time.time(),
+
     }
 
-    st.session_state.user_id = user["id"]
-    st.session_state.username = user["username"]
-    st.session_state.role_id = role_id
 
+    # =================================================
+    # IMPORTANT UUID SESSION
+    # =================================================
+
+    st.session_state["user_id"] = user_id
+
+    st.session_state["username"] = username
+
+    st.session_state["role_id"] = role_id
+
+
+    # backup id
+    st.session_state["id"] = user_id
 
 # ==================================================
 # CURRENT USER & ROLE HELPERS
