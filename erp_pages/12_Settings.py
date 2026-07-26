@@ -1,8 +1,10 @@
 # ==============================================================================
 # erp_pages/12_Settings.py
-# ERP ENTERPRISE CONTROL CENTER v2.0
+# ERP ENTERPRISE CONTROL CENTER v3.0
 # PART 1 / 4
+# Enterprise Settings + Pricing Engine
 # ==============================================================================
+
 
 import streamlit as st
 
@@ -10,51 +12,77 @@ from supabase_client import supabase
 
 from utils.notification import (
     notify_success,
-    notify_error,
-    notify_warning
+    notify_error
 )
+
 
 
 # ==============================================================================
 # SECURITY
 # ==============================================================================
 
+
 def require_admin():
 
-    user = st.session_state.get("user")
+    user = st.session_state.get(
+        "user"
+    )
+
 
     if not user:
 
-        st.error("⛔ Please login first")
+        st.error(
+            "⛔ Please login first"
+        )
 
         st.stop()
 
-    if user.get("role_id") != 1:
 
-        st.error("⛔ Access Denied")
+
+    if user.get(
+        "role_id"
+    ) != 1:
+
+
+        st.error(
+            "⛔ Access Denied : Admin Only"
+        )
 
         st.stop()
+
+
 
     return user
+
+
 
 
 # ==============================================================================
 # LOAD SETTINGS
 # ==============================================================================
 
-@st.cache_data(ttl=60)
+
+@st.cache_data(
+    ttl=60
+)
 
 def load_settings():
 
+
     try:
+
 
         rows = (
 
             supabase
 
-            .table("settings")
+            .table(
+                "settings"
+            )
 
-            .select("*")
+            .select(
+                "*"
+            )
 
             .execute()
 
@@ -64,24 +92,35 @@ def load_settings():
 
         )
 
+
         return {
 
-            row["key"]: row["value"]
+            row["key"]:
+            row["value"]
 
             for row in rows
 
         }
 
+
+
     except Exception as e:
 
-        st.error(e)
+
+        st.error(
+            f"Settings Load Error : {e}"
+        )
 
         return {}
 
 
+
+
+
 # ==============================================================================
-# SAVE SETTING
+# SAVE SETTINGS
 # ==============================================================================
+
 
 def save_setting(
 
@@ -91,24 +130,44 @@ def save_setting(
 
 ):
 
-    supabase.table("settings").upsert(
 
-        {
+    try:
 
-            "key": key,
 
-            "value": str(value)
+        supabase.table(
+            "settings"
+        ).upsert(
 
-        },
+            {
 
-        on_conflict="key"
+                "key":
+                    key,
 
-    ).execute()
+
+                "value":
+                    str(value)
+
+            },
+
+            on_conflict="key"
+
+        ).execute()
+
+
+
+    except Exception as e:
+
+
+        raise e
+
+
+
 
 
 # ==============================================================================
 # HELPERS
 # ==============================================================================
+
 
 def get_bool(
 
@@ -119,6 +178,7 @@ def get_bool(
     default=False
 
 ):
+
 
     return (
 
@@ -132,13 +192,18 @@ def get_bool(
 
             )
 
-        ).lower()
+        )
+
+        .lower()
 
         ==
 
         "true"
 
     )
+
+
+
 
 
 def get_float(
@@ -151,7 +216,9 @@ def get_float(
 
 ):
 
+
     try:
+
 
         return float(
 
@@ -165,9 +232,17 @@ def get_float(
 
         )
 
+
+
     except Exception:
 
-        return float(default)
+
+        return float(
+            default
+        )
+
+
+
 
 
 def get_text(
@@ -179,6 +254,7 @@ def get_text(
     default=""
 
 ):
+
 
     return str(
 
@@ -193,25 +269,38 @@ def get_text(
     )
 
 
+
+
+
 # ==============================================================================
 # MAIN
 # ==============================================================================
 
+
 def run():
+
 
     user = require_admin()
 
+
     settings = load_settings()
 
-    st.title("⚙ ERP Control Center")
+
+
+    st.title(
+        "⚙ ERP Control Center"
+    )
+
+
 
     st.success(
 
-        f"Welcome Admin : "
-
+        f"🔐 Welcome Admin : "
         f"{user.get('full_name','Admin')}"
 
     )
+
+
 
     st.caption(
 
@@ -219,360 +308,112 @@ def run():
 
     )
 
-    st.divider()
-    # ==========================================================
-    # 💰 PRICING ENGINE
-    # ==========================================================
 
-    st.subheader("💰 Pricing Engine")
-
-    st.caption("""
-Pricing Priority
-
-Product Markup
-      ↓
-Category Markup
-      ↓
-Global Default Markup
-""")
-
-    # ----------------------------------------------------------
-    # Global Default Markup
-    # ----------------------------------------------------------
-
-    default_markup = st.number_input(
-default_markup = st.number_input(
-
-    "🌐 Global Default Markup (%)",
-
-    min_value=0.0,
-
-    max_value=500.0,
-
-    value=float(
-        get_float(
-            "DEFAULT_MARKUP_PERCENT",
-            20.0
-        )
-    ),
-
-    step=1.0
-
-)
-
-    # ----------------------------------------------------------
-    # Pricing Priority
-    # ----------------------------------------------------------
-
-    priority_options = [
-        "PRODUCT_FIRST",
-        "CATEGORY_FIRST",
-        "GLOBAL_FIRST"
-    ]
-
-    current_priority = settings_map.get(
-        "PRICING_PRIORITY",
-        "PRODUCT_FIRST"
-    )
-
-    pricing_priority = st.selectbox(
-        "⚙ Pricing Priority",
-        priority_options,
-        index=(
-            priority_options.index(current_priority)
-            if current_priority in priority_options
-            else 0
-        )
-    )
-
-    # ----------------------------------------------------------
-    # Enable Rules
-    # ----------------------------------------------------------
-
-    enable_product_markup = st.toggle(
-        "Enable Product Markup",
-        value=get_bool(
-            "ENABLE_PRODUCT_MARKUP",
-            True
-        )
-    )
-
-    enable_category_markup = st.toggle(
-        "Enable Category Markup",
-        value=get_bool(
-            "ENABLE_CATEGORY_MARKUP",
-            True
-        )
-    )
-
-    # ----------------------------------------------------------
-    # Price Calculation Method
-    # ----------------------------------------------------------
-
-    pricing_method = st.selectbox(
-        "Pricing Method",
-        [
-            "MARKUP",
-            "MARGIN"
-        ],
-        index=(
-            0
-            if settings_map.get(
-                "PRICING_METHOD",
-                "MARKUP"
-            ) == "MARKUP"
-            else 1
-        )
-    )
-
-    auto_update_price = st.toggle(
-        "Auto Update Selling Price",
-        value=get_bool(
-            "AUTO_UPDATE_SELLING_PRICE",
-            True
-        )
-    )
-
-    allow_manual_override = st.toggle(
-        "Allow Manual Price Override",
-        value=get_bool(
-            "ALLOW_MANUAL_PRICE_OVERRIDE",
-            True
-        )
-    )
 
     st.divider()
 
-    st.markdown("### 🧪 Pricing Preview")
 
-    preview_cost = st.number_input(
-        "Sample Cost",
-        min_value=0.0,
-        value=1000.0,
-        step=100.0
-    )
 
-    preview_product_markup = st.number_input(
-        "Sample Product Markup (%)",
-        value=50.0,
-        step=1.0
-    )
 
-    preview_category_markup = st.number_input(
-        "Sample Category Markup (%)",
-        value=30.0,
-        step=1.0
-    )
-        # ==========================================================
+    # ==========================================================================
     # 💰 PRICING ENGINE
-    # ==========================================================
+    # ==========================================================================
 
-    st.subheader("💰 Pricing Engine")
+
+    st.subheader(
+        "💰 Pricing Engine"
+    )
+
 
     st.info(
-        """
+
+"""
 Pricing Priority
 
+
 ① Product Markup
+
         ↓
+
 ② Category Markup
+
         ↓
+
 ③ Global Default Markup
 
-System will automatically use the first available rule.
+
+System automatically selects the first available rule.
 """
+
     )
+
+
 
     st.divider()
 
-    # ==========================================================
-    # GLOBAL DEFAULT
-    # ==========================================================
+
+
+    # ==========================================================================
+    # GLOBAL DEFAULT MARKUP
+    # ==========================================================================
+
 
     default_markup = st.number_input(
-        "🌍 Global Default Markup (%)",
-        min_value=0.0,
-        max_value=500.0,
-        value=get_float("DEFAULT_MARKUP_PERCENT", 20),
-        step=1.0,
-    )
 
-    # ==========================================================
-    # PRIORITY
-    # ==========================================================
+
+        "🌍 Global Default Markup (%)",
+
+
+        min_value=float(0.0),
+
+
+        max_value=float(500.0),
+
+
+        value=float(
+
+            get_float(
+
+                settings,
+
+                "DEFAULT_MARKUP_PERCENT",
+
+                40.0
+
+            )
+
+        ),
+
+
+        step=float(1.0)
+
+    )
+    # ==========================================================================
+    # PRICING PRIORITY
+    # ==========================================================================
+
 
     priority_options = [
+
         "PRODUCT_FIRST",
+
         "CATEGORY_FIRST",
-        "GLOBAL_FIRST",
+
+        "GLOBAL_FIRST"
+
     ]
 
+
+
     priority_labels = {
-        "PRODUCT_FIRST": "Product → Category → Global",
-        "CATEGORY_FIRST": "Category → Product → Global",
-        "GLOBAL_FIRST": "Global Only",
-    }
-
-    current_priority = settings_map.get(
-        "PRICING_PRIORITY",
-        "PRODUCT_FIRST",
-    )
-
-    pricing_priority = st.selectbox(
-        "Priority Rule",
-        priority_options,
-        index=priority_options.index(current_priority)
-        if current_priority in priority_options
-        else 0,
-        format_func=lambda x: priority_labels[x],
-    )
-
-    # ==========================================================
-    # ENABLE FLAGS
-    # ==========================================================
-
-    enable_product_markup = st.toggle(
-        "Enable Product Markup",
-        value=get_bool(
-            "ENABLE_PRODUCT_MARKUP",
-            True,
-        ),
-    )
-
-    enable_category_markup = st.toggle(
-        "Enable Category Markup",
-        value=get_bool(
-            "ENABLE_CATEGORY_MARKUP",
-            True,
-        ),
-    )
-
-    st.divider()
-
-    # ==========================================================
-    # PRICE METHOD
-    # ==========================================================
-
-    pricing_method = st.selectbox(
-        "Pricing Method",
-        [
-            "MARKUP",
-            "MARGIN",
-        ],
-        index=0
-        if settings_map.get(
-            "PRICING_METHOD",
-            "MARKUP",
-        )
-        == "MARKUP"
-        else 1,
-    )
-
-    auto_update = st.toggle(
-        "Auto Update Selling Price",
-        value=get_bool(
-            "AUTO_UPDATE_SELLING_PRICE",
-            True,
-        ),
-    )
-
-    allow_override = st.toggle(
-        "Allow Manual Price Override",
-        value=get_bool(
-            "ALLOW_MANUAL_PRICE_OVERRIDE",
-            True,
-        ),
-    )
-
-    st.divider()
-
-    # ==========================================================
-    # SAVE
-    # ==========================================================
-
-    if st.button(
-        "💾 Save Pricing Settings",
-        use_container_width=True,
-    ):
-
-        try:
-
-            save_setting(
-                "DEFAULT_MARKUP_PERCENT",
-                default_markup,
-            )
-
-            save_setting(
-                "PRICING_PRIORITY",
-                pricing_priority,
-            )
-
-            save_setting(
-                "ENABLE_PRODUCT_MARKUP",
-                enable_product_markup,
-            )
-
-            save_setting(
-                "ENABLE_CATEGORY_MARKUP",
-                enable_category_markup,
-            )
-
-            save_setting(
-                "PRICING_METHOD",
-                pricing_method,
-            )
-
-            save_setting(
-                "AUTO_UPDATE_SELLING_PRICE",
-                auto_update,
-            )
-
-            save_setting(
-                "ALLOW_MANUAL_PRICE_OVERRIDE",
-                allow_override,
-            )
-
-            st.cache_data.clear()
-
-            notify_success(
-                "Pricing Engine settings saved successfully."
-            )
-
-            st.rerun()
-
-        except Exception as e:
-
-            notify_error(str(e))
-    # ==========================================================
-    # PRICING PREVIEW
-    # ==========================================================
-
-    st.subheader("🔎 Pricing Rule Preview")
-
-
-    product_status = (
-        "✅ Enabled"
-        if enable_product_markup
-        else
-        "❌ Disabled"
-    )
-
-
-    category_status = (
-        "✅ Enabled"
-        if enable_category_markup
-        else
-        "❌ Disabled"
-    )
-
-
-    priority_text = {
 
         "PRODUCT_FIRST":
             "Product Markup → Category Markup → Global Default",
 
+
         "CATEGORY_FIRST":
             "Category Markup → Product Markup → Global Default",
+
 
         "GLOBAL_FIRST":
             "Global Default Only"
@@ -580,114 +421,111 @@ System will automatically use the first available rule.
     }
 
 
-    st.success(
 
-        f"""
-### Current Pricing Engine
+    current_priority = settings.get(
 
-🟢 Product Markup:
-{product_status}
+        "PRICING_PRIORITY",
 
-
-🟢 Category Markup:
-{category_status}
-
-
-⚙️ Priority:
-
-{priority_text.get(
-    pricing_priority,
-    pricing_priority
-)}
-
-
-🌍 Global Default Markup:
-
-{default_markup}%
-
-
-💰 Pricing Method:
-
-{pricing_method}
-
-
-🔄 Auto Update Selling Price:
-
-{"Enabled" if auto_update else "Disabled"}
-
-
-✏️ Manual Override:
-
-{"Allowed" if allow_override else "Disabled"}
-
-"""
-    )
-
-
-
-    # ==========================================================
-    # EXAMPLE CALCULATION
-    # ==========================================================
-
-    st.subheader(
-        "🧮 Example Calculation"
-    )
-
-
-    example_cost = st.number_input(
-
-        "Test Cost Price",
-
-        min_value=0.0,
-
-        value=1000.0,
-
-        step=100.0
+        "PRODUCT_FIRST"
 
     )
 
 
-    example_price = (
 
-        example_cost
+    pricing_priority = st.selectbox(
 
-        +
 
-        (
-            example_cost
+        "⚙ Pricing Priority Rule",
 
-            *
 
-            default_markup
+        priority_options,
 
-            /
 
-            100
+        index=(
+
+            priority_options.index(
+
+                current_priority
+
+            )
+
+            if current_priority in priority_options
+
+            else 0
+
+        ),
+
+
+        format_func=lambda x:
+
+            priority_labels.get(
+
+                x,
+
+                x
+
+            )
+
+    )
+
+
+
+
+
+    # ==========================================================================
+    # ENABLE MARKUP RULES
+    # ==========================================================================
+
+
+    col1, col2 = st.columns(2)
+
+
+
+    with col1:
+
+
+        enable_product_markup = st.toggle(
+
+
+            "☑ Enable Product Markup Override",
+
+
+            value=get_bool(
+
+                settings,
+
+                "ENABLE_PRODUCT_MARKUP",
+
+                True
+
+            )
+
         )
 
-    )
 
 
-    st.info(
-
-        f"""
-Example:
-
-Cost Price:
-{example_cost:,.2f}
+    with col2:
 
 
-Global Markup:
-{default_markup}%
+        enable_category_markup = st.toggle(
 
 
-Estimated Selling Price:
+            "☑ Enable Category Markup",
 
-{example_price:,.2f}
 
-"""
+            value=get_bool(
 
-    )
+                settings,
+
+                "ENABLE_CATEGORY_MARKUP",
+
+                True
+
+            )
+
+        )
+
+
 
 
 
@@ -695,24 +533,927 @@ Estimated Selling Price:
 
 
 
-    # ==========================================================
-    # SYSTEM STATUS
-    # ==========================================================
+
+
+    # ==========================================================================
+    # PRICE CALCULATION METHOD
+    # ==========================================================================
+
+
+    pricing_method = st.selectbox(
+
+
+        "📊 Pricing Calculation Method",
+
+
+        [
+
+            "MARKUP",
+
+            "MARGIN"
+
+        ],
+
+
+        index=(
+
+
+            0
+
+
+            if settings.get(
+
+                "PRICING_METHOD",
+
+                "MARKUP"
+
+            )
+
+            ==
+
+            "MARKUP"
+
+
+            else 1
+
+        )
+
+    )
+
+
+
+
+
+
+    # ==========================================================================
+    # PRICE CONTROL
+    # ==========================================================================
+
+
+    col3, col4 = st.columns(2)
+
+
+
+    with col3:
+
+
+        auto_update_price = st.toggle(
+
+
+            "🔄 Auto Update Selling Price",
+
+
+            value=get_bool(
+
+                settings,
+
+                "AUTO_UPDATE_SELLING_PRICE",
+
+                True
+
+            )
+
+        )
+
+
+
+    with col4:
+
+
+        allow_manual_override = st.toggle(
+
+
+            "✏ Allow Manual Price Override",
+
+
+            value=get_bool(
+
+                settings,
+
+                "ALLOW_MANUAL_PRICE_OVERRIDE",
+
+                True
+
+            )
+
+        )
+
+
+
+
+
+    st.divider()
+
+
+
+
+
+    # ==========================================================================
+    # PRICING PREVIEW CALCULATOR
+    # ==========================================================================
+
 
     st.subheader(
+
+        "🧮 Pricing Preview"
+
+    )
+
+
+
+    preview_cost = st.number_input(
+
+
+        "Test Cost Price",
+
+
+        min_value=float(0),
+
+
+        value=float(1000),
+
+
+        step=float(100)
+
+    )
+
+
+
+    preview_product_markup = st.number_input(
+
+
+        "Test Product Markup (%)",
+
+
+        min_value=float(0),
+
+
+        max_value=float(500),
+
+
+        value=float(50),
+
+
+        step=float(1)
+
+    )
+
+
+
+    preview_category_markup = st.number_input(
+
+
+        "Test Category Markup (%)",
+
+
+        min_value=float(0),
+
+
+        max_value=float(500),
+
+
+        value=float(30),
+
+
+        step=float(1)
+
+    )
+
+
+
+    # --------------------------------------------------------------------------
+    # PREVIEW ENGINE
+    # --------------------------------------------------------------------------
+
+
+    if enable_product_markup:
+
+
+        preview_markup = preview_product_markup
+
+        preview_source = "Product Markup"
+
+
+
+    elif enable_category_markup:
+
+
+        preview_markup = preview_category_markup
+
+        preview_source = "Category Markup"
+
+
+
+    else:
+
+
+        preview_markup = default_markup
+
+        preview_source = "Global Default"
+
+
+
+
+    preview_price = (
+
+        preview_cost
+
+        +
+
+        (
+
+            preview_cost
+
+            *
+
+            preview_markup
+
+            /
+
+            100
+
+        )
+
+    )
+
+
+
+    st.success(
+
+f"""
+### Current Pricing Preview
+
+
+Source:
+
+{preview_source}
+
+
+Applied Markup:
+
+{preview_markup:.2f}%
+
+
+Cost:
+
+{preview_cost:,.2f}
+
+
+Estimated Selling Price:
+
+{preview_price:,.2f}
+
+"""
+
+    )
+    # ==========================================================================
+    # SAVE PRICING SETTINGS
+    # ==========================================================================
+
+
+    if st.button(
+
+        "💾 Save Pricing Engine Settings",
+
+        use_container_width=True
+
+    ):
+
+
+        try:
+
+
+            save_setting(
+
+                "DEFAULT_MARKUP_PERCENT",
+
+                default_markup
+
+            )
+
+
+            save_setting(
+
+                "PRICING_PRIORITY",
+
+                pricing_priority
+
+            )
+
+
+            save_setting(
+
+                "ENABLE_PRODUCT_MARKUP",
+
+                enable_product_markup
+
+            )
+
+
+            save_setting(
+
+                "ENABLE_CATEGORY_MARKUP",
+
+                enable_category_markup
+
+            )
+
+
+            save_setting(
+
+                "PRICING_METHOD",
+
+                pricing_method
+
+            )
+
+
+            save_setting(
+
+                "AUTO_UPDATE_SELLING_PRICE",
+
+                auto_update_price
+
+            )
+
+
+            save_setting(
+
+                "ALLOW_MANUAL_PRICE_OVERRIDE",
+
+                allow_manual_override
+
+            )
+
+
+
+            # Clear cache after update
+
+            st.cache_data.clear()
+
+
+
+            notify_success(
+
+                "💰 Pricing Engine settings saved successfully."
+
+            )
+
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+
+            notify_error(
+
+                f"Pricing Settings Save Failed : {e}"
+
+            )
+
+
+
+
+
+
+    st.divider()
+
+
+
+
+
+    # ==========================================================================
+    # PRICING RULE SUMMARY
+    # ==========================================================================
+
+
+    st.subheader(
+
+        "🔎 Current Pricing Rule"
+
+    )
+
+
+
+    product_status = (
+
+        "✅ Enabled"
+
+        if enable_product_markup
+
+        else
+
+        "❌ Disabled"
+
+    )
+
+
+
+    category_status = (
+
+        "✅ Enabled"
+
+        if enable_category_markup
+
+        else
+
+        "❌ Disabled"
+
+    )
+
+
+
+    priority_display = priority_labels.get(
+
+        pricing_priority,
+
+        pricing_priority
+
+    )
+
+
+
+    st.success(
+
+f"""
+## 💰 Pricing Engine Status
+
+
+### Product Markup
+
+{product_status}
+
+
+
+### Category Markup
+
+{category_status}
+
+
+
+### Priority Rule
+
+{priority_display}
+
+
+
+### Global Default Markup
+
+{default_markup:.2f}%
+
+
+
+### Calculation Method
+
+{pricing_method}
+
+
+
+### Auto Update Selling Price
+
+{"✅ Enabled" if auto_update_price else "❌ Disabled"}
+
+
+
+### Manual Price Override
+
+{"✅ Allowed" if allow_manual_override else "❌ Disabled"}
+
+"""
+
+    )
+    # ==========================================================================
+    # ACCOUNTING & TAX SETTINGS
+    # ==========================================================================
+
+
+    st.divider()
+
+    st.subheader(
+        "🧾 Accounting & Tax"
+    )
+
+
+    tax_rate = st.number_input(
+
+        "Default Tax Rate (%)",
+
+        min_value=float(0),
+
+        max_value=float(100),
+
+        value=float(
+
+            get_float(
+
+                settings,
+
+                "DEFAULT_TAX_RATE",
+
+                7.0
+
+            )
+
+        ),
+
+        step=float(0.5)
+
+    )
+
+
+
+    discount_policy = st.selectbox(
+
+        "Discount Policy",
+
+        [
+
+            "allowed",
+
+            "restricted"
+
+        ],
+
+        index=(
+
+            0
+
+            if settings.get(
+
+                "DISCOUNT_POLICY",
+
+                "allowed"
+
+            )
+
+            == "allowed"
+
+            else 1
+
+        )
+
+    )
+
+
+
+    if st.button(
+
+        "💾 Save Accounting Settings",
+
+        use_container_width=True
+
+    ):
+
+
+        try:
+
+
+            save_setting(
+
+                "DEFAULT_TAX_RATE",
+
+                tax_rate
+
+            )
+
+
+            save_setting(
+
+                "DISCOUNT_POLICY",
+
+                discount_policy
+
+            )
+
+
+            st.cache_data.clear()
+
+
+            notify_success(
+
+                "🧾 Accounting settings saved."
+
+            )
+
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+
+            notify_error(
+
+                str(e)
+
+            )
+
+
+
+
+
+
+
+    # ==========================================================================
+    # INVENTORY RULES
+    # ==========================================================================
+
+
+    st.divider()
+
+
+    st.subheader(
+
+        "📦 Inventory Rules"
+
+    )
+
+
+
+    minimum_stock = st.number_input(
+
+        "Default Minimum Stock Alert",
+
+        min_value=float(0),
+
+        value=float(
+
+            get_float(
+
+                settings,
+
+                "MIN_STOCK_ALERT",
+
+                10
+
+            )
+
+        ),
+
+        step=float(1)
+
+    )
+
+
+
+    auto_reorder = st.toggle(
+
+        "Enable Auto Reorder",
+
+        value=get_bool(
+
+            settings,
+
+            "AUTO_REORDER",
+
+            False
+
+        )
+
+    )
+
+
+
+    if st.button(
+
+        "💾 Save Inventory Settings",
+
+        use_container_width=True
+
+    ):
+
+
+        try:
+
+
+            save_setting(
+
+                "MIN_STOCK_ALERT",
+
+                minimum_stock
+
+            )
+
+
+            save_setting(
+
+                "AUTO_REORDER",
+
+                auto_reorder
+
+            )
+
+
+            notify_success(
+
+                "📦 Inventory settings saved."
+
+            )
+
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+
+            notify_error(
+
+                str(e)
+
+            )
+
+
+
+
+
+
+
+    # ==========================================================================
+    # FINANCE SETTINGS
+    # ==========================================================================
+
+
+    st.divider()
+
+
+    st.subheader(
+
+        "💱 Finance Settings"
+
+    )
+
+
+
+    currency_options = [
+
+        "MMK",
+
+        "USD",
+
+        "THB",
+
+        "SGD"
+
+    ]
+
+
+
+    current_currency = settings.get(
+
+        "CURRENCY",
+
+        "MMK"
+
+    )
+
+
+
+    currency = st.selectbox(
+
+        "Base Currency",
+
+        currency_options,
+
+        index=(
+
+            currency_options.index(
+
+                current_currency
+
+            )
+
+            if current_currency in currency_options
+
+            else 0
+
+        )
+
+    )
+
+
+
+    payment_methods = st.multiselect(
+
+        "Enabled Payment Methods",
+
+        [
+
+            "Cash",
+
+            "Bank Transfer",
+
+            "Mobile Pay",
+
+            "Credit"
+
+        ],
+
+        default=settings.get(
+
+            "PAYMENT_METHODS",
+
+            "Cash,Bank Transfer"
+
+        ).split(",")
+
+    )
+
+
+
+    if st.button(
+
+        "💾 Save Finance Settings",
+
+        use_container_width=True
+
+    ):
+
+
+        try:
+
+
+            save_setting(
+
+                "CURRENCY",
+
+                currency
+
+            )
+
+
+            save_setting(
+
+                "PAYMENT_METHODS",
+
+                ",".join(
+
+                    payment_methods
+
+                )
+
+            )
+
+
+            notify_success(
+
+                "💱 Finance settings saved."
+
+            )
+
+
+            st.rerun()
+
+
+
+        except Exception as e:
+
+
+            notify_error(
+
+                str(e)
+
+            )
+
+
+
+
+
+
+
+    # ==========================================================================
+    # SYSTEM STATUS
+    # ==========================================================================
+
+
+    st.divider()
+
+
+    st.subheader(
+
         "🖥 System Status"
+
     )
 
 
     st.success(
-        """
+
+"""
 ✔ ERP Core Active
+
+✔ Database Connected
 
 ✔ Warehouse Engine Ready
 
-✔ Inventory Connected
+✔ Inventory Engine Connected
 
 ✔ Sales Engine Connected
+
+✔ Purchase Engine Connected
 
 ✔ Pricing Engine Connected
 
@@ -720,20 +1461,27 @@ Estimated Selling Price:
 
 ✔ Product / Category / Global Markup Ready
 """
+
     )
 
 
     st.success(
+
         "🚀 ERP Control Center Fully Operational"
+
     )
 
 
 
-# ==========================================================
+
+
+# ==============================================================================
 # ENTRY POINT
-# ==========================================================
+# ==============================================================================
+
 
 if __name__ == "__main__":
+
 
     st.set_page_config(
 
@@ -745,4 +1493,7 @@ if __name__ == "__main__":
 
     )
 
+
     run()
+
+
