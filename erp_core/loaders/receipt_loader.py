@@ -1,10 +1,16 @@
 # ==============================================================================
 # erp_core/loaders/receipt_loader.py
-# ERP ENTERPRISE RECEIPT LOADER v1.0
+# ERP ENTERPRISE RECEIPT LOADER v2.0
+# PRODUCT NAME JOIN ENABLED
 # ==============================================================================
 
 
-from typing import Dict, Any, List
+from typing import (
+    Dict,
+    Any,
+    List
+)
+
 
 from ..base_repo import (
     db,
@@ -13,47 +19,106 @@ from ..base_repo import (
 
 
 
+
+
 # ==============================================================================
 # SALE ITEMS
 # ==============================================================================
 
-def get_sale_items(sale_id:int):
+
+def get_sale_items(
+    sale_id: int
+) -> List[Dict[str, Any]]:
+
 
     try:
 
+
         response = (
+
             db()
-            .table("sale_items")
-            .select("""
+
+            .table(
+                "sale_items"
+            )
+
+            .select(
+                """
                 id,
                 sale_id,
                 product_id,
-                product_name,
                 quantity,
                 unit_price,
                 discount,
-                total
-            """)
+                total,
+                products(
+                    name
+                )
+                """
+            )
+
             .eq(
                 "sale_id",
                 sale_id
             )
+
             .execute()
+
         )
+
 
 
         items = response.data or []
 
+
+
         for item in items:
-            item["name"] = item.get("product_name", "")
 
-            # receipt compatibility
 
-            item["product_name"] = (
-                item.get("product_name")
-                or
-                f"Product #{item.get('product_id')}"
+            # --------------------------------------------------
+            # Product Name From Join
+            # --------------------------------------------------
+
+            product = item.get(
+                "products"
+            ) or {}
+
+
+
+            product_name = product.get(
+                "name"
             )
+
+
+
+            if not product_name:
+
+
+                product_name = (
+
+                    item.get(
+                        "product_name"
+                    )
+
+                    or
+
+                    f"Product #{item.get('product_id')}"
+
+                )
+
+
+
+            # --------------------------------------------------
+            # Compatibility Fields
+            # --------------------------------------------------
+
+
+            item["name"] = product_name
+
+
+            item["product_name"] = product_name
+
+
 
             item["qty"] = item.get(
                 "quantity",
@@ -61,44 +126,68 @@ def get_sale_items(sale_id:int):
             )
 
 
+
         return items
 
 
+
+
     except Exception as e:
+
 
         log_error(
             f"get_sale_items error : {e}"
         )
 
+
         return []
+
+
+
+
+
+
 
 # ==============================================================================
 # GET RECEIPT
 # ==============================================================================
 
+
 def get_receipt(
-    invoice_no:str
-)->Dict[str,Any]:
+    invoice_no: str
+) -> Dict[str, Any]:
 
 
     try:
 
+
         response = (
 
             db()
-            .table("sales")
-            .select("*")
+
+            .table(
+                "sales"
+            )
+
+            .select(
+                "*"
+            )
+
             .eq(
                 "invoice_no",
                 invoice_no
             )
+
             .single()
+
             .execute()
 
         )
 
 
         return response.data or {}
+
+
 
 
     except Exception as e:
@@ -115,13 +204,16 @@ def get_receipt(
 
 
 
+
+
 # ==============================================================================
 # FULL RECEIPT
 # ==============================================================================
 
+
 def get_full_receipt(
-    invoice_no:str
-)->Dict[str,Any]:
+    invoice_no: str
+) -> Dict[str, Any]:
 
 
     try:
@@ -132,36 +224,46 @@ def get_full_receipt(
         )
 
 
+
         if not sale:
+
 
             return {
 
-                "success":False,
+                "success": False,
 
-                "sale":None,
+                "sale": None,
 
-                "items":[]
+                "items": []
 
             }
 
 
 
+
         items = get_sale_items(
-            sale["id"]
+
+            sale.get(
+                "id"
+            )
+
         )
+
 
 
         return {
 
 
-            "success":True,
+            "success": True,
 
-            "sale":sale,
+            "sale": sale,
 
-            "items":items
+            "items": items
 
 
         }
+
+
 
 
     except Exception as e:
@@ -172,15 +274,19 @@ def get_full_receipt(
         )
 
 
+
         return {
 
-            "success":False,
 
-            "sale":None,
+            "success": False,
 
-            "items":[]
+            "sale": None,
+
+            "items": []
 
         }
+
+
 
 
 
@@ -190,9 +296,10 @@ def get_full_receipt(
 # SEARCH RECEIPTS
 # ==============================================================================
 
+
 def search_receipts(
-    keyword:str=""
-)->List[Dict[str,Any]]:
+    keyword: str = ""
+) -> List[Dict[str, Any]]:
 
 
     try:
@@ -201,10 +308,17 @@ def search_receipts(
         query = (
 
             db()
-            .table("sales")
-            .select("*")
+
+            .table(
+                "sales"
+            )
+
+            .select(
+                "*"
+            )
 
         )
+
 
 
         if keyword:
@@ -213,27 +327,39 @@ def search_receipts(
             query = (
 
                 query
+
                 .ilike(
+
                     "invoice_no",
+
                     f"%{keyword}%"
+
                 )
 
             )
 
 
-        response=(
+
+        response = (
 
             query
+
             .order(
+
                 "created_at",
+
                 desc=True
+
             )
+
             .execute()
 
         )
 
 
+
         return response.data or []
+
 
 
 
