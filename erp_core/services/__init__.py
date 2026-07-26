@@ -181,9 +181,7 @@ from .receipt_service import (
 
 from .helpers import (
 
-    get_fifo_cogs,
-
-    create_audit_log
+    get_fifo_cogs
 
 )
 
