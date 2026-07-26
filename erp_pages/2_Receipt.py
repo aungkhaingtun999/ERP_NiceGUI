@@ -15,6 +15,7 @@ from database import (
 from utils.receipt_pdf import generate_pdf
 from utils.thermal_receipt import build_receipt_data
 from utils.ui import show_table
+from utils.timezone import format_db_datetime
 
 
 def run():
@@ -319,9 +320,11 @@ def run():
     ):
 
         st.write(
-            "📅 Date:",
-            receipt["created_at"]
-        )
+    "📅 Date:",
+    format_db_datetime(
+        receipt["created_at"]
+    )
+)
 
     # ==========================================
     # ACTION AREA
