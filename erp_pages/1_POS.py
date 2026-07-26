@@ -268,7 +268,7 @@ def run():
         0
     )
 
-    st.session_state.tax_rate = float(
+     st.session_state.tax_rate = float(
         tax_value
     )
 
