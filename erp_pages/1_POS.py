@@ -28,6 +28,24 @@ import streamlit as st
 from datetime import datetime
 
 
+# ==============================================================================
+# ROOT PATH
+# ==============================================================================
+
+sys.path.append(
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            ".."
+        )
+    )
+)
+
+
+# ==============================================================================
+# UTILITIES
+# ==============================================================================
+
 from utils.timezone import format_datetime
 from utils.receipt_pdf import generate_pdf
 from utils.thermal_receipt import print_thermal
@@ -35,54 +53,40 @@ from utils.thermal_receipt import print_thermal
 
 
 # ==============================================================================
-# ROOT PATH
-# ==============================================================================
-
-sys.path.append(
-
-os.path.abspath(
-
-os.path.join(
-
-os.path.dirname(__file__),
-
-".."
-
-)
-
-)
-
-)
-
-
-
-# ==============================================================================
 # ERP CORE
 # ==============================================================================
 
-
 from erp_core import (
 
-get_products,
+    get_products,
 
-get_setting,
+    get_setting,
 
-get_default_warehouse_id,
+    get_default_warehouse_id,
 
-checkout_sale_rpc
+    checkout_sale_rpc
 
 )
 
 
+
+# ==============================================================================
+# AUTH
+# ==============================================================================
 
 from auth import is_authenticated
 
 
+
+# ==============================================================================
+# LANGUAGE
+# ==============================================================================
+
 from language import (
 
-t,
+    t,
 
-language_selector
+    language_selector
 
 )
 
@@ -94,13 +98,13 @@ language_selector
 
 def money(value):
 
-try:
+    try:
 
-return f"{float(value):,.0f} MMK"
+        return f"{float(value):,.0f} MMK"
 
-except:
+    except Exception:
 
-return "0 MMK"
+        return "0 MMK"
 
 
 
@@ -110,102 +114,84 @@ return "0 MMK"
 # PRICE ENGINE
 # ==============================================================================
 
-
 def get_final_price(product):
 
-"""
-OWNER PRICE PRIORITY ENGINE
+    """
+    OWNER PRICE PRIORITY ENGINE
 
-OWNER
-PRODUCT MARKUP
-CATEGORY MARKUP
-SYSTEM PRICE
+    OWNER
+        ↓
+    PRODUCT MARKUP
+        ↓
+    CATEGORY MARKUP
+        ↓
+    SYSTEM PRICE
 
-"""
-
-
-# OWNER PRICE
-
-owner_price = product.get(
-"owner_selling_price"
-)
-
-
-if owner_price is not None:
-
-
-return {
-
-"price":
-float(owner_price),
-
-"source":
-"OWNER"
-
-}
+    """
 
 
 
+    # ==========================================================
+    # OWNER MANUAL PRICE
+    # ==========================================================
+
+    owner_price = product.get(
+        "owner_selling_price"
+    )
 
 
-# FINAL VIEW PRICE
+    if owner_price is not None:
 
-final_price = product.get(
+        return {
 
-"final_selling_price"
+            "price": float(owner_price),
 
-)
+            "source": "OWNER"
 
-
-if final_price is not None:
-
-
-return {
-
-
-"price":
-float(final_price),
-
-
-"source":
-product.get(
-"price_source",
-"SYSTEM"
-)
-
-
-}
+        }
 
 
 
+    # ==========================================================
+    # CALCULATED FINAL PRICE
+    # ==========================================================
+
+    final_price = product.get(
+        "final_selling_price"
+    )
 
 
-# FALLBACK
+    if final_price is not None:
 
-return {
+        return {
 
+            "price": float(final_price),
 
-"price":
+            "source": product.get(
+                "price_source",
+                "SYSTEM"
+            )
 
-float(
-
-product.get(
-
-"selling_price",
-
-0
-
-)
-
-),
+        }
 
 
-"source":
 
-"SYSTEM"
+    # ==========================================================
+    # FALLBACK
+    # ==========================================================
 
+    return {
 
-}
+        "price": float(
+            product.get(
+                "selling_price",
+                0
+            )
+        ),
+
+        "source": "SYSTEM"
+
+    }
 
 
 
@@ -215,232 +201,188 @@ product.get(
 # MAIN
 # ==============================================================================
 
-
 def run():
 
 
 
-# ==========================================================================
-# LANGUAGE
-# ==========================================================================
+    # ==========================================================================
+    # LANGUAGE
+    # ==========================================================================
 
+    language_selector()
 
-language_selector()
 
 
+    # ==========================================================================
+    # AUTH CHECK
+    # ==========================================================================
 
+    if not is_authenticated():
 
+        st.warning(
+            "Please login first."
+        )
 
-# ==========================================================================
-# AUTH CHECK
-# ==========================================================================
+        st.stop()
 
 
-if not is_authenticated():
 
 
-st.warning(
 
-"Please login first."
+    # ==========================================================================
+    # SESSION STATE
+    # ==========================================================================
 
-)
+    default_state = {
 
+        "cart": [],
 
-st.stop()
+        "sale_data": None,
 
+        "show_receipt": False,
 
+        "processing": False
 
+    }
 
 
-# ==========================================================================
-# SESSION STATE
-# ==========================================================================
 
+    for key, value in default_state.items():
 
-default_state = {
+        if key not in st.session_state:
 
+            st.session_state[key] = value
 
-"cart":
 
-[],
 
 
-"sale_data":
 
-None,
+    # ==========================================================================
+    # SETTINGS
+    # ==========================================================================
 
+    try:
 
-"show_receipt":
+        st.session_state.tax_rate = float(
 
-False,
+            get_setting(
 
+                "default_tax_rate",
 
-"processing":
+                0
 
-False
+            )
 
+        )
 
-}
+    except Exception:
 
+        st.session_state.tax_rate = 0
 
 
-for key,value in default_state.items():
 
 
-if key not in st.session_state:
 
+    try:
 
-st.session_state[key] = value
+        st.session_state.discount_policy = str(
 
+            get_setting(
 
+                "discount_policy",
 
+                "allowed"
 
+            )
 
-# ==========================================================================
-# SETTINGS
-# ==========================================================================
+        )
 
+    except Exception:
 
-try:
+        st.session_state.discount_policy = "allowed"
 
 
-st.session_state.tax_rate = float(
 
-get_setting(
 
-"default_tax_rate",
 
-0
+    # ==========================================================================
+    # WAREHOUSE
+    # ==========================================================================
 
-)
+    warehouse_id = get_default_warehouse_id()
 
-)
 
 
-except:
+    if not warehouse_id:
 
+        st.error(
 
-st.session_state.tax_rate = 0
+            "Default warehouse not configured."
 
+        )
 
+        st.stop()
 
 
 
-try:
 
 
-st.session_state.discount_policy = str(
+    # ==========================================================================
+    # LOAD PRODUCTS
+    # ==========================================================================
 
-get_setting(
+    try:
 
-"discount_policy",
+        products = get_products(
 
-"allowed"
+            warehouse_id=warehouse_id
 
-)
+        )
 
-)
 
+    except Exception as e:
 
-except:
+        st.error(
 
+            f"Product Load Error : {e}"
 
-st.session_state.discount_policy = "allowed"
+        )
 
+        st.stop()
 
 
 
 
-# ==========================================================================
-# WAREHOUSE
-# ==========================================================================
 
+    if not products:
 
-warehouse_id = get_default_warehouse_id()
+        st.warning(
 
+            "No Products Found"
 
+        )
 
-if not warehouse_id:
+        st.stop()
 
 
-st.error(
 
-"Default warehouse not configured."
 
-)
 
+    # ==========================================================================
+    # TITLE
+    # ==========================================================================
 
-st.stop()
+    st.title(
 
+        f"🛒 {t('app.pos_system')}"
 
+    )
 
 
 
-# ==========================================================================
-# LOAD PRODUCTS
-# ==========================================================================
+    st.caption(
 
-
-try:
-
-
-products = get_products(
-
-warehouse_id=
-
-warehouse_id
-
-)
-
-
-except Exception as e:
-
-
-st.error(
-
-f"Product Load Error : {e}"
-
-)
-
-
-st.stop()
-
-
-
-
-
-if not products:
-
-
-st.warning(
-
-"No Products Found"
-
-)
-
-
-st.stop()
-
-
-
-
-
-# ==========================================================================
-# TITLE
-# ==========================================================================
-
-
-st.title(
-
-f"🛒 {t('app.pos_system')}"
-
-)
-
-
-
-st.caption(
-
-"""
+        """
 ERP ENTERPRISE POS
 
 Pricing Engine
@@ -455,250 +397,246 @@ SYSTEM PRICE
 
 POS uses FINAL SELLING PRICE
 
-"""
+        """
 
-)
-# ==============================================================================
-# PART 2/4
-#
-# PRODUCT SEARCH
-# CART ENGINE
-# STOCK CONTROL
-#
-# ==============================================================================
+    )
 
 
 
-# ==============================================================================
-# PRODUCT SEARCH
-# ==============================================================================
+    # PART 2/4 CONTINUES HERE
+      # ==============================================================================
+    # PART 2/4
+    #
+    # PRODUCT SEARCH
+    # CART ENGINE
+    # STOCK CONTROL
+    #
+    # ==============================================================================
 
 
-if not st.session_state.show_receipt:
+    # ==========================================================================
+    # PRODUCT SEARCH
+    # ==========================================================================
 
+    if not st.session_state.show_receipt:
 
-col1, col2 = st.columns(2)
 
+        col1, col2 = st.columns(2)
 
 
-with col1:
 
+        with col1:
 
-name_search = st.text_input(
+            name_search = st.text_input(
 
-"🔍 Product Name"
+                "🔍 Product Name"
 
-)
+            )
 
 
 
-with col2:
+        with col2:
 
+            barcode_search = st.text_input(
 
-barcode_search = st.text_input(
+                "📦 SKU / Barcode"
 
-"📦 SKU / Barcode"
+            )
 
-)
 
 
 
 
+        matches = []
 
-matches = []
 
 
+        for product in products:
 
-for product in products:
 
+            name = str(
 
-name = str(
+                product.get(
 
-product.get(
+                    "name",
 
-"name",
+                    ""
 
-""
+                )
 
-)
+            )
 
-)
 
+            sku = str(
 
-sku = str(
+                product.get(
 
-product.get(
+                    "sku",
 
-"sku",
+                    ""
 
-""
+                )
 
-)
+            )
 
-)
 
+            barcode = str(
 
-barcode = str(
+                product.get(
 
-product.get(
+                    "barcode",
 
-"barcode",
+                    ""
 
-""
+                )
 
-)
+            )
 
-)
 
 
+            name_ok = True
 
-name_ok = True
+            code_ok = True
 
-code_ok = True
 
 
 
 
+            if name_search:
 
-if name_search:
 
+                name_ok = (
 
-name_ok = (
+                    name_search.lower()
 
-name_search.lower()
+                    in
 
-in
+                    name.lower()
 
-name.lower()
+                )
 
-)
 
 
 
 
+            if barcode_search:
 
-if barcode_search:
 
+                search = barcode_search.lower()
 
-search = barcode_search.lower()
 
 
-code_ok = (
+                code_ok = (
 
-search in sku.lower()
+                    search in sku.lower()
 
-or
+                    or
 
-search in barcode.lower()
+                    search in barcode.lower()
 
-)
+                )
 
 
 
 
 
-if name_ok and code_ok:
+            if name_ok and code_ok:
 
 
-matches.append(product)
+                matches.append(product)
 
 
 
 
 
-# ======================================================================
-# SELECT PRODUCT
-# ======================================================================
+        # ======================================================================
+        # SELECT PRODUCT
+        # ======================================================================
 
+        if matches:
 
-if matches:
 
 
+            selected = st.selectbox(
 
-selected = st.selectbox(
+                "Select Product",
 
+                matches,
 
-"Select Product",
 
+                format_func=lambda x:
 
-matches,
 
+                    (
 
-format_func=lambda x:
+                        f"{x.get('sku','')} | "
 
+                        f"{x.get('name','')} | "
 
-(
+                        f"Stock: "
 
-f"{x.get('sku','')} | "
+                        f"{x.get('available_qty',0)} | "
 
-f"{x.get('name')} | "
+                        f"Price: "
 
-f"Stock: "
+                        f"{money(get_final_price(x)['price'])}"
 
-f"{x.get('available_qty',0)} | "
+                    )
 
-f"Price: "
+            )
 
-f"{money(get_final_price(x)['price'])}"
 
-)
 
 
-)
 
+            qty = st.number_input(
 
 
+                "Quantity",
 
 
-qty = st.number_input(
+                min_value=1,
 
 
-"Quantity",
+                value=1,
 
 
-min_value=1,
+                step=1
 
+            )
 
-value=1,
 
 
-step=1
 
 
-)
+            # ==============================================================
+            # PRICE ENGINE
+            # ==============================================================
 
 
+            price_data = get_final_price(
 
+                selected
 
+            )
 
-# ==============================================================
-# PRICE ENGINE
-# ==============================================================
 
+            final_price = price_data["price"]
 
-price_data = get_final_price(
 
-selected
+            price_source = price_data["source"]
 
-)
 
 
-final_price = price_data["price"]
 
 
-price_source = price_data["source"]
+            st.info(
 
-
-
-
-
-st.info(
-
-f"""
+                f"""
 
 Product:
 
-{selected['name']}
+{selected.get('name')}
 
 
 Selling Price:
@@ -710,368 +648,381 @@ Price Source:
 
 {price_source}
 
-"""
+                """
 
-)
-
-
-
-
-
-# ==============================================================
-# ADD CART
-# ==============================================================
-
-
-if st.button(
-
-"➕ Add To Cart",
-
-use_container_width=True
-
-):
-
-
-
-available = int(
-
-selected.get(
-
-"available_qty",
-
-0
-
-)
-
-)
+            )
 
 
 
 
 
-current_qty = sum(
+            # ==============================================================
+            # ADD CART
+            # ==============================================================
 
 
-item["qty"]
+            if st.button(
 
+                "➕ Add To Cart",
 
-for item in st.session_state.cart
+                use_container_width=True
 
-
-if item["id"] == selected["id"]
-
-
-)
-
-
+            ):
 
 
 
-if current_qty + qty > available:
+                available = int(
+
+                    selected.get(
+
+                        "available_qty",
+
+                        0
+
+                    )
+
+                )
 
 
 
-st.error(
 
-f"""
+
+                current_qty = sum(
+
+
+                    item["qty"]
+
+
+                    for item in st.session_state.cart
+
+
+                    if item["id"] == selected["id"]
+
+
+                )
+
+
+
+
+
+                if current_qty + qty > available:
+
+
+
+                    st.error(
+
+                        f"""
 
 Insufficient Stock
+
 
 Available:
 
 {available}
 
-"""
+                        """
 
-)
+                    )
 
 
 
 
 
-else:
+                else:
 
 
 
-exists = False
+                    exists = False
 
 
 
 
 
-for item in st.session_state.cart:
+                    for item in st.session_state.cart:
 
 
 
-if item["id"] == selected["id"]:
+                        if item["id"] == selected["id"]:
 
 
 
-item["qty"] += int(qty)
+                            item["qty"] += int(qty)
 
 
-exists = True
+                            exists = True
 
 
-break
+                            break
 
 
 
 
 
-if not exists:
+                    if not exists:
 
 
 
-st.session_state.cart.append(
+                        st.session_state.cart.append(
 
 
-{
+                            {
 
 
-"id":
+                                "id":
 
-selected["id"],
+                                    selected["id"],
 
 
 
-"name":
+                                "name":
 
-selected["name"],
+                                    selected.get(
 
+                                        "name",
 
+                                        ""
 
-"sku":
+                                    ),
 
-selected.get(
 
-"sku",
 
-""
+                                "sku":
 
-),
+                                    selected.get(
 
+                                        "sku",
 
+                                        ""
 
-"qty":
+                                    ),
 
-int(qty),
 
 
+                                "qty":
 
-"selling_price":
+                                    int(qty),
 
-final_price,
 
 
+                                "selling_price":
 
-"price_source":
+                                    final_price,
 
-price_source
 
 
+                                "price_source":
 
-}
+                                    price_source
 
 
-)
 
+                            }
 
 
+                        )
 
 
-st.success(
 
-"Added to cart"
 
-)
 
+                    st.success(
 
-st.rerun()
+                        "Added to cart"
 
+                    )
 
 
+                    st.rerun()
 
 
 
 
-# ==============================================================================
-# CART DISPLAY
-# ==============================================================================
 
 
-if (
 
-not st.session_state.show_receipt
+    # ==========================================================================
+    # CART DISPLAY
+    # ==========================================================================
 
-and
 
-st.session_state.cart
+    if (
 
-):
+        not st.session_state.show_receipt
 
+        and
 
+        st.session_state.cart
 
-st.divider()
+    ):
 
 
 
-st.subheader(
+        st.divider()
 
-"🛒 Shopping Cart"
 
-)
 
+        st.subheader(
 
+            "🛒 Shopping Cart"
 
+        )
 
 
-cart_rows = []
 
 
 
+        cart_rows = []
 
 
-for item in st.session_state.cart:
 
 
 
-amount = (
+        for item in st.session_state.cart:
 
-item["selling_price"]
 
-*
 
-item["qty"]
+            amount = (
 
-)
+                item["selling_price"]
 
+                *
 
+                item["qty"]
 
-cart_rows.append(
+            )
 
 
-{
 
+            cart_rows.append(
 
-"Product":
 
-item["name"],
+                {
 
 
-"Qty":
+                    "Product":
 
-item["qty"],
+                        item["name"],
 
 
-"Price Source":
 
-item.get(
+                    "Qty":
 
-"price_source",
+                        item["qty"],
 
-"SYSTEM"
 
-),
 
+                    "Price Source":
 
-"Unit Price":
+                        item.get(
 
-money(
+                            "price_source",
 
-item["selling_price"]
+                            "SYSTEM"
 
-),
+                        ),
 
 
-"Amount":
 
-money(
+                    "Unit Price":
 
-amount
+                        money(
 
-)
+                            item["selling_price"]
 
+                        ),
 
-}
 
 
-)
+                    "Amount":
 
+                        money(
 
+                            amount
 
+                        )
 
 
-cart_df = pd.DataFrame(
+                }
 
-cart_rows
 
-)
+            )
 
 
 
 
 
-st.dataframe(
+        cart_df = pd.DataFrame(
 
+            cart_rows
 
-cart_df,
+        )
 
 
-use_container_width=True,
 
 
-hide_index=True
 
+        st.dataframe(
 
-)
 
+            cart_df,
 
 
+            use_container_width=True,
 
 
-# ==============================================================
-# TOTAL
-# ==============================================================
+            hide_index=True
 
 
-subtotal = sum(
+        )
 
 
-item["selling_price"]
 
-*
 
-item["qty"]
 
 
-for item in st.session_state.cart
 
+        # ==============================================================
+        # TOTAL
+        # ==============================================================
 
-)
 
+        subtotal = sum(
 
 
+            item["selling_price"]
 
+            *
 
-total_qty = sum(
+            item["qty"]
 
 
-item["qty"]
+            for item in st.session_state.cart
 
 
-for item in st.session_state.cart
+        )
 
 
-)
 
 
 
+        total_qty = sum(
 
 
-st.info(
+            item["qty"]
 
-f"""
+
+            for item in st.session_state.cart
+
+
+        )
+
+
+
+
+
+        st.info(
+
+            f"""
 
 Total Items:
 
@@ -1087,245 +1038,293 @@ Subtotal:
 
 {money(subtotal)}
 
-"""
+            """
 
-)
+        )
 
 
 
 
 
-# ==============================================================
-# REMOVE ITEM
-# ==============================================================
 
 
-st.subheader(
+        # ==============================================================
+        # REMOVE ITEM
+        # ==============================================================
 
-"❌ Remove Product"
 
-)
+        st.subheader(
 
+            "❌ Remove Product"
 
+        )
 
 
 
-for index,item in enumerate(
 
 
-st.session_state.cart
+        for index, item in enumerate(
 
+            st.session_state.cart
 
-):
+        ):
 
 
 
-c1,c2 = st.columns(
+            c1, c2 = st.columns(
 
-[5,1]
+                [5, 1]
 
-)
+            )
 
 
 
-with c1:
 
 
-st.write(
+            with c1:
 
-f"{item['name']} × {item['qty']}"
 
-)
+                st.write(
 
+                    f"{item['name']} × {item['qty']}"
 
+                )
 
-with c2:
 
 
-if st.button(
 
 
-"❌",
+            with c2:
 
 
-key=f"remove_{index}"
 
+                if st.button(
 
-):
 
+                    "❌",
 
-st.session_state.cart.pop(index)
 
+                    key=f"remove_{index}"
 
-st.rerun()
 
-# ==============================================================================
-# PART 3/4
-#
-# PAYMENT ENGINE
-# CHECKOUT RPC
-# SALE PROCESS
-#
-# ==============================================================================
+                ):
 
 
 
-st.divider()
+                    st.session_state.cart.pop(index)
 
 
-st.subheader(
+                    st.rerun()
+                      # ==============================================================================
+    # PART 3/4
+    #
+    # PAYMENT ENGINE
+    # CHECKOUT RPC
+    # SALE PROCESS
+    #
+    # ==============================================================================
 
-"💰 Payment"
 
-)
 
+    if (
 
+        not st.session_state.show_receipt
 
-# ==============================================================
-# DISCOUNT POLICY
-# ==============================================================
+        and
 
+        st.session_state.cart
 
-policy = str(
+    ):
 
-st.session_state.discount_policy
 
-).lower().strip()
+        st.divider()
 
 
+        st.subheader(
 
+            "💰 Payment"
 
+        )
 
-if policy == "restricted":
 
 
 
-discount = st.number_input(
 
+        # ==============================================================
+        # DISCOUNT POLICY
+        # ==============================================================
 
-"Discount",
 
+        policy = str(
 
-min_value=0.0,
+            st.session_state.discount_policy
 
+        ).lower().strip()
 
-value=0.0,
 
 
-step=100.0,
 
 
-disabled=True
+        if policy == "restricted":
 
 
-)
 
+            discount = st.number_input(
 
 
-st.error(
+                "Discount",
 
-"⛔ Discount restricted"
 
-)
+                min_value=0.0,
 
 
+                value=0.0,
 
-else:
 
+                step=100.0,
 
 
-discount = st.number_input(
+                disabled=True
 
 
-"Discount",
+            )
 
 
-min_value=0.0,
 
+            st.error(
 
-value=0.0,
+                "⛔ Discount restricted"
 
+            )
 
-step=100.0
 
 
-)
 
 
+        else:
 
-st.success(
 
-"✅ Discount allowed"
 
-)
+            discount = st.number_input(
 
 
+                "Discount",
 
 
+                min_value=0.0,
 
-# ==============================================================
-# TAX
-# ==============================================================
 
+                value=0.0,
 
-tax_amount = round(
 
+                step=100.0
 
-subtotal
 
-*
+            )
 
-st.session_state.tax_rate
 
-/
 
-100,
+            st.success(
 
+                "✅ Discount allowed"
 
-2
+            )
 
 
-)
 
 
 
 
 
-grand_total = max(
+        # ==============================================================
+        # SUBTOTAL
+        # ==============================================================
 
 
-0,
+        subtotal = sum(
 
 
-subtotal
+            item["selling_price"]
 
-+
+            *
 
-tax_amount
+            item["qty"]
 
--
 
-discount
+            for item in st.session_state.cart
 
 
-)
+        )
 
 
 
 
 
-st.success(
+        # ==============================================================
+        # TAX ENGINE
+        # ==============================================================
 
-f"""
+
+        tax_amount = round(
+
+
+            subtotal
+
+            *
+
+            st.session_state.tax_rate
+
+            /
+
+            100,
+
+
+            2
+
+
+        )
+
+
+
+
+
+        grand_total = max(
+
+
+            0,
+
+
+            subtotal
+
+            +
+
+            tax_amount
+
+            -
+
+            discount
+
+
+        )
+
+
+
+
+
+        st.success(
+
+            f"""
 
 Subtotal:
 
 {money(subtotal)}
 
 
+
 Tax:
 
 {money(tax_amount)}
+
 
 
 Discount:
@@ -1342,658 +1341,703 @@ TOTAL:
 
 ====================
 
-"""
+            """
 
-)
+        )
 
 
 
 
 
-# ==============================================================
-# PAYMENT METHOD
-# ==============================================================
 
 
-payment_method = st.selectbox(
+        # ==============================================================
+        # PAYMENT METHOD
+        # ==============================================================
 
 
-"Payment Method",
+        payment_method = st.selectbox(
 
 
-[
+            "Payment Method",
 
-"CASH",
 
-"CARD",
+            [
 
-"MOBILE"
+                "CASH",
 
-]
+                "CARD",
 
-)
+                "MOBILE"
 
+            ]
 
+        )
 
 
 
-if payment_method == "CASH":
 
 
 
-received = st.number_input(
 
+        if payment_method == "CASH":
 
-"Received Amount",
 
 
-min_value=float(grand_total),
+            received = st.number_input(
 
 
-value=float(grand_total),
+                "Received Amount",
 
 
-step=100.0
+                min_value=float(grand_total),
 
 
-)
+                value=float(grand_total),
 
 
-else:
+                step=100.0
 
 
-received = grand_total
+            )
 
 
 
+        else:
 
 
-change = max(
+            received = grand_total
 
 
-0,
 
 
-received - grand_total
 
+        change = max(
 
-)
 
+            0,
 
 
+            received - grand_total
 
 
-st.write(
+        )
 
-f"Change : {money(change)}"
 
-)
 
 
 
+        st.write(
 
+            f"Change : {money(change)}"
 
+        )
 
 
-# ==============================================================
-# CONFIRM SALE
-# ==============================================================
 
 
-if st.button(
 
 
-"✅ Confirm Sale",
 
+        # ==============================================================
+        # CONFIRM SALE
+        # ==============================================================
 
-disabled=
 
-st.session_state.processing,
+        if st.button(
 
 
-use_container_width=True
+            "✅ Confirm Sale",
 
 
-):
+            disabled=st.session_state.processing,
 
 
+            use_container_width=True
 
-st.session_state.processing = True
 
+        ):
 
 
 
+            st.session_state.processing = True
 
-try:
 
 
 
-# ======================================================
-# CREATE RPC CART PAYLOAD
-# ======================================================
 
+            try:
 
-cart_payload = []
 
 
+                # ======================================================
+                # CREATE RPC CART PAYLOAD
+                # ======================================================
 
-for item in st.session_state.cart:
 
+                cart_payload = []
 
 
-cart_payload.append(
 
 
-{
 
+                for item in st.session_state.cart:
 
-"id":
 
-item["id"],
 
+                    cart_payload.append(
 
 
-"qty":
+                        {
 
-int(
 
-item["qty"]
+                            "id":
 
-),
+                                item["id"],
 
 
 
-"selling_price":
+                            "qty":
 
-float(
+                                int(item["qty"]),
 
-item["selling_price"]
 
-)
 
+                            "selling_price":
 
+                                float(
 
-}
+                                    item["selling_price"]
 
+                                )
 
-)
 
+                        }
 
 
+                    )
 
 
 
 
-# ======================================================
-# CALL checkout_sale_rpc
-# SQL MATCH
-# ======================================================
 
 
-result = checkout_sale_rpc(
-# ======================================================
-# CASHIER UUID RESOLVE
-# ======================================================
 
-cashier_id = (
 
-st.session_state.get("user_id")
+                # ======================================================
+                # CASHIER UUID RESOLVE
+                # ======================================================
 
-or
 
-st.session_state.get("id")
+                cashier_id = (
 
-or
 
-st.session_state.get("user", {}).get("id")
+                    st.session_state.get(
 
-)
+                        "user_id"
 
+                    )
 
 
-if not cashier_id:
+                    or
 
-st.error(
-"Cashier ID missing. Please login again."
-)
 
-st.session_state.processing = False
+                    st.session_state.get(
 
-st.stop()
+                        "id"
 
+                    )
 
 
-# ======================================================
-# CHECKOUT RPC
-# ======================================================
+                    or
 
 
-# ======================================================
-# CASHIER UUID RESOLVE
-# ======================================================
+                    st.session_state.get(
 
-cashier_id = (
+                        "user",
 
-st.session_state.get("user_id")
+                        {}
 
-or
+                    ).get(
 
-st.session_state.get("id")
+                        "id"
 
-or
+                    )
 
-st.session_state.get("user", {}).get("id")
 
-)
+                )
 
 
 
-if not cashier_id:
 
-st.error(
-"Cashier ID missing. Please login again."
-)
 
-st.session_state.processing = False
+                if not cashier_id:
 
-st.stop()
 
 
+                    st.error(
 
-# ======================================================
-# CHECKOUT RPC
-# ======================================================
+                        "Cashier ID missing. Please login again."
 
+                    )
 
-result = checkout_sale_rpc(
 
+                    st.session_state.processing = False
 
-cart=
 
-cart_payload,
+                    st.stop()
 
 
-paid_amount=
 
-received,
 
 
-warehouse_id=
 
-warehouse_id,
 
+                # ======================================================
+                # CHECKOUT RPC
+                # ======================================================
 
-cashier_id=
 
-cashier_id,
+                result = checkout_sale_rpc(
 
 
-counter_id=
 
-1,
+                    cart=
 
+                        cart_payload,
 
-payment_method=
 
-payment_method,
 
+                    paid_amount=
 
-tax=
+                        received,
 
-tax_amount,
 
 
-discount=
+                    warehouse_id=
 
-discount
+                        warehouse_id,
 
-)
 
 
+                    cashier_id=
 
+                        cashier_id,
 
 
 
-# ======================================================
-# SUCCESS
-# ======================================================
+                    counter_id=
 
+                        1,
 
-if result.get(
 
-"success",
 
-False
+                    payment_method=
 
-):
+                        payment_method,
 
 
 
-data = result.get(
+                    tax=
 
-"data",
+                        tax_amount,
 
-{}
 
-)
 
+                    discount=
 
+                        discount
 
 
 
-if isinstance(
+                )
 
-data,
 
-list
 
-):
 
 
 
-data = data[0] if data else {}
 
 
+                # ======================================================
+                # SUCCESS
+                # ======================================================
 
 
+                if result.get(
 
-invoice_no = (
+                    "success",
 
-data.get(
+                    False
 
-"invoice_no"
+                ):
 
-)
 
-or
 
-(
+                    data = result.get(
 
-"INV-"
+                        "data",
 
-+
+                        {}
 
-datetime.now()
+                    )
 
-.strftime(
 
-"%Y%m%d%H%M%S"
 
-)
 
-)
 
-)
+                    if isinstance(
 
+                        data,
 
+                        list
 
+                    ):
 
 
 
+                        data = data[0] if data else {}
 
-receipt_items = []
 
 
 
-for item in st.session_state.cart:
 
 
 
-receipt_items.append(
+                    invoice_no = (
 
 
+                        data.get(
 
-{
+                            "invoice_no"
 
+                        )
 
-"name":
 
-item["name"],
+                        or
 
 
+                        (
 
-"product_id":
+                            "INV-"
 
-item["id"],
+                            +
 
+                            datetime.now().strftime(
 
+                                "%Y%m%d%H%M%S"
 
-"quantity":
+                            )
 
-item["qty"],
+                        )
 
 
+                    )
 
-"unit_price":
 
-item["selling_price"],
 
 
 
-"price_source":
 
-item.get(
 
-"price_source",
+                    receipt_items = []
 
-"SYSTEM"
 
-),
 
 
 
-"total":
+                    for item in st.session_state.cart:
 
-item["qty"]
 
-*
 
-item["selling_price"]
+                        receipt_items.append(
 
 
-}
 
+                            {
 
-)
 
+                                "name":
 
+                                    item["name"],
 
 
 
+                                "product_id":
 
+                                    item["id"],
 
 
-st.session_state.sale_data = {
 
+                                "quantity":
 
+                                    item["qty"],
 
-"invoice_no":
 
-invoice_no,
 
+                                "unit_price":
 
+                                    item["selling_price"],
 
-"date":
 
-format_datetime(),
 
+                                "price_source":
 
+                                    item.get(
 
-"cashier":
+                                        "price_source",
 
-(
-st.session_state.get("username")
-or
-st.session_state.get("full_name")
-or
-"Unknown"
-),
+                                        "SYSTEM"
 
+                                    ),
 
 
-"items":
 
-receipt_items,
+                                "total":
 
+                                    item["qty"]
 
+                                    *
 
-"subtotal":
+                                    item["selling_price"]
 
-subtotal,
 
 
+                            }
 
-"tax_rate":
 
-st.session_state.tax_rate,
+                        )
 
 
 
-"tax_amount":
 
-tax_amount,
 
 
 
-"discount":
 
-discount,
+                    st.session_state.sale_data = {
 
 
 
-"grand_total":
+                        "invoice_no":
 
-grand_total,
+                            invoice_no,
 
 
 
-"paid":
+                        "date":
 
-received,
+                            format_datetime(),
 
 
 
-"change":
+                        "cashier":
 
-change
 
+                            (
 
+                                st.session_state.get(
 
-}
+                                    "username"
 
+                                )
 
 
+                                or
 
 
+                                st.session_state.get(
 
-st.session_state.show_receipt = True
+                                    "full_name"
 
+                                )
 
-st.session_state.processing = False
 
+                                or
 
-st.rerun()
 
+                                "Unknown"
 
+                            ),
 
 
 
+                        "items":
 
-else:
+                            receipt_items,
 
 
 
-st.error(
+                        "subtotal":
 
+                            subtotal,
 
-result.get(
 
-"message",
 
-"Checkout Failed"
+                        "tax_rate":
 
-)
+                            st.session_state.tax_rate,
 
-)
 
 
+                        "tax_amount":
 
-st.session_state.processing = False
+                            tax_amount,
 
 
 
+                        "discount":
 
+                            discount,
 
 
-except Exception as e:
 
+                        "grand_total":
 
+                            grand_total,
 
-st.session_state.processing = False
 
 
+                        "paid":
 
-st.error(
+                            received,
 
-f"Checkout Error : {e}"
 
-)
-# ==============================================================================
-# PART 4/4
-#
-# RECEIPT ENGINE
-# PRINT
-# PDF
-# RESET
-#
-# ==============================================================================
 
+                        "change":
 
+                            change
 
-if st.session_state.show_receipt:
 
 
+                    }
 
-data = st.session_state.sale_data
 
 
 
-if not data:
 
 
-st.error(
 
-"Receipt data missing"
+                    st.session_state.show_receipt = True
 
-)
 
-st.stop()
+                    st.session_state.processing = False
 
 
+                    st.rerun()
 
 
 
-st.divider()
 
 
 
-st.title(
 
-"🧾 Sales Receipt"
+                else:
 
-)
 
 
+                    st.error(
 
 
+                        result.get(
 
-st.info(
+                            "message",
 
-f"""
+                            "Checkout Failed"
+
+                        )
+
+                    )
+
+
+
+                    st.session_state.processing = False
+
+
+
+
+
+
+
+            except Exception as e:
+
+
+
+                st.session_state.processing = False
+
+
+
+                st.error(
+
+                    f"Checkout Error : {e}"
+
+                )
+                  # ==============================================================================
+    # PART 4/4
+    #
+    # RECEIPT ENGINE
+    # PRINT
+    # PDF
+    # RESET
+    #
+    # ==============================================================================
+
+
+
+    if st.session_state.show_receipt:
+
+
+
+        data = st.session_state.sale_data
+
+
+
+
+
+        if not data:
+
+
+            st.error(
+
+                "Receipt data missing"
+
+            )
+
+            st.stop()
+
+
+
+
+
+        st.divider()
+
+
+
+        st.title(
+
+            "🧾 Sales Receipt"
+
+        )
+
+
+
+
+
+
+
+        # ==============================================================
+        # RECEIPT HEADER
+        # ==============================================================
+
+
+        st.info(
+
+            f"""
 
 Invoice No:
 
 {data['invoice_no']}
+
 
 
 Date:
@@ -2001,13 +2045,14 @@ Date:
 {data['date']}
 
 
+
 Cashier:
 
 {data['cashier']}
 
-"""
+            """
 
-)
+        )
 
 
 
@@ -2015,123 +2060,135 @@ Cashier:
 
 
 
-# ==============================================================
-# RECEIPT TABLE
-# ==============================================================
+        # ==============================================================
+        # RECEIPT TABLE
+        # ==============================================================
 
 
-receipt_rows = []
+        receipt_rows = []
 
 
 
-for item in data["items"]:
 
 
+        for item in data["items"]:
 
-receipt_rows.append(
 
 
-{
+            receipt_rows.append(
 
 
-"Product":
+                {
 
-item["name"],
 
+                    "Product":
 
+                        item["name"],
 
-"Qty":
 
-item["quantity"],
 
+                    "Qty":
 
+                        item["quantity"],
 
-"Price Source":
 
-item.get(
 
-"price_source",
+                    "Price Source":
 
-"SYSTEM"
+                        item.get(
 
-),
+                            "price_source",
 
+                            "SYSTEM"
 
+                        ),
 
-"Unit Price":
 
-f"{item['unit_price']:,.0f} MMK",
 
+                    "Unit Price":
 
+                        money(
 
-"Amount":
+                            item["unit_price"]
 
-f"{item['total']:,.0f} MMK"
+                        ),
 
 
-}
 
+                    "Amount":
 
-)
+                        money(
 
+                            item["total"]
 
+                        )
 
 
+                }
 
-receipt_df = pd.DataFrame(
 
-receipt_rows
+            )
 
-)
 
 
 
 
 
-st.dataframe(
 
+        receipt_df = pd.DataFrame(
 
-receipt_df,
+            receipt_rows
 
+        )
 
-use_container_width=True,
 
 
-hide_index=True
 
 
-)
+        st.dataframe(
 
 
+            receipt_df,
 
 
+            use_container_width=True,
 
 
+            hide_index=True
 
-# ==============================================================
-# PAYMENT SUMMARY
-# ==============================================================
 
+        )
 
-st.success(
 
-f"""
+
+
+
+
+
+        # ==============================================================
+        # PAYMENT SUMMARY
+        # ==============================================================
+
+
+        st.success(
+
+            f"""
 
 Subtotal:
 
-{data['subtotal']:,.0f} MMK
+{money(data['subtotal'])}
 
 
 
-Tax ({data['tax_rate']}%)
+Tax ({data['tax_rate']}%):
 
-{data['tax_amount']:,.0f} MMK
+{money(data['tax_amount'])}
 
 
 
 Discount:
 
-{data['discount']:,.0f} MMK
+{money(data['discount'])}
 
 
 
@@ -2139,7 +2196,7 @@ Discount:
 
 GRAND TOTAL
 
-{data['grand_total']:,.0f} MMK
+{money(data['grand_total'])}
 
 =========================
 
@@ -2147,17 +2204,17 @@ GRAND TOTAL
 
 Paid:
 
-{data['paid']:,.0f} MMK
+{money(data['paid'])}
 
 
 
 Change:
 
-{data['change']:,.0f} MMK
+{money(data['change'])}
 
-"""
+            """
 
-)
+        )
 
 
 
@@ -2165,65 +2222,65 @@ Change:
 
 
 
-c1,c2,c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
 
 
 
 
 
 
-# ==============================================================
-# THERMAL PRINT
-# ==============================================================
 
+        # ==============================================================
+        # THERMAL PRINT
+        # ==============================================================
 
-with c1:
 
+        with c1:
 
 
-if st.button(
 
+            if st.button(
 
-"🖨 Print Receipt",
 
+                "🖨 Print Receipt",
 
-use_container_width=True
 
+                use_container_width=True
 
-):
 
+            ):
 
 
-try:
 
+                try:
 
 
-print_thermal(
 
-data
+                    print_thermal(
 
-)
+                        data
 
+                    )
 
 
-st.success(
 
-"Receipt sent to printer"
+                    st.success(
 
-)
+                        "Receipt sent to printer"
 
+                    )
 
 
-except Exception as e:
 
+                except Exception as e:
 
 
-st.error(
 
-f"Printer Error : {e}"
+                    st.error(
 
-)
+                        f"Printer Error : {e}"
 
+                    )
 
 
 
@@ -2231,90 +2288,90 @@ f"Printer Error : {e}"
 
 
 
-# ==============================================================
-# PDF GENERATE
-# ==============================================================
 
+        # ==============================================================
+        # PDF GENERATE
+        # ==============================================================
 
-with c2:
 
+        with c2:
 
 
-if st.button(
 
+            if st.button(
 
-"📄 Generate PDF",
 
+                "📄 Generate PDF",
 
-use_container_width=True
 
+                use_container_width=True
 
-):
 
+            ):
 
 
-try:
 
+                try:
 
 
-pdf_bytes, filename = generate_pdf(
 
-data
+                    pdf_bytes, filename = generate_pdf(
 
-)
+                        data
 
+                    )
 
 
-if pdf_bytes:
 
 
 
-st.download_button(
+                    if pdf_bytes:
 
 
-label=
 
-"⬇ Download PDF",
+                        st.download_button(
 
 
+                            label=
 
-data=
+                                "⬇ Download PDF",
 
-pdf_bytes,
 
 
+                            data=
 
-file_name=
+                                pdf_bytes,
 
-f"{filename}.pdf",
 
 
+                            file_name=
 
-mime=
+                                f"{filename}.pdf",
 
-"application/pdf",
 
 
+                            mime=
 
-use_container_width=True
+                                "application/pdf",
 
 
 
-)
+                            use_container_width=True
 
 
+                        )
 
-except Exception as e:
 
 
+                except Exception as e:
 
-st.error(
 
-f"PDF Error : {e}"
 
-)
+                    st.error(
 
+                        f"PDF Error : {e}"
 
+                    )
 
 
 
@@ -2322,82 +2379,104 @@ f"PDF Error : {e}"
 
 
 
-# ==============================================================
-# NEW SALE
-# ==============================================================
 
 
-with c3:
 
+        # ==============================================================
+        # NEW SALE
+        # ==============================================================
 
 
-if st.button(
+        with c3:
 
 
-"🆕 New Sale",
 
+            if st.button(
 
-use_container_width=True
 
+                "🆕 New Sale",
 
-):
 
+                use_container_width=True
 
 
-st.session_state.cart = []
+            ):
 
 
 
-st.session_state.sale_data = None
+                st.session_state.cart = []
 
 
 
-st.session_state.show_receipt = False
+                st.session_state.sale_data = None
 
 
 
-st.session_state.processing = False
+                st.session_state.show_receipt = False
 
 
 
+                st.session_state.processing = False
 
 
-try:
 
 
-st.session_state.tax_rate = float(
 
+                try:
 
-get_setting(
 
 
-"default_tax_rate",
+                    st.session_state.tax_rate = float(
 
 
-0
+                        get_setting(
 
 
-)
+                            "default_tax_rate",
 
-)
 
+                            0
 
-except:
 
+                        )
 
-st.session_state.tax_rate = 0
 
+                    )
 
 
 
+                except Exception:
 
 
-st.success(
 
-"New Sale Ready"
+                    st.session_state.tax_rate = 0
 
-)
 
 
 
-st.rerun()
+
+
+                st.success(
+
+                    "New Sale Ready"
+
+                )
+
+
+
+                st.rerun()
+
+
+
+
+
+# ==============================================================================
+# APPLICATION START
+# ==============================================================================
+
+
+if __name__ == "__main__":
+
+
+    run()
+  
