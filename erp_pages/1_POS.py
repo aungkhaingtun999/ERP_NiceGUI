@@ -273,7 +273,7 @@ def run():
     )
 
 
-        except Exception:
+    except Exception:
 
        st.session_state.tax_rate = 0
 
