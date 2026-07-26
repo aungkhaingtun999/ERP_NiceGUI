@@ -308,7 +308,7 @@ with st.expander(
         )
     else:
       st.info("No activity logs found")
-  except Exception as e:
+    except Exception as e:
     st.error(f"Activity log loading failed: {e}")
 
   # Permission Matrix
