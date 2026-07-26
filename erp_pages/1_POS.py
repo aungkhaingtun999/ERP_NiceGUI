@@ -268,16 +268,16 @@ def run():
         0
     )
 
-     st.session_state.tax_rate = float(
+        st.session_state.tax_rate = float(
         tax_value
     )
 
 
     except Exception as e:
 
-    st.session_state.tax_rate = 0
+       st.session_state.tax_rate = 0
 
-    st.error(
+       st.error(
         f"Tax Load Error: {e}"
     )
 
