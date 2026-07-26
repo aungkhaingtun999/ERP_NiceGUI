@@ -55,7 +55,7 @@ from erp_core import (
     # Helpers
     # ------------------------------------------------------------------
     get_fifo_cogs,
-    create_audit_log,
+    
     # ------------------------------------------------------------------
     # Utilities
     # ------------------------------------------------------------------
@@ -130,7 +130,7 @@ __all__ = [  # Fixed from 'all =' to '__all__ ='
     "get_refund_service",
     # Helpers
     "get_fifo_cogs",
-    "create_audit_log",
+    
     # Utils
     "money",
     "money_float",
