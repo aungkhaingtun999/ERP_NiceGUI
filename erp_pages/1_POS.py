@@ -265,15 +265,15 @@ def run():
 
         st.session_state.tax_rate = float(
 
-            get_setting(
+    get_setting(
 
-                "default_tax_rate",
+        "DEFAULT_TAX_RATE",
 
-                0
+        0
 
-            )
+    )
 
-        )
+)
 
     except Exception:
 
@@ -289,7 +289,7 @@ def run():
 
             get_setting(
 
-                "discount_policy",
+                "DISCOUNT_POLICY"
 
                 "allowed"
 
