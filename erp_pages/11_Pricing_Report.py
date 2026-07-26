@@ -30,11 +30,9 @@ st.set_page_config(
 
 def run():
 
-
     st.title(
         "💰 Product Pricing Report"
     )
-
 
     st.caption(
         "MYANMAR ERP - Product Cost, Markup & Selling Price Analysis"
@@ -47,7 +45,6 @@ def run():
     # ==========================================================================
 
     products = get_pricing_report_products()
-
 
     if not products:
 
@@ -63,7 +60,19 @@ def run():
     # NORMALIZE DATA
     # ==========================================================================
 
-    
+    report_products = []
+
+    for p in products:
+
+        cost = float(
+            p.get("purchase_price", 0)
+        )
+
+        selling = float(
+            p.get("selling_price", 0)
+        )
+
+        profit = selling - cost
 
 
         # =====================================================
@@ -72,128 +81,88 @@ def run():
         # Else Calculate From Cost
         # =====================================================
 
-
         stored_markup = p.get(
             "markup_percent"
         )
 
-
         if stored_markup is not None:
-
 
             markup = float(
                 stored_markup
             )
 
-
             markup_source = (
                 "Product Override"
             )
 
-
         elif cost > 0:
 
-
             markup = (
-
                 (selling - cost)
-
                 /
-
                 cost
-
             ) * 100
-
 
             markup_source = (
                 "Calculated"
             )
 
-
         else:
 
-
             markup = 0
-
 
             markup_source = (
                 "No Cost"
             )
 
 
-
         report_products.append(
 
             {
 
-
                 "id":
-
-                    p.get(
-                        "id"
-                    ),
-
-
+                    p.get("id"),
 
                 "name":
-
-                    p.get(
-                        "name",
-                        ""
-                    ),
-
-
+                    p.get("name", ""),
 
                 "sku":
-
-                    p.get(
-                        "sku",
-                        ""
-                    ),
-
-
+                    p.get("sku", ""),
 
                 "category":
-
-                    p.get(
-                        "category"
-                    )
+                    p.get("category")
                     or
                     "Uncategorized",
 
-
-
                 "purchase_price":
-
                     cost,
 
-
-
                 "selling_price":
-
                     selling,
 
-
-
                 "profit":
-
                     profit,
 
-
-
                 "markup_percent":
-
                     round(
                         markup,
                         2
                     ),
 
-
-
                 "markup_source":
+                    markup_source,
 
-                    markup_source
+                "product_markup":
+                    p.get("product_markup", 0),
 
+                "category_markup":
+                    p.get("category_markup", 0),
+
+                "global_markup":
+                    p.get("global_markup", 0),
+
+                "final_markup_percent":
+                    p.get("final_markup_percent", markup)
 
             }
 
@@ -205,10 +174,7 @@ def run():
     # FILTER
     # ==========================================================================
 
-
     col1, col2 = st.columns(2)
-
-
 
     with col1:
 
@@ -216,10 +182,7 @@ def run():
             "🔍 Search Product"
         )
 
-
-
     with col2:
-
 
         categories = sorted(
 
@@ -232,7 +195,6 @@ def run():
             }
 
         )
-
 
         category_filter = st.selectbox(
 
@@ -247,13 +209,9 @@ def run():
         )
 
 
-
     filtered = report_products
 
-
-
     if search:
-
 
         filtered = [
 
@@ -269,10 +227,7 @@ def run():
 
         ]
 
-
-
     if category_filter != "All":
-
 
         filtered = [
 
@@ -293,11 +248,9 @@ def run():
     # KPI
     # ==========================================================================
 
-
     total_products = len(
         filtered
     )
-
 
     total_profit = sum(
 
@@ -306,7 +259,6 @@ def run():
         for p in filtered
 
     )
-
 
     avg_markup = (
 
@@ -329,10 +281,7 @@ def run():
     )
 
 
-
     c1, c2, c3 = st.columns(3)
-
-
 
     c1.metric(
 
@@ -342,7 +291,6 @@ def run():
 
     )
 
-
     c2.metric(
 
         "💰 Total Profit",
@@ -350,7 +298,6 @@ def run():
         f"{total_profit:,.0f} MMK"
 
     )
-
 
     c3.metric(
 
@@ -366,142 +313,70 @@ def run():
     # TABLE
     # ==========================================================================
 
-
     st.divider()
-
 
     st.subheader(
         "📋 Pricing Analysis"
     )
 
-
-
     display_rows = []
-
-
 
     for p in filtered:
 
+        display_rows.append({
 
-        display_rows.append(
+            "Product":
+                p["name"],
 
-            {
+            "SKU":
+                p.get("sku", ""),
 
+            "Category":
+                p.get("category", "-"),
 
-                "Product":
+            "Cost":
+                f"{p['purchase_price']:,.0f}",
 
-                    p["name"],
+            "Product Markup %":
+                f"{p.get('product_markup', 0):.2f}%",
 
+            "Category Markup %":
+                f"{p.get('category_markup', 0):.2f}%",
 
+            "Global Markup %":
+                f"{p.get('global_markup', 0):.2f}%",
 
-                "SKU":
+            "Final Markup %":
+                f"{p.get('final_markup_percent', 0):.2f}%",
 
-                    p["sku"],
+            "Source":
+                p.get("markup_source", ""),
 
+            "Selling Price":
+                f"{p['selling_price']:,.0f}",
 
+            "Profit":
+                f"{p['profit']:,.0f}"
 
-                "Category":
+        })
 
-                    p["category"],
+    st.dataframe(
+        display_rows,
+        use_container_width=True,
+        hide_index=True
+    )
 
-
-
-                "Cost":
-
-                    f"{p['purchase_price']:,.0f}",
-
-
-
-                "Selling":
-
-                    f"{p['selling_price']:,.0f}",
-
-
-
-                "Profit":
-
-                    f"{p['profit']:,.0f}",
-
-
-
-                "Markup %":
-
-                    f"{p['markup_percent']:.2f}%",
-
-
-
-                "Source":
-
-                    p["markup_source"]
-
-
-            }
-
-        )
-
-
-
-    display_rows = []
-
-for p in filtered:
-
-    display_rows.append({
-
-        "Product":
-            p["name"],
-
-        "SKU":
-            p.get("sku",""),
-
-        "Category":
-            p.get("category","-"),
-
-        "Cost":
-            p["purchase_price"],
-
-        "Product Markup %":
-            p.get("product_markup",0),
-
-        "Category Markup %":
-            p.get("category_markup",0),
-
-        "Global Markup %":
-            p.get("global_markup",0),
-
-        "Final Markup %":
-            p.get("final_markup_percent",0),
-
-        "Source":
-            p.get("markup_source",""),
-
-        "Selling Price":
-            p["selling_price"],
-
-        "Profit":
-            p["profit"]
-
-    })
-
-
-st.dataframe(
-    display_rows,
-    use_container_width=True,
-    hide_index=True
-)
 
 
     # ==========================================================================
     # EXCEL EXPORT
     # ==========================================================================
 
-
     excel_file = create_pricing_excel_report(
 
         filtered
 
     )
-
-
 
     st.download_button(
 
@@ -518,12 +393,9 @@ st.dataframe(
 
 
 
-
-
 # ==============================================================================
 # ENTRY
 # ==============================================================================
-
 
 if __name__ == "__main__":
 
