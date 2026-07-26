@@ -409,63 +409,179 @@ c4.metric(
     except Exception as e:
         st.error(f"Activity log loading failed: {e}")
 
-    # Permission Matrix
-    st.divider()
-    st.subheader("👑 Permission Matrix")
+# ==============================================================================
+# PERMISSION MATRIX - COLLAPSED ENTERPRISE VIEW
+# ==============================================================================
+
+st.divider()
+
+
+with st.expander(
+    "👑 Permission Matrix",
+    expanded=False
+):
+
     try:
+
+
         permissions = (
+
             supabase
-            .table("permissions")
+
+            .table(
+                "permissions"
+            )
+
             .select("*")
+
             .execute()
+
             .data
+
             or []
+
         )
 
+
+
         if permissions:
+
+
             for role in roles:
-                st.markdown(f"### 🛡 {role['name']}")
+
+
+                st.markdown(
+                    f"### 🛡 {role['name']}"
+                )
+
 
                 for perm in permissions:
+
+
                     current = (
+
                         supabase
-                        .table("role_permissions")
-                        .select("allowed")
-                        .eq("role_id", role["id"])
-                        .eq("permission_id", perm["id"])
+
+                        .table(
+                            "role_permissions"
+                        )
+
+                        .select(
+                            "allowed"
+                        )
+
+                        .eq(
+                            "role_id",
+                            role["id"]
+                        )
+
+                        .eq(
+                            "permission_id",
+                            perm["id"]
+                        )
+
                         .execute()
+
                     )
+
+
 
                     allowed = False
+
+
                     if current.data:
-                        allowed = current.data[0]["allowed"]
+
+                        allowed = current.data[0].get(
+                            "allowed",
+                            False
+                        )
+
+
 
                     new_value = st.checkbox(
-                        perm["permission_name"],
+
+                        perm.get(
+                            "permission_name",
+                            "Permission"
+                        ),
+
                         value=allowed,
+
                         key=f"{role['id']}_{perm['id']}"
+
                     )
 
-                    if new_value != allowed:
-                        exists = current.data
 
-                        if exists:
-                            supabase.table("role_permissions").update({
-                                "allowed": new_value
-                            }).eq("role_id", role["id"]).eq("permission_id", perm["id"]).execute()
+
+                    if new_value != allowed:
+
+
+                        if current.data:
+
+
+                            supabase.table(
+                                "role_permissions"
+                            ).update({
+
+                                "allowed":
+                                new_value
+
+                            }).eq(
+
+                                "role_id",
+                                role["id"]
+
+                            ).eq(
+
+                                "permission_id",
+                                perm["id"]
+
+                            ).execute()
+
+
+
                         else:
-                            supabase.table("role_permissions").insert({
-                                "role_id": role["id"],
-                                "permission_id": perm["id"],
-                                "allowed": new_value
+
+
+                            supabase.table(
+                                "role_permissions"
+                            ).insert({
+
+                                "role_id":
+                                role["id"],
+
+                                "permission_id":
+                                perm["id"],
+
+                                "allowed":
+                                new_value
+
                             }).execute()
 
+
+
+                        notify_success(
+                            "Permission updated"
+                        )
+
                         st.rerun()
+
+
+
         else:
-            st.info("No permissions found in database.")
+
+
+            st.info(
+                "ℹ No permissions configured yet."
+            )
+
+
 
     except Exception as e:
-        st.error(f"Permission Matrix Error: {e}")
 
+
+        st.error(
+            f"Permission Matrix Error: {e}"
+        )
 if __name__ == "__main__":
     run()
