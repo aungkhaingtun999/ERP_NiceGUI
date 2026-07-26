@@ -147,7 +147,7 @@ def get_float(
 
     key,
 
-    default=0
+    default=0.0
 
 ):
 
@@ -165,9 +165,9 @@ def get_float(
 
         )
 
-    except:
+    except Exception:
 
-        return default
+        return float(default)
 
 
 def get_text(
@@ -241,15 +241,24 @@ Global Default Markup
     # ----------------------------------------------------------
 
     default_markup = st.number_input(
-        "🌐 Global Default Markup (%)",
-        min_value=0.0,
-        max_value=500.0,
-        value=get_float(
+default_markup = st.number_input(
+
+    "🌐 Global Default Markup (%)",
+
+    min_value=0.0,
+
+    max_value=500.0,
+
+    value=float(
+        get_float(
             "DEFAULT_MARKUP_PERCENT",
-            20
-        ),
-        step=1.0
-    )
+            20.0
+        )
+    ),
+
+    step=1.0
+
+)
 
     # ----------------------------------------------------------
     # Pricing Priority
