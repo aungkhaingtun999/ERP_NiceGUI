@@ -45,6 +45,7 @@ from .config import (
 # ==============================================================================
 
 from .context import (
+    ERPContext,
     CacheManager,
     get_cache_version,
     bump_cache,
