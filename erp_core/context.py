@@ -1,42 +1,46 @@
 # ==============================================================================
-# erp_core/context.py
-# ERP ENTERPRISE CACHE CONTEXT v31.2
-# STREAMLIT SAFE CACHE VERSION MANAGER
+# ERP CONTEXT
+# Legacy compatibility layer
 # ==============================================================================
 
 
-import time
-import streamlit as st
-
-
-
-class CacheManager:
+class ERPContext:
     """
-    ERP Global Cache Version Manager
+    ERP Runtime Context
 
-    Flow:
+    Used by:
+    - Services
+    - Sales Engine
+    - Inventory Engine
 
-    Database Update
-          |
-          v
-    CacheManager.bump()
-          |
-          v
-    Version changes
-          |
-          v
-    @st.cache_data receives new version
-          |
-          v
-    Fresh data reload
     """
 
+    def __init__(
+        self,
+        user_id=None,
+        warehouse_id=None,
+        customer_id=None
+    ):
+
+        self.user_id = user_id
+
+        self.warehouse_id = warehouse_id
+
+        self.customer_id = customer_id
 
 
-    VERSION_KEY = "erp_cache_versions"
 
+    def to_dict(self):
 
+        return {
 
+            "user_id": self.user_id,
+
+            "warehouse_id": self.warehouse_id,
+
+            "customer_id": self.customer_id
+
+        }
     # ------------------------------------------------------------------
     # INITIALIZE
     # ------------------------------------------------------------------
