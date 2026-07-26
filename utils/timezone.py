@@ -124,3 +124,5 @@ def myanmar_now():
 
 def singapore_now():
     return local_now("Asia/Singapore")
+    print("TIMEZONE MODULE LOADED")
+print("HAS format_db_datetime:", "format_db_datetime" in globals())
