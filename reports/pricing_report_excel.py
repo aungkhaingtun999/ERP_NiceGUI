@@ -1,30 +1,23 @@
 # ==============================================================================
 # reports/pricing_report_excel.py
-# ERP ENTERPRISE PRICING EXCEL REPORT ENGINE v2.0
-# Product / Category / Global Markup Analysis
+# ERP ENTERPRISE PRICING EXCEL REPORT ENGINE v3.0
+# Product + Category + Global Markup Analysis
 # ==============================================================================
 
 
 from io import BytesIO
-
 from datetime import datetime
 
-
 from openpyxl import Workbook
-
 
 from openpyxl.styles import (
     Font,
     Alignment,
     Border,
-    Side,
-    PatternFill
+    Side
 )
 
-
-from openpyxl.utils import (
-    get_column_letter
-)
+from openpyxl.utils import get_column_letter
 
 
 
@@ -36,15 +29,11 @@ from openpyxl.utils import (
 thin_border = Border(
 
     left=Side(style="thin"),
-
     right=Side(style="thin"),
-
     top=Side(style="thin"),
-
     bottom=Side(style="thin")
 
 )
-
 
 
 header_font = Font(
@@ -52,12 +41,10 @@ header_font = Font(
 )
 
 
-
 title_font = Font(
     bold=True,
     size=16
 )
-
 
 
 center = Alignment(
@@ -78,43 +65,9 @@ def create_pricing_excel_report(
 ):
 
 
-    """
-    ERP Enterprise Product Pricing Report
-
-
-    Expected product format:
-
-    {
-        name,
-        sku,
-        category,
-
-        purchase_price,
-
-        product_markup,
-
-        category_markup,
-
-        default_markup,
-
-        final_markup,
-
-        markup_source,
-
-        selling_price,
-
-        profit
-    }
-
-    """
-
-
-
     wb = Workbook()
 
-
     ws = wb.active
-
 
     ws.title = "Pricing Report"
 
@@ -125,34 +78,21 @@ def create_pricing_excel_report(
     # ==========================================================================
 
 
-    ws.merge_cells(
-        "A1:L1"
-    )
-
+    ws.merge_cells("A1:L1")
 
     ws["A1"] = (
-
         company_name
-
         +
-
         " - PRODUCT PRICING REPORT"
-
     )
 
-
     ws["A1"].font = title_font
-
 
     ws["A1"].alignment = center
 
 
 
-
-    ws.merge_cells(
-        "A2:L2"
-    )
-
+    ws.merge_cells("A2:L2")
 
     ws["A2"] = (
 
@@ -190,7 +130,7 @@ def create_pricing_excel_report(
 
         "Category Markup %",
 
-        "Default Markup %",
+        "Global Markup %",
 
         "Applied Source",
 
@@ -215,25 +155,18 @@ def create_pricing_excel_report(
 
 
         cell = ws.cell(
-
             row=row,
-
             column=col
-
         )
 
 
         cell.value = header
 
-
         cell.font = header_font
-
 
         cell.alignment = center
 
-
         cell.border = thin_border
-
 
 
 
@@ -242,14 +175,12 @@ def create_pricing_excel_report(
     # ==========================================================================
 
 
+    row += 1
+
+
     total_profit = 0
 
-
-    total_sales_value = 0
-
-
-
-    row += 1
+    total_sales = 0
 
 
 
@@ -257,7 +188,6 @@ def create_pricing_excel_report(
         products,
         start=1
     ):
-
 
 
         cost = float(
@@ -271,7 +201,6 @@ def create_pricing_excel_report(
         )
 
 
-
         selling = float(
 
             product.get(
@@ -283,24 +212,12 @@ def create_pricing_excel_report(
         )
 
 
-
-        profit = (
-
-            selling
-
-            -
-
-            cost
-
-        )
-
+        profit = selling - cost
 
 
         total_profit += profit
 
-
-        total_sales_value += selling
-
+        total_sales += selling
 
 
 
@@ -308,15 +225,18 @@ def create_pricing_excel_report(
 
             index,
 
+
             product.get(
                 "name",
                 ""
             ),
 
+
             product.get(
                 "sku",
                 ""
             ),
+
 
             product.get(
                 "category",
@@ -340,19 +260,19 @@ def create_pricing_excel_report(
 
 
             product.get(
-                "default_markup",
+                "global_markup",
                 0
             ),
 
 
             product.get(
                 "markup_source",
-                "GLOBAL"
+                "GLOBAL_DEFAULT_MARKUP"
             ),
 
 
             product.get(
-                "final_markup",
+                "final_markup_percent",
                 0
             ),
 
@@ -383,11 +303,11 @@ def create_pricing_excel_report(
 
             cell.value = value
 
-
             cell.border = thin_border
 
 
 
+            # Money format
 
             if col in [
 
@@ -397,11 +317,16 @@ def create_pricing_excel_report(
 
             ]:
 
+
                 cell.number_format = (
+
                     '#,##0.00'
+
                 )
 
 
+
+            # Percent format
 
             if col in [
 
@@ -412,13 +337,17 @@ def create_pricing_excel_report(
 
             ]:
 
+
                 cell.number_format = (
+
                     '0.00"%"'
+
                 )
 
 
 
         row += 1
+
 
 
 
@@ -438,10 +367,12 @@ def create_pricing_excel_report(
             len(products)
         ),
 
+
         (
             "Total Selling Value",
-            total_sales_value
+            total_sales
         ),
+
 
         (
             "Total Profit",
@@ -499,13 +430,11 @@ def create_pricing_excel_report(
         max_length = 0
 
 
-
         column_letter = get_column_letter(
 
             column[0].column
 
         )
-
 
 
         for cell in column:
@@ -525,11 +454,9 @@ def create_pricing_excel_report(
                     max_length = length
 
 
-
             except:
 
                 pass
-
 
 
 
@@ -540,14 +467,12 @@ def create_pricing_excel_report(
 
 
 
-
     # ==========================================================================
-    # RETURN FILE
+    # RETURN EXCEL
     # ==========================================================================
 
 
     output = BytesIO()
-
 
 
     wb.save(
@@ -555,11 +480,9 @@ def create_pricing_excel_report(
     )
 
 
-
     output.seek(
         0
     )
-
 
 
     return output
