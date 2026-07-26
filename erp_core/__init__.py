@@ -1,40 +1,29 @@
 # ==============================================================================
 # erp_core/__init__.py
-# ERP ENTERPRISE CORE PACKAGE v30.13
-# SAFE LAZY IMPORT ARCHITECTURE
+# ERP ENTERPRISE CORE PACKAGE v31.0
+# CLEAN LAZY IMPORT ARCHITECTURE
 # ==============================================================================
 
 
 """
-ERP CORE PACKAGE
+ERP CORE
 
-Architecture:
+Structure:
 
 Pages
  |
  └── erp_core
         |
+        ├── config
+        ├── context
         ├── base_repo
         ├── repositories
         ├── services
         ├── loaders
         └── rpc
-              |
-              ├── checkout_rpc
-              ├── purchase_rpc
-              ├── refund_rpc
-              └── stock_rpc
 
 
 """
-
-
-
-# ==============================================================================
-# EXCEPTIONS
-# ==============================================================================
-
-from .exceptions import *
 
 
 
@@ -43,15 +32,10 @@ from .exceptions import *
 # ==============================================================================
 
 from .config import (
-
     Tables,
-
     TABLE_PRODUCT_VIEW,
-
     DEFAULT_PAGE_SIZE,
-
     log_error
-
 )
 
 
@@ -61,23 +45,25 @@ from .config import (
 # ==============================================================================
 
 from .context import (
-
-    ERPContext,
-from .context import (
     CacheManager,
+    get_cache_version,
+    bump_cache,
+    bump_inventory_version,
+    bump_product_version,
+    bump_sales_version
 )
 
 
 
 # ==============================================================================
-# DATABASE
+# DATABASE CORE
 # ==============================================================================
 
 from .base_repo import (
 
-    get_supabase,
-
     db,
+
+    get_supabase,
 
     get_connection,
 
@@ -124,10 +110,7 @@ from .repositories import (
 
 
 # ==============================================================================
-# RPC ENGINE ONLY
-# ==============================================================================
-# IMPORTANT:
-# DO NOT IMPORT RPC FUNCTIONS HERE
+# RPC ENGINE
 # ==============================================================================
 
 from .rpc.engine import RPCEngine
@@ -135,25 +118,21 @@ from .rpc.engine import RPCEngine
 
 
 
-ERP_CORE_VERSION = "30.13 SAFE RPC LAZY ARCHITECTURE"
-
-
+ERP_CORE_VERSION = "31.0 CLEAN LAZY ARCHITECTURE"
 
 
 
 # ==============================================================================
-# EXPORT MAP
+# LAZY EXPORT MAP
 # ==============================================================================
 
 
 _EXPORTS = {
 
 
-
-    # ==========================================================
+    # ----------------------------------------------------------
     # LOADERS
-    # ==========================================================
-
+    # ----------------------------------------------------------
 
     "get_setting":
         ("loaders", "get_setting"),
@@ -167,43 +146,43 @@ _EXPORTS = {
         ("loaders", "get_inventory_view"),
 
 
+    "get_default_warehouse_id":
+        ("loaders", "get_default_warehouse_id"),
+
+
     "get_warehouses":
         ("loaders", "get_warehouses"),
 
 
-    "get_default_warehouse_id":
-        ("loaders", "get_default_warehouse_id"),
+    "get_customers":
+        ("loaders", "get_customers"),
 
 
     "get_suppliers":
         ("loaders", "get_suppliers"),
 
 
-    "get_customers":
-        ("loaders", "get_customers"),
-    
+
+    # ----------------------------------------------------------
+    # RECEIPT
+    # ----------------------------------------------------------
+
     "get_receipt":
         ("loaders", "get_receipt"),
+
+
     "get_sale_items":
-    ("loaders", "get_sale_items"),
+        ("loaders", "get_sale_items"),
+
+
     "search_receipts":
-    ("loaders", "search_receipts"),
+        ("loaders", "search_receipts"),
 
 
 
-
-    # ==========================================================
+    # ----------------------------------------------------------
     # SERVICES
-    # ==========================================================
-
-
-    "AccountingLedgerService":
-        ("services", "AccountingLedgerService"),
-
-
-    "CustomerService":
-        ("services", "CustomerService"),
-
+    # ----------------------------------------------------------
 
     "SalesService":
         ("services", "SalesService"),
@@ -221,29 +200,28 @@ _EXPORTS = {
         ("services", "RefundService"),
 
 
+    "CustomerService":
+        ("services", "CustomerService"),
+
+
+    "ReceiptService":
+        ("services", "ReceiptService"),
+
+
     "DashboardService":
         ("services", "DashboardService"),
 
 
-    "AuditService":
-        ("services", "AuditService"),
-     "ReceiptService":
-    ("services", "ReceiptService"),
 
-
-
-
-    # ==========================================================
-    # RPC DIRECT MODULE
-    # ==========================================================
-
+    # ----------------------------------------------------------
+    # RPC
+    # ----------------------------------------------------------
 
     "checkout_sale_rpc":
         (
             "rpc.checkout_rpc",
             "checkout_sale_rpc"
         ),
-
 
 
     "purchase_receive_rpc":
@@ -253,7 +231,6 @@ _EXPORTS = {
         ),
 
 
-
     "refund_sale_rpc":
         (
             "rpc.refund_rpc",
@@ -261,13 +238,13 @@ _EXPORTS = {
         ),
 
 
-
     "stock_adjustment_rpc":
         (
             "rpc.stock_rpc",
             "stock_adjustment_rpc"
         ),
- 
+
+
     "update_product_rpc":
         (
             "rpc.stock_rpc",
@@ -276,24 +253,14 @@ _EXPORTS = {
 
 
 
-
-    # ==========================================================
+    # ----------------------------------------------------------
     # HELPERS
-    # ==========================================================
-
+    # ----------------------------------------------------------
 
     "get_fifo_cogs":
         (
             "services",
             "get_fifo_cogs"
-        ),
-
-
-
-    "create_audit_log":
-        (
-            "services",
-            "create_audit_log"
         )
 
 }
@@ -302,10 +269,8 @@ _EXPORTS = {
 
 
 
-
-
 # ==============================================================================
-# LAZY LOADER
+# LAZY IMPORT FUNCTION
 # ==============================================================================
 
 
@@ -315,9 +280,7 @@ def __getattr__(name):
     if name not in _EXPORTS:
 
         raise AttributeError(
-
-            f"module 'erp_core' has no attribute '{name}'"
-
+            f"erp_core has no attribute '{name}'"
         )
 
 
@@ -326,9 +289,7 @@ def __getattr__(name):
 
 
 
-    # ----------------------------------------------------------
-    # RPC DIRECT IMPORT
-    # ----------------------------------------------------------
+    # RPC
 
     if module_name.startswith("rpc."):
 
@@ -343,19 +304,13 @@ def __getattr__(name):
 
 
         return getattr(
-
             module,
-
             object_name
-
         )
 
 
 
-
-    # ----------------------------------------------------------
     # SERVICES
-    # ----------------------------------------------------------
 
     if module_name == "services":
 
@@ -364,19 +319,13 @@ def __getattr__(name):
 
 
         return getattr(
-
             services,
-
             object_name
-
         )
 
 
 
-
-    # ----------------------------------------------------------
     # LOADERS
-    # ----------------------------------------------------------
 
     if module_name == "loaders":
 
@@ -385,19 +334,13 @@ def __getattr__(name):
 
 
         return getattr(
-
             loaders,
-
             object_name
-
         )
 
 
 
-
     raise AttributeError(name)
-
-
 
 
 
@@ -411,120 +354,88 @@ def __getattr__(name):
 __all__ = [
 
 
-
     "ERP_CORE_VERSION",
-
 
 
     # DATABASE
 
     "db",
-
     "get_supabase",
-
     "get_connection",
-
 
 
     # MONEY
 
     "money",
-
     "money_float",
-
 
 
     # CONFIG
 
     "Tables",
-
     "TABLE_PRODUCT_VIEW",
 
 
-
-    # CONTEXT
-
-    "ERPContext",
+    # CACHE
 
     "CacheManager",
+    "get_cache_version",
+    "bump_cache",
+    "bump_inventory_version",
+    "bump_product_version",
+    "bump_sales_version",
 
 
+    # REPOSITORY
 
-    # RPC ENGINE
-
-    "RPCEngine",
-
+    "RepositoryCoordinator",
+    "BaseRepository",
+    "ProductRepository",
 
 
     # LOADERS
 
     "get_setting",
-
     "get_products",
-
     "get_inventory_view",
-
-    "get_warehouses",
-
     "get_default_warehouse_id",
-
-    "get_suppliers",
-
+    "get_warehouses",
     "get_customers",
+    "get_suppliers",
     "get_receipt",
     "get_sale_items",
     "search_receipts",
 
 
-
     # RPC
 
     "checkout_sale_rpc",
-
     "purchase_receive_rpc",
-
     "refund_sale_rpc",
-
     "stock_adjustment_rpc",
-    
     "update_product_rpc",
-
 
 
     # SERVICES
 
-    "AccountingLedgerService",
-
-    "CustomerService",
-
     "SalesService",
-
     "InventoryService",
-
     "PurchaseService",
-
     "RefundService",
-
+    "CustomerService",
+    "ReceiptService",
     "DashboardService",
 
-    "AuditService",
-    "ReceiptService",
-    
 
+    # RPC ENGINE
 
-
-    # HELPERS
-
-    "get_fifo_cogs",
-
-    "create_audit_log"
+    "RPCEngine"
 
 ]
 
 
 
 
-
 print(
-    "ERP_CORE v30.13 SAFE RPC LAZY ARCHITECTURE LOADED"
+    "ERP_CORE v31.0 CLEAN LAZY ARCHITECTURE LOADED"
 )
