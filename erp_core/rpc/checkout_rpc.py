@@ -3,13 +3,7 @@
 # ERP ENTERPRISE CHECKOUT RPC
 # ==============================================================================
 
-print("CHECKOUT RPC START")
-from typing import (
-    Optional,
-    Dict,
-    Any
-)
-
+from typing import Optional, Dict, Any
 
 from ..base_repo import (
     db,
@@ -17,19 +11,11 @@ from ..base_repo import (
 )
 
 
-from ..services.sales_service import (
-    SalesService
-)
-
-
-
-
-
 def checkout_sale_rpc(
     cart: list,
-    paid_amount: Any,
+    paid_amount: Any = 0,
     warehouse_id: Optional[int] = None,
-    customer_id: Optional[str] = None,
+    customer_id: Optional[int] = None,
     cashier_id: Optional[str] = None,
     counter_id: int = 1,
     payment_method: str = "cash",
@@ -41,40 +27,47 @@ def checkout_sale_rpc(
 
     try:
 
-        service = SalesService(
+        payload = {
+
+            "p_cart": cart,
+
+            "p_warehouse_id": warehouse_id,
+
+            "p_user_id": cashier_id,
+
+            "p_customer_id": customer_id,
+
+            "p_payment_method": payment_method,
+
+            "p_discount": discount,
+
+            "p_tax": (
+                float(tax_rate)
+                * sum(
+                    float(i["qty"]) *
+                    float(i["selling_price"])
+                    for i in cart
+                )
+                / 100
+            )
+
+        }
+
+
+        response = (
             db()
+            .rpc(
+                "checkout_sale_rpc",
+                payload
+            )
+            .execute()
         )
 
 
-        result = service.checkout(
-
-            cart,
-
-            paid_amount,
-
-            warehouse_id,
-
-            customer_id,
-
-            cashier_id,
-
-            counter_id,
-
-            payment_method,
-
-            tax_rate,
-
-            discount
-
-        )
-
-
-        return result
-
+        return response.data
 
 
     except Exception as e:
-
 
         log_error(
             f"checkout_sale_rpc error: {e}"
