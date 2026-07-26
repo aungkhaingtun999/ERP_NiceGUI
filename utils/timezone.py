@@ -125,3 +125,44 @@ def singapore_now():
 def utc_iso():
 
     return utc_now().isoformat()
+    # ------------------------------------------------------------------------------
+# DATABASE UTC -> LOCAL TIME
+# ------------------------------------------------------------------------------
+
+def db_to_local(value, tz=None):
+    """
+    Convert database UTC timestamp to local timezone.
+
+    Supports:
+    - datetime object
+    - ISO string
+    """
+
+    timezone_name = tz or get_timezone()
+
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        value = datetime.fromisoformat(
+            value.replace("Z", "+00:00")
+        )
+
+    return value.astimezone(
+        ZoneInfo(timezone_name)
+    )
+
+
+def format_db_datetime(value, tz=None, fmt=None):
+    """
+    Format database timestamp as local time.
+    """
+
+    dt = db_to_local(value, tz)
+
+    if dt is None:
+        return ""
+
+    return dt.strftime(
+        fmt or DATETIME_FORMAT
+    )
