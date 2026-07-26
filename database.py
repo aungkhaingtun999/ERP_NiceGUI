@@ -1,152 +1,300 @@
 """
 ==============================================================================
 database.py
-ERP ENTERPRISE DATABASE GATEWAY v32
+ERP ENTERPRISE DATABASE GATEWAY v33
 Legacy Compatibility Bridge
 ==============================================================================
 
-Legacy bridge.
-Old pages:
-from database import ...
+Legacy pages:
+    from database import ...
+
 New architecture:
-erp_core/
-This file only re-exports ERP Core APIs.
+    erp_core/
+
+This module only re-exports ERP Core APIs.
+==============================================================================
 """
 
+
+# ==============================================================================
+# ERP CORE IMPORT
+# ==============================================================================
+
 from erp_core import (
+
     # ------------------------------------------------------------------
-    # Database
+    # DATABASE
     # ------------------------------------------------------------------
+
     db,
+
     get_supabase,
+
     get_connection,
+
     DatabaseHealth,
+
     database_health_check,
-    search_receipts,  # Added to match __all__
+
+
     # ------------------------------------------------------------------
-    # Loaders
+    # LOADERS
     # ------------------------------------------------------------------
+
     get_setting,
+
     get_products,
+
     get_inventory_view,
+
     get_warehouses,
+
     get_default_warehouse_id,
+
     get_suppliers,
+
     get_customers,
+
+
+    # ------------------------------------------------------------------
+    # RECEIPT
+    # ------------------------------------------------------------------
+
     get_receipt,
+
     get_sale_items,
+
+    search_receipts,
+
+
     # ------------------------------------------------------------------
     # RPC
     # ------------------------------------------------------------------
+
     checkout_sale_rpc,
+
     purchase_receive_rpc,
+
     refund_sale_rpc,
+
     stock_adjustment_rpc,
+
     update_product_rpc,
+
+
     # ------------------------------------------------------------------
-    # Services
+    # SERVICES
     # ------------------------------------------------------------------
+
     SalesService,
+
     PurchaseService,
+
     InventoryService,
+
     RefundService,
+
     ReceiptService,
+
+
     # ------------------------------------------------------------------
-    # Helpers
+    # HELPERS
     # ------------------------------------------------------------------
+
     get_fifo_cogs,
+
     create_audit_log,
-    
+
+
     # ------------------------------------------------------------------
-    # Utilities
+    # UTILITIES
     # ------------------------------------------------------------------
+
     money,
+
     money_float,
+
     validate_uuid,
+
     serialize_json,
+
     safe_execute,
+
 )
 
-ERP_DATABASE_VERSION = "32.0 Legacy Gateway"
+
+
+ERP_DATABASE_VERSION = "33.0 Legacy Gateway"
+
 
 
 # ==============================================================================
 # SERVICE FACTORIES
 # ==============================================================================
 
+
 def get_sales_service():
-    return SalesService(db())
+
+    return SalesService(
+        db()
+    )
+
 
 
 def get_purchase_service():
-    return PurchaseService(db())
+
+    return PurchaseService(
+        db()
+    )
+
 
 
 def get_inventory_service():
-    return InventoryService(db())
+
+    return InventoryService(
+        db()
+    )
+
 
 
 def get_refund_service():
-    return RefundService(db())
+
+    return RefundService(
+        db()
+    )
+
 
 
 # ==============================================================================
-# EXPORTS
+# PUBLIC EXPORTS
 # ==============================================================================
 
-__all__ = [  # Fixed from 'all =' to '__all__ ='
-    # Database
+
+__all__ = [
+
+
+    # ------------------------------------------------------------------
+    # DATABASE
+    # ------------------------------------------------------------------
+
     "db",
+
     "get_supabase",
+
     "get_connection",
+
     "DatabaseHealth",
+
     "database_health_check",
-    "search_receipts",
-    # Loaders
+
+
+
+    # ------------------------------------------------------------------
+    # LOADERS
+    # ------------------------------------------------------------------
+
     "get_setting",
+
     "get_products",
+
     "get_inventory_view",
+
     "get_warehouses",
+
     "get_default_warehouse_id",
+
     "get_suppliers",
+
     "get_customers",
+
+
+
+    # ------------------------------------------------------------------
+    # RECEIPT
+    # ------------------------------------------------------------------
+
     "get_receipt",
+
     "get_sale_items",
+
+    "search_receipts",
+
+
+
+    # ------------------------------------------------------------------
     # RPC
+    # ------------------------------------------------------------------
+
     "checkout_sale_rpc",
+
     "purchase_receive_rpc",
+
     "refund_sale_rpc",
+
     "stock_adjustment_rpc",
+
     "update_product_rpc",
-    # Services
+
+
+
+    # ------------------------------------------------------------------
+    # SERVICES
+    # ------------------------------------------------------------------
+
     "SalesService",
+
     "PurchaseService",
+
     "InventoryService",
+
     "RefundService",
+
     "ReceiptService",
-    # Factories
+
+
+
+    # ------------------------------------------------------------------
+    # SERVICE FACTORIES
+    # ------------------------------------------------------------------
+
     "get_sales_service",
+
     "get_purchase_service",
+
     "get_inventory_service",
+
     "get_refund_service",
-    # Helpers
+
+
+
+    # ------------------------------------------------------------------
+    # HELPERS
+    # ------------------------------------------------------------------
+
     "get_fifo_cogs",
+
     "create_audit_log",
-    
-    # Utils
+
+
+
+    # ------------------------------------------------------------------
+    # UTILITIES
+    # ------------------------------------------------------------------
+
     "money",
+
     "money_float",
+
     "validate_uuid",
+
     "serialize_json",
+
     "safe_execute",
+
+
 ]
 
-print(
-    "stock_adjustment_rpc loaded from:",
-    stock_adjustment_rpc.__module__
-)
 
 print(
-    "signature:",
-    stock_adjustment_rpc.__code__.co_varnames
+    "ERP DATABASE GATEWAY v33 LOADED"
 )
