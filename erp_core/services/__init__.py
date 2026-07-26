@@ -154,7 +154,7 @@ from .accounting_service import (
 # ==============================================================================
 # AUDIT
 # ==============================================================================
-
+from .audit_service import create_audit_log
 
 from .audit_service import (
 
