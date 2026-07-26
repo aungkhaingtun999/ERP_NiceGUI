@@ -265,6 +265,11 @@ _EXPORTS = {
         )
 
 }
+    "create_audit_log":
+(
+    "services",
+    "create_audit_log"
+),
 
 
 
