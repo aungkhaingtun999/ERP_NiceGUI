@@ -291,7 +291,7 @@ def run():
 
             get_setting(
 
-                "DISCOUNT_POLICY"
+                "DISCOUNT_POLICY",
 
                 "allowed"
 
