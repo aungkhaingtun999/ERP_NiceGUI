@@ -1,7 +1,7 @@
 # ==============================================================================
 # utils/timezone.py
-# ERP ENTERPRISE TIME ENGINE v4
-# UTC DATABASE -> LOCAL DISPLAY
+# ERP ENTERPRISE TIME ENGINE v5
+# UTC DATABASE -> LOCAL DISPLAY ENGINE
 # ==============================================================================
 
 
@@ -9,7 +9,12 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 
+# ==============================================================================
+# CONFIG SAFE LOAD
+# ==============================================================================
+
 try:
+
     from config import (
         DEFAULT_TIMEZONE,
         DATETIME_FORMAT
@@ -24,7 +29,7 @@ except Exception:
 
 
 # ==============================================================================
-# GLOBAL
+# GLOBAL TIMEZONE STATE
 # ==============================================================================
 
 _CURRENT_TIMEZONE = DEFAULT_TIMEZONE
@@ -32,10 +37,21 @@ _CURRENT_TIMEZONE = DEFAULT_TIMEZONE
 
 
 # ==============================================================================
-# SET / GET
+# TIMEZONE CONTROL
 # ==============================================================================
 
-def set_timezone(tz):
+def set_timezone(
+    tz: str
+):
+    """
+    Change ERP display timezone.
+
+    Example:
+
+        set_timezone("Asia/Yangon")
+        set_timezone("Asia/Bangkok")
+        set_timezone("UTC")
+    """
 
     global _CURRENT_TIMEZONE
 
@@ -50,10 +66,14 @@ def get_timezone():
 
 
 # ==============================================================================
-# UTC
+# UTC TIME
 # ==============================================================================
 
 def utc_now():
+
+    """
+    Database standard time.
+    """
 
     return datetime.now(
         timezone.utc
@@ -62,10 +82,12 @@ def utc_now():
 
 
 # ==============================================================================
-# LOCAL
+# LOCAL TIME
 # ==============================================================================
 
-def local_now(tz=None):
+def local_now(
+    tz=None
+):
 
     zone = tz or _CURRENT_TIMEZONE
 
@@ -76,7 +98,7 @@ def local_now(tz=None):
 
 
 # ==============================================================================
-# FORMAT CURRENT
+# CURRENT TIME FORMAT
 # ==============================================================================
 
 def format_datetime(
@@ -84,36 +106,57 @@ def format_datetime(
     fmt=None
 ):
 
-    return local_now(tz).strftime(
+    return local_now(
+        tz
+    ).strftime(
         fmt or DATETIME_FORMAT
     )
 
 
 
-def format_date(tz=None):
+def format_date(
+    tz=None
+):
 
-    return local_now(tz).strftime(
+    return local_now(
+        tz
+    ).strftime(
         "%d-%m-%Y"
     )
 
 
 
-def format_time(tz=None):
+def format_time(
+    tz=None
+):
 
-    return local_now(tz).strftime(
+    return local_now(
+        tz
+    ).strftime(
         "%H:%M:%S"
     )
 
 
 
 # ==============================================================================
-# DATABASE UTC -> LOCAL
+# DATABASE UTC -> LOCAL CONVERSION
 # ==============================================================================
 
 def db_to_local(
     value,
     tz=None
 ):
+    """
+    Convert database timestamp into ERP display timezone.
+
+    Supports:
+
+    - datetime object
+    - PostgreSQL timestamp
+    - Supabase ISO string
+    - UTC Z format
+
+    """
 
     if value is None:
 
@@ -125,7 +168,12 @@ def db_to_local(
 
 
 
-    if isinstance(value, str):
+    # String timestamp
+
+    if isinstance(
+        value,
+        str
+    ):
 
         value = datetime.fromisoformat(
 
@@ -137,6 +185,8 @@ def db_to_local(
         )
 
 
+
+    # Database timestamp without timezone
 
     if value.tzinfo is None:
 
@@ -156,6 +206,10 @@ def db_to_local(
 
 
 
+# ==============================================================================
+# DATABASE DATE FORMATTER
+# Used by Receipt Viewer / Reports
+# ==============================================================================
 
 def format_db_datetime(
     value,
@@ -183,7 +237,27 @@ def format_db_datetime(
 
 
 # ==============================================================================
-# SHORTCUT
+# ISO FORMAT
+# ==============================================================================
+
+def iso_datetime(
+    tz=None
+):
+
+    return local_now(
+        tz
+    ).isoformat()
+
+
+
+def utc_iso():
+
+    return utc_now().isoformat()
+
+
+
+# ==============================================================================
+# SHORTCUT TIMEZONES
 # ==============================================================================
 
 def myanmar_now():
@@ -194,19 +268,44 @@ def myanmar_now():
 
 
 
-def utc_iso():
+def singapore_now():
 
-    return utc_now().isoformat()
+    return local_now(
+        "Asia/Singapore"
+    )
 
 
 
-# DEBUG
+# ==============================================================================
+# PUBLIC EXPORTS
+# ==============================================================================
 
-print(
-    "TIMEZONE ENGINE LOADED"
-)
+__all__ = [
 
-print(
-    "format_db_datetime:",
-    callable(format_db_datetime)
-)
+    "set_timezone",
+
+    "get_timezone",
+
+    "utc_now",
+
+    "local_now",
+
+    "format_datetime",
+
+    "format_date",
+
+    "format_time",
+
+    "db_to_local",
+
+    "format_db_datetime",
+
+    "iso_datetime",
+
+    "utc_iso",
+
+    "myanmar_now",
+
+    "singapore_now",
+
+]
