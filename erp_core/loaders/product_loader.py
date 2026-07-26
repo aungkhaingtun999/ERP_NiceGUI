@@ -31,7 +31,7 @@ def _get_products_cached(
     offset,
     limit,
     version
-):-> List[Dict[str, Any]]:
+):
 
     try:
 
