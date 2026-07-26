@@ -1,562 +1,371 @@
 # ==============================================================================
-# ERP ENTERPRISE PRICING REPORT SERVICE v4.0
-# Product + Category + Global Markup Analysis Engine
+# reports/pricing_report.py
+# ERP ENTERPRISE PRICING REPORT UI v3.0
+# Product + Category + Global Markup Analysis
 # ==============================================================================
 
+import streamlit as st
+import pandas as pd
 
-from decimal import Decimal, ROUND_HALF_UP
+from reports.pricing_report_service import (
+    get_pricing_report_products
+)
 
-from erp_core.base_repo import db
-
+from reports.pricing_report_excel import (
+    create_pricing_excel_report
+)
 
 
 # ==============================================================================
-# GET SETTING
+# RUN
 # ==============================================================================
 
-def get_setting(
-    key,
-    default=None
-):
+def run():
 
-    try:
+    st.title(
+        "💰 Product Pricing Report"
+    )
 
-        result = (
+    st.caption(
+        "MYANMAR ERP - Product Cost, Markup & Selling Price Analysis"
+    )
 
-            db()
 
-            .table("settings")
+    # =====================================================
+    # LOAD DATA
+    # =====================================================
 
-            .select(
-                "value"
+    products = get_pricing_report_products()
+
+
+    if not products:
+
+        st.warning(
+            "No products found"
+        )
+
+        return
+
+
+
+    # =====================================================
+    # FILTER DATA
+    # =====================================================
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        search = st.text_input(
+            "🔍 Search Product"
+        )
+
+
+    with col2:
+
+        categories = sorted(
+            list(
+                set(
+                    [
+                        p.get(
+                            "category",
+                            "-"
+                        )
+                        for p in products
+                    ]
+                )
             )
+        )
 
-            .eq(
-                "key",
-                key
-            )
 
-            .execute()
+        category_filter = st.selectbox(
+
+            "📂 Category",
+
+            [
+                "All"
+            ]
+            +
+            categories
 
         )
 
 
-        if result.data:
 
-            return result.data[0].get(
-                "value"
+    filtered = products.copy()
+
+
+
+    if search:
+
+
+        filtered = [
+
+            p for p in filtered
+
+            if search.lower()
+            in
+            p.get(
+                "name",
+                ""
+            ).lower()
+
+        ]
+
+
+
+    if category_filter != "All":
+
+
+        filtered = [
+
+            p for p in filtered
+
+            if p.get(
+                "category"
+            )
+            ==
+            category_filter
+
+        ]
+
+
+
+
+    # =====================================================
+    # KPI
+    # =====================================================
+
+    total_products = len(filtered)
+
+
+    total_profit = sum(
+
+        float(
+            p.get(
+                "profit",
+                0
+            )
+            or 0
+        )
+
+        for p in filtered
+
+    )
+
+
+    avg_markup = (
+
+        sum(
+
+            float(
+                p.get(
+                    "final_markup_percent",
+                    0
+                )
+                or 0
             )
 
-
-    except Exception:
-
-        pass
-
-
-    return default
-
-
-
-
-# ==============================================================================
-# PRICING REPORT
-# ==============================================================================
-
-
-def get_pricing_report_products():
-
-
-
-    try:
-
-
-        result = (
-
-            db()
-
-            .table("products")
-
-            .select(
-                """
-                id,
-                name,
-                sku,
-                purchase_price,
-                selling_price,
-                markup_percent,
-                category_id
-                """
-            )
-
-            .order(
-                "name"
-            )
-
-            .execute()
+            for p in filtered
 
         )
 
+        /
 
-        products = result.data or []
+        total_products
 
+        if total_products
 
-
-    except Exception:
-
-
-        return []
-
-
-
-
-    # =====================================================
-    # GLOBAL SETTINGS
-    # =====================================================
-
-
-    global_markup = Decimal(
-
-        str(
-
-            get_setting(
-
-                "DEFAULT_MARKUP_PERCENT",
-
-                "20"
-
-            )
-
-        )
+        else 0
 
     )
 
 
 
-    priority = get_setting(
+    c1,c2,c3 = st.columns(3)
 
-        "PRICING_PRIORITY",
 
-        "PRODUCT_FIRST"
+
+    c1.metric(
+
+        "📦 Products",
+
+        total_products
+
+    )
+
+
+    c2.metric(
+
+        "💰 Total Profit",
+
+        f"{total_profit:,.2f}"
+
+    )
+
+
+    c3.metric(
+
+        "📈 Avg Markup %",
+
+        f"{avg_markup:.2f}%"
 
     )
 
 
 
-    enable_product = (
-
-        str(
-
-            get_setting(
-
-                "ENABLE_PRODUCT_MARKUP",
-
-                "true"
-
-            )
-
-        ).lower()
-
-        ==
-        "true"
-
-    )
-
-
-
-    enable_category = (
-
-        str(
-
-            get_setting(
-
-                "ENABLE_CATEGORY_MARKUP",
-
-                "true"
-
-            )
-
-        ).lower()
-
-        ==
-        "true"
-
-    )
-
-
+    st.divider()
 
 
 
     # =====================================================
-    # PRODUCT LOOP
+    # REPORT TABLE
     # =====================================================
 
 
-    for p in products:
+    rows = []
 
 
-
-        # -------------------------------------------------
-        # BASIC PRICE
-        # -------------------------------------------------
+    for p in filtered:
 
 
-        cost = Decimal(
+        rows.append({
 
-            str(
+            "Product":
+
+                p.get(
+                    "name"
+                ),
+
+
+            "SKU":
+
+                p.get(
+                    "sku"
+                ),
+
+
+            "Category":
+
+                p.get(
+                    "category"
+                ),
+
+
+            "Cost":
 
                 p.get(
                     "purchase_price"
-                )
-                or 0
-
-            )
-
-        )
+                ),
 
 
-        selling = Decimal(
-
-            str(
+            "Selling":
 
                 p.get(
                     "selling_price"
-                )
-                or 0
-
-            )
-
-        )
+                ),
 
 
+            "Profit":
 
-        p["cost"] = float(cost)
-
-        p["actual_selling_price"] = float(selling)
+                p.get(
+                    "profit"
+                ),
 
 
 
-        p["profit"] = float(
+            "Product Markup %":
 
-            selling - cost
-
-        )
-
-
+                p.get(
+                    "product_markup"
+                ),
 
 
 
-        # -------------------------------------------------
-        # CATEGORY MARKUP
-        # -------------------------------------------------
+            "Category Markup %":
 
-
-        category_name = "-"
-
-        category_markup = None
+                p.get(
+                    "category_markup"
+                ),
 
 
 
-        category_id = p.get(
-            "category_id"
-        )
+            "Global Markup %":
+
+                p.get(
+                    "global_markup"
+                ),
 
 
 
-        if category_id:
+            "Final Markup %":
+
+                f"{p.get('final_markup_percent',0)}%"
 
 
-            try:
+            ,
 
 
-                category = (
+            "Markup Source":
 
-                    db()
-
-                    .table("categories")
-
-                    .select(
-                        """
-                        name,
-                        markup_percent
-                        """
-                    )
-
-                    .eq(
-                        "id",
-                        category_id
-                    )
-
-                    .execute()
-
+                p.get(
+                    "markup_source"
                 )
 
+        })
 
 
-                if category.data:
 
+    df = pd.DataFrame(
+        rows
+    )
 
-                    category_name = (
 
-                        category.data[0]
 
-                        .get(
-                            "name"
-                        )
+    st.dataframe(
 
-                    )
+        df,
 
+        use_container_width=True,
 
-                    category_markup = (
+        hide_index=True
 
-                        category.data[0]
+    )
 
-                        .get(
-                            "markup_percent"
-                        )
 
-                    )
 
+    # =====================================================
+    # EXCEL EXPORT
+    # =====================================================
 
-            except Exception:
 
+    excel = create_pricing_excel_report(
 
-                pass
+        filtered
 
+    )
 
 
+    st.download_button(
 
-        p["category"] = category_name
+        label="📥 Download Pricing Excel",
 
+        data=excel,
 
-        p["category_markup"] = category_markup
+        file_name="pricing_report.xlsx",
 
+        mime=
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+    )
 
 
 
-        # -------------------------------------------------
-        # PRODUCT MARKUP
-        # -------------------------------------------------
+# ==============================================================================
+# STREAMLIT ENTRY
+# ==============================================================================
 
+if __name__ == "__main__":
 
-        product_markup = p.get(
-
-            "markup_percent"
-
-        )
-
-
-
-        p["product_markup"] = (
-
-
-            float(product_markup)
-
-            if product_markup is not None
-
-            else None
-
-
-        )
-
-
-
-
-
-        # -------------------------------------------------
-        # MARKUP PRIORITY ENGINE
-        #
-        # PRODUCT
-        #    ↓
-        # CATEGORY
-        #    ↓
-        # GLOBAL
-        # -------------------------------------------------
-
-
-
-        final_markup = global_markup
-
-
-        source = "GLOBAL_DEFAULT_MARKUP"
-
-
-
-
-        if priority == "PRODUCT_FIRST":
-
-
-
-            if (
-
-                enable_product
-
-                and product_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(product_markup)
-
-                )
-
-
-                source = "PRODUCT_MARKUP"
-
-
-
-            elif (
-
-                enable_category
-
-                and category_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(category_markup)
-
-                )
-
-
-                source = "CATEGORY_MARKUP"
-
-
-
-
-
-        elif priority == "CATEGORY_FIRST":
-
-
-
-            if (
-
-                enable_category
-
-                and category_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(category_markup)
-
-                )
-
-
-                source = "CATEGORY_MARKUP"
-
-
-
-            elif (
-
-                enable_product
-
-                and product_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(product_markup)
-
-                )
-
-
-                source = "PRODUCT_MARKUP"
-
-
-
-
-
-        elif priority == "GLOBAL_FIRST":
-
-
-
-            final_markup = global_markup
-
-
-            source = "GLOBAL_DEFAULT_MARKUP"
-
-
-
-
-
-
-        # -------------------------------------------------
-        # PRICE CALCULATION
-        # -------------------------------------------------
-
-
-        expected_price = (
-
-            cost +
-
-            (
-
-                cost *
-
-                final_markup /
-
-                Decimal("100")
-
-            )
-
-        ).quantize(
-
-            Decimal("0.01"),
-
-            rounding=ROUND_HALF_UP
-
-        )
-
-
-
-
-
-        # -------------------------------------------------
-        # REPORT OUTPUT FIELDS
-        # -------------------------------------------------
-
-
-        p["global_markup"] = float(
-
-            global_markup
-
-        )
-
-
-        p["final_markup_percent"] = float(
-
-            final_markup
-
-        )
-
-
-        p["markup_source"] = source
-
-
-
-        p["expected_selling_price"] = float(
-
-            expected_price
-
-        )
-
-
-        p["price_difference"] = float(
-
-            selling - expected_price
-
-        )
-
-
-
-
-    return products
+    run()
