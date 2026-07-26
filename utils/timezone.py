@@ -1,6 +1,6 @@
 # ==============================================================================
 # utils/timezone.py
-# ERP ENTERPRISE TIME ENGINE v2
+# ERP ENTERPRISE TIME ENGINE v3
 # ==============================================================================
 
 from datetime import datetime, timezone
@@ -11,35 +11,19 @@ from config import (
     DATETIME_FORMAT,
 )
 
-
 # ------------------------------------------------------------------------------
-# DEFAULT TIMEZONE
+# GLOBAL TIMEZONE
 # ------------------------------------------------------------------------------
 
 _CURRENT_TIMEZONE = DEFAULT_TIMEZONE
 
 
-# ------------------------------------------------------------------------------
-# GET / SET TIMEZONE
-# ------------------------------------------------------------------------------
-
 def set_timezone(tz: str):
-    """
-    Change timezone globally.
-
-    Example:
-        set_timezone("Asia/Yangon")
-        set_timezone("Asia/Bangkok")
-        set_timezone("UTC")
-    """
-
     global _CURRENT_TIMEZONE
-
     _CURRENT_TIMEZONE = tz
 
 
 def get_timezone():
-
     return _CURRENT_TIMEZONE
 
 
@@ -48,97 +32,45 @@ def get_timezone():
 # ------------------------------------------------------------------------------
 
 def utc_now():
-
     return datetime.now(timezone.utc)
 
 
 # ------------------------------------------------------------------------------
-# LOCAL TIME
+# LOCAL
 # ------------------------------------------------------------------------------
 
 def local_now(tz=None):
-
     timezone_name = tz or _CURRENT_TIMEZONE
-
     return utc_now().astimezone(
         ZoneInfo(timezone_name)
     )
 
 
 # ------------------------------------------------------------------------------
-# FORMATTING
+# FORMAT CURRENT TIME
 # ------------------------------------------------------------------------------
 
-def format_datetime(
-    tz=None,
-    fmt=None
-):
-
+def format_datetime(tz=None, fmt=None):
     return local_now(tz).strftime(
         fmt or DATETIME_FORMAT
     )
 
 
-def format_date(
-    tz=None
-):
-
-    return local_now(tz).strftime(
-        "%Y-%m-%d"
-    )
+def format_date(tz=None):
+    return local_now(tz).strftime("%d-%m-%Y")
 
 
-def format_time(
-    tz=None
-):
-
-    return local_now(tz).strftime(
-        "%H:%M:%S"
-    )
+def format_time(tz=None):
+    return local_now(tz).strftime("%H:%M:%S")
 
 
 # ------------------------------------------------------------------------------
-# ISO FORMAT
-# ------------------------------------------------------------------------------
-
-def iso_datetime(
-    tz=None
-):
-
-    return local_now(tz).isoformat()
-
-
-# ------------------------------------------------------------------------------
-# COMMON SHORTCUTS
-# ------------------------------------------------------------------------------
-
-def myanmar_now():
-
-    return local_now("Asia/Yangon")
-
-
-def singapore_now():
-
-    return local_now("Asia/Singapore")
-
-
-def utc_iso():
-
-    return utc_now().isoformat()
-    # ------------------------------------------------------------------------------
-# DATABASE UTC -> LOCAL TIME
+# DATABASE UTC → LOCAL
 # ------------------------------------------------------------------------------
 
 def db_to_local(value, tz=None):
-    """
-    Convert database UTC timestamp to local timezone.
 
-    Supports:
-    - datetime object
-    - ISO string
-    """
-
-    timezone_name = tz or get_timezone()
+    timezone_name = tz or _CURRENT_TIMEZONE
 
     if value is None:
         return None
@@ -148,15 +80,17 @@ def db_to_local(value, tz=None):
             value.replace("Z", "+00:00")
         )
 
+    if value.tzinfo is None:
+        value = value.replace(
+            tzinfo=timezone.utc
+        )
+
     return value.astimezone(
         ZoneInfo(timezone_name)
     )
 
 
 def format_db_datetime(value, tz=None, fmt=None):
-    """
-    Format database timestamp as local time.
-    """
 
     dt = db_to_local(value, tz)
 
@@ -166,3 +100,27 @@ def format_db_datetime(value, tz=None, fmt=None):
     return dt.strftime(
         fmt or DATETIME_FORMAT
     )
+
+
+# ------------------------------------------------------------------------------
+# ISO
+# ------------------------------------------------------------------------------
+
+def iso_datetime(tz=None):
+    return local_now(tz).isoformat()
+
+
+def utc_iso():
+    return utc_now().isoformat()
+
+
+# ------------------------------------------------------------------------------
+# SHORTCUTS
+# ------------------------------------------------------------------------------
+
+def myanmar_now():
+    return local_now("Asia/Yangon")
+
+
+def singapore_now():
+    return local_now("Asia/Singapore")
