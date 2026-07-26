@@ -1,8 +1,9 @@
 # ==============================================================================
 # erp_core/context.py
-# ERP ENTERPRISE CACHE CONTEXT v31.1
+# ERP ENTERPRISE CACHE CONTEXT v31.2
 # STREAMLIT SAFE CACHE VERSION MANAGER
 # ==============================================================================
+
 
 import time
 import streamlit as st
@@ -13,27 +14,23 @@ class CacheManager:
     """
     ERP Global Cache Version Manager
 
-    Used for:
-    - Inventory refresh
-    - Product refresh
-    - Sales refresh
+    Flow:
 
-    Cache flow:
-
-    Database Change
+    Database Update
           |
           v
     CacheManager.bump()
           |
           v
-    Version number changes
+    Version changes
           |
           v
     @st.cache_data receives new version
           |
           v
-    Reload fresh data
+    Fresh data reload
     """
+
 
 
     VERSION_KEY = "erp_cache_versions"
@@ -62,16 +59,6 @@ class CacheManager:
                 "updated_at": time.time()
 
             }
-                @classmethod
-    def refresh_inventory(cls):
-        """
-        Legacy compatibility
-        Refresh inventory cache
-        """
-
-        cls.bump(
-            "inventory_version"
-        )
 
 
 
@@ -97,7 +84,7 @@ class CacheManager:
 
 
     # ------------------------------------------------------------------
-    # INCREASE VERSION
+    # BUMP VERSION
     # ------------------------------------------------------------------
 
     @classmethod
@@ -131,12 +118,13 @@ class CacheManager:
         ] = time.time()
 
 
+
         return versions[key]
 
 
 
     # ------------------------------------------------------------------
-    # INVENTORY CACHE
+    # INVENTORY REFRESH
     # ------------------------------------------------------------------
 
     @classmethod
@@ -148,8 +136,17 @@ class CacheManager:
 
 
 
+    # Legacy name support
+
+    @classmethod
+    def refresh_inventory(cls):
+
+        return cls.clear_inventory()
+
+
+
     # ------------------------------------------------------------------
-    # PRODUCT CACHE
+    # PRODUCT REFRESH
     # ------------------------------------------------------------------
 
     @classmethod
@@ -161,8 +158,15 @@ class CacheManager:
 
 
 
+    @classmethod
+    def refresh_products(cls):
+
+        return cls.clear_products()
+
+
+
     # ------------------------------------------------------------------
-    # SALES CACHE
+    # SALES REFRESH
     # ------------------------------------------------------------------
 
     @classmethod
@@ -174,8 +178,15 @@ class CacheManager:
 
 
 
+    @classmethod
+    def refresh_sales(cls):
+
+        return cls.clear_sales()
+
+
+
     # ------------------------------------------------------------------
-    # RESET ALL CACHE
+    # RESET
     # ------------------------------------------------------------------
 
     @classmethod
@@ -185,11 +196,15 @@ class CacheManager:
             cls.VERSION_KEY
         ] = {
 
+
             "inventory_version": 1,
+
 
             "product_version": 1,
 
+
             "sales_version": 1,
+
 
             "updated_at": time.time()
 
@@ -199,7 +214,6 @@ class CacheManager:
 
 # ==============================================================================
 # LEGACY COMPATIBILITY FUNCTIONS
-# Keep old ERP modules working
 # ==============================================================================
 
 
@@ -238,3 +252,21 @@ def bump_product_version():
 def bump_sales_version():
 
     return CacheManager.clear_sales()
+
+
+
+def refresh_inventory():
+
+    return CacheManager.refresh_inventory()
+
+
+
+def refresh_products():
+
+    return CacheManager.refresh_products()
+
+
+
+def refresh_sales():
+
+    return CacheManager.refresh_sales()
