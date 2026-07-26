@@ -266,11 +266,11 @@ def run():
         tax_setting = get_setting(
         "DEFAULT_TAX_RATE",
         0
-    )
+)
 
-        st.session_state.tax_rate = float(
-        tax_setting
-    )
+        st.write("DEBUG TAX FROM DB =", tax_setting)
+
+        st.session_state.tax_rate = float(tax_setting)
 
 
     except Exception:
