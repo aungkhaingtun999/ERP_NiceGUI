@@ -251,65 +251,37 @@ def run():
   c3.metric("🔴 Disabled", total - active_count)
   c4.metric("🛡 Roles", len(roles))
 
-# ==============================================================================
-# ACTIVITY LOG - COMPACT VIEW
-# ==============================================================================
+  # ==============================================================================
+  # ACTIVITY LOG - COMPACT VIEW
+  # ==============================================================================
 
-st.divider()
+  st.divider()
 
-with st.expander(
-    "📝 User Activity Log",
-    expanded=False
-):
-
+  with st.expander("📝 User Activity Log", expanded=False):
     try:
-
-        logs = (
-            supabase
-            .table("user_activity_logs")
-            .select(
-                """
+      logs = (
+          supabase.table("user_activity_logs")
+          .select(
+              """
                 action,
                 description,
                 created_at
                 """
-            )
-            .order(
-                "created_at",
-                desc=True
-            )
-            .limit(50)
-            .execute()
-        )
+          )
+          .order("created_at", desc=True)
+          .limit(50)
+          .execute()
+      )
 
+      activity_logs = logs.data or []
 
-        activity_logs = logs.data or []
-
-
-        if activity_logs:
-
-            st.dataframe(
-                activity_logs,
-                use_container_width=True,
-                hide_index=True
-            )
-
-        else:
-
-            st.info(
-                "No activity logs found"
-            )
-
+      if activity_logs:
+        st.dataframe(activity_logs, use_container_width=True, hide_index=True)
+      else:
+        st.info("No activity logs found")
 
     except Exception as e:
-
-        st.error(
-            f"Activity log loading failed: {e}"
-        )
-    else:
-      st.info("No activity logs found")
-    except Exception as e:
-    st.error(f"Activity log loading failed: {e}")
+      st.error(f"Activity log loading failed: {e}")
 
   # Permission Matrix
   st.divider()
