@@ -92,89 +92,251 @@ def run():
                         st.error(f"Create user failed: {e}")
 
     st.divider()
+# ==============================================================================
+# USER LIST - ENTERPRISE COMPACT VIEW
+# ==============================================================================
 
-    # User List
-    st.subheader("📋 Users")
-    if not users:
-        st.info("No users found")
-    else:
-        for u in users:
-            role_name = next((r["name"] for r in roles if r["id"] == u["role_id"]), "Unknown")
-            
-            # Column ကို (6) ခု အဖြစ် ပြောင်းလဲထားခြင်း
-            c1, c2, c3, c4, c5, c6 = st.columns([2, 2, 2, 2, 1, 1])
-            
-            with c1: 
-                st.write(f"👤 {u.get('username', '-')}")
-            
-            with c2: 
-                st.write(u.get('full_name', '-'))
-            
-            with c3: 
-                st.write(f"🛡 {role_name}")
-            
-            with c4:
-                new_role = st.selectbox(
-                    "Role", 
-                    role_names, 
-                    index=role_names.index(role_name) if role_name in role_names else 0, 
-                    key=f"role_{u['id']}"
+st.subheader("📋 Users")
+
+
+if not users:
+
+    st.info(
+        "No users found"
+    )
+
+
+else:
+
+
+    for u in users:
+
+
+        role_name = next(
+            (
+                r["name"]
+                for r in roles
+                if r["id"] == u["role_id"]
+            ),
+            "Unknown"
+        )
+
+
+        is_active = u.get(
+            "is_active",
+            False
+        )
+
+
+        status = (
+            "🟢 Active"
+            if is_active
+            else
+            "🔴 Disabled"
+        )
+
+
+        with st.container():
+
+
+            c1,c2,c3,c4 = st.columns(
+                [3,2,2,1]
+            )
+
+
+            # USER INFO
+            with c1:
+
+
+                st.markdown(
+                    f"""
+                    👤 **{u.get('full_name','-')}**
+
+                    `{u.get('username','-')}`
+                    """
                 )
-                
-                # Role Update with Try/Except
-                if new_role != role_name:
-                    try:
-                        supabase.table("users").update({
-                            "role_id": role_map[new_role]
-                        }).eq("id", u["id"]).execute()
-                        
-                        notify_success(f"✅ {u['username']} role updated.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Role update failed: {e}")
 
-            with c5:
-                # Reset Password Button
-                if st.button("🔐", key=f"reset_{u['id']}", help="Reset Password"):
-                    st.session_state[f"reset_user_{u['id']}"] = True
 
-            with c6:
-                if u.get("username") != "admin":
-                    if u.get("is_active"):
-                        if st.button("🚫", key=f"disable_{u['id']}", help="Disable User"):
-                            try:
-                                supabase.table("users").update({"is_active": False}).eq("id", u["id"]).execute()
-                                
-                                # Log Activity
-                                create_activity_log(
-                                    st.session_state.get("user_id"),
-                                    "DISABLE_USER",
-                                    f"Disabled user {u['username']}"
-                                )
-                                
-                                notify_success(f"✅ {u['username']} disabled.")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Disable failed: {e}")
-                    else:
-                        if st.button("🔄", key=f"restore_{u['id']}", help="Restore User"):
-                            try:
-                                supabase.table("users").update({"is_active": True}).eq("id", u["id"]).execute()
-                                
-                                # Log Activity
-                                create_activity_log(
-                                    st.session_state.get("user_id"),
-                                    "RESTORE_USER",
-                                    f"Restored user {u['username']}"
-                                )
-                                
-                                notify_success(f"✅ {u['username']} restored.")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Restore failed: {e}")
+            # ROLE
+
+            with c2:
+
+                st.write(
+                    f"🛡 {role_name}"
+                )
+
+
+
+            # STATUS
+
+            with c3:
+
+                st.write(
+                    status
+                )
+
+
+
+            # ACTION
+
+            with c4:
+
+
+                if u.get("username") == "admin":
+
+
+                    st.write(
+                        "🔒"
+                    )
+
+
                 else:
-                    st.caption("🔒 Protected")
 
+
+                    if st.button(
+                        "⚙",
+                        key=f"manage_{u['id']}"
+                    ):
+
+                        st.session_state[
+                            f"manage_user_{u['id']}"
+                        ] = True
+
+
+
+            # MANAGEMENT PANEL
+
+            if st.session_state.get(
+                f"manage_user_{u['id']}",
+                False
+            ):
+
+
+                with st.expander(
+                    f"Manage {u['username']}",
+                    expanded=True
+                ):
+
+
+                    col1,col2 = st.columns(2)
+
+
+
+                    with col1:
+
+
+                        new_role = st.selectbox(
+
+                            "Role",
+
+                            role_names,
+
+                            index=
+                            role_names.index(role_name)
+                            if role_name in role_names
+                            else 0,
+
+                            key=f"role_{u['id']}"
+
+                        )
+
+
+                        if new_role != role_name:
+
+
+                            supabase.table(
+                                "users"
+                            ).update({
+
+                                "role_id":
+                                role_map[new_role]
+
+                            }).eq(
+                                "id",
+                                u["id"]
+                            ).execute()
+
+
+                            notify_success(
+                                "Role updated"
+                            )
+
+                            st.rerun()
+
+
+
+                    with col2:
+
+
+                        if st.button(
+                            "🔐 Reset Password",
+                            key=f"reset_{u['id']}"
+                        ):
+
+                            st.session_state[
+                                f"reset_user_{u['id']}"
+                            ] = True
+
+
+
+                    if u.get("is_active"):
+
+
+                        if st.button(
+                            "🚫 Disable User",
+                            key=f"disable_{u['id']}"
+                        ):
+
+
+                            supabase.table(
+                                "users"
+                            ).update({
+
+                                "is_active":False
+
+                            }).eq(
+                                "id",
+                                u["id"]
+                            ).execute()
+
+
+                            notify_success(
+                                f"{u['username']} disabled"
+                            )
+
+                            st.rerun()
+
+
+
+                    else:
+
+
+                        if st.button(
+                            "🔄 Enable User",
+                            key=f"enable_{u['id']}"
+                        ):
+
+
+                            supabase.table(
+                                "users"
+                            ).update({
+
+                                "is_active":True
+
+                            }).eq(
+                                "id",
+                                u["id"]
+                            ).execute()
+
+
+                            notify_success(
+                                f"{u['username']} enabled"
+                            )
+
+                            st.rerun()
+
+
+                                    st.divider()
             # Reset Password Input Dialog
             if st.session_state.get(f"reset_user_{u['id']}", False):
                 with st.expander(f"🔐 Reset Password : {u['username']}", expanded=True):
@@ -204,12 +366,28 @@ def run():
     # Summary
     st.divider()
     st.subheader("📊 System Summary")
-    total = len(users)
-    active_count = len([u for u in users if u.get("is_active")])
-    c1, c2, c3 = st.columns(3)
-    c1.metric("👥 Total Users", total)
-    c2.metric("✅ Active", active_count)
-    c3.metric("⛔ Disabled", total - active_count)
+
+c1,c2,c3,c4 = st.columns(4)
+
+c1.metric(
+    "👥 Users",
+    total
+)
+
+c2.metric(
+    "🟢 Active",
+    active_count
+)
+
+c3.metric(
+    "🔴 Disabled",
+    total-active_count
+)
+
+c4.metric(
+    "🛡 Roles",
+    len(roles)
+)
 
     # Activity Log Viewer
     st.divider()
