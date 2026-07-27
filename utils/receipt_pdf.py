@@ -394,6 +394,9 @@ tax = num(
             550,
             y,
             f"Tax Rate : {tax_rate}%"
+            pdf.drawRightString(
+            550,
+            y,
             f"Tax Amount : {tax:,.0f}" MMK"
         )
 
