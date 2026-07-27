@@ -133,7 +133,7 @@ class Tables:
     # SETTINGS
     # --------------------------------------------------
 
-    SETTINGS = "settings"
+    SETTINGS = "erp_settings"
 
 
 
