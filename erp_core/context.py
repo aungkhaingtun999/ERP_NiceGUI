@@ -14,9 +14,6 @@ import streamlit as st
 # ==============================================================================
 
 class ERPContext:
-    """
-    ERP Runtime Context
-    """
 
     SESSION_KEY = "erp_context"
 
@@ -46,10 +43,7 @@ class ERPContext:
 
             "warehouse_id": self.warehouse_id,
 
-            "customer_id": self.customer_id,
-
-            "transaction_id":
-                self.current_transaction_id
+            "customer_id": self.customer_id
 
         }
 
@@ -75,7 +69,6 @@ class ERPContext:
                 customer_id=st.session_state.get(
                     "customer_id"
                 )
-
             )
 
 
@@ -102,16 +95,6 @@ class ERPContext:
 
 
 
-    @classmethod
-    def clear_current(cls):
-
-        st.session_state.pop(
-            cls.SESSION_KEY,
-            None
-        )
-
-
-
     def rotate_transaction(self):
 
         self.current_transaction_id = str(
@@ -124,10 +107,10 @@ class ERPContext:
 
 
 
+
 # ==============================================================================
 # CACHE MANAGER
 # ==============================================================================
-
 
 class CacheManager:
 
@@ -145,18 +128,15 @@ class CacheManager:
                 cls.VERSION_KEY
             ] = {
 
-
                 "inventory_version":1,
 
                 "product_version":1,
 
                 "sales_version":1,
 
-                "updated_at":
-                    time.time()
+                "updated_at":time.time()
 
             }
-
 
 
 
@@ -177,7 +157,6 @@ class CacheManager:
 
 
 
-
     @classmethod
     def bump(
         cls,
@@ -186,26 +165,21 @@ class CacheManager:
 
         cls.init()
 
-        versions = st.session_state[
+        data = st.session_state[
             cls.VERSION_KEY
         ]
 
 
-        versions[key] = (
-            versions.get(
-                key,
-                1
-            )
-            +
+        data[key] = data.get(
+            key,
             1
-        )
+        ) + 1
 
 
-        versions["updated_at"] = time.time()
+        data["updated_at"] = time.time()
 
 
-        return versions[key]
-
+        return data[key]
 
 
 
@@ -216,7 +190,6 @@ class CacheManager:
     ):
 
         return cls.bump(key)
-
 
 
 
@@ -244,27 +217,6 @@ class CacheManager:
         return cls.bump(
             "sales_version"
         )
-
-
-
-    @classmethod
-    def reset(cls):
-
-        st.session_state[
-            cls.VERSION_KEY
-        ] = {
-
-            "inventory_version":1,
-
-            "product_version":1,
-
-            "sales_version":1,
-
-            "updated_at":
-                time.time()
-
-        }
-
 
 
 
@@ -298,23 +250,5 @@ def bump_product_version():
 
 
 def bump_sales_version():
-
-    return CacheManager.clear_sales()
-
-
-
-def refresh_inventory():
-
-    return CacheManager.clear_inventory()
-
-
-
-def refresh_products():
-
-    return CacheManager.clear_products()
-
-
-
-def refresh_sales():
 
     return CacheManager.clear_sales()
