@@ -293,7 +293,7 @@ class CacheManager:
 
 
     # ------------------------------------------------------------------
-    # Compatibility For Services
+    # Compatibility For Services (bump_version)
     # ------------------------------------------------------------------
 
     @classmethod
@@ -383,7 +383,7 @@ class CacheManager:
 
             "sales_version": 1,
 
-            "purchase_version":1,
+            "purchase_version": 1,
 
             "updated_at": time.time()
 
