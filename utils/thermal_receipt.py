@@ -559,6 +559,33 @@ def build_receipt_data(
 
 
             "tax_amount":
+    num(
+        sale.get(
+            "tax_amount",
+            sale.get(
+                "tax",
+                0
+            )
+        )
+    ),
+
+
+"tax_rate":
+    num(
+        sale.get(
+            "tax_rate",
+            0
+        )
+    ),
+
+
+"grand_total":
+    num(
+        sale.get(
+            "total",
+            0
+        )
+    ),
                 num(
                     sale.get(
                         "tax_amount",
@@ -798,24 +825,28 @@ def create_receipt_text(data):
 
 
     tax_rate = num(
-    data.get("tax_rate")
-)
-
-tax_amount = num(
-    data.get("tax_amount")
-)
-
-
-text += (
-    line(
-        f"Tax ({tax_rate:.2f}%)",
-        f"{tax_amount:,.0f}",
-        32
+        data.get(
+            "tax_rate"
+        )
     )
-    +
-    "\n"
-)
 
+
+    tax_amount = num(
+        data.get(
+            "tax_amount"
+        )
+    )
+
+
+    text += (
+        line(
+            f"Tax ({tax_rate:.2f}%)",
+            f"{tax_amount:,.0f}",
+            32
+        )
+        +
+        "\n"
+    )
 
     text += (
         line(
