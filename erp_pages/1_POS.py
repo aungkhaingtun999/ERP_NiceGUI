@@ -270,7 +270,7 @@ def run():
 
         st.write("DEBUG TAX FROM DB =", tax_setting)
 
-      if "tax_rate" in st.session_state:
+    if "tax_rate" in st.session_state:
         del st.session_state["tax_rate"]
 
         st.session_state.tax_rate = float(tax_setting)
