@@ -347,9 +347,13 @@ def generate_pdf(receipt_data):
         )
 
 
-        tax = num(
-            receipt_data.get("tax_amount")
-        )
+        tax_rate = num(
+    receipt_data.get("tax_rate")
+)
+
+tax = num(
+    receipt_data.get("tax_amount")
+)
 
 
         grand_total = num(
@@ -389,7 +393,8 @@ def generate_pdf(receipt_data):
         pdf.drawRightString(
             550,
             y,
-            f"Tax Amount : {tax:,.0f} MMK"
+            f"Tax Rate : {tax_rate}%"
+f"Tax Amount : {tax:,.0f}" MMK"
         )
 
         y -= 18
