@@ -57,13 +57,11 @@ def get_setting(
 
     if result.data:
 
-            return result.data.get(
+        return result.data.get(
                 "value",
                 default
             )
-
-
-    except Exception as e:
+except Exception as e:
 
         log_error(
             f"get_setting error: {e}"
