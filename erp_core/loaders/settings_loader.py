@@ -49,7 +49,7 @@ def get_setting(
 
         if result.data:
 
-          return result.data[0].get(
+        return result.data[0].get(
           "value",
           default
     )
@@ -57,7 +57,7 @@ def get_setting(
 
         if result.data:
 
-           return result.data.get(
+        return result.data.get(
                 "value",
                 default
             )
