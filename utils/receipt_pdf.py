@@ -394,7 +394,7 @@ tax = num(
             550,
             y,
             f"Tax Rate : {tax_rate}%"
-f"Tax Amount : {tax:,.0f}" MMK"
+            f"Tax Amount : {tax:,.0f}" MMK"
         )
 
         y -= 18
