@@ -2,16 +2,16 @@ import time
 import streamlit as st
 
 
-
 # ==============================================================================
 # ERP CONTEXT
 # ==============================================================================
-
 
 class ERPContext:
     """
     ERP Runtime Context
     """
+
+    SESSION_KEY = "erp_context"
 
     def __init__(
         self,
@@ -23,8 +23,6 @@ class ERPContext:
         self.user_id = user_id
         self.warehouse_id = warehouse_id
         self.customer_id = customer_id
-
-
 
     def to_dict(self):
 
@@ -38,19 +36,58 @@ class ERPContext:
 
         }
 
+    @classmethod
+    def set_current(cls, context):
+        """
+        Save current ERP context into Streamlit session.
+        """
+
+        if isinstance(context, ERPContext):
+            st.session_state[cls.SESSION_KEY] = context.to_dict()
+
+        elif isinstance(context, dict):
+            st.session_state[cls.SESSION_KEY] = {
+                "user_id": context.get("user_id"),
+                "warehouse_id": context.get("warehouse_id"),
+                "customer_id": context.get("customer_id")
+            }
+
+    @classmethod
+    def get_current(cls):
+        """
+        Get current ERP context.
+        """
+
+        data = st.session_state.get(
+            cls.SESSION_KEY,
+            {}
+        )
+
+        return cls(
+            user_id=data.get("user_id"),
+            warehouse_id=data.get("warehouse_id"),
+            customer_id=data.get("customer_id")
+        )
+
+    @classmethod
+    def clear_current(cls):
+        """
+        Remove current ERP context.
+        """
+
+        st.session_state.pop(
+            cls.SESSION_KEY,
+            None
+        )
 
 
 # ==============================================================================
 # CACHE MANAGER
 # ==============================================================================
 
-
 class CacheManager:
 
-
     VERSION_KEY = "erp_cache_versions"
-
-
 
     @classmethod
     def init(cls):
@@ -71,8 +108,6 @@ class CacheManager:
 
             }
 
-
-
     @classmethod
     def get_version(
         cls,
@@ -88,8 +123,6 @@ class CacheManager:
             1
         )
 
-
-
     @classmethod
     def bump(
         cls,
@@ -102,18 +135,13 @@ class CacheManager:
             cls.VERSION_KEY
         ]
 
-
         versions[key] = (
-            versions.get(key,1)+1
+            versions.get(key, 1) + 1
         )
-
 
         versions["updated_at"] = time.time()
 
-
         return versions[key]
-
-
 
     @classmethod
     def clear_inventory(cls):
@@ -122,14 +150,10 @@ class CacheManager:
             "inventory_version"
         )
 
-
-
     @classmethod
     def refresh_inventory(cls):
 
         return cls.clear_inventory()
-
-
 
     @classmethod
     def clear_products(cls):
@@ -138,14 +162,10 @@ class CacheManager:
             "product_version"
         )
 
-
-
     @classmethod
     def refresh_products(cls):
 
         return cls.clear_products()
-
-
 
     @classmethod
     def clear_sales(cls):
@@ -154,14 +174,10 @@ class CacheManager:
             "sales_version"
         )
 
-
-
     @classmethod
     def refresh_sales(cls):
 
         return cls.clear_sales()
-
-
 
     @classmethod
     def reset(cls):
@@ -170,27 +186,24 @@ class CacheManager:
             cls.VERSION_KEY
         ] = {
 
-            "inventory_version":1,
+            "inventory_version": 1,
 
-            "product_version":1,
+            "product_version": 1,
 
-            "sales_version":1,
+            "sales_version": 1,
 
-            "updated_at":time.time()
+            "updated_at": time.time()
 
         }
-
 
 
 # ==============================================================================
 # LEGACY FUNCTIONS
 # ==============================================================================
 
-
 def get_cache_version(key):
 
     return CacheManager.get_version(key)
-
 
 
 def bump_cache(key):
@@ -198,11 +211,9 @@ def bump_cache(key):
     return CacheManager.bump(key)
 
 
-
 def bump_inventory_version():
 
     return CacheManager.clear_inventory()
-
 
 
 def bump_product_version():
@@ -210,11 +221,9 @@ def bump_product_version():
     return CacheManager.clear_products()
 
 
-
 def bump_sales_version():
 
     return CacheManager.clear_sales()
-
 
 
 def refresh_inventory():
@@ -222,11 +231,9 @@ def refresh_inventory():
     return CacheManager.refresh_inventory()
 
 
-
 def refresh_products():
 
     return CacheManager.refresh_products()
-
 
 
 def refresh_sales():
