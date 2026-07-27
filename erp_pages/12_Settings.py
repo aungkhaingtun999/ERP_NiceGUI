@@ -132,9 +132,7 @@ def save_setting(
     try:
 
 
-        supabase.table(
-            "settings"
-        ).upsert(
+        supabase.table("erp_settings").upsert(
 
             {
 
