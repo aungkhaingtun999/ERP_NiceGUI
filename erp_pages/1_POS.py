@@ -272,11 +272,18 @@ def run():
         if  "tax_rate" in st.session_state:
             del st.session_state["tax_rate"]
 
-        st.session_state.tax_rate = float(tax_setting)
+            tax_setting = get_setting(
+            "DEFAULT_TAX_RATE",
+            0
+)
+
+        st.write("RAW TAX FROM LOADER =", repr(tax_setting))
+
+        st.session_state["tax_rate"] = float(tax_setting)
 
         st.write(
-        "NEW TAX=",
-        st.session_state.tax_rate
+            "SESSION TAX =",
+        st.session_state["tax_rate"]
 )
 
 
