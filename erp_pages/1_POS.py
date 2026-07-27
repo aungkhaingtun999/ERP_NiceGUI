@@ -2193,9 +2193,34 @@ Subtotal:
 
 
 
-Tax ({data['tax_rate']}%):
+Subtotal:
+
+{money(data['subtotal'])}
+
+
+Tax Rate:
+
+{data['tax_rate']}%
+
+
+Tax Amount:
 
 {money(data['tax_amount'])}
+
+
+Discount:
+
+{money(data['discount'])}
+
+
+
+=========================
+
+GRAND TOTAL
+
+{money(data['grand_total'])}
+
+=========================
 
 
 
