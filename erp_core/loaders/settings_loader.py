@@ -23,10 +23,6 @@ def get_setting(
     default=None
 ):
 
-    """
-    ERP Settings Reader
-    """
-
     try:
 
         result = (
@@ -40,7 +36,7 @@ def get_setting(
                 key
             )
             .order(
-                "created_at",
+                "id",
                 desc=True
             )
             .limit(1)
@@ -50,10 +46,7 @@ def get_setting(
 
         if result.data:
 
-            return result.data[0].get(
-                "value",
-                default
-            )
+            return result.data[0]["value"]
 
 
     except Exception as e:
