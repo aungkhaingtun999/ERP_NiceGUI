@@ -281,8 +281,7 @@ def run():
 
         st.session_state["tax_rate"] = float(tax_setting)
 
-        st.write(
-            "SESSION TAX =",
+        
         st.session_state["tax_rate"]
 )
 
