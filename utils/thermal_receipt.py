@@ -507,7 +507,7 @@ def build_receipt_data(
             )
 
 
-                receipt = {
+            receipt = {
 
             "invoice_no":
                 sale.get(
