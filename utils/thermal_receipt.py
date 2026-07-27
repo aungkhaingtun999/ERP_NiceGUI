@@ -507,7 +507,7 @@ def build_receipt_data(
             )
 
 
-        receipt = {
+                receipt = {
 
             "invoice_no":
                 sale.get(
@@ -558,34 +558,20 @@ def build_receipt_data(
                 ),
 
 
-"tax_rate":
-    num(
-        sale.get(
-            "tax_rate",
-            0
-        )
-    ),
+            # =========================
+            # TAX
+            # =========================
+
+            "tax_rate":
+                num(
+                    sale.get(
+                        "tax_rate",
+                        0
+                    )
+                ),
 
 
-"tax_amount":
-    num(
-        sale.get(
-            "tax_amount",
-            sale.get(
-                "tax",
-                0
-            )
-        )
-    ),
-
-
-"grand_total":
-    num(
-        sale.get(
-            "total",
-            0
-        )
-    ),
+            "tax_amount":
                 num(
                     sale.get(
                         "tax_amount",
@@ -594,13 +580,6 @@ def build_receipt_data(
                             0
                         )
                     )
-                ),
-            "tax_rate":
-                 num(
-                     sale.get(
-                         "tax_rate",
-                           0
-                       )
                 ),
 
 
@@ -631,7 +610,6 @@ def build_receipt_data(
                 )
 
         }
-
 
         return receipt
 
