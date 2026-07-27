@@ -1,5 +1,51 @@
+import uuid
 import time
 import streamlit as st
+
+
+class ERPContext:
+
+    SESSION_KEY = "erp_context"
+
+    def __init__(
+        self,
+        user_id=None,
+        warehouse_id=None,
+        customer_id=None
+    ):
+        self.user_id = user_id
+        self.warehouse_id = warehouse_id
+        self.customer_id = customer_id
+
+        self.current_transaction_id = str(uuid.uuid4())
+        self.transaction_started_at = time.time()
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "warehouse_id": self.warehouse_id,
+            "customer_id": self.customer_id
+        }
+
+    @classmethod
+    def get_current(cls):
+
+        if cls.SESSION_KEY not in st.session_state:
+            st.session_state[cls.SESSION_KEY] = ERPContext(
+                user_id=st.session_state.get("user_id"),
+                warehouse_id=st.session_state.get("warehouse_id"),
+                customer_id=st.session_state.get("customer_id")
+            )
+
+        return st.session_state[cls.SESSION_KEY]
+
+    @classmethod
+    def set_current(cls, context):
+        st.session_state[cls.SESSION_KEY] = context
+
+    def rotate_transaction(self):
+        self.current_transaction_id = str(uuid.uuid4())
+        self.transaction_started_at = time.time()
 
 
 # ==============================================================================
