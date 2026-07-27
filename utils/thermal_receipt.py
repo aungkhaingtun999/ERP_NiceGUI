@@ -568,6 +568,13 @@ def build_receipt_data(
                         )
                     )
                 ),
+            "tax_rate":
+                 num(
+                     sale.get(
+                         "tax_rate",
+                           0
+                       )
+                ),
 
 
             "grand_total":
