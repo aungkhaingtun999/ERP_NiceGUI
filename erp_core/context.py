@@ -1,7 +1,6 @@
 # ==============================================================================
 # erp_core/context.py
-# ERP ENTERPRISE RUNTIME CONTEXT + CACHE ENGINE
-# VERSION: V31.0 PRODUCTION
+# ERP ENTERPRISE CONTEXT + CACHE MANAGER
 # ==============================================================================
 
 import uuid
@@ -14,21 +13,12 @@ import streamlit as st
 # ERP CONTEXT
 # ==============================================================================
 
-
 class ERPContext:
     """
     ERP Runtime Context
-
-    Stores:
-    - Current User
-    - Warehouse
-    - Customer
-    - Transaction ID
     """
 
-
     SESSION_KEY = "erp_context"
-
 
 
     def __init__(
@@ -39,90 +29,61 @@ class ERPContext:
     ):
 
         self.user_id = user_id
-
         self.warehouse_id = warehouse_id
-
         self.customer_id = customer_id
 
-
-        # Transaction Engine
-
-        self.current_transaction_id = str(
-            uuid.uuid4()
-        )
+        self.current_transaction_id = str(uuid.uuid4())
 
         self.transaction_started_at = time.time()
 
 
 
-    # ------------------------------------------------------------------
-    # Convert Dictionary
-    # ------------------------------------------------------------------
-
     def to_dict(self):
 
         return {
 
-            "user_id":
-                self.user_id,
+            "user_id": self.user_id,
 
-            "warehouse_id":
-                self.warehouse_id,
+            "warehouse_id": self.warehouse_id,
 
-            "customer_id":
-                self.customer_id
+            "customer_id": self.customer_id,
+
+            "transaction_id":
+                self.current_transaction_id
 
         }
 
 
 
-    # ------------------------------------------------------------------
-    # Get Current Context
-    # ------------------------------------------------------------------
-
     @classmethod
     def get_current(cls):
 
-        context = st.session_state.get(
-            cls.SESSION_KEY
-        )
+        if cls.SESSION_KEY not in st.session_state:
 
+            st.session_state[
+                cls.SESSION_KEY
+            ] = cls(
 
-        if context is None:
+                user_id=st.session_state.get(
+                    "user_id"
+                ),
 
-            context = ERPContext(
+                warehouse_id=st.session_state.get(
+                    "warehouse_id"
+                ),
 
-                user_id=
-                    st.session_state.get(
-                        "user_id"
-                    ),
-
-                warehouse_id=
-                    st.session_state.get(
-                        "warehouse_id"
-                    ),
-
-                customer_id=
-                    st.session_state.get(
-                        "customer_id"
-                    )
+                customer_id=st.session_state.get(
+                    "customer_id"
+                )
 
             )
 
 
-            st.session_state[
-                cls.SESSION_KEY
-            ] = context
+        return st.session_state[
+            cls.SESSION_KEY
+        ]
 
 
-
-        return context
-
-
-
-    # ------------------------------------------------------------------
-    # Save Context
-    # ------------------------------------------------------------------
 
     @classmethod
     def set_current(
@@ -130,10 +91,9 @@ class ERPContext:
         context
     ):
 
-
         if isinstance(
             context,
-            ERPContext
+            cls
         ):
 
             st.session_state[
@@ -141,35 +101,6 @@ class ERPContext:
             ] = context
 
 
-
-        elif isinstance(
-            context,
-            dict
-        ):
-
-            st.session_state[
-                cls.SESSION_KEY
-            ] = ERPContext(
-
-                user_id=context.get(
-                    "user_id"
-                ),
-
-                warehouse_id=context.get(
-                    "warehouse_id"
-                ),
-
-                customer_id=context.get(
-                    "customer_id"
-                )
-
-            )
-
-
-
-    # ------------------------------------------------------------------
-    # Clear Context
-    # ------------------------------------------------------------------
 
     @classmethod
     def clear_current(cls):
@@ -181,10 +112,6 @@ class ERPContext:
 
 
 
-    # ------------------------------------------------------------------
-    # New Transaction
-    # ------------------------------------------------------------------
-
     def rotate_transaction(self):
 
         self.current_transaction_id = str(
@@ -192,6 +119,7 @@ class ERPContext:
         )
 
         self.transaction_started_at = time.time()
+
 
 
 
@@ -213,30 +141,24 @@ class CacheManager:
 
         if cls.VERSION_KEY not in st.session_state:
 
-
             st.session_state[
                 cls.VERSION_KEY
             ] = {
 
 
-                "inventory_version": 1,
+                "inventory_version":1,
 
-                "product_version": 1,
+                "product_version":1,
 
-                "sales_version": 1,
+                "sales_version":1,
 
-                "purchase_version": 1,
-
-                "updated_at": time.time()
+                "updated_at":
+                    time.time()
 
             }
 
 
 
-
-    # ------------------------------------------------------------------
-    # Get Version
-    # ------------------------------------------------------------------
 
     @classmethod
     def get_version(
@@ -255,9 +177,6 @@ class CacheManager:
 
 
 
-    # ------------------------------------------------------------------
-    # Increase Version
-    # ------------------------------------------------------------------
 
     @classmethod
     def bump(
@@ -267,21 +186,18 @@ class CacheManager:
 
         cls.init()
 
-
         versions = st.session_state[
             cls.VERSION_KEY
         ]
 
 
         versions[key] = (
-
             versions.get(
                 key,
                 1
             )
             +
             1
-
         )
 
 
@@ -292,9 +208,6 @@ class CacheManager:
 
 
 
-    # ------------------------------------------------------------------
-    # Compatibility For Services (bump_version)
-    # ------------------------------------------------------------------
 
     @classmethod
     def bump_version(
@@ -302,15 +215,10 @@ class CacheManager:
         key
     ):
 
-        return cls.bump(
-            key
-        )
+        return cls.bump(key)
 
 
 
-    # ------------------------------------------------------------------
-    # Inventory
-    # ------------------------------------------------------------------
 
     @classmethod
     def clear_inventory(cls):
@@ -320,16 +228,6 @@ class CacheManager:
         )
 
 
-    @classmethod
-    def refresh_inventory(cls):
-
-        return cls.clear_inventory()
-
-
-
-    # ------------------------------------------------------------------
-    # Product
-    # ------------------------------------------------------------------
 
     @classmethod
     def clear_products(cls):
@@ -339,16 +237,6 @@ class CacheManager:
         )
 
 
-    @classmethod
-    def refresh_products(cls):
-
-        return cls.clear_products()
-
-
-
-    # ------------------------------------------------------------------
-    # Sales
-    # ------------------------------------------------------------------
 
     @classmethod
     def clear_sales(cls):
@@ -358,16 +246,6 @@ class CacheManager:
         )
 
 
-    @classmethod
-    def refresh_sales(cls):
-
-        return cls.clear_sales()
-
-
-
-    # ------------------------------------------------------------------
-    # Reset
-    # ------------------------------------------------------------------
 
     @classmethod
     def reset(cls):
@@ -376,16 +254,14 @@ class CacheManager:
             cls.VERSION_KEY
         ] = {
 
+            "inventory_version":1,
 
-            "inventory_version": 1,
+            "product_version":1,
 
-            "product_version": 1,
+            "sales_version":1,
 
-            "sales_version": 1,
-
-            "purchase_version": 1,
-
-            "updated_at": time.time()
+            "updated_at":
+                time.time()
 
         }
 
@@ -393,23 +269,19 @@ class CacheManager:
 
 
 # ==============================================================================
-# LEGACY SUPPORT FUNCTIONS
+# LEGACY COMPATIBILITY
 # ==============================================================================
 
 
 def get_cache_version(key):
 
-    return CacheManager.get_version(
-        key
-    )
+    return CacheManager.get_version(key)
 
 
 
 def bump_cache(key):
 
-    return CacheManager.bump(
-        key
-    )
+    return CacheManager.bump(key)
 
 
 
@@ -433,16 +305,16 @@ def bump_sales_version():
 
 def refresh_inventory():
 
-    return CacheManager.refresh_inventory()
+    return CacheManager.clear_inventory()
 
 
 
 def refresh_products():
 
-    return CacheManager.refresh_products()
+    return CacheManager.clear_products()
 
 
 
 def refresh_sales():
 
-    return CacheManager.refresh_sales()
+    return CacheManager.clear_sales()
