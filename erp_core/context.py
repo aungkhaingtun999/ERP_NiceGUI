@@ -1,9 +1,11 @@
+print("ERPContext file loaded")
 import uuid
 import time
 import streamlit as st
 
 
 class ERPContext:
+    print(hasattr(ERPContext, "get_current"))
 
     SESSION_KEY = "erp_context"
 
