@@ -267,7 +267,7 @@ def run():
         0
 )
 
-        st.write("DEBUG TAX FROM DB =", tax_setting)
+        
 
         if  "tax_rate" in st.session_state:
             del st.session_state["tax_rate"]
