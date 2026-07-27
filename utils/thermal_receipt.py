@@ -558,7 +558,16 @@ def build_receipt_data(
                 ),
 
 
-            "tax_amount":
+"tax_rate":
+    num(
+        sale.get(
+            "tax_rate",
+            0
+        )
+    ),
+
+
+"tax_amount":
     num(
         sale.get(
             "tax_amount",
@@ -566,15 +575,6 @@ def build_receipt_data(
                 "tax",
                 0
             )
-        )
-    ),
-
-
-"tax_rate":
-    num(
-        sale.get(
-            "tax_rate",
-            0
         )
     ),
 
