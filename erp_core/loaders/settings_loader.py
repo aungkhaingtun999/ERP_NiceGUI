@@ -29,18 +29,30 @@ def get_setting(
     try:
 
         result = (
-            db()
-            .table(
-                Tables.SETTINGS
-            )
-            .select("*")
-            .eq(
-                "key",
-                key
-            )
-            .maybe_single()
-            .execute()
-        )
+    db()
+    .table(
+        Tables.SETTINGS
+    )
+    .select("*")
+    .eq(
+        "key",
+        key
+    )
+    .order(
+        "created_at",
+        desc=True
+    )
+    .limit(1)
+    .execute()
+)
+
+
+if result.data:
+
+    return result.data[0].get(
+        "value",
+        default
+    )
 
 
         if result.data:
