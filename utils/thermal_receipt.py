@@ -790,15 +790,24 @@ def create_receipt_text(data):
     )
 
 
-    text += (
-        line(
-            "Tax",
-            f"{num(data.get('tax_amount')):,.0f}",
-            32
-        )
-        +
-        "\n"
+    tax_rate = num(
+    data.get("tax_rate")
+)
+
+tax_amount = num(
+    data.get("tax_amount")
+)
+
+
+text += (
+    line(
+        f"Tax ({tax_rate:.2f}%)",
+        f"{tax_amount:,.0f}",
+        32
     )
+    +
+    "\n"
+)
 
 
     text += (
