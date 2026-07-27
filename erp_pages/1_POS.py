@@ -262,7 +262,6 @@ def run():
     # ==========================================================================
 
     try:
-
         tax_setting = get_setting(
         "DEFAULT_TAX_RATE",
         0
@@ -281,11 +280,11 @@ def run():
 )
 
 
-    except Exception:
+    except Exception as e:
 
-       st.session_state.tax_rate = 0
+        st.session_state.tax_rate = 0
 
-       st.error(
+        st.error(
         f"Tax Load Error: {e}"
     )
 
