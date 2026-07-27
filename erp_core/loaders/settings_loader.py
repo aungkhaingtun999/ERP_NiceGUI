@@ -47,7 +47,7 @@ def get_setting(
 )
 
 
-     if result.data:
+      if result.data:
 
         return result.data[0].get(
           "value",
@@ -55,7 +55,7 @@ def get_setting(
     )
 
 
-     if result.data:
+      if result.data:
 
         return result.data.get(
                 "value",
