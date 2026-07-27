@@ -272,6 +272,11 @@ def run():
 
         st.session_state.tax_rate = float(tax_setting)
 
+        st.write(
+        "FINAL TAX RATE USED =",
+        st.session_state.tax_rate
+)
+
 
     except Exception:
 
