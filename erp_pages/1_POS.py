@@ -282,8 +282,7 @@ def run():
         st.session_state["tax_rate"] = float(tax_setting)
 
         
-        st.session_state["tax_rate"]
-)
+        
 
 
     except Exception as e:
