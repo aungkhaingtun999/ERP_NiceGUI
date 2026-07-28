@@ -1,8 +1,6 @@
 # ==============================================================================
 # erp_pages/pos/payment.py
-# ERP ENTERPRISE POS PAYMENT ENGINE v12.0
-#
-# RESPONSIBILITY
+# ERP ENTERPRISE POS PAYMENT ENGINE v12.1
 #
 # Cart
 #   ↓
@@ -12,7 +10,7 @@
 #   ↓
 # Payment
 #   ↓
-# Checkout
+# Checkout RPC
 #
 # ==============================================================================
 
@@ -26,9 +24,21 @@ from .cart import (
 )
 
 
+
 from .checkout import (
     process_checkout
 )
+
+
+
+from .session import (
+    start_processing,
+    stop_processing
+)
+
+
+
+
 
 
 
@@ -43,6 +53,7 @@ def money(value):
 
         return f"{float(value):,.0f} MMK"
 
+
     except Exception:
 
         return "0 MMK"
@@ -51,8 +62,10 @@ def money(value):
 
 
 
+
+
 # ==============================================================================
-# TAX CALCULATION
+# TAX
 # ==============================================================================
 
 
@@ -61,9 +74,10 @@ def calculate_tax(
     tax_rate
 ):
 
+
     return round(
 
-        subtotal
+        float(subtotal)
         *
         float(tax_rate)
         /
@@ -77,8 +91,10 @@ def calculate_tax(
 
 
 
+
+
 # ==============================================================================
-# TOTAL CALCULATION
+# TOTAL
 # ==============================================================================
 
 
@@ -92,17 +108,20 @@ def calculate_total(
 
 ):
 
+
     return max(
 
         0,
 
-        subtotal
+        float(subtotal)
         +
-        tax_amount
+        float(tax_amount)
         -
-        discount
+        float(discount)
 
     )
+
+
 
 
 
@@ -129,9 +148,12 @@ def render_payment(
     )
 
 
+
     if not cart:
 
         return
+
+
 
 
 
@@ -150,9 +172,12 @@ def render_payment(
 
 
 
-    # ==============================================================
-    # CART TOTAL
-    # ==============================================================
+
+
+    # ==========================================================================
+    # TOTAL
+    # ==========================================================================
+
 
     subtotal = calculate_subtotal(
 
@@ -162,12 +187,6 @@ def render_payment(
 
 
 
-
-
-    # ==============================================================
-    # TAX
-    # ==============================================================
-
     tax_rate = st.session_state.get(
 
         "tax_rate",
@@ -175,6 +194,7 @@ def render_payment(
         0
 
     )
+
 
 
     tax_amount = calculate_tax(
@@ -189,9 +209,11 @@ def render_payment(
 
 
 
-    # ==============================================================
+
+
+    # ==========================================================================
     # DISCOUNT
-    # ==============================================================
+    # ==========================================================================
 
 
     policy = str(
@@ -211,17 +233,7 @@ def render_payment(
     if policy == "restricted":
 
 
-        discount = st.number_input(
-
-            "Discount",
-
-            min_value=0.0,
-
-            value=0.0,
-
-            disabled=True
-
-        )
+        discount = 0
 
 
         st.warning(
@@ -250,7 +262,9 @@ def render_payment(
 
 
 
-    grand_total = calculate_total(
+
+
+    total = calculate_total(
 
         subtotal,
 
@@ -264,30 +278,35 @@ def render_payment(
 
 
 
+
+
     st.success(
 
         f"""
 
-Subtotal:
+Subtotal :
 
 {money(subtotal)}
 
 
-Tax:
+
+Tax :
 
 {money(tax_amount)}
 
 
-Discount:
+
+Discount :
 
 {money(discount)}
 
 
+
 ====================
 
-TOTAL:
+TOTAL :
 
-{money(grand_total)}
+{money(total)}
 
 ====================
 
@@ -299,9 +318,11 @@ TOTAL:
 
 
 
-    # ==============================================================
+
+
+    # ==========================================================================
     # PAYMENT METHOD
-    # ==============================================================
+    # ==========================================================================
 
 
     payment_method = st.selectbox(
@@ -322,11 +343,17 @@ TOTAL:
 
 
 
+    st.session_state.payment_method = payment_method
 
 
-    # ==============================================================
+
+
+
+
+
+    # ==========================================================================
     # RECEIVED
-    # ==============================================================
+    # ==========================================================================
 
 
     if payment_method == "CASH":
@@ -336,9 +363,9 @@ TOTAL:
 
             "Received Amount",
 
-            min_value=float(grand_total),
+            min_value=float(total),
 
-            value=float(grand_total),
+            value=float(total),
 
             step=100.0
 
@@ -348,7 +375,15 @@ TOTAL:
     else:
 
 
-        received = grand_total
+        received = total
+
+
+
+
+
+
+
+    st.session_state.received_amount = received
 
 
 
@@ -358,15 +393,13 @@ TOTAL:
 
         0,
 
-        received - grand_total
+        received - total
 
     )
 
 
 
-
-
-    st.write(
+    st.info(
 
         f"Change : {money(change)}"
 
@@ -376,9 +409,11 @@ TOTAL:
 
 
 
-    # ==============================================================
-    # CONFIRM SALE
-    # ==============================================================
+
+
+    # ==========================================================================
+    # CHECKOUT
+    # ==========================================================================
 
 
     if st.button(
@@ -398,11 +433,13 @@ TOTAL:
     ):
 
 
-        st.session_state.processing = True
+
+        start_processing()
 
 
 
         try:
+
 
 
             cashier_id = (
@@ -434,9 +471,12 @@ TOTAL:
 
                 )
 
-                st.session_state.processing = False
+
+                stop_processing()
 
                 return
+
+
 
 
 
@@ -464,6 +504,8 @@ TOTAL:
 
 
 
+
+
             if result.get(
 
                 "success",
@@ -471,6 +513,7 @@ TOTAL:
                 False
 
             ):
+
 
 
                 st.session_state.sale_data = result.get(
@@ -482,13 +525,20 @@ TOTAL:
                 )
 
 
+
                 st.session_state.show_receipt = True
 
 
-                st.session_state.processing = False
+
+                stop_processing()
+
 
 
                 st.rerun()
+
+
+
+
 
 
 
@@ -508,7 +558,10 @@ TOTAL:
                 )
 
 
-                st.session_state.processing = False
+
+                stop_processing()
+
+
 
 
 
@@ -517,7 +570,7 @@ TOTAL:
         except Exception as e:
 
 
-            st.session_state.processing = False
+            stop_processing()
 
 
             st.error(
