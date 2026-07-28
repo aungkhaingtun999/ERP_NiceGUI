@@ -84,3 +84,49 @@ def get_active_products():
         offset=0,
         limit=DEFAULT_PAGE_SIZE
     )
+    # ==============================================================================
+# POS PRODUCT LOADER
+# ==============================================================================
+
+
+def get_pos_products(
+    warehouse_id=None,
+    search=None
+):
+
+    products = get_products(
+        warehouse_id=warehouse_id,
+        offset=0,
+        limit=DEFAULT_PAGE_SIZE
+    )
+
+
+    if not search:
+
+        return products
+
+
+
+    search = search.lower()
+
+
+
+    return [
+
+        p
+
+        for p in products
+
+        if search in str(
+            p.get("name","")
+        ).lower()
+
+        or search in str(
+            p.get("sku","")
+        ).lower()
+
+        or search in str(
+            p.get("barcode","")
+        ).lower()
+
+    ]
