@@ -1,83 +1,178 @@
 # ==============================================================================
 # erp_pages/pos/cart.py
-# ERP ENTERPRISE POS CART ENGINE v12.0
+# ERP ENTERPRISE POS CART ENGINE v12.2
 #
 # Responsibilities:
-# - Add product to cart
-# - Merge duplicate items
-# - Remove cart item
+# - Add product
+# - Merge duplicate item
+# - Remove item
 # - Update quantity
 # - Calculate totals
 #
 # ==============================================================================
 
 
-from typing import List, Dict, Any
+from typing import (
+    List,
+    Dict,
+    Any
+)
+
+
+
 
 
 # ==============================================================================
-# ADD ITEM
+# ADD TO CART
 # ==============================================================================
+
 
 def add_to_cart(
+
     cart: List[Dict[str, Any]],
+
     product: Dict[str, Any],
+
     qty: int,
+
     price: float,
+
     price_source: str = "SYSTEM"
+
 ):
-    """
-    Add product into cart.
-
-    If product already exists:
-        increase quantity
-
-    Else:
-        create new cart row
-    """
 
 
-    product_id = product.get("id")
+    product_id = product.get(
+
+        "id"
+
+    )
+
+
+
+    qty = int(qty)
+
+    price = float(price)
+
+
+
+
+
+    # ==============================================================
+    # MERGE EXISTING ITEM
+    # ==============================================================
 
 
     for item in cart:
 
+
         if item.get("id") == product_id:
 
-            item["qty"] += int(qty)
+
+            item["qty"] += qty
+
+
+            item["unit_price"] = price
+
+
+            item["selling_price"] = price
+
+
+            item["price_source"] = price_source
+
+
 
             return cart
 
+
+
+
+
+    # ==============================================================
+    # NEW CART ITEM
+    # ==============================================================
 
 
     cart.append(
 
         {
 
-            "id": product_id,
 
-            "name": product.get(
-                "name",
-                ""
-            ),
+            "id":
 
-            "sku": product.get(
-                "sku",
-                ""
-            ),
+                product_id,
 
-            "qty": int(qty),
 
-            "selling_price": float(price),
 
-            "price_source": price_source
+            "name":
+
+                product.get(
+
+                    "name",
+
+                    ""
+
+                ),
+
+
+
+            "sku":
+
+                product.get(
+
+                    "sku",
+
+                    ""
+
+                ),
+
+
+
+            "barcode":
+
+                product.get(
+
+                    "barcode"
+
+                ),
+
+
+
+            "qty":
+
+                qty,
+
+
+
+            "unit_price":
+
+                price,
+
+
+
+            # backward compatibility
+
+            "selling_price":
+
+                price,
+
+
+
+            "price_source":
+
+                price_source
+
+
 
         }
 
     )
 
 
+
     return cart
+
+
 
 
 
@@ -87,21 +182,30 @@ def add_to_cart(
 # REMOVE ITEM
 # ==============================================================================
 
+
 def remove_from_cart(
-    cart: List[Dict[str, Any]],
-    index: int
+
+    cart,
+
+    index
+
 ):
+
 
     try:
 
         cart.pop(index)
+
 
     except Exception:
 
         pass
 
 
+
     return cart
+
+
 
 
 
@@ -111,9 +215,12 @@ def remove_from_cart(
 # CLEAR CART
 # ==============================================================================
 
+
 def clear_cart():
 
     return []
+
+
 
 
 
@@ -123,27 +230,43 @@ def clear_cart():
 # UPDATE QUANTITY
 # ==============================================================================
 
+
 def update_quantity(
-    cart: List[Dict[str, Any]],
-    index: int,
-    qty: int
+
+    cart,
+
+    index,
+
+    qty
+
 ):
 
 
     try:
 
+
+        qty = int(qty)
+
+
+
         if qty <= 0:
+
 
             cart.pop(index)
 
+
+
         else:
 
-            cart[index]["qty"] = int(qty)
+
+            cart[index]["qty"] = qty
+
 
 
     except Exception:
 
         pass
+
 
 
     return cart
@@ -152,62 +275,105 @@ def update_quantity(
 
 
 
+
+
 # ==============================================================================
-# CART TOTAL
+# SUBTOTAL
 # ==============================================================================
 
+
 def calculate_subtotal(
+
     cart: List[Dict[str, Any]]
+
 ):
 
 
     total = 0
 
 
+
     for item in cart:
 
-        total += (
 
-            float(
+        price = float(
+
+            item.get(
+
+                "unit_price",
+
                 item.get(
+
                     "selling_price",
-                    0
-                )
-            )
 
-            *
-
-            int(
-                item.get(
-                    "qty",
                     0
+
                 )
+
             )
 
         )
 
 
+
+        qty = int(
+
+            item.get(
+
+                "qty",
+
+                0
+
+            )
+
+        )
+
+
+
+        total += price * qty
+
+
+
+
+
     return round(
+
         total,
+
         2
+
     )
 
 
 
 
 
+
+
+# ==============================================================================
+# TOTAL QUANTITY
+# ==============================================================================
+
+
 def calculate_total_qty(
-    cart: List[Dict[str, Any]]
+
+    cart
+
 ):
 
 
     return sum(
 
         int(
+
             item.get(
+
                 "qty",
+
                 0
+
             )
+
         )
 
         for item in cart
@@ -218,8 +384,17 @@ def calculate_total_qty(
 
 
 
+
+
+# ==============================================================================
+# CART COUNT
+# ==============================================================================
+
+
 def cart_count(
-    cart: List[Dict[str, Any]]
+
+    cart
+
 ):
 
     return len(cart)
@@ -228,38 +403,67 @@ def cart_count(
 
 
 
+
+
 # ==============================================================================
-# STOCK CHECK
+# STOCK VALIDATION
 # ==============================================================================
 
+
 def check_available_stock(
+
     cart,
+
     product_id,
+
     available_qty,
+
     add_qty
+
 ):
 
 
     current_qty = sum(
 
-        item["qty"]
+        int(
+
+            item.get(
+
+                "qty",
+
+                0
+
+            )
+
+        )
 
         for item in cart
 
-        if item["id"] == product_id
+        if item.get(
+
+            "id"
+
+        ) == product_id
 
     )
+
 
 
     return (
 
-        current_qty + add_qty
+        current_qty + int(add_qty)
 
         <=
 
-        int(available_qty)
+        int(
+
+            available_qty
+
+        )
 
     )
+
+
 
 
 
@@ -269,68 +473,104 @@ def check_available_stock(
 # CART TABLE DATA
 # ==============================================================================
 
-def get_cart_rows(cart):
+
+def get_cart_rows(
+
+    cart
+
+):
 
 
     rows = []
 
 
+
     for item in cart:
+
+
+        price = float(
+
+            item.get(
+
+                "unit_price",
+
+                item.get(
+
+                    "selling_price",
+
+                    0
+
+                )
+
+            )
+
+        )
+
+
+        qty = int(
+
+            item.get(
+
+                "qty",
+
+                0
+
+            )
+
+        )
+
 
 
         rows.append(
 
             {
 
+
                 "Product":
+
                     item.get(
+
                         "name",
+
                         ""
+
                     ),
+
 
 
                 "Qty":
-                    item.get(
-                        "qty",
-                        0
-                    ),
+
+                    qty,
+
 
 
                 "Price Source":
+
                     item.get(
+
                         "price_source",
+
                         "SYSTEM"
+
                     ),
+
 
 
                 "Unit Price":
-                    item.get(
-                        "selling_price",
-                        0
-                    ),
+
+                    price,
+
 
 
                 "Amount":
 
-                    (
+                    price * qty
 
-                        item.get(
-                            "selling_price",
-                            0
-                        )
-
-                        *
-
-                        item.get(
-                            "qty",
-                            0
-                        )
-
-                    )
 
             }
 
         )
+
 
 
     return rows
