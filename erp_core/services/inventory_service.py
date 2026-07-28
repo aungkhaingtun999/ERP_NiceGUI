@@ -131,7 +131,7 @@ class InventoryService:
             return []
 
     # ==========================================================================
-    # Stock Adjustment Operations (Fixed for UUID and Schema Compatibility)
+    # Stock Adjustment Operations (Fixed for UUID, Schema & Unit Cost Compatibility)
     # ==========================================================================
 
     def adjust_stock(
@@ -141,9 +141,10 @@ class InventoryService:
         quantity: int,
         reason: str,
         created_by: Any = None,
+        unit_cost: float = 0.0,
     ) -> Dict[str, Any]:
         try:
-            # Table Schema နှင့် ကိုက်ညီစေရန် payload တည်ဆောက်ခြင်း
+            # Table Schema နှင့် ကိုက်ညီစေရန်နှင့် not-null constraint မတက်စေရန် payload တည်ဆောက်ခြင်း
             payload = {
                 "product_id": int(product_id),
                 "warehouse_id": int(warehouse_id),
@@ -151,6 +152,7 @@ class InventoryService:
                 "reason": str(reason),
                 "adjustment_type": "COUNT_CORRECTION",
                 "status": "PENDING",
+                "unit_cost": float(unit_cost),
             }
 
             # created_by / requested_by သည် uuid ဖြစ်နိုင်သဖြင့် int() မပြောင်းဘဲ string အနေဖြင့် ထည့်သွင်းခြင်း
