@@ -183,14 +183,10 @@ def run():
     )
 
 
-    # ======================================================
-    # CACHE INVALIDATION AFTER STOCK CHANGE
-    # ======================================================
-
-                        CacheManager.bump(
+    # CacheManager.bump(
     "inventory_version"
 )
-                        CacheManager.bump(
+CacheManager.bump(
     "product_version"
 )
 st.cache_data.clear()
@@ -205,6 +201,30 @@ else:
 
 except Exception as e:
     st.error(f"Create Product Error : {e}")
+    # ======================================================
+    # CACHE INVALIDATION AFTER STOCK CHANGE
+    # ======================================================
+    try:
+        # (အပေါ်ပိုင်း ကုဒ်များရှိလျှင် ဤနေရာတွင် ရှိမည်)
+        
+        CacheManager.bump(
+            "inventory_version"
+        )
+        CacheManager.bump(
+            "product_version"
+        )
+        st.cache_data.clear()
+        st.json(
+            result
+        )
+        time.sleep(1)
+        st.rerun()
+
+    else:
+        st.error(result.get("message", "Create Failed"))
+
+    except Exception as e:
+        st.error(f"Create Product Error : {e}")
 
     # ==========================================================================
     # TAB 3 # EDIT PRODUCT
