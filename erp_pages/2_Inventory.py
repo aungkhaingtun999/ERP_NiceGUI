@@ -187,14 +187,14 @@ def run():
     # CACHE INVALIDATION AFTER STOCK CHANGE
     # ======================================================
 
-            CacheManager.bump(
+                        CacheManager.bump(
 
         "inventory_version"
 
     )
 
 
-            CacheManager.bump(
+                        CacheManager.bump(
 
         "product_version"
 
