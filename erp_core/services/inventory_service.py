@@ -192,6 +192,33 @@ class InventoryService:
             return []
 
     # ==========================================================================
+    # Stock Adjustment Approval (Maker & Checker Workflow)
+    # ==========================================================================
+
+    def approve_stock_adjustment(
+        self, adjustment_id: int, manager_id: Any
+    ) -> Dict[str, Any]:
+        try:
+            response = (
+                self.client.rpc(
+                    "approve_stock_adjustment_rpc",
+                    {
+                        "p_adjustment_id": int(adjustment_id),
+                        "p_manager_id": str(manager_id),
+                    },
+                )
+                .execute()
+            )
+            result = response.data
+            if isinstance(result, list):
+                result = result[0]
+            return result or {"success": False, "message": "No response data"}
+
+        except Exception as e:
+            log_error(message="Stock adjustment RPC approval failed", exception=e)
+            return {"success": False, "message": str(e)}
+
+    # ==========================================================================
     # Inventory Health Check
     # ==========================================================================
 
