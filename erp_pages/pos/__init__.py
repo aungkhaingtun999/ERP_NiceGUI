@@ -16,44 +16,53 @@
 """
 ERP Enterprise POS Package
 
-This package contains POS modules:
+Modular POS Architecture
+
+Modules:
 
 engine.py
-    - Price calculation
+    - Price engine
+    - Owner price priority
     - Money formatting
 
+
 product.py
-    - Product search
-    - Product selection
+    - Product loader
+    - Search
+    - Barcode
+
 
 cart.py
-    - Cart management
-    - Quantity control
-    - Cart totals
+    - Cart state
+    - Add/remove/update quantity
+    - Cart calculation
+
 
 payment.py
-    - Payment processing
     - Checkout RPC
+    - Payment validation
+
 
 receipt.py
-    - Receipt display
+    - Receipt rendering
     - PDF
-    - Thermal printing
+    - Thermal printer
+
 
 cache.py
-    - POS cache control
+    - Inventory cache refresh
 """
 
 
 # ==============================================================================
-# PACKAGE VERSION
+# VERSION
 # ==============================================================================
 
 POS_VERSION = "12.0"
 
 
 # ==============================================================================
-# SAFE IMPORT FLAG
+# PACKAGE EXPORTS
 # ==============================================================================
 
 __all__ = [
@@ -71,3 +80,26 @@ __all__ = [
     "cache",
 
 ]
+
+
+
+# ==============================================================================
+# OPTIONAL MODULE LOADER
+# ==============================================================================
+
+def load_pos_module(name):
+
+    """
+    Safe POS module loader
+
+    Example:
+
+        load_pos_module("product")
+
+    """
+
+    import importlib
+
+    return importlib.import_module(
+        f"erp_pages.pos.{name}"
+    )
