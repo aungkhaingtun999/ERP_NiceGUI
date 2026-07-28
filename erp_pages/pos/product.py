@@ -2,59 +2,102 @@
 # erp_pages/pos/product.py
 # ERP ENTERPRISE POS PRODUCT MODULE v12.0
 #
-# Responsibilities:
-# - Load POS products
-# - Search product
-# - Barcode / SKU lookup
-# - Product validation
+# RESPONSIBILITY
 #
-# Database Access:
+# Product Loading
+# Product Search
+# Barcode / SKU Search
+# Product Selection
+# Stock Validation
+#
+# Flow:
+#
 # POS
-#   ↓
+#  ↓
 # Product Loader
-#   ↓
+#  ↓
 # Repository
-#   ↓
+#  ↓
 # Database
 #
 # ==============================================================================
 
 
-from typing import List, Dict, Any, Optional
+from typing import (
+    List,
+    Dict,
+    Any
+)
+
+
+import streamlit as st
+
 
 
 from erp_core.loaders.product_loader import (
-    get_products
+    get_pos_products
 )
 
 
 
+
+
 # ==============================================================================
-# PRODUCT CACHE LOADER
+# MONEY FORMAT
+# ==============================================================================
+
+
+def money(value):
+
+    try:
+
+        return f"{float(value):,.0f} MMK"
+
+
+    except Exception:
+
+        return "0 MMK"
+
+
+
+
+
+
+
+# ==============================================================================
+# LOAD PRODUCTS
 # ==============================================================================
 
 
 def load_pos_products(
     warehouse_id=None
 ) -> List[Dict[str, Any]]:
-    """
-    Load products for POS
 
-    Single source of truth:
-    erp_core product loader
+    """
+    POS Product Source
+
+    Single Source Of Truth
 
     """
 
     try:
 
-        products = get_products(
+        return get_pos_products(
+
             warehouse_id=warehouse_id
+
+        ) or []
+
+
+    except Exception as e:
+
+
+        st.error(
+
+            f"Product Load Error: {e}"
+
         )
 
-        return products or []
-
-
-    except Exception:
 
         return []
 
@@ -62,14 +105,19 @@ def load_pos_products(
 
 
 
+
+
 # ==============================================================================
-# PRODUCT SEARCH
+# SEARCH ENGINE
 # ==============================================================================
 
 
 def search_products(
-    products: List[Dict[str, Any]],
-    keyword: str = ""
+
+    products,
+
+    keyword=""
+
 ):
 
 
@@ -79,10 +127,13 @@ def search_products(
 
 
 
-    keyword = keyword.lower().strip()
+    keyword = str(
+        keyword
+    ).lower().strip()
 
 
-    results = []
+
+    result = []
 
 
 
@@ -130,37 +181,13 @@ def search_products(
 
         ):
 
-            results.append(product)
+            result.append(product)
 
 
 
-    return results
+    return result
 
 
-
-
-
-# ==============================================================================
-# FIND BY ID
-# ==============================================================================
-
-
-def get_product_by_id(
-    products,
-    product_id
-):
-
-
-    for product in products:
-
-
-        if int(product.get("id")) == int(product_id):
-
-            return product
-
-
-
-    return None
 
 
 
@@ -172,8 +199,11 @@ def get_product_by_id(
 
 
 def check_stock(
+
     product,
+
     qty
+
 ):
 
 
@@ -196,8 +226,10 @@ def check_stock(
 
 
 
+
+
 # ==============================================================================
-# PRODUCT DISPLAY
+# PRODUCT LABEL
 # ==============================================================================
 
 
@@ -212,6 +244,371 @@ def product_label(product):
 
         f"Stock: "
 
-        f"{product.get('available_qty',0)}"
+        f"{product.get('available_qty',0)} | "
 
-  )
+        f"{money(product.get('final_selling_price',0))}"
+
+    )
+
+
+
+
+
+
+
+# ==============================================================================
+# FIND PRODUCT
+# ==============================================================================
+
+
+def get_product_by_id(
+
+    products,
+
+    product_id
+
+):
+
+
+    for product in products:
+
+
+        if int(product.get("id")) == int(product_id):
+
+            return product
+
+
+
+    return None
+
+
+
+
+
+
+
+# ==============================================================================
+# PRODUCT UI
+# ==============================================================================
+
+
+def render_products(
+
+    warehouse_id
+
+):
+
+
+    products = load_pos_products(
+
+        warehouse_id
+
+    )
+
+
+
+    if not products:
+
+
+        st.warning(
+
+            "No Products Found"
+
+        )
+
+
+        return []
+
+
+
+
+
+    st.subheader(
+
+        "🔍 Product Search"
+
+    )
+
+
+
+    col1, col2 = st.columns(2)
+
+
+
+    with col1:
+
+
+        name_search = st.text_input(
+
+            "Product Name"
+
+        )
+
+
+
+    with col2:
+
+
+        code_search = st.text_input(
+
+            "SKU / Barcode"
+
+        )
+
+
+
+
+
+    keyword = (
+
+        name_search
+
+        or
+
+        code_search
+
+    )
+
+
+
+    filtered = search_products(
+
+        products,
+
+        keyword
+
+    )
+
+
+
+
+
+    if not filtered:
+
+
+        st.warning(
+
+            "Product not found"
+
+        )
+
+
+        return products
+
+
+
+
+
+    selected = st.selectbox(
+
+        "Select Product",
+
+        filtered,
+
+        format_func=product_label
+
+    )
+
+
+
+
+
+    qty = st.number_input(
+
+        "Quantity",
+
+        min_value=1,
+
+        value=1,
+
+        step=1
+
+    )
+
+
+
+
+
+    if selected:
+
+
+
+        st.info(
+
+            f"""
+
+Product:
+
+{selected.get('name')}
+
+
+
+Price:
+
+{money(
+
+selected.get(
+
+'final_selling_price',
+
+selected.get(
+
+'selling_price',
+
+0
+
+)
+
+)
+
+)}
+
+
+
+Price Source:
+
+{selected.get(
+
+'price_source',
+
+'SYSTEM'
+
+)}
+
+
+
+
+
+
+
+Available Stock:
+
+{selected.get(
+
+'available_qty',
+
+0
+
+)}
+
+            """
+
+        )
+
+
+
+
+
+        if st.button(
+
+            "➕ Add To Cart",
+
+            use_container_width=True
+
+        ):
+
+
+            if not check_stock(
+
+                selected,
+
+                qty
+
+            ):
+
+
+                st.error(
+
+                    "Insufficient Stock"
+
+                )
+
+
+            else:
+
+
+                cart_item = {
+
+
+                    "id":
+
+                        selected.get("id"),
+
+
+
+                    "name":
+
+                        selected.get("name"),
+
+
+
+                    "sku":
+
+                        selected.get("sku"),
+
+
+
+                    "qty":
+
+                        int(qty),
+
+
+
+                    "selling_price":
+
+                        float(
+
+                            selected.get(
+
+                                "final_selling_price",
+
+                                selected.get(
+
+                                    "selling_price",
+
+                                    0
+
+                                )
+
+                            )
+
+                        ),
+
+
+
+                    "price_source":
+
+                        selected.get(
+
+                            "price_source",
+
+                            "SYSTEM"
+
+                        )
+
+
+                }
+
+
+
+                st.session_state.cart.append(
+
+                    cart_item
+
+                )
+
+
+                st.success(
+
+                    "Added to cart"
+
+                )
+
+
+                st.rerun()
+
+
+
+
+
+    return products
