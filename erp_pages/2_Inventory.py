@@ -201,10 +201,10 @@ def run():
     )
 
 
-    st.cache_data.clear()
+                       st.cache_data.clear()
 
 
-    st.json(
+                       st.json(
 
         result
 
