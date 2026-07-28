@@ -41,7 +41,12 @@ from sidebar import (
 from utils.notification import (
     show_notification
 )
+from database import db
 
+from pos_sync import (
+    render_pos_sync_sidebar,
+    get_cached_products
+)
 
 # ==============================================================================
 # OPTIONAL POS SYNC
