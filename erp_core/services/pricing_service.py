@@ -1,243 +1,342 @@
 # ==============================================================================
 # erp_core/services/pricing_service.py
-# ERP ENTERPRISE PRICING ENGINE v3.0
+# ERP ENTERPRISE PRICING ENGINE v4.0
+#
 # Dynamic Markup Priority Engine
-# Product → Category → Global
+#
+# Priority:
+#       Product
+#          ↓
+#       Category
+#          ↓
+#       Global
+#
+# Features:
+#   - Safe Supabase Handling
+#   - Pricing Trace
+#   - Health Check
+#   - ERP Test Center Ready
+#
 # ==============================================================================
 
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import (
+    Decimal,
+    ROUND_HALF_UP
+)
+
+from typing import (
+    Any,
+    Dict
+)
 
 
+try:
+    from supabase import Client
+except Exception:
+    Client = Any
+
+
+from ..base_repo import (
+    log_error
+)
+
+
+
+# ==============================================================================
+# Pricing Service
+# ==============================================================================
 
 
 class PricingService:
 
 
+    # ==========================================================================
+    # Constructor
+    # ==========================================================================
+
     def __init__(
         self,
-        client
+        client: Client
     ):
 
         self.client = client
 
 
 
-    # ==========================================================
-    # GET SETTING
-    # ==========================================================
+    # ==========================================================================
+    # Safe Query Helper
+    # ==========================================================================
 
-    def get_setting(
+    def safe_query(
         self,
-        key,
-        default=None
+        table_name,
+        select="*",
+        filters=None
     ):
 
         try:
 
-            result = (
+
+            query = (
+
                 self.client
-                .table("settings")
-                .select("value")
-                .eq(
-                    "key",
-                    key
+
+                .table(
+                    table_name
                 )
-                .execute()
+
+                .select(
+                    select
+                )
+
             )
 
 
-            if result.data:
-
-                return result.data[0].get(
-                    "value"
-                )
+            if filters:
 
 
-        except Exception:
+                for key, value in filters.items():
 
-            pass
+
+                    query = (
+
+                        query
+
+                        .eq(
+                            key,
+                            value
+                        )
+
+                    )
+
+
+            result = query.execute()
+
+
+            return result.data or []
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message=
+                f"Pricing query failed: {table_name}",
+
+                exception=e
+
+            )
+
+
+            return []
+
+
+
+
+
+    # ==========================================================================
+    # Get Setting
+    # ==========================================================================
+
+    def get_setting(
+
+        self,
+
+        key,
+
+        default=None
+
+    ):
+
+
+        data = self.safe_query(
+
+            "settings",
+
+            "value",
+
+            {
+                "key": key
+            }
+
+        )
+
+
+        if data:
+
+
+            return data[0].get(
+                "value"
+            )
 
 
         return default
 
 
 
-    # ==========================================================
-    # PRODUCT MARKUP
-    # ==========================================================
+
+
+    # ==========================================================================
+    # Product Markup
+    # ==========================================================================
 
     def get_product_markup(
+
         self,
+
         product_id
+
     ):
 
 
-        try:
+        data = self.safe_query(
 
-            result = (
+            "products",
 
-                self.client
+            """
+            name,
+            markup_percent,
+            category_id
+            """,
 
-                .table("products")
+            {
+                "id": product_id
+            }
 
-                .select(
-                    """
-                    name,
-                    markup_percent,
-                    category_id
-                    """
-                )
-
-                .eq(
-                    "id",
-                    product_id
-                )
-
-                .execute()
-
-            )
+        )
 
 
-            if result.data:
+        if data:
 
 
-                product = result.data[0]
+            product = data[0]
 
 
-                return {
+            return {
 
 
-                    "name":
-                        product.get(
-                            "name"
-                        ),
+                "name":
+                    product.get(
+                        "name"
+                    ),
 
 
-                    "product_markup":
-                        product.get(
-                            "markup_percent"
-                        ),
+                "product_markup":
+                    product.get(
+                        "markup_percent"
+                    ),
 
 
-                    "category_id":
-                        product.get(
-                            "category_id"
-                        )
+                "category_id":
+                    product.get(
+                        "category_id"
+                    )
 
-
-                }
-
-
-
-        except Exception:
-
-            pass
-
+            }
 
 
         return {
 
 
-            "name":"",
-            "product_markup":None,
-            "category_id":None
+            "name":
+                "",
 
+
+            "product_markup":
+                None,
+
+
+            "category_id":
+                None
 
         }
 
 
 
 
-    # ==========================================================
-    # CATEGORY MARKUP
-    # ==========================================================
+
+    # ==========================================================================
+    # Category Markup
+    # ==========================================================================
 
     def get_category_markup(
+
         self,
+
         category_id
+
     ):
 
 
         if not category_id:
 
+
             return {
 
 
-                "name":None,
+                "name":
+                    None,
 
-                "markup":None
 
+                "markup":
+                    None
 
             }
 
 
 
-        try:
+        data = self.safe_query(
+
+            "categories",
+
+            """
+            name,
+            markup_percent
+            """,
+
+            {
+                "id": category_id
+            }
+
+        )
 
 
-            result = (
-
-                self.client
-
-                .table("categories")
-
-                .select(
-                    """
-                    name,
-                    markup_percent
-                    """
-                )
-
-                .eq(
-                    "id",
-                    category_id
-                )
-
-                .execute()
-
-            )
+        if data:
 
 
-
-            if result.data:
-
-
-                category = result.data[0]
+            category = data[0]
 
 
-                return {
+            return {
 
 
-                    "name":
-                        category.get(
-                            "name"
-                        ),
+                "name":
+                    category.get(
+                        "name"
+                    ),
 
 
-                    "markup":
-                        category.get(
-                            "markup_percent"
-                        )
+                "markup":
+                    category.get(
+                        "markup_percent"
+                    )
 
-
-                }
-
-
-
-        except Exception:
-
-            pass
+            }
 
 
 
         return {
 
 
-            "name":None,
+            "name":
+                None,
 
-            "markup":None
 
+            "markup":
+                None
 
         }
 
@@ -245,9 +344,9 @@ class PricingService:
 
 
 
-    # ==========================================================
-    # CALCULATE PRICE
-    # ==========================================================
+    # ==========================================================================
+    # Price Calculation
+    # ==========================================================================
 
     def calculate_selling_price(
 
@@ -260,309 +359,505 @@ class PricingService:
     ):
 
 
-
-        cost = Decimal(
-            str(cost or 0)
-        )
+        try:
 
 
-
-        # -----------------------------
-        # SETTINGS
-        # -----------------------------
-
-
-        priority = self.get_setting(
-
-            "PRICING_PRIORITY",
-
-            "PRODUCT_FIRST"
-
-        )
-
-
-
-        enable_product = (
-
-            str(
-                self.get_setting(
-                    "ENABLE_PRODUCT_MARKUP",
-                    "true"
+            cost = Decimal(
+                str(
+                    cost or 0
                 )
-            ).lower()
-            ==
-            "true"
-
-        )
+            )
 
 
 
-        enable_category = (
+            # --------------------------------------------------
+            # Settings
+            # --------------------------------------------------
 
-            str(
-                self.get_setting(
-                    "ENABLE_CATEGORY_MARKUP",
-                    "true"
+            priority = self.get_setting(
+
+                "PRICING_PRIORITY",
+
+                "PRODUCT_FIRST"
+
+            )
+
+
+            enable_product = (
+
+                str(
+
+                    self.get_setting(
+
+                        "ENABLE_PRODUCT_MARKUP",
+
+                        "true"
+
+                    )
+
                 )
-            ).lower()
-            ==
-            "true"
 
-        )
+                .lower()
+
+                ==
+                "true"
+
+            )
 
 
 
-        global_markup = Decimal(
+            enable_category = (
 
-            str(
+                str(
 
-                self.get_setting(
+                    self.get_setting(
 
-                    "DEFAULT_MARKUP_PERCENT",
+                        "ENABLE_CATEGORY_MARKUP",
 
-                    "20"
+                        "true"
+
+                    )
+
+                )
+
+                .lower()
+
+                ==
+                "true"
+
+            )
+
+
+
+            global_markup = Decimal(
+
+                str(
+
+                    self.get_setting(
+
+                        "DEFAULT_MARKUP_PERCENT",
+
+                        "20"
+
+                    )
 
                 )
 
             )
 
-        )
 
 
 
-        # -----------------------------
-        # GET MARKUPS
-        # -----------------------------
+            # --------------------------------------------------
+            # Markup Sources
+            # --------------------------------------------------
 
+            product = (
 
-        product = self.get_product_markup(
+                self
 
-            product_id
+                .get_product_markup(
 
-        )
+                    product_id
 
+                )
 
-        product_markup = product.get(
-            "product_markup"
-        )
-
-
-        category = self.get_category_markup(
-
-            product.get(
-                "category_id"
             )
 
-        )
 
+            product_markup = product.get(
 
-        category_markup = category.get(
-            "markup"
-        )
+                "product_markup"
 
-
-
-        # -----------------------------
-        # DEFAULT
-        # -----------------------------
-
-
-        final_markup = global_markup
-
-        source = "GLOBAL_DEFAULT_MARKUP"
+            )
 
 
 
-        # -----------------------------
-        # PRIORITY ENGINE
-        # -----------------------------
+            category = (
 
+                self
 
-        if priority == "PRODUCT_FIRST":
+                .get_category_markup(
 
-
-            if (
-
-                enable_product
-
-                and product_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(product_markup)
+                    product.get(
+                        "category_id"
+                    )
 
                 )
 
-                source = "PRODUCT_MARKUP"
+            )
 
 
+            category_markup = category.get(
 
-            elif (
+                "markup"
 
-                enable_category
-
-                and category_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(category_markup)
-
-                )
-
-                source = "CATEGORY_MARKUP"
+            )
 
 
 
 
-
-        elif priority == "CATEGORY_FIRST":
-
-
-
-            if (
-
-                enable_category
-
-                and category_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(category_markup)
-
-                )
-
-
-                source = "CATEGORY_MARKUP"
-
-
-
-            elif (
-
-                enable_product
-
-                and product_markup is not None
-
-            ):
-
-
-                final_markup = Decimal(
-
-                    str(product_markup)
-
-                )
-
-
-                source = "PRODUCT_MARKUP"
-
-
-
-
-
-        elif priority == "GLOBAL_FIRST":
-
+            # --------------------------------------------------
+            # Default
+            # --------------------------------------------------
 
             final_markup = global_markup
 
-            source = "GLOBAL_DEFAULT_MARKUP"
 
+            source = (
 
-
-
-
-        # -----------------------------
-        # PRICE CALCULATION
-        # -----------------------------
-
-
-        selling_price = (
-
-            cost +
-
-            (
-
-                cost *
-
-                final_markup /
-
-                Decimal("100")
+                "GLOBAL_DEFAULT_MARKUP"
 
             )
 
-        ).quantize(
-
-            Decimal("0.01"),
-
-            rounding=ROUND_HALF_UP
-
-        )
 
 
 
+            # --------------------------------------------------
+            # Priority Engine
+            # --------------------------------------------------
 
-
-        return {
-
-
-            "cost":
-
-                float(cost),
+            if priority == "PRODUCT_FIRST":
 
 
 
-            # Product level
+                if (
 
-            "product_markup":
+                    enable_product
 
-                float(product_markup)
-                if product_markup is not None
-                else None,
+                    and product_markup is not None
 
-
-
-            # Category level
-
-            "category_markup":
-
-                float(category_markup)
-                if category_markup is not None
-                else None,
+                ):
 
 
+                    final_markup = Decimal(
 
-            # Global level
+                        str(
+                            product_markup
+                        )
 
-            "global_markup":
+                    )
 
-                float(global_markup),
+
+                    source = (
+
+                        "PRODUCT_MARKUP"
+
+                    )
 
 
 
-            # Final Applied
+                elif (
 
-            "final_markup_percent":
+                    enable_category
 
-                float(final_markup),
+                    and category_markup is not None
 
-
-
-            "markup_source":
-
-                source,
+                ):
 
 
+                    final_markup = Decimal(
 
-            "selling_price":
+                        str(
+                            category_markup
+                        )
 
-                float(selling_price)
+                    )
 
 
-        }
+                    source = (
+
+                        "CATEGORY_MARKUP"
+
+                    )
+
+
+
+
+
+            elif priority == "CATEGORY_FIRST":
+
+
+
+                if (
+
+                    enable_category
+
+                    and category_markup is not None
+
+                ):
+
+
+                    final_markup = Decimal(
+
+                        str(
+                            category_markup
+                        )
+
+                    )
+
+
+                    source = (
+
+                        "CATEGORY_MARKUP"
+
+                    )
+
+
+
+                elif (
+
+                    enable_product
+
+                    and product_markup is not None
+
+                ):
+
+
+                    final_markup = Decimal(
+
+                        str(
+                            product_markup
+                        )
+
+                    )
+
+
+                    source = (
+
+                        "PRODUCT_MARKUP"
+
+                    )
+
+
+
+
+
+            elif priority == "GLOBAL_FIRST":
+
+
+                final_markup = global_markup
+
+
+                source = (
+
+                    "GLOBAL_DEFAULT_MARKUP"
+
+                )
+
+
+
+
+
+            # --------------------------------------------------
+            # Calculate Final Price
+            # --------------------------------------------------
+
+            selling_price = (
+
+                cost +
+
+                (
+
+                    cost *
+
+                    final_markup /
+
+                    Decimal(
+                        "100"
+                    )
+
+                )
+
+            ).quantize(
+
+                Decimal(
+                    "1"
+                ),
+
+                rounding=ROUND_HALF_UP
+
+            )
+
+
+
+
+
+            return {
+
+
+                "success":
+                    True,
+
+
+                "product_id":
+                    product_id,
+
+
+                "product_name":
+                    product.get(
+                        "name"
+                    ),
+
+
+                "cost":
+                    float(
+                        cost
+                    ),
+
+
+                "product_markup":
+                    float(product_markup)
+                    if product_markup is not None
+                    else None,
+
+
+                "category_markup":
+                    float(category_markup)
+                    if category_markup is not None
+                    else None,
+
+
+                "global_markup":
+                    float(
+                        global_markup
+                    ),
+
+
+                "final_markup_percent":
+                    float(
+                        final_markup
+                    ),
+
+
+                "markup_source":
+                    source,
+
+
+                "selling_price":
+                    float(
+                        selling_price
+                    )
+
+            }
+
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message=
+                "Pricing calculation failed",
+
+                exception=e
+
+            )
+
+
+            return {
+
+
+                "success":
+                    False,
+
+
+                "message":
+                    str(e)
+
+            }
+
+
+
+
+
+    # ==========================================================================
+    # Pricing Health Check
+    # ==========================================================================
+
+    def health_check(self):
+
+
+        try:
+
+
+            result = (
+
+                self.client
+
+                .table(
+                    "products"
+                )
+
+                .select(
+                    "id"
+                )
+
+                .limit(
+                    1
+                )
+
+                .execute()
+
+            )
+
+
+            return {
+
+
+                "service":
+                    "PricingService",
+
+
+                "status":
+                    "PASS",
+
+
+                "database":
+                    "CONNECTED",
+
+
+                "rows":
+                    len(
+                        result.data or []
+                    )
+
+            }
+
+
+
+        except Exception as e:
+
+
+            return {
+
+
+                "service":
+                    "PricingService",
+
+
+                "status":
+                    "FAIL",
+
+
+                "message":
+                    str(e)
+
+            }
+
+
+
+
+
+# ==============================================================================
+# Export
+# ==============================================================================
+
+
+__all__ = [
+
+    "PricingService"
+
+]
