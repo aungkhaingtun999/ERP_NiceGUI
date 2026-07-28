@@ -1,73 +1,166 @@
 # ==============================================================================
-# erp_pages/pos/__init__.py
-# ERP ENTERPRISE POS MODULE PACKAGE
-# Version v12.0
+# erp_pages/pos/cache.py
+# ERP ENTERPRISE POS CACHE CONTROLLER v12.0
 #
-# POS Components
-# - engine
-# - product
-# - cart
-# - payment
-# - receipt
-# - cache
+# POS Cache
+# Inventory Refresh
+# Product Refresh
+# Streamlit Cache Control
+#
 # ==============================================================================
 
 
-"""
-ERP Enterprise POS Package
+import streamlit as st
 
-This package contains POS modules:
 
-engine.py
-    - Price calculation
-    - Money formatting
+from erp_core.context import (
+    CacheManager
+)
 
-product.py
-    - Product search
-    - Product selection
 
-cart.py
-    - Cart management
-    - Quantity control
-    - Cart totals
 
-payment.py
-    - Payment processing
-    - Checkout RPC
-
-receipt.py
-    - Receipt display
-    - PDF
-    - Thermal printing
-
-cache.py
-    - POS cache control
-"""
 
 
 # ==============================================================================
-# PACKAGE VERSION
+# INVENTORY CACHE
 # ==============================================================================
 
-POS_VERSION = "12.0"
+def refresh_inventory():
+
+    """
+    After sale / transfer / adjustment
+    """
+
+    return CacheManager.bump(
+        "inventory_version"
+    )
+
+
+
+
+
 
 
 # ==============================================================================
-# SAFE IMPORT FLAG
+# PRODUCT CACHE
 # ==============================================================================
 
-__all__ = [
+def refresh_products():
 
-    "engine",
+    """
+    Product price / stock refresh
+    """
 
-    "product",
+    return CacheManager.bump(
+        "product_version"
+    )
 
-    "cart",
 
-    "payment",
 
-    "receipt",
 
-    "cache",
 
-]
+
+
+# ==============================================================================
+# SALES CACHE
+# ==============================================================================
+
+def refresh_sales():
+
+    return CacheManager.bump(
+        "sales_version"
+    )
+
+
+
+
+
+
+
+# ==============================================================================
+# FULL POS REFRESH
+# ==============================================================================
+
+def refresh_pos():
+
+    """
+    After checkout success
+    """
+
+    refresh_inventory()
+
+    refresh_products()
+
+    refresh_sales()
+
+
+    # Streamlit local cache clear
+
+    st.cache_data.clear()
+
+
+
+
+
+
+
+# ==============================================================================
+# GET CACHE VERSION
+# ==============================================================================
+
+def get_inventory_version():
+
+    return CacheManager.get_version(
+        "inventory_version"
+    )
+
+
+
+
+
+def get_product_version():
+
+    return CacheManager.get_version(
+        "product_version"
+    )
+
+
+
+
+
+def get_sales_version():
+
+    return CacheManager.get_version(
+        "sales_version"
+    )
+
+
+
+
+
+
+
+# ==============================================================================
+# CLEAR SESSION CART CACHE
+# ==============================================================================
+
+def clear_pos_session():
+
+    keys = [
+
+        "cart",
+
+        "sale_data",
+
+        "show_receipt",
+
+        "processing"
+
+    ]
+
+
+    for key in keys:
+
+        if key in st.session_state:
+
+            del st.session_state[key]
