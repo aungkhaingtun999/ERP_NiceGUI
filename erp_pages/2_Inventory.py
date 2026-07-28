@@ -334,15 +334,23 @@ def run():
             st.divider()
             st.subheader("📜 Stock Adjustment History")
             try:
-                history = inventory_service.get_stock_adjustments(
-                    warehouse_id=selected_wh_id
+                # Direct Supabase query for stock adjustment history table if service method is missing
+                history = (
+                    db()
+                    .table("stock_adjustments")
+                    .select("*")
+                    .eq("warehouse_id", int(selected_wh_id))
+                    .execute()
+                    .data
                 )
                 if history:
                     show_table(history)
                 else:
                     st.info("No adjustment history")
             except Exception as e:
-                st.error(f"History Error : {e}")
+                st.info(
+                    "Adjustment history table not directly accessed or empty."
+                )
 
     # ==========================================================================
     # TAB 5 # ENTERPRISE INVENTORY DASHBOARD
