@@ -1,87 +1,183 @@
 # ==============================================================================
 # erp_core/services/inventory_service.py
 # ERP ENTERPRISE INVENTORY SERVICE
+# Version: V1.0 Production
+#
+# FIFO
+# Valuation
+# Stock Card
+# KPI
+# Loss Analytics
 # ==============================================================================
 
-from typing import (
-    Optional,
-    Dict,
-    Any
-)
 
-from ..base_repo import (
-    validate_uuid
-)
+from typing import Any, Dict, List
 
-from ..context import (
-    ERPContext,
-    CacheManager
-)
+from ..base_repo import db
 
-from ..rpc.engine import (
-    RPCEngine
-)
+
+# ==============================================================================
+# Inventory Service
+# ==============================================================================
 
 
 class InventoryService:
 
-    def __init__(
-        self,
-        client: Any
-    ):
-        self.client = client
 
-    def adjust_stock(
-        self,
-        product_id: int,
-        warehouse_id: int,
-        quantity: int,
-        reason: str,
-        user_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    # --------------------------------------------------------------------------
+    # Inventory KPI
+    # --------------------------------------------------------------------------
 
-        context = ERPContext.get_current()
-        context.rotate_transaction()
-        tx_id = context.current_transaction_id
+    @staticmethod
+    def get_inventory_kpi() -> Dict[str, Any]:
 
-        result = RPCEngine.execute(
-            self.client,
-            "stock_adjustment_rpc",
-            {
-                "p_product_id": int(product_id),
-                "p_warehouse_id": int(warehouse_id),
-                "p_quantity": int(quantity),
-                "p_reason": str(reason),
-                "p_created_by": validate_uuid(user_id),
-                "p_transaction_id": tx_id
-            }
-        )
+        try:
 
-        if result.get("success"):
-            CacheManager.bump_version(
-                "inventory_version"
+            result = (
+                db
+                .table("inventory_kpi_view")
+                .select("*")
+                .single()
+                .execute()
             )
 
-        return result
 
-    def update_product(
-        self,
-        product_id: int,
-        data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+            return result.data or {}
 
-        result = RPCEngine.execute(
-            self.client,
-            "update_product_rpc",
-            {
-                "p_product_id": int(product_id),
-                "p_data": data
+
+        except Exception as e:
+
+            return {
+                "success": False,
+                "message": str(e)
             }
-        )
 
-        if result.get("success"):
-            CacheManager.bump_version(
-                "inventory_version"
+
+
+    # --------------------------------------------------------------------------
+    # Warehouse Inventory KPI
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def get_warehouse_inventory_kpi() -> List[Dict]:
+
+
+        try:
+
+            result = (
+                db
+                .table("warehouse_inventory_kpi_view")
+                .select("*")
+                .execute()
             )
 
-        return result
+
+            return result.data or []
+
+
+        except Exception:
+
+            return []
+
+
+
+    # --------------------------------------------------------------------------
+    # Inventory Valuation
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def get_inventory_valuation() -> List[Dict]:
+
+
+        try:
+
+            result = (
+                db
+                .table("inventory_valuation_view")
+                .select("*")
+                .execute()
+            )
+
+
+            return result.data or []
+
+
+        except Exception:
+
+            return []
+
+
+
+    # --------------------------------------------------------------------------
+    # Inventory Loss Report
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def get_inventory_loss_report() -> List[Dict]:
+
+
+        try:
+
+            result = (
+                db
+                .table("inventory_loss_kpi_view")
+                .select("*")
+                .execute()
+            )
+
+
+            return result.data or []
+
+
+        except Exception:
+
+            return []
+
+
+
+    # --------------------------------------------------------------------------
+    # Stock Card
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def get_stock_card(
+        product_id: int,
+        warehouse_id: int
+    ) -> List[Dict]:
+
+
+        try:
+
+            result = (
+                db
+                .table("stock_card_view")
+                .select("*")
+                .eq(
+                    "product_id",
+                    product_id
+                )
+                .eq(
+                    "warehouse_id",
+                    warehouse_id
+                )
+                .order(
+                    "created_at"
+                )
+                .execute()
+            )
+
+
+            return result.data or []
+
+
+        except Exception:
+
+            return []
+
+
+
+# ==============================================================================
+# Export Instance
+# ==============================================================================
+
+inventory_service = InventoryService()
