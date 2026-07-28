@@ -7,7 +7,6 @@ from auth import login_page, is_authenticated
 from sidebar import show_sidebar
 
 # လိုအပ်သော Database နှင့် POS sync module များကို import လုပ်ခြင်း
-# (သင့်ပရောဂျက်ရှိ database ဖိုင်အမည်နှင့် ကိုက်ညီအောင် 'database' ကို လိုသလို ပြင်နိုင်ပါသည်)
 try:
     from database import supabase
 except ImportError:
@@ -36,7 +35,7 @@ st.set_page_config(
 def init_state():
     defaults = {
         "user": None,
-        "active_page": "1_POS", # Default Landing Page ID
+        "active_page": "1_POS",
         "language": "English",
         "auth_checked": False
     }
@@ -102,16 +101,10 @@ def page_router():
         # Execute Page Logic (Support run(), main(), or Legacy)
         if hasattr(module, "run"):
             module.run()
-        
         elif hasattr(module, "main"):
             module.main()
-        
         else:
-            # Legacy page support
-            st.warning(
-                f"{page_id}.py has no run() or main() function.\n"
-                "Executing legacy page..."
-            )
+            st.warning(f"{page_id}.py has no run() or main() function.")
 
     except Exception as e:
         st.error(f"Page Load Error: {e}")
