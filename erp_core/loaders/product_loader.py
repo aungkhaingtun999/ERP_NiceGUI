@@ -1,21 +1,26 @@
 # ==============================================================================
 # erp_core/loaders/product_loader.py
-# ERP ENTERPRISE PRODUCT LOADER v30.1
+# ERP ENTERPRISE PRODUCT LOADER v30.2
 #
-# Product Source Of Truth
+# SINGLE SOURCE OF TRUTH
 #
 # Database
-#    ↓
+#      ↓
 # Repository
-#    ↓
+#      ↓
 # Loader
-#    ↓
+#      ↓
 # POS / Inventory / Sales
 #
 # ==============================================================================
 
 
-from typing import Any, Dict, List
+from typing import (
+    List,
+    Dict,
+    Any,
+    Optional
+)
 
 
 import streamlit as st
@@ -53,16 +58,25 @@ from erp_core.repositories import (
 
 @st.cache_data
 def _get_products_cached(
+
     warehouse_id,
+
     offset,
+
     limit,
+
     version
+
 ):
+
 
     try:
 
+
         with RepositoryCoordinator(
+
             db()
+
         ) as coord:
 
 
@@ -77,17 +91,261 @@ def _get_products_cached(
             )
 
 
+
     except Exception as e:
 
 
         log_error(
 
-            f"product loader error: {e}"
+            f"Product loader error: {e}"
 
         )
 
 
         return []
+
+
+
+
+
+
+
+# ==============================================================================
+# NORMALIZE PRODUCT
+# ==============================================================================
+
+
+def normalize_product(
+
+    product: Dict[str, Any],
+
+    warehouse_id=None
+
+):
+
+    """
+    Convert database product view
+    into ERP standard product object
+
+    """
+
+
+
+    if not product:
+
+        return None
+
+
+
+
+
+    return {
+
+
+        "id":
+
+            product.get(
+                "id"
+            ),
+
+
+
+        "name":
+
+            product.get(
+                "name",
+                ""
+            ),
+
+
+
+        "sku":
+
+            product.get(
+                "sku"
+            ),
+
+
+
+        "barcode":
+
+            product.get(
+                "barcode"
+            ),
+
+
+
+        "category_id":
+
+            product.get(
+                "category_id"
+            ),
+
+
+
+        "category":
+
+            product.get(
+                "category"
+            ),
+
+
+
+        # --------------------------
+        # COST
+        # --------------------------
+
+        "purchase_price":
+
+            product.get(
+                "purchase_price",
+                0
+            ),
+
+
+
+        # --------------------------
+        # PRICE ENGINE
+        # --------------------------
+
+        "selling_price":
+
+            product.get(
+                "selling_price",
+                0
+            ),
+
+
+
+        "owner_selling_price":
+
+            product.get(
+                "owner_selling_price"
+            ),
+
+
+
+        "owner_price_locked":
+
+            product.get(
+                "owner_price_locked",
+                False
+            ),
+
+
+
+        "final_selling_price":
+
+            product.get(
+
+                "final_selling_price",
+
+                product.get(
+
+                    "selling_price",
+
+                    0
+
+                )
+
+            ),
+
+
+
+        "price_source":
+
+            product.get(
+
+                "price_source",
+
+                "MANUAL"
+
+            ),
+
+
+
+        # --------------------------
+        # INVENTORY
+        # --------------------------
+
+        "warehouse_id":
+
+            product.get(
+
+                "warehouse_id",
+
+                warehouse_id
+
+            ),
+
+
+
+        "qty":
+
+            product.get(
+
+                "qty",
+
+                0
+
+            ),
+
+
+
+        "reserved_qty":
+
+            product.get(
+
+                "reserved_qty",
+
+                0
+
+            ),
+
+
+
+        "available_qty":
+
+            product.get(
+
+                "available_qty",
+
+                product.get(
+
+                    "stock",
+
+                    0
+
+                )
+
+            ),
+
+
+
+        "minimum_stock":
+
+            product.get(
+
+                "minimum_stock",
+
+                0
+
+            ),
+
+
+
+        "is_active":
+
+            product.get(
+
+                "is_active",
+
+                True
+
+            )
+
+
+    }
 
 
 
@@ -111,7 +369,7 @@ def get_products(
 ):
 
 
-    return _get_products_cached(
+    products = _get_products_cached(
 
         warehouse_id,
 
@@ -130,50 +388,138 @@ def get_products(
 
 
 
+    return [
+
+
+        normalize_product(
+
+            p,
+
+            warehouse_id
+
+        )
+
+
+        for p in products
+
+
+        if p
+
+
+
+    ]
+
+
+
 
 
 
 
 # ==============================================================================
-# CACHE REFRESH
+# POS PRODUCT LOADER
 # ==============================================================================
 
 
-def refresh_products_cache():
+def get_pos_products(
 
-    """
-    Force POS / Inventory product refresh
+    warehouse_id=None,
 
-    After:
-        - Sale
-        - Refund
-        - Stock Transfer
-        - Adjustment
+    search: Optional[str]=None
 
-    """
-
-    try:
+):
 
 
-        CacheManager.bump(
+    products = get_products(
 
-            "inventory_version"
+        warehouse_id=warehouse_id,
 
-        )
+        offset=0,
 
+        limit=DEFAULT_PAGE_SIZE
 
-        _get_products_cached.clear()
+    )
 
 
 
-    except Exception as e:
 
 
-        log_error(
+    if search:
 
-            f"refresh product cache error: {e}"
 
-        )
+        keyword = str(
+
+            search
+
+        ).lower().strip()
+
+
+
+        products = [
+
+
+            p
+
+
+            for p in products
+
+
+            if (
+
+                keyword in str(
+
+                    p.get(
+
+                        "name",
+
+                        ""
+
+                    )
+
+                ).lower()
+
+
+                or
+
+
+                keyword in str(
+
+                    p.get(
+
+                        "sku",
+
+                        ""
+
+                    )
+
+                ).lower()
+
+
+                or
+
+
+                keyword in str(
+
+                    p.get(
+
+                        "barcode",
+
+                        ""
+
+                    )
+
+                ).lower()
+
+            )
+
+        ]
+
+
+
+
+
+
+
+    return products
 
 
 
@@ -206,195 +552,39 @@ def get_active_products():
 
 
 # ==============================================================================
-# POS PRODUCT LOADER
+# CACHE REFRESH
 # ==============================================================================
 
 
-def get_pos_products(
+def refresh_products_cache():
 
-    warehouse_id=None,
 
-    search=None
+    try:
 
-):
 
+        CacheManager.bump(
 
-    products = get_products(
+            "inventory_version"
 
-        warehouse_id=warehouse_id,
+        )
 
-        offset=0,
 
-        limit=DEFAULT_PAGE_SIZE
+        CacheManager.bump(
 
-    )
+            "product_version"
 
+        )
 
 
+        _get_products_cached.clear()
 
-    if search:
 
 
-        keyword = str(search).lower().strip()
+    except Exception as e:
 
 
+        log_error(
 
-        products = [
+            f"Product cache refresh error: {e}"
 
-            p
-
-            for p in products
-
-            if (
-
-                keyword in str(
-                    p.get("name","")
-                ).lower()
-
-
-                or
-
-
-                keyword in str(
-                    p.get("sku","")
-                ).lower()
-
-
-                or
-
-
-                keyword in str(
-                    p.get("barcode","")
-                ).lower()
-
-            )
-
-        ]
-
-
-
-
-
-    pos_products = []
-
-
-
-
-    for p in products:
-
-
-        if not p:
-
-            continue
-
-
-
-
-        pos_products.append({
-
-
-            "id":
-
-                p.get("id"),
-
-
-
-            "name":
-
-                p.get("name"),
-
-
-
-            "sku":
-
-                p.get("sku"),
-
-
-
-            "barcode":
-
-                p.get("barcode"),
-
-
-
-            "purchase_price":
-
-                p.get(
-                    "purchase_price",
-                    0
-                ),
-
-
-
-            "selling_price":
-
-                p.get(
-                    "selling_price",
-                    0
-                ),
-
-
-
-            "owner_selling_price":
-
-                p.get(
-                    "owner_selling_price"
-                ),
-
-
-
-            "final_selling_price":
-
-                p.get(
-                    "final_selling_price",
-                    p.get(
-                        "selling_price",
-                        0
-                    )
-                ),
-
-
-
-            "price_source":
-
-                p.get(
-                    "price_source",
-                    "SYSTEM"
-                ),
-
-
-
-            "owner_price_locked":
-
-                p.get(
-                    "owner_price_locked",
-                    False
-                ),
-
-
-
-            "available_qty":
-
-                p.get(
-
-                    "available_qty",
-
-                    p.get(
-                        "stock",
-                        0
-                    )
-
-                ),
-
-
-
-            "warehouse_id":
-
-                warehouse_id
-
-
-        })
-
-
-
-    return pos_products
+        )
