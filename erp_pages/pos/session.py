@@ -1,11 +1,11 @@
 # ==============================================================================
 # erp_pages/pos/session.py
-# ERP ENTERPRISE POS SESSION MANAGER v12.0
+# ERP ENTERPRISE POS SESSION MANAGER v12.1
 #
 # Responsibilities:
-# - Initialize POS session state
-# - Reset POS transaction
-# - Manage checkout status
+# - Initialize POS session
+# - Reset transaction
+# - Manage checkout state
 #
 # ==============================================================================
 
@@ -15,101 +15,97 @@ import streamlit as st
 
 
 
+
 # ==============================================================================
-# DEFAULT POS STATE
+# DEFAULT SESSION FACTORY
 # ==============================================================================
 
 
-POS_DEFAULTS = {
+def default_pos_state():
 
+    return {
 
-    # Cart
+        # Cart
 
-    "cart":
-
-        [],
-
-
-
-    # Sale
-
-    "sale_data":
-
-        None,
+        "cart": [],
 
 
 
-    # Receipt
+        # Sale result
 
-    "show_receipt":
-
-        False,
+        "sale_data": None,
 
 
 
-    # Checkout lock
+        # Receipt
 
-    "processing":
-
-        False,
+        "show_receipt": False,
 
 
 
-    # Tax
+        # Checkout lock
 
-    "tax_rate":
-
-        0,
+        "processing": False,
 
 
 
-    # Discount
+        # Tax
 
-    "discount_policy":
-
-        "allowed",
+        "tax_rate": 0,
 
 
 
-    # Selected product
+        # Discount
 
-    "selected_product":
-
-        None,
+        "discount_policy": "allowed",
 
 
 
-    # Search
+        # Product
 
-    "product_search":
-
-        "",
+        "selected_product": None,
 
 
 
-}
+        # Search
+
+        "product_search": "",
+
+
+
+        # Payment
+
+        "payment_method": "CASH",
+
+
+
+        "received_amount": 0,
+
+
+
+    }
+
+
 
 
 
 
 
 # ==============================================================================
-# INIT POS SESSION
+# INIT SESSION
 # ==============================================================================
 
 
 def init_pos_session():
 
-
     """
-    Initialize POS session_state
-
-    Called once when POS opens
-
+    Initialize POS session state
     """
 
+    defaults = default_pos_state()
 
-    for key, value in POS_DEFAULTS.items():
+
+    for key, value in defaults.items():
 
 
         if key not in st.session_state:
@@ -121,45 +117,95 @@ def init_pos_session():
 
 
 
+
+
 # ==============================================================================
-# RESET CURRENT SALE
+# RESET SALE
 # ==============================================================================
 
 
 def reset_sale():
 
-
     """
-    Clear current transaction
+    Reset current transaction only.
 
-    Keep login session
-
+    Login session remains.
     """
 
 
-    st.session_state.cart = []
+    reset_keys = [
+
+        "cart",
+
+        "sale_data",
+
+        "show_receipt",
+
+        "processing",
+
+        "selected_product",
+
+        "product_search",
+
+        "payment_method",
+
+        "received_amount",
+
+    ]
 
 
-    st.session_state.sale_data = None
+
+    for key in reset_keys:
 
 
-    st.session_state.show_receipt = False
+        if key == "cart":
 
 
-    st.session_state.processing = False
+            st.session_state[key] = []
 
 
-    st.session_state.selected_product = None
+
+        elif key == "processing":
 
 
-    st.session_state.product_search = ""
+            st.session_state[key] = False
+
+
+
+        elif key == "show_receipt":
+
+
+            st.session_state[key] = False
+
+
+
+        elif key == "sale_data":
+
+
+            st.session_state[key] = None
+
+
+
+        elif key == "received_amount":
+
+
+            st.session_state[key] = 0
+
+
+
+        else:
+
+
+            st.session_state[key] = None
+
+
 
 
 
 
 
 # ==============================================================================
-# CART STATUS
+# CART CHECK
 # ==============================================================================
 
 
@@ -182,21 +228,29 @@ def has_cart():
 
 
 
+
+
 # ==============================================================================
-# RECEIPT STATUS
+# RECEIPT MODE
 # ==============================================================================
 
 
 def is_receipt_mode():
 
 
-    return st.session_state.get(
+    return bool(
 
-        "show_receipt",
+        st.session_state.get(
 
-        False
+            "show_receipt",
+
+            False
+
+        )
 
     )
+
+
 
 
 
@@ -216,6 +270,7 @@ def start_processing():
 
 
 
+
 def stop_processing():
 
 
@@ -225,13 +280,18 @@ def stop_processing():
 
 
 
+
 def is_processing():
 
 
-    return st.session_state.get(
+    return bool(
 
-        "processing",
+        st.session_state.get(
 
-        False
+            "processing",
+
+            False
+
+        )
 
     )
