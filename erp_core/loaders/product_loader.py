@@ -130,3 +130,84 @@ def get_pos_products(
         ).lower()
 
     ]
+    # ==============================================================================
+# POS PRODUCT LOADER
+# ==============================================================================
+
+def get_pos_products(
+    warehouse_id=None
+):
+
+    """
+    POS Product Source
+
+    Single Source Of Truth
+    Used By:
+        - POS
+        - Inventory
+        - Sales
+
+    """
+
+    products = get_products(
+
+        warehouse_id=warehouse_id,
+
+        offset=0,
+
+        limit=DEFAULT_PAGE_SIZE
+
+    )
+
+
+    pos_products = []
+
+
+    for p in products:
+
+
+        if not p:
+
+            continue
+
+
+        pos_products.append({
+
+            "id":
+                p.get("id"),
+
+
+            "name":
+                p.get("name"),
+
+
+            "sku":
+                p.get("sku"),
+
+
+            "barcode":
+                p.get("barcode"),
+
+
+            "selling_price":
+                p.get("selling_price",0),
+
+
+            "stock":
+                p.get(
+                    "available_qty",
+                    p.get(
+                        "stock",
+                        0
+                    )
+                ),
+
+
+            "warehouse_id":
+                warehouse_id
+
+
+        })
+
+
+    return pos_products
