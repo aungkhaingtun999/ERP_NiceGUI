@@ -1,16 +1,14 @@
-pos_sync.py (Production Safe Version)
-
 # ==============================================================================
 # pos_sync.py
 # ERP POS PRODUCT CACHE ENGINE
-# Production Safe Version
+# PRODUCTION SAFE VERSION
 # ==============================================================================
 
 import streamlit as st
 
 
 # ==============================================================================
-# FETCH PRODUCTS
+# FETCH PRODUCTS FROM DATABASE
 # ==============================================================================
 
 def fetch_products_from_supabase(client):
