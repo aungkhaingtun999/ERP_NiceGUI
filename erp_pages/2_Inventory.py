@@ -11,7 +11,7 @@
 #
 # Dependency Injection Pattern
 # ==============================================================================
-
+from erp_core.services.inventory_service import InventoryService
 
 from typing import Any, Dict, List
 
@@ -561,7 +561,9 @@ with tab5:
         )
 
 
-        inventory = InventoryService()
+        inventory = InventoryService(
+            db()
+        )
 
 
         kpi = inventory.get_inventory_kpi()
