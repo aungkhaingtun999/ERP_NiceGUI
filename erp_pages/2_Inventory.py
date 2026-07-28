@@ -176,7 +176,7 @@ def run():
 
 ):
 
-    st.success(
+                        st.success(
 
         "✅ Stock Adjustment Created"
 
