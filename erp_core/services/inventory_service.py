@@ -131,7 +131,7 @@ class InventoryService:
             return []
 
     # ==========================================================================
-    # Stock Adjustment Operations (Added for UI Compatibility)
+    # Stock Adjustment Operations (Fixed for UUID and Schema Compatibility)
     # ==========================================================================
 
     def adjust_stock(
@@ -140,36 +140,39 @@ class InventoryService:
         warehouse_id: int,
         quantity: int,
         reason: str,
-        created_by: int = None,
+        created_by: Any = None,
     ) -> Dict[str, Any]:
         try:
-            res = self.client.rpc(
-                "stock_adjustment_rpc",
-                {
-                    "p_product_id": int(product_id),
-                    "p_warehouse_id": int(warehouse_id),
-                    "p_quantity": int(quantity),
-                    "p_reason": str(reason),
-                    "p_created_by": int(created_by) if created_by else None,
-                },
-            ).execute()
+            # Table Schema နှင့် ကိုက်ညီစေရန် payload တည်ဆောက်ခြင်း
+            payload = {
+                "product_id": int(product_id),
+                "warehouse_id": int(warehouse_id),
+                "qty": float(quantity),
+                "reason": str(reason),
+                "adjustment_type": "COUNT_CORRECTION",
+                "status": "PENDING",
+            }
+
+            # created_by / requested_by သည် uuid ဖြစ်နိုင်သဖြင့် int() မပြောင်းဘဲ string အနေဖြင့် ထည့်သွင်းခြင်း
+            if created_by:
+                payload["requested_by"] = str(created_by)
+
+            res = self.client.table("stock_adjustments").insert(payload).execute()
 
             data = res.data
             if isinstance(data, list) and data:
                 data = data[0]
 
-            if data and (
-                data.get("success") or data.get("status") == "success"
-            ):
+            if data:
                 return {"success": True, "data": data}
             else:
                 return {
                     "success": False,
-                    "message": data.get("message", "Stock adjustment failed"),
+                    "message": "Stock adjustment insertion failed",
                 }
 
         except Exception as e:
-            log_error(message="Stock adjustment RPC failed", exception=e)
+            log_error(message="Stock adjustment failed", exception=e)
             return {"success": False, "message": str(e)}
 
     def get_stock_adjustments(self, warehouse_id: int) -> List[Dict]:
