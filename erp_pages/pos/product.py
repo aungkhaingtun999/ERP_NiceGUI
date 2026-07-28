@@ -1,14 +1,6 @@
 # ==============================================================================
 # erp_pages/pos/product.py
-# ERP ENTERPRISE POS PRODUCT MODULE v12.3 FINAL
-#
-# RESPONSIBILITY
-# - Product loading
-# - Search
-# - Barcode / SKU lookup
-# - Product selection
-# - Stock validation
-# - Add to cart
+# ERP ENTERPRISE POS PRODUCT MODULE v12.4 FINAL
 # ==============================================================================
 
 from typing import List, Dict, Any
@@ -142,20 +134,6 @@ def product_label(product):
 
 
 # ==============================================================================
-# FIND PRODUCT
-# ==============================================================================
-
-def get_product_by_id(products, product_id):
-
-    for product in products:
-
-        if int(product.get("id")) == int(product_id):
-            return product
-
-    return None
-
-
-# ==============================================================================
 # PRODUCT UI
 # ==============================================================================
 
@@ -171,6 +149,13 @@ def render_products(warehouse_id):
 
 
     # --------------------------------------------------------------------------
+    # UNIQUE PREFIX
+    # --------------------------------------------------------------------------
+
+    prefix = f"pos_{warehouse_id}_"
+
+
+    # --------------------------------------------------------------------------
     # SEARCH
     # --------------------------------------------------------------------------
 
@@ -178,7 +163,7 @@ def render_products(warehouse_id):
 
     keyword = st.text_input(
         "Name / SKU / Barcode",
-        key="pos_product_search"
+        key=prefix + "search"
     )
 
     filtered = search_products(products, keyword)
@@ -198,10 +183,72 @@ def render_products(warehouse_id):
         "Select Product",
         filtered,
         format_func=product_label,
-        key="pos_product_selectbox"
+        key=prefix + "select"
     )
 
 
     # --------------------------------------------------------------------------
-    # QTY
-    #
+    # QUANTITY
+    # --------------------------------------------------------------------------
+
+    qty = st.number_input(
+        "Quantity",
+        min_value=1,
+        value=1,
+        step=1,
+        key=prefix + "qty"
+    )
+
+
+    # --------------------------------------------------------------------------
+    # PRODUCT INFO
+    # --------------------------------------------------------------------------
+
+    if selected:
+
+        price_data = get_final_price(selected)
+
+        st.info(
+            f"""
+**Product:** {selected.get('name')}
+
+**Price:** {money(price_data['price'])}
+
+**Price Source:** {price_data['source']}
+
+**Available Stock:** {selected.get('available_qty',0)}
+            """
+        )
+
+
+        # ----------------------------------------------------------------------
+        # ADD TO CART
+        # ----------------------------------------------------------------------
+
+        if st.button(
+            "➕ Add To Cart",
+            use_container_width=True,
+            key=prefix + "add_button"
+        ):
+
+            if not check_stock(selected, qty):
+
+                st.error("Insufficient stock")
+
+                return products
+
+
+            add_to_cart(
+                st.session_state.cart,
+                selected,
+                qty,
+                price_data["price"],
+                price_data["source"]
+            )
+
+            st.success("Added to cart")
+
+            st.rerun()
+
+
+    return products
