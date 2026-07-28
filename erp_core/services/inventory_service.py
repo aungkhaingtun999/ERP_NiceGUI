@@ -8,6 +8,7 @@
 # Valuation
 # Stock Card
 # Loss Analytics
+# Stock Adjustments
 #
 # Compatible:
 #   erp_core.base_repo.db()
@@ -15,16 +16,9 @@
 #
 # ==============================================================================
 
-
 from typing import Any, Dict, List
 
-
-from ..base_repo import (
-    db,
-    log_error
-)
-
-
+from ..base_repo import db, log_error
 
 # ==============================================================================
 # Inventory Service
@@ -33,438 +27,195 @@ from ..base_repo import (
 
 class InventoryService:
 
-
-    def __init__(
-        self,
-        client
-    ):
-
+    def __init__(self, client):
         self.client = client
-
 
     # ==========================================================================
     # Inventory KPI
     # ==========================================================================
 
-    @staticmethod
-    def get_inventory_kpi() -> Dict[str, Any]:
-
-
+    def get_inventory_kpi(self) -> Dict[str, Any]:
         try:
-
             result = (
-
-                self.client
-                  .table()(
-                    "inventory_kpi_view"
-                )
-
-                .select(
-                    "*"
-                )
-
+                self.client.table("inventory_kpi_view")
+                .select("*")
                 .single()
-
                 .execute()
-
             )
-
 
             data = result.data or {}
 
-
             return {
-
-
-                "success":
-                    True,
-
-
-                "total_products":
-                    data.get(
-                        "total_products",
-                        0
-                    ),
-
-
-                "total_warehouses":
-                    data.get(
-                        "total_warehouses",
-                        0
-                    ),
-
-
-                "total_stock_qty":
-                    data.get(
-                        "total_stock_qty",
-                        0
-                    ),
-
-
-                "total_inventory_value":
-                    data.get(
-                        "total_inventory_value",
-                        0
-                    ),
-
-
-                "average_unit_value":
-                    data.get(
-                        "average_unit_value",
-                        0
-                    ),
-
-
-                "low_stock_items":
-                    data.get(
-                        "low_stock_items",
-                        0
-                    )
-
+                "success": True,
+                "total_products": data.get("total_products", 0),
+                "total_warehouses": data.get("total_warehouses", 0),
+                "total_stock_qty": data.get("total_stock_qty", 0),
+                "total_inventory_value": data.get("total_inventory_value", 0),
+                "average_unit_value": data.get("average_unit_value", 0),
+                "low_stock_items": data.get("low_stock_items", 0),
             }
-
-
 
         except Exception as e:
-
-
-            log_error(
-
-                message=
-                "Inventory KPI failed",
-
-                exception=e
-
-            )
-
-
-            return {
-
-                "success":
-                    False,
-
-                "message":
-                    str(e)
-
-            }
-
-
-
-
+            log_error(message="Inventory KPI failed", exception=e)
+            return {"success": False, "message": str(e)}
 
     # ==========================================================================
     # Warehouse Inventory KPI
     # ==========================================================================
 
-    @staticmethod
-    def get_warehouse_inventory_kpi() -> List[Dict]:
-
-
+    def get_warehouse_inventory_kpi(self) -> List[Dict]:
         try:
-
-
             result = (
-
-                self.client
-                 .table()(
-                    "warehouse_inventory_kpi_view"
-                )
-
-                .select(
-                    "*"
-                )
-
+                self.client.table("warehouse_inventory_kpi_view")
+                .select("*")
                 .execute()
-
             )
-
-
             return result.data or []
 
-
-
         except Exception as e:
-
-
-            log_error(
-
-                message=
-                "Warehouse KPI failed",
-
-                exception=e
-
-            )
-
-
+            log_error(message="Warehouse KPI failed", exception=e)
             return []
-
-
-
-
 
     # ==========================================================================
     # Inventory Valuation
     # ==========================================================================
 
-    @staticmethod
-    def get_inventory_valuation() -> List[Dict]:
-
-
+    def get_inventory_valuation(self) -> List[Dict]:
         try:
-
-
             result = (
-
-                self.client
-                  .table()(
-                    "inventory_valuation_view"
-                )
-
-                .select(
-                    "*"
-                )
-
+                self.client.table("inventory_valuation_view")
+                .select("*")
                 .execute()
-
             )
-
-
             return result.data or []
 
-
-
         except Exception as e:
-
-
-            log_error(
-
-                message=
-                "Inventory valuation failed",
-
-                exception=e
-
-            )
-
-
+            log_error(message="Inventory valuation failed", exception=e)
             return []
-
-
-
-
 
     # ==========================================================================
     # Inventory Loss Report
     # ==========================================================================
 
-    @staticmethod
-    def get_inventory_loss_report() -> List[Dict]:
-
-
+    def get_inventory_loss_report(self) -> List[Dict]:
         try:
-
-
             result = (
-
-                self.client
-                  .table()(
-                    "inventory_loss_kpi_view"
-                )
-
-                .select(
-                    "*"
-                )
-
+                self.client.table("inventory_loss_kpi_view")
+                .select("*")
                 .execute()
-
             )
-
-
             return result.data or []
 
-
-
         except Exception as e:
-
-
-            log_error(
-
-                message=
-                "Inventory loss report failed",
-
-                exception=e
-
-            )
-
-
+            log_error(message="Inventory loss report failed", exception=e)
             return []
-
-
-
-
 
     # ==========================================================================
     # Stock Card
     # ==========================================================================
 
-    @staticmethod
-    def get_stock_card(
-
-        product_id: int,
-
-        warehouse_id: int
-
-    ) -> List[Dict]:
-
-
+    def get_stock_card(self, product_id: int, warehouse_id: int) -> List[Dict]:
         try:
-
-
             result = (
-
-                self.client
-                  .table()(
-                    "stock_card_view"
-                )
-
-                .select(
-                    "*"
-                )
-
-                .eq(
-
-                    "product_id",
-
-                    product_id
-
-                )
-
-                .eq(
-
-                    "warehouse_id",
-
-                    warehouse_id
-
-                )
-
-                .order(
-
-                    "created_at"
-
-                )
-
+                self.client.table("stock_card_view")
+                .select("*")
+                .eq("product_id", product_id)
+                .eq("warehouse_id", warehouse_id)
+                .order("created_at")
                 .execute()
-
             )
-
-
             return result.data or []
 
-
-
         except Exception as e:
-
-
-            log_error(
-
-                message=
-                "Stock card loading failed",
-
-                exception=e
-
-            )
-
-
+            log_error(message="Stock card loading failed", exception=e)
             return []
 
+    # ==========================================================================
+    # Stock Adjustment Operations (Added for UI Compatibility)
+    # ==========================================================================
 
+    def adjust_stock(
+        self,
+        product_id: int,
+        warehouse_id: int,
+        quantity: int,
+        reason: str,
+        created_by: int = None,
+    ) -> Dict[str, Any]:
+        try:
+            res = self.client.rpc(
+                "stock_adjustment_rpc",
+                {
+                    "p_product_id": int(product_id),
+                    "p_warehouse_id": int(warehouse_id),
+                    "p_quantity": int(quantity),
+                    "p_reason": str(reason),
+                    "p_created_by": int(created_by) if created_by else None,
+                },
+            ).execute()
 
+            data = res.data
+            if isinstance(data, list) and data:
+                data = data[0]
 
+            if data and (
+                data.get("success") or data.get("status") == "success"
+            ):
+                return {"success": True, "data": data}
+            else:
+                return {
+                    "success": False,
+                    "message": data.get("message", "Stock adjustment failed"),
+                }
+
+        except Exception as e:
+            log_error(message="Stock adjustment RPC failed", exception=e)
+            return {"success": False, "message": str(e)}
+
+    def get_stock_adjustments(self, warehouse_id: int) -> List[Dict]:
+        try:
+            result = (
+                self.client.table("stock_adjustments")
+                .select("*")
+                .eq("warehouse_id", int(warehouse_id))
+                .execute()
+            )
+            return result.data or []
+
+        except Exception as e:
+            log_error(message="Stock adjustment history loading failed", exception=e)
+            return []
 
     # ==========================================================================
     # Inventory Health Check
     # ==========================================================================
 
-    @staticmethod
-    def health_check() -> Dict[str, Any]:
-
-
+    def health_check(self) -> Dict[str, Any]:
         try:
-
-
             result = (
-
-                self.client
-                  .table()(
-                    "inventory_kpi_view"
-                )
-
-                .select(
-                    "*"
-                )
-
-                .limit(
-                    1
-                )
-
+                self.client.table("inventory_kpi_view")
+                .select("*")
+                .limit(1)
                 .execute()
-
             )
 
-
             return {
-
-
-                "service":
-                    "InventoryService",
-
-
-                "status":
-                    "PASS",
-
-
-                "database":
-                    "CONNECTED",
-
-
-                "rows":
-                    len(
-                        result.data or []
-                    )
-
+                "service": "InventoryService",
+                "status": "PASS",
+                "database": "CONNECTED",
+                "rows": len(result.data or []),
             }
-
-
 
         except Exception as e:
-
-
             return {
-
-
-                "service":
-                    "InventoryService",
-
-
-                "status":
-                    "FAIL",
-
-
-                "message":
-                    str(e)
-
+                "service": "InventoryService",
+                "status": "FAIL",
+                "message": str(e),
             }
-
-
-
 
 
 # ==============================================================================
 # Export
 # ==============================================================================
 
-
-__all__ = [
-
-    "InventoryService"
-
-]
+__all__ = ["InventoryService"]
