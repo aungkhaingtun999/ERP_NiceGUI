@@ -1,23 +1,25 @@
 # ==============================================================================
 # erp_core/config.py
-# ERP ENTERPRISE CORE CONFIG v30.5
+# ERP ENTERPRISE CORE CONFIG v30.6 FINAL
 #
-# Product View
+# Core Configuration
+# Database Map
 # Pricing Engine
-# Warehouse
-# Inventory
+# Cache System
 # Security
+# Logging
 # ==============================================================================
 
 
 import logging
 
 
+
 # ==============================================================================
 # ERP INFO
 # ==============================================================================
 
-ERP_VERSION = "30.5"
+ERP_VERSION = "30.6"
 
 DEBUG = False
 
@@ -27,8 +29,10 @@ CURRENCY = "MMK"
 
 
 
+
+
 # ==============================================================================
-# SECURITY KEYS
+# SECURITY
 # ==============================================================================
 
 SENSITIVE_KEYS = (
@@ -44,6 +48,8 @@ SENSITIVE_KEYS = (
 
 
 
+
+
 # ==============================================================================
 # DATABASE TABLE MAP
 # ==============================================================================
@@ -52,18 +58,21 @@ SENSITIVE_KEYS = (
 class Tables:
 
 
-    # --------------------------------------------------
-    # PRODUCT / PRICING
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
+    # PRODUCT
+    # ------------------------------------------------------------------
 
     PRODUCTS = "products"
 
     PRODUCT_VIEW = "pos_products_view"
 
+    CATEGORIES = "categories"
 
-    # --------------------------------------------------
+
+
+    # ------------------------------------------------------------------
     # INVENTORY
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     WAREHOUSES = "warehouses"
 
@@ -71,13 +80,15 @@ class Tables:
 
     INVENTORY_LEDGER = "inventory_ledgers"
 
-    COST_TRANSACTIONS = "inventory_cost_transactions"
+    INVENTORY_COST_TRANSACTIONS = (
+        "inventory_cost_transactions"
+    )
 
 
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
     # SALES
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     SALES = "sales"
 
@@ -85,9 +96,9 @@ class Tables:
 
 
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
     # PURCHASE
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     PURCHASES = "purchases"
 
@@ -95,9 +106,9 @@ class Tables:
 
 
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
     # REFUND
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     REFUNDS = "refunds"
 
@@ -105,9 +116,9 @@ class Tables:
 
 
 
-    # --------------------------------------------------
-    # MASTER DATA
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
+    # CUSTOMER / SUPPLIER
+    # ------------------------------------------------------------------
 
     CUSTOMERS = "customers"
 
@@ -115,9 +126,9 @@ class Tables:
 
 
 
-    # --------------------------------------------------
-    # SECURITY
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
+    # USER SECURITY
+    # ------------------------------------------------------------------
 
     USERS = "users"
 
@@ -129,17 +140,17 @@ class Tables:
 
 
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
     # SETTINGS
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     SETTINGS = "erp_settings"
 
 
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
     # ACCOUNTING
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     ACCOUNT_JOURNALS = "accounting_journals"
 
@@ -149,9 +160,9 @@ class Tables:
 
 
 
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
     # SYSTEM
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
 
     AUDIT_LOGS = "audit_logs"
 
@@ -164,18 +175,15 @@ class Tables:
 
 
 # ==============================================================================
-# QUICK ACCESS CONSTANTS
+# QUICK TABLE ACCESS
 # ==============================================================================
-
-
-TABLE_USERS = Tables.USERS
-
-TABLE_ROLE_PERMISSIONS = Tables.ROLE_PERMISSIONS
 
 
 TABLE_PRODUCTS = Tables.PRODUCTS
 
 TABLE_PRODUCT_VIEW = Tables.PRODUCT_VIEW
+
+TABLE_CATEGORIES = Tables.CATEGORIES
 
 
 TABLE_WAREHOUSES = Tables.WAREHOUSES
@@ -183,29 +191,37 @@ TABLE_WAREHOUSES = Tables.WAREHOUSES
 TABLE_WAREHOUSE_STOCK = Tables.WAREHOUSE_STOCK
 
 
-TABLE_CUSTOMERS = Tables.CUSTOMERS
-
-TABLE_SUPPLIERS = Tables.SUPPLIERS
-
-
 TABLE_SALES = Tables.SALES
 
 TABLE_SALE_ITEMS = Tables.SALE_ITEMS
 
 
+TABLE_PURCHASES = Tables.PURCHASES
+
+TABLE_PURCHASE_ITEMS = Tables.PURCHASE_ITEMS
+
+
+TABLE_USERS = Tables.USERS
+
+
+
+
 
 # ==============================================================================
-# PRICING ENGINE CONSTANTS
+# PRICE ENGINE
 #
-# OWNER PRICE PRIORITY
+# Priority
 #
-# OWNER_MANUAL
+# OWNER PRICE
 #       ↓
-# PRODUCT_MARKUP
+# PRODUCT MARKUP
 #       ↓
-# CATEGORY_MARKUP
+# CATEGORY MARKUP
 #       ↓
-# GLOBAL_MARKUP
+# GLOBAL MARKUP
+#       ↓
+# CURRENT PRICE
+#
 # ==============================================================================
 
 
@@ -219,24 +235,51 @@ PRICE_SOURCE_GLOBAL = "GLOBAL_MARKUP"
 
 PRICE_SOURCE_CURRENT = "CURRENT_PRICE"
 
+PRICE_SOURCE_SYSTEM = "SYSTEM"
+
+
+
 
 
 # ==============================================================================
-# CACHE VERSION KEYS
+# CACHE VERSION SYSTEM
 # ==============================================================================
 
 
 CACHE_KEYS = {
 
-    "inventory": "inventory_version",
 
-    "products": "products_version",
+    "inventory":
 
-    "pricing": "pricing_version",
+        "inventory_version",
 
-    "settings": "settings_version"
+
+
+    "products":
+
+        "product_version",
+
+
+
+    "pricing":
+
+        "pricing_version",
+
+
+
+    "settings":
+
+        "settings_version",
+
+
+
+    "sales":
+
+        "sales_version"
+
 
 }
+
 
 
 
@@ -253,9 +296,13 @@ logging.basicConfig(
     level=logging.ERROR,
 
     format=(
+
         "%(asctime)s | "
+
         "%(levelname)s | "
+
         "%(message)s"
+
     ),
 
     force=True
@@ -267,7 +314,7 @@ logging.basicConfig(
 
 
 # ==============================================================================
-# SECURITY PAYLOAD CLEANER
+# SECURITY CLEANER
 # ==============================================================================
 
 
@@ -284,7 +331,7 @@ def sanitize_payload(payload):
 
 
 
-    for key,value in payload.items():
+    for key, value in payload.items():
 
 
         if any(
@@ -355,6 +402,10 @@ def log_error(
         or
 
         rpc_name
+
+        or
+
+        ""
 
     )
 
