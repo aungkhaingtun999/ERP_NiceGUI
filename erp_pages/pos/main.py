@@ -2,8 +2,18 @@
 # erp_pages/pos/main.py
 # ERP ENTERPRISE POS MAIN CONTROLLER v12.2 FINAL
 # ==============================================================================
-
 import streamlit as st
+
+if "pos_render_count" not in st.session_state:
+    st.session_state.pos_render_count = 0
+
+st.session_state.pos_render_count += 1
+
+st.write(
+    "POS Render Count:",
+    st.session_state.pos_render_count
+)
+
 
 # ==============================================================================
 # ERP CORE
