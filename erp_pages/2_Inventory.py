@@ -188,33 +188,23 @@ def run():
     # ======================================================
 
                         CacheManager.bump(
+    "inventory_version"
+)
+CacheManager.bump(
+    "product_version"
+)
+st.cache_data.clear()
+st.json(
+    result
+)
+time.sleep(1)
+st.rerun()
 
-        "inventory_version"
+else:
+    st.error(result.get("message", "Create Failed"))
 
-    )
-
-
-                        CacheManager.bump(
-
-        "product_version"
-
-    )
-
-
-        st.cache_data.clear()
-
-
-        st.json(
-
-                           result
-
-    )
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(result.get("message", "Create Failed"))
-                except Exception as e:
-                    st.error(f"Create Product Error : {e}")
+except Exception as e:
+    st.error(f"Create Product Error : {e}")
 
     # ==========================================================================
     # TAB 3 # EDIT PRODUCT
