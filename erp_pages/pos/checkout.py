@@ -1,26 +1,7 @@
 # ==============================================================================
-# erp_pages/pos/checkout.py
-# ERP ENTERPRISE POS CHECKOUT ENGINE v12.0
-#
-# RESPONSIBILITY
-# - Cart payload builder
-# - Checkout RPC caller
-# - Inventory cache refresh
-# - Sale result handler
+# ERP POS CHECKOUT ENGINE v12.1 FINAL
 # ==============================================================================
 
-
-from typing import (
-    List,
-    Dict,
-    Any,
-    Optional
-)
-
-
-# ==============================================================================
-# ERP CORE
-# ==============================================================================
 
 from erp_core import (
     checkout_sale_rpc
@@ -32,73 +13,42 @@ from erp_core.context import (
 )
 
 
+from erp_core.config import (
+    CACHE_KEYS
+)
 
-# ==============================================================================
-# BUILD CHECKOUT PAYLOAD
-# ==============================================================================
 
 
-def build_cart_payload(
-    cart: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
 
-    """
-    Convert POS cart
-    into ERP RPC payload format
 
-    Output:
+def build_cart_payload(cart):
 
-    [
+
+    return [
+
         {
-            id: product_id,
-            qty: quantity,
-            selling_price: price
+
+            "id":
+                int(item["id"]),
+
+
+            "qty":
+                int(item["qty"]),
+
+
+            "selling_price":
+                float(item["selling_price"])
+
         }
+
+        for item in cart
+
     ]
 
-    """
-
-    payload = []
-
-
-    for item in cart:
-
-
-        payload.append(
-
-            {
-
-                "id":
-                    int(
-                        item["id"]
-                    ),
-
-
-                "qty":
-                    int(
-                        item["qty"]
-                    ),
-
-
-                "selling_price":
-                    float(
-                        item["selling_price"]
-                    )
-
-            }
-
-        )
-
-
-    return payload
 
 
 
 
-
-# ==============================================================================
-# EXECUTE CHECKOUT
-# ==============================================================================
 
 
 def process_checkout(
@@ -113,8 +63,6 @@ def process_checkout(
 
     payment_method="CASH",
 
-    counter_id=1,
-
     tax_rate=0,
 
     discount=0
@@ -125,19 +73,11 @@ def process_checkout(
     try:
 
 
-        payload = build_cart_payload(
-
-            cart
-
-        )
-
-
-
         result = checkout_sale_rpc(
 
             cart=
 
-                payload,
+                build_cart_payload(cart),
 
 
             paid_amount=
@@ -153,11 +93,6 @@ def process_checkout(
             cashier_id=
 
                 cashier_id,
-
-
-            counter_id=
-
-                counter_id,
 
 
             payment_method=
@@ -179,42 +114,39 @@ def process_checkout(
 
 
 
-        # ==============================================================
-        # SUCCESS
-        # ==============================================================
-
         if result.get(
             "success",
             False
         ):
 
 
-            # Refresh ERP Cache
 
             CacheManager.bump(
 
-                "inventory_version"
+                CACHE_KEYS["inventory"]
 
             )
 
 
+
             CacheManager.bump(
 
-                "product_version"
+                CACHE_KEYS["products"]
 
             )
 
 
+
             CacheManager.bump(
 
-                "sales_version"
+                CACHE_KEYS["sales"]
 
             )
+
 
 
 
             return {
-
 
                 "success":
 
@@ -226,12 +158,7 @@ def process_checkout(
                     result.get(
                         "data",
                         {}
-                    ),
-
-
-                "message":
-
-                    "Checkout completed"
+                    )
 
             }
 
@@ -250,14 +177,12 @@ def process_checkout(
             "message":
 
                 result.get(
-
                     "message",
-
-                    "Checkout failed"
-
+                    "Checkout Failed"
                 )
 
         }
+
 
 
 
@@ -278,41 +203,3 @@ def process_checkout(
                 str(e)
 
         }
-
-
-
-
-
-
-# ==============================================================================
-# RECEIPT DATA HELPER
-# ==============================================================================
-
-
-def normalize_checkout_result(
-    result
-):
-
-
-    data = result.get(
-
-        "data",
-
-        {}
-
-    )
-
-
-    if isinstance(
-        data,
-        list
-    ):
-
-        data = (
-            data[0]
-            if data
-            else {}
-        )
-
-
-    return data
