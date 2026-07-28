@@ -206,7 +206,7 @@ def run():
 
                        st.json(
 
-        result
+                           result
 
     )
                         time.sleep(1)
