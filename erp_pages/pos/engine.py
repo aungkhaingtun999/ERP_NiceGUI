@@ -1,24 +1,21 @@
 # ==============================================================================
 # erp_pages/pos/engine.py
-# ERP ENTERPRISE POS PRICE ENGINE v12.0
+# ERP ENTERPRISE POS PRICE ENGINE v12.1
 #
-# RESPONSIBILITY
+# PRICE PRIORITY
 #
-# OWNER PRICE
-#       ↓
-# PRODUCT MARKUP
-#       ↓
-# CATEGORY MARKUP
-#       ↓
-# SYSTEM PRICE
+# OWNER LOCK
+#      ↓
+# FINAL SELLING PRICE
+#      ↓
+# SELLING PRICE
 #
 # ==============================================================================
 
 
-from typing import (
-    Dict,
-    Any
-)
+from typing import Dict, Any
+
+
 
 
 
@@ -27,10 +24,7 @@ from typing import (
 # ==============================================================================
 
 
-def safe_float(
-    value,
-    default=0.0
-):
+def safe_float(value, default=0.0):
 
     try:
 
@@ -50,25 +44,13 @@ def safe_float(
 
 
 
+
 # ==============================================================================
 # MONEY FORMAT
 # ==============================================================================
 
 
-def money(
-    value
-):
-
-    """
-    Myanmar Kyat formatter
-
-    Example:
-
-    1500
-    =>
-    1,500 MMK
-
-    """
+def money(value):
 
     try:
 
@@ -84,6 +66,7 @@ def money(
 
 
 
+
 # ==============================================================================
 # FINAL PRICE ENGINE
 # ==============================================================================
@@ -93,16 +76,21 @@ def get_final_price(
     product: Dict[str, Any]
 ):
 
+
     """
-    POS Selling Price Priority
+    POS price source resolver
 
 
-    1. OWNER MANUAL PRICE
+    Priority:
 
-    2. FINAL SELLING PRICE
-       (Product/Category/System markup result)
 
-    3. CURRENT SELLING PRICE
+    1. OWNER LOCKED PRICE
+
+
+    2. ERP FINAL SELLING PRICE
+
+
+    3. SELLING PRICE
 
 
     """
@@ -114,24 +102,21 @@ def get_final_price(
     # ==============================================================
 
 
-    owner_locked = product.get(
+    if (
 
-        "owner_price_locked",
+        product.get(
+            "owner_price_locked",
+            False
+        )
 
-        False
+        and
 
-    )
+        product.get(
+            "owner_selling_price"
+        )
+        is not None
 
-
-    owner_price = product.get(
-
-        "owner_selling_price"
-
-    )
-
-
-
-    if owner_locked and owner_price is not None:
+    ):
 
 
         return {
@@ -141,7 +126,9 @@ def get_final_price(
 
                 safe_float(
 
-                    owner_price
+                    product.get(
+                        "owner_selling_price"
+                    )
 
                 ),
 
@@ -157,51 +144,16 @@ def get_final_price(
 
 
 
-    # ==============================================================
-    # OWNER PRICE WITHOUT LOCK
-    # ==============================================================
-
-
-    if owner_price is not None:
-
-
-        return {
-
-
-            "price":
-
-                safe_float(
-
-                    owner_price
-
-                ),
-
-
-            "source":
-
-                "OWNER"
-
-
-        }
-
-
-
 
 
     # ==============================================================
-    # FINAL ENGINE PRICE
+    # ERP PRICE ENGINE RESULT
     # ==============================================================
 
 
-    final_price = product.get(
-
+    if product.get(
         "final_selling_price"
-
-    )
-
-
-
-    if final_price is not None:
+    ) is not None:
 
 
         return {
@@ -211,7 +163,9 @@ def get_final_price(
 
                 safe_float(
 
-                    final_price
+                    product.get(
+                        "final_selling_price"
+                    )
 
                 ),
 
@@ -228,6 +182,8 @@ def get_final_price(
 
 
         }
+
+
 
 
 
@@ -258,7 +214,7 @@ def get_final_price(
 
         "source":
 
-            "CURRENT_PRICE"
+            "MANUAL"
 
 
     }
@@ -267,20 +223,36 @@ def get_final_price(
 
 
 
+
+
 # ==============================================================================
-# PRICE DISPLAY
+# SIMPLE PRICE ONLY
 # ==============================================================================
 
 
-def get_price_label(
-    product
-):
+def get_price(product):
 
 
-    price_data = get_final_price(
-
+    return get_final_price(
         product
+    )["price"]
 
+
+
+
+
+
+
+# ==============================================================================
+# PRICE LABEL
+# ==============================================================================
+
+
+def get_price_label(product):
+
+
+    data = get_final_price(
+        product
     )
 
 
@@ -288,7 +260,7 @@ def get_price_label(
 
         money(
 
-            price_data["price"]
+            data["price"]
 
         )
 
@@ -300,7 +272,7 @@ def get_price_label(
 
         str(
 
-            price_data["source"]
+            data["source"]
 
         )
 
