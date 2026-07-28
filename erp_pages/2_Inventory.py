@@ -256,7 +256,7 @@ def run():
                         st.error(result.get("message", "Update Failed"))
 
     # ==========================================================================
-    # TAB 4 # ENTERPRISE STOCK ADJUSTMENT (FIXED FOR UNIT COST)
+    # TAB 4 # ENTERPRISE STOCK ADJUSTMENT & APPROVAL WORKFLOW
     # ==========================================================================
     with tab4:
         st.subheader("🔧 Enterprise Stock Adjustment")
@@ -312,7 +312,6 @@ def run():
                     st.warning("Quantity cannot be zero")
                     st.stop()
                 try:
-                    # Direct InventoryService call including unit_cost to prevent not-null constraint error
                     result = inventory_service.adjust_stock(
                         product_id=product_id,
                         warehouse_id=int(selected_wh_id),
@@ -322,7 +321,7 @@ def run():
                         unit_cost=float(selected_product.get("purchase_price", 0.0)),
                     )
                     if result.get("success"):
-                        st.success("✅ Stock Adjustment Created")
+                        st.success("✅ Stock Adjustment Request Submitted (PENDING)")
                         st.json(result)
                         st.cache_data.clear()
                         time.sleep(1)
@@ -333,19 +332,49 @@ def run():
                     st.error(f"Adjustment Error : {e}")
 
             st.divider()
-            st.subheader("📜 Stock Adjustment History")
+            st.subheader("📜 Stock Adjustment History & Manager Approvals")
             try:
                 history = inventory_service.get_stock_adjustments(
                     warehouse_id=selected_wh_id
                 )
                 if history:
+                    # Maker & Checker: PENDING စာရင်းများအတွက် Approve ခလုတ်ပြသခြင်း
+                    st.markdown("### 🔔 Pending Approvals (Checker Queue)")
+                    pending_found = False
+                    
+                    for item in history:
+                        if item.get("status") and item.get("status").upper() == "PENDING":
+                            pending_found = True
+                            col1, col2, col3 = st.columns([3, 2, 1])
+                            col1.write(f"ID: {item.get('id')} | Qty: {item.get('qty')} | Reason: {item.get('reason')}")
+                            col2.warning("Status: PENDING")
+                            if col3.button("✅ Approve", key=f"approve_adj_{item.get('id')}"):
+                                manager_id = st.session_state.get("user_id")
+                                if not manager_id:
+                                    st.error("Manager session not found. Please log in.")
+                                else:
+                                    res = inventory_service.approve_stock_adjustment(
+                                        adjustment_id=item.get("id"),
+                                        manager_id=manager_id,
+                                    )
+                                    if res.get("success"):
+                                        st.success("✅ Stock Adjustment Approved & Applied Successfully!")
+                                        st.cache_data.clear()
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error(res.get("message", "Approval Failed"))
+                    
+                    if not pending_found:
+                        st.info("No pending stock adjustments waiting for approval.")
+
+                    st.divider()
+                    st.markdown("### 📊 All Adjustments History")
                     show_table(history)
                 else:
                     st.info("No adjustment history")
             except Exception as e:
-                st.info(
-                    "Adjustment history table not directly accessed or empty."
-                )
+                st.info(f"Adjustment history error: {e}")
 
     # ==========================================================================
     # TAB 5 # ENTERPRISE INVENTORY DASHBOARD
