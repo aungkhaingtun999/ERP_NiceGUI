@@ -1,10 +1,14 @@
-app.py (Production Safe Fixed Version)
+==============================================================================
 
-# ==============================================================================
-# app.py
-# ERP ENTERPRISE APPLICATION CONTROLLER
-# SAFE PAGE ROUTER v30.12
-# ==============================================================================
+app.py
+
+ERP ENTERPRISE APPLICATION CONTROLLER
+
+SAFE PAGE ROUTER v30.13
+
+PRODUCTION SAFE CLEAN VERSION
+
+==============================================================================
 
 import os
 import sys
@@ -12,225 +16,213 @@ import importlib.util
 
 import streamlit as st
 
+==============================================================================
 
-# ==============================================================================
-# PAGE CONFIG (MUST BE FIRST STREAMLIT COMMAND)
-# ==============================================================================
+PAGE CONFIG (MUST BE FIRST STREAMLIT COMMAND)
+
+==============================================================================
 
 st.set_page_config(
-    page_title="Myanmar ERP Enterprise",
-    page_icon="🏭",
-    layout="wide",
-    initial_sidebar_state="expanded"
+page_title="Myanmar ERP Enterprise",
+page_icon="🏭",
+layout="wide",
+initial_sidebar_state="expanded"
 )
 
+==============================================================================
 
-# ==============================================================================
-# CORE IMPORTS
-# ==============================================================================
+PATH SETUP
 
-from auth import (
-    login_page,
-    is_authenticated
-)
+==============================================================================
 
-from sidebar import (
-    show_sidebar
-)
+BASE_DIR = os.path.dirname(os.path.abspath(file))
 
-from utils.notification import (
-    show_notification
-)
-from database import db
+if BASE_DIR not in sys.path:
+sys.path.insert(0, BASE_DIR)
 
-from pos_sync import (
-    render_pos_sync_sidebar,
-    get_cached_products
-)
+==============================================================================
 
-# ==============================================================================
-# OPTIONAL POS SYNC
-# ==============================================================================
+CORE IMPORTS
 
-# POS sync module is optional. App should still run if it is missing.
+==============================================================================
+
+from auth import login_page, is_authenticated
+from sidebar import show_sidebar
+from utils.notification import show_notification
+
+==============================================================================
+
+OPTIONAL POS SYNC
+
+==============================================================================
+
 POS_SYNC_AVAILABLE = False
 
 try:
-    from database import db
-    from pos_sync import (
-        render_pos_sync_sidebar,
-        get_cached_products
-    )
-
-    POS_SYNC_AVAILABLE = True
-
-except Exception:
-    POS_SYNC_AVAILABLE = False
-
-
-# ==============================================================================
-# PATH SETUP
-# ==============================================================================
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
+from database import db
+from pos_sync import (
+render_pos_sync_sidebar,
+get_cached_products
 )
 
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
+POS_SYNC_AVAILABLE = True
 
+except Exception:
+POS_SYNC_AVAILABLE = False
 
-# ==============================================================================
-# SESSION INITIALIZER
-# ==============================================================================
+==============================================================================
+
+SESSION INITIALIZER
+
+==============================================================================
 
 def init_state():
 
-    defaults = {
-        "user": None,
-        "active_page": "1_POS",
-        "language": "English",
-        "auth_checked": False
-    }
+defaults = {
+    "user": None,
+    "active_page": "1_POS",
+    "language": "English",
+    "auth_checked": False
+}
 
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
+==============================================================================
 
-# ==============================================================================
-# SAFE PAGE LOADER
-# ==============================================================================
+SAFE PAGE LOADER
+
+==============================================================================
 
 def load_page(page_id):
 
-    page_folder = os.path.join(BASE_DIR, "erp_pages")
+page_folder = os.path.join(BASE_DIR, "erp_pages")
 
-    file_path = os.path.join(
-        page_folder,
-        f"{page_id}.py"
+file_path = os.path.join(page_folder, f"{page_id}.py")
+
+if not os.path.exists(file_path):
+    st.error(f"Page file not found:\\n{file_path}")
+    return
+
+try:
+
+    module_name = f"erp_pages.{page_id}"
+
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        file_path
     )
 
-    if not os.path.exists(file_path):
-        st.error(f"Page file not found:\n{file_path}")
-        return
+    if spec is None:
+        raise ImportError(f"Cannot load module {module_name}")
 
-    try:
+    module = importlib.util.module_from_spec(spec)
 
-        module_name = f"erp_pages.{page_id}"
+    # Register module before execute to support relative imports
+    sys.modules[module_name] = module
 
-        spec = importlib.util.spec_from_file_location(
-            module_name,
-            file_path
-        )
+    spec.loader.exec_module(module)
 
-        if spec is None:
-            raise ImportError(f"Cannot load module {module_name}")
+    if hasattr(module, "run"):
+        module.run()
 
-        module = importlib.util.module_from_spec(spec)
+    elif hasattr(module, "main"):
+        module.main()
 
-        # Register module before execute to support relative imports
-        sys.modules[module_name] = module
+    else:
+        st.warning(f"{page_id}.py loaded without run() or main()")
 
-        spec.loader.exec_module(module)
+except Exception as e:
 
-        if hasattr(module, "run"):
-            module.run()
+    st.error(f"Page Load Error: {e}")
 
-        elif hasattr(module, "main"):
-            module.main()
+    with st.expander("Debug Trace"):
+        st.exception(e)
 
-        else:
-            st.warning(f"{page_id}.py loaded without run() or main()")
+==============================================================================
 
-    except Exception as e:
+PAGE ROUTER
 
-        st.error(f"Page Load Error: {e}")
-
-        with st.expander("Debug Trace"):
-            st.exception(e)
-
-
-# ==============================================================================
-# PAGE ROUTER
-# ==============================================================================
+==============================================================================
 
 def page_router():
 
-    if not st.session_state.get("user"):
-        st.error("Please login first")
-        return
+if not st.session_state.get("user"):
 
-    page_id = st.session_state.get(
-        "active_page",
-        "1_POS"
-    )
+    st.error("Please login first")
 
-    if page_id == "dashboard":
+    return
 
-        st.title("🏭 ERP Control Dashboard")
+page_id = st.session_state.get("active_page", "1_POS")
 
-        st.info("Welcome to Enterprise Core.")
+if page_id == "dashboard":
 
-        return
+    st.title("🏭 ERP Control Dashboard")
 
-    load_page(page_id)
+    st.info("Welcome to Enterprise Core.")
 
+    return
 
-# ==============================================================================
-# MAIN APPLICATION
-# ==============================================================================
+load_page(page_id)
+
+==============================================================================
+
+MAIN APPLICATION
+
+==============================================================================
 
 def main():
 
-    init_state()
+init_state()
 
-    if not is_authenticated():
-        login_page()
-        st.stop()
+if not is_authenticated():
+    login_page()
+    st.stop()
 
-    # --------------------------------------------------------------------------
-    # Global Notification
-    # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# Global Notification
+# --------------------------------------------------------------------------
 
-    show_notification()
+show_notification()
 
-    # --------------------------------------------------------------------------
-    # Sidebar
-    # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# Sidebar
+# --------------------------------------------------------------------------
+
+try:
+    show_sidebar()
+
+except Exception as e:
+
+    st.sidebar.error("Sidebar loading error")
+
+    with st.sidebar.expander("Debug"):
+        st.exception(e)
+
+# --------------------------------------------------------------------------
+# Optional POS Sync Sidebar
+# --------------------------------------------------------------------------
+
+if POS_SYNC_AVAILABLE:
 
     try:
-        show_sidebar()
+        render_pos_sync_sidebar(db())
 
     except Exception as e:
+        st.sidebar.warning(f"POS Sync unavailable : {e}")
 
-        st.sidebar.error("Sidebar loading error")
+# --------------------------------------------------------------------------
+# Route Current ERP Page
+# --------------------------------------------------------------------------
 
-        with st.sidebar.expander("Debug"):
-            st.exception(e)
+page_router()
 
-    # --------------------------------------------------------------------------
-    # Optional POS Sync Sidebar
-    # --------------------------------------------------------------------------
+==============================================================================
 
-    if POS_SYNC_AVAILABLE:
+ENTRY POINT
 
-        try:
-            render_pos_sync_sidebar(db())
+==============================================================================
 
-        except Exception as e:
-            st.sidebar.warning(f"POS Sync unavailable : {e}")
-
-    # --------------------------------------------------------------------------
-    # Route Current ERP Page
-    # --------------------------------------------------------------------------
-
-    page_router()
-
-
-# ==============================================================================
-# ENTRY POINT
-# ==============================================================================
-
-if __name__ == "__main__":
-    main()
+if name == "main":
+main()
