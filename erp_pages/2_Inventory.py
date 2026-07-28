@@ -22,6 +22,7 @@ from database import (
 # ERP CORE SERVICES
 # ==============================================================================
 from erp_core.services.inventory_service import InventoryService
+from erp_core.context import CacheManager
 from erp_core.services.pricing_service import PricingService
 
 # ==============================================================================
@@ -169,8 +170,46 @@ def run():
                     if isinstance(result, list):
                         result = result[0]
 
-                    if result.get("success") or result.get("status") == "success":
-                        st.success("✅ Product Created Successfully")
+                    if result.get(
+
+    "success"
+
+):
+
+
+    st.success(
+
+        "✅ Stock Adjustment Created"
+
+    )
+
+
+    # ======================================================
+    # CACHE INVALIDATION AFTER STOCK CHANGE
+    # ======================================================
+
+    CacheManager.bump(
+
+        "inventory_version"
+
+    )
+
+
+    CacheManager.bump(
+
+        "product_version"
+
+    )
+
+
+    st.cache_data.clear()
+
+
+    st.json(
+
+        result
+
+    )
                         time.sleep(1)
                         st.rerun()
                     else:
