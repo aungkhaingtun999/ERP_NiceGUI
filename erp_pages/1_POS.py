@@ -1676,7 +1676,7 @@ TOTAL:
 # SUCCESS
 # ======================================================
 
-if result.get("success", False):
+    if result.get("success", False):
     data = result.get("data", {})
 
     if isinstance(data, list):
