@@ -1,170 +1,175 @@
 # ==============================================================================
-# pages/99_System_Test.py
-# ERP ENTERPRISE SYSTEM TEST CENTER
+# erp_pages/99_System_Test.py
+# ERP SYSTEM TEST CENTER
+# Custom Router Compatible
 # ==============================================================================
 
 
 import streamlit as st
-from datetime import datetime
 
 
-# ------------------------------------------------------------------------------
-# ERP Imports
-# ------------------------------------------------------------------------------
+from supabase_client import supabase
 
-from database import get_supabase
 
 from erp_core.services.inventory_service import (
     InventoryService
 )
 
 
-# ------------------------------------------------------------------------------
-# Page Config
-# ------------------------------------------------------------------------------
-
-st.set_page_config(
-    page_title="ERP System Test Center",
-    page_icon="🧪",
-    layout="wide"
-)
-
-
-# ------------------------------------------------------------------------------
-# Header
-# ------------------------------------------------------------------------------
-
-st.title("🧪 ERP SYSTEM TEST CENTER")
-
-st.caption(
-    "Enterprise Health Monitoring & Service Verification"
-)
-
-
-st.divider()
-
-
 
 # ==============================================================================
-# Database Test
-# ==============================================================================
-
-st.subheader("🗄 Database Connection")
-
-
-if st.button("Test Database"):
-
-
-    try:
-
-        supabase = get_supabase()
-
-
-        result = (
-            supabase
-            .table("products")
-            .select("id")
-            .limit(1)
-            .execute()
-        )
-
-
-        st.success(
-            "Database Connection PASS ✅"
-        )
-
-
-        st.write(
-            result.data
-        )
-
-
-    except Exception as e:
-
-
-        st.error(
-            f"Database Failed ❌ : {e}"
-        )
-
-
-
-# ==============================================================================
-# Inventory Service Test
+# PAGE ENTRY
 # ==============================================================================
 
 
-st.divider()
-
-st.subheader("📦 Inventory Service")
+def run():
 
 
-if st.button("Run Inventory Test"):
+    st.title(
+        "🧪 ERP SYSTEM TEST CENTER"
+    )
 
 
-    try:
+    st.caption(
+        "Enterprise Health Monitoring"
+    )
 
 
-        data = (
-            InventoryService
-            .get_inventory_kpi()
-        )
-
-
-        st.success(
-            "Inventory Service PASS ✅"
-        )
-
-
-        st.json(data)
+    st.divider()
 
 
 
-    except Exception as e:
+    # ======================================================
+    # DATABASE TEST
+    # ======================================================
 
 
-        st.error(
-            f"Inventory Service Failed ❌ : {e}"
-        )
+    st.subheader(
+        "🗄 Database Connection"
+    )
+
+
+    if st.button(
+        "Test Database",
+        use_container_width=True
+    ):
+
+
+        try:
+
+
+            result = (
+                supabase
+                .table("products")
+                .select("id,name")
+                .limit(5)
+                .execute()
+            )
+
+
+            st.success(
+                "Database Connection PASS ✅"
+            )
+
+
+            st.dataframe(
+                result.data
+            )
+
+
+        except Exception as e:
+
+
+            st.error(
+                str(e)
+            )
 
 
 
-# ==============================================================================
-# System Summary
-# ==============================================================================
+    st.divider()
 
 
-st.divider()
 
-st.subheader("System Information")
-
-
-col1, col2 = st.columns(2)
+    # ======================================================
+    # INVENTORY SERVICE TEST
+    # ======================================================
 
 
-with col1:
-
-    st.info(
-        f"""
-ERP Version:
-Enterprise
-
-Check Time:
-{datetime.now()}
-"""
+    st.subheader(
+        "📦 Inventory Service"
     )
 
 
 
-with col2:
+    if st.button(
+        "Run Inventory KPI Test",
+        use_container_width=True
+    ):
 
-    st.info(
-        """
-Modules:
 
-✅ Inventory
-✅ Pricing
-✅ FIFO
-✅ Transfer
-✅ Adjustment
-"""
+        try:
+
+
+            data = (
+                InventoryService
+                .get_inventory_kpi()
+            )
+
+
+            st.success(
+                "Inventory Service PASS ✅"
+            )
+
+
+            st.json(
+                data
+            )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+                f"Inventory Error : {e}"
+            )
+
+
+
+    st.divider()
+
+
+
+    # ======================================================
+    # SYSTEM INFO
+    # ======================================================
+
+
+    st.subheader(
+        "⚙️ System Information"
     )
+
+
+    st.write(
+        {
+            "ERP Version":
+                "Enterprise v30.12",
+
+            "Router":
+                "Custom Router",
+
+            "Page":
+                "99_System_Test"
+        }
+    )
+
+
+
+# ==============================================================================
+# DIRECT RUN SUPPORT
+# ==============================================================================
+
+
+if __name__ == "__main__":
+
+    run()
