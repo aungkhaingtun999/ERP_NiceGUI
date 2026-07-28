@@ -1673,40 +1673,14 @@ TOTAL:
 
 
                 # ======================================================
-                # SUCCESS
-                # ======================================================
+# SUCCESS
+# ======================================================
 
+if result.get("success", False):
+    data = result.get("data", {})
 
-   if result.get(
-
-       "success",
-
-        False
-
-):
-
-
-    data = result.get(
-
-        "data",
-
-        {}
-
-    )
-
-
-    if isinstance(
-
-        data,
-
-        list
-
-    ):
-
-
+    if isinstance(data, list):
         data = data[0] if data else {}
-
-
 
     # ======================================================
     # CACHE INVALIDATION AFTER SUCCESSFUL SALE
