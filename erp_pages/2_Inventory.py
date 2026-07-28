@@ -1,842 +1,463 @@
-# ==============================================================================
-# erp_core/services/inventory_service.py
-# ERP ENTERPRISE INVENTORY SERVICE
-# Version: V1.2 DI PRODUCTION
-#
-# FIFO
-# Valuation
-# Stock Card
-# KPI
-# Loss Analytics
-#
-# Dependency Injection Pattern
-# ==============================================================================
-from erp_core.services.inventory_service import InventoryService
+==============================================================================
 
-from typing import Any, Dict, List
+pages/2_Inventory.py
 
+ERP ENTERPRISE PRODUCT MASTER v4.3 - PRODUCTION HARDENED
 
-# ==============================================================================
-# Inventory Service
-# ==============================================================================
+==============================================================================
 
+import streamlit as st
 
-class InventoryService:
+import pandas as pd
 
+import time
 
-    # ==========================================================================
-    # Constructor
-    # ==========================================================================
+from database import (
 
-    def __init__(self, client):
+db,
 
-        self.client = client
+get_inventory_view,
 
+get_warehouses,
 
+update_product_rpc,
 
-    # ==========================================================================
-    # Inventory KPI
-    # ==========================================================================
+stock_adjustment_rpc
 
-    def get_inventory_kpi(
-        self
-    ) -> Dict[str, Any]:
+)
 
+from utils.ui import show_table
 
-        try:
+def run():
 
-            result = (
+st.title("🏭 Enterprise Product Master v4.3")
 
-                self.client
 
-                .table(
-                    "inventory_kpi_view"
-                )
 
-                .select(
-                    "*"
-                )
+# Warehouse Selection
 
-                .single()
+warehouses = get_warehouses()
 
-                .execute()
+if not warehouses:
 
-            )
+    st.error("No active warehouses found. Please check database.")
 
+    st.stop()
 
-            return result.data or {}
 
 
-        except Exception as e:
+wh_map = {w['name']: w['id'] for w in warehouses}
 
+selected_wh_name = st.selectbox("📍 Select Warehouse", list(wh_map.keys()))
 
-            return {
+selected_wh_id = wh_map[selected_wh_name]
 
-                "success": False,
 
-                "message": str(e)
 
-            }
+# Tab ၅ ခု
 
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
 
+    "📋 Product Master",
 
+    "➕ Add Product",
 
+    "✏️ Edit Product",
 
-    # ==========================================================================
-    # Warehouse Inventory KPI
-    # ==========================================================================
+    "🔧 Stock Adjustment",
 
-    def get_warehouse_inventory_kpi(
-        self
-    ) -> List[Dict]:
+    "📊 Enterprise Dashboard"
 
+])
 
-        try:
 
-            result = (
 
-                self.client
+with tab1:
 
-                .table(
-                    "warehouse_inventory_kpi_view"
-                )
+    search = st.text_input("🔍 Search Products (Name, SKU, Barcode)", key="search_bar")
 
-                .select(
-                    "*"
-                )
+    products = get_inventory_view(warehouse_id=selected_wh_id, search=search)
 
-                .execute()
+    
 
-            )
+    if products:
 
+        show_table(products)
 
-            return result.data or []
+    else:
 
+        st.info("No products found in this warehouse.")
 
-        except Exception:
 
 
-            return []
+with tab2:
 
+    with st.form("add_product_form", clear_on_submit=True):
 
+        c1, c2 = st.columns(2)
 
+        data = {
 
+            "name": c1.text_input("Product Name*"),
 
-    # ==========================================================================
-    # FIFO Inventory Valuation
-    # ==========================================================================
+            "sku": c1.text_input("SKU*"),
 
-    def get_inventory_valuation(
-        self
-    ) -> List[Dict]:
+            "barcode": c2.text_input("Barcode"),
 
+            "purchase_price": c1.number_input("Purchase Price", value=0.0),
 
-        try:
+            "selling_price": c2.number_input("Selling Price", value=0.0),
 
-            result = (
+            "category_id": 1,
 
-                self.client
+            "unit": c2.selectbox("Unit", ["pcs", "kg", "box"]),
 
-                .table(
-                    "inventory_valuation_view"
-                )
+            "minimum_stock": c1.number_input("Minimum Stock", value=5)
 
-                .select(
-                    "*"
-                )
+        }
 
-                .execute()
+        init_qty = st.number_input("Initial Stock", min_value=0)
 
-            )
+        
 
+        if st.form_submit_button("Save Product", use_container_width=True):
 
-            return result.data or []
+            try:
 
+                res = db().rpc("create_product_full", {
 
+                    "p_data": data, 
 
-        except Exception:
+                    "p_warehouse_id": int(selected_wh_id), 
 
+                    "p_initial_qty": int(init_qty)
 
-            return []
+                }).execute()
 
+                
 
+                result = res.data
 
+                if isinstance(result, list): result = result[0]
 
+                
 
-    # ==========================================================================
-    # Inventory Loss Report
-    # ==========================================================================
+                if result and result.get('status') == 'success':
 
-    def get_inventory_loss_report(
-        self
-    ) -> List[Dict]:
+                    st.success("Product created successfully!")
 
+                else:
 
-        try:
+                    st.error(f"Error: {result.get('message', 'Unknown Error')}")
 
-            result = (
+            except Exception as e:
 
-                self.client
+                st.error(f"Transaction failed: {str(e)}")
 
-                .table(
-                    "inventory_loss_kpi_view"
-                )
 
-                .select(
-                    "*"
-                )
 
-                .execute()
+with tab3:
 
-            )
+    st.subheader("✏️ Edit Product Master")
 
+    products = get_inventory_view(warehouse_id=selected_wh_id)
 
-            return result.data or []
-
-
-
-        except Exception:
-
-
-            return []
-
-
-
-
-
-    # ==========================================================================
-    # Stock Card
-    # ==========================================================================
-
-    def get_stock_card(
-
-        self,
-
-        product_id:int,
-
-        warehouse_id:int
-
-    ) -> List[Dict]:
-
-
-        try:
-
-
-            result = (
-
-                self.client
-
-                .table(
-                    "stock_card_view"
-                )
-
-                .select(
-                    "*"
-                )
-
-                .eq(
-                    "product_id",
-                    product_id
-                )
-
-                .eq(
-                    "warehouse_id",
-                    warehouse_id
-                )
-
-                .order(
-                    "created_at"
-                )
-
-                .execute()
-
-            )
-
-
-            return result.data or []
-
-
-
-        except Exception:
-
-
-            return []
-
-
-
-
-
-    # ==========================================================================
-    # Stock Adjustment History
-    # ==========================================================================
-
-    def get_stock_adjustments(
-
-        self,
-
-        warehouse_id=None
-
-    ) -> List[Dict]:
-
-
-        try:
-
-
-            query = (
-
-                self.client
-
-                .table(
-                    "stock_adjustments"
-                )
-
-                .select(
-                    "*"
-                )
-
-            )
-
-
-            if warehouse_id:
-
-
-                query = query.eq(
-
-                    "warehouse_id",
-
-                    warehouse_id
-
-                )
-
-
-
-            result = query.execute()
-
-
-            return result.data or []
-
-
-
-        except Exception:
-
-
-            return []
-
-
-
-
-
-# ==============================================================================
-# Export
-# ==============================================================================
-
-
-__all__ = [
-
-    "InventoryService"
-
-]
-
-# =========================================================
-# 🔧 STOCK ADJUSTMENT
-# =========================================================
-
-with tab4:
-
-    st.subheader(
-        "🔧 Stock Adjustment"
-    )
-
-
-    products = get_inventory_view(
-        warehouse_id=selected_wh_id
-    )
 
 
     if not products:
 
-        st.warning(
-            "No products found"
-        )
-
+        st.info("No products available")
 
     else:
 
+        product_map = {f"{p.get('sku','')} | {p.get('name','')}": p for p in products}
 
-        product_map = {
+        selected_name = st.selectbox("Select Product", list(product_map.keys()))
 
-            f"{p.get('id')} | {p.get('name')}": p
-
-            for p in products
-
-        }
+        selected_product = product_map[selected_name]
 
 
 
-        selected = st.selectbox(
+        st.divider()
 
-            "Select Product",
 
-            list(product_map.keys())
 
-        )
+        with st.form(f"edit_product_form_{selected_product['id']}"):
 
+            c1, c2 = st.columns(2)
+
+            name = c1.text_input("Product Name", value=selected_product.get("name",""))
+
+            sku = c1.text_input("SKU", value=selected_product.get("sku",""))
+
+            barcode = c2.text_input("Barcode", value=selected_product.get("barcode",""))
+
+            purchase_price = c1.number_input("Purchase Price", value=float(selected_product.get("purchase_price", 0)))
+
+            selling_price = c2.number_input("Selling Price", value=float(selected_product.get("selling_price", 0)))
+
+            minimum_stock = c1.number_input("Minimum Stock", value=int(selected_product.get("minimum_stock", 0)))
+
+            
+
+            unit_options = ["pcs", "kg", "box"]
+
+            unit_val = selected_product.get("unit", "pcs")
+
+            unit = c2.selectbox("Unit", unit_options, index=unit_options.index(unit_val) if unit_val in unit_options else 0)
+
+            
+
+            notes = st.text_area("Notes", value=selected_product.get("notes", ""))
+
+            is_active = st.checkbox("Active Product", value=selected_product.get("is_active", True))
+
+
+
+            if st.form_submit_button("💾 Update Product", use_container_width=True):
+
+                result = update_product_rpc(
+
+                    product_id=selected_product["id"],
+
+                    name=name,
+
+                    sku=sku,
+
+                    barcode=barcode,
+
+                    purchase_price=purchase_price,
+
+                    selling_price=selling_price,
+
+                    minimum_stock=minimum_stock,
+
+                    unit=unit,
+
+                    notes=notes,
+
+                    is_active=is_active
+
+                )
+
+
+
+                if result.get("success"):
+
+                    st.success(f"✅ '{name}' ကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
+
+                    time.sleep(1)
+
+                    st.rerun()
+
+                else:
+
+                    st.error(result.get("message", "Update failed"))
+
+
+
+# =========================================================
+
+# 🔧 STOCK ADJUSTMENT
+
+# =========================================================
+
+with tab4:
+
+    st.subheader("🔧 Stock Adjustment")
+
+    products = get_inventory_view(warehouse_id=selected_wh_id)
+
+
+
+    if not products:
+
+        st.warning("No products found")
+
+    else:
+
+        product_map = {f"{p['id']} | {p['name']}": p for p in products}
+
+        selected = st.selectbox("Select Product", list(product_map.keys()))
 
         product = product_map[selected]
 
+        product_id = product["id"]
 
-
-        product_id = product.get(
-            "id"
-        )
-
-
-        current_stock = (
-
-            product.get(
-                "available_qty"
-            )
-
-            or
-
-            product.get(
-                "qty"
-            )
-
-            or
-
-            product.get(
-                "stock"
-            )
-
-            or 0
-
-        )
+        current_stock = product.get("stock", product.get("qty", 0))
 
 
 
-        st.info(
-
-            f"""
-📦 Product : {product.get('name')}
-
-🆔 ID : {product_id}
-
-🏭 Warehouse : {selected_wh_name}
-
-📊 Current Stock : {current_stock}
-"""
-        )
+        st.info(f"📦 Product : {product['name']}\n🆔 ID : {product_id}\n📊 Current Stock : {current_stock}")
 
 
 
-        adjustment_qty = st.number_input(
+        adjustment_qty = st.number_input("Adjustment Quantity (+/-)", value=0, step=1)
 
-            "Adjustment Quantity (+/-)",
-
-            value=0,
-
-            step=1
-
-        )
+        reason = st.text_input("Reason", "Stock Adjustment")
 
 
 
-        reason = st.text_input(
-
-            "Reason",
-
-            value="Manual Stock Adjustment"
-
-        )
-
-
-
-        if st.button(
-
-            "💾 Apply Adjustment",
-
-            use_container_width=True
-
-        ):
-
+        if st.button("💾 Apply Adjustment", use_container_width=True):
 
             result = stock_adjustment_rpc(
 
-                product_id=int(product_id),
+                product_id=product_id,
 
-                warehouse_id=int(selected_wh_id),
+                warehouse_id=selected_wh_id,
 
                 quantity=int(adjustment_qty),
 
                 reason=reason,
 
-                created_by=st.session_state.get(
-                    "user_id"
-                )
+                created_by=st.session_state.get("user_id")
 
             )
 
 
 
-            if result.get(
-                "success"
-            ):
+            if result.get("success"):
+
+                st.success("✅ Stock Updated Successfully")
+
+                st.json(result.get("data"))
 
 
-                st.success(
 
-                    "✅ Stock Adjustment Created"
-
-                )
-
-
-                st.json(
-                    result
-                )
-
+                # Clear Streamlit cache
 
                 st.cache_data.clear()
 
 
-                time.sleep(1)
 
+                time.sleep(1)
 
                 st.rerun()
 
-
-
             else:
 
-
-                st.error(
-
-                    result.get(
-
-                        "message",
-
-                        "Adjustment Failed"
-
-                    )
-
-                )
+                st.error(result.get("message", "Adjustment Failed"))
 
 
-
-
-
-# =========================================================
-# 📊 ENTERPRISE INVENTORY DASHBOARD
-# =========================================================
 
 with tab5:
 
+    st.caption(f"Current Warehouse : {selected_wh_name}")
 
-    st.subheader(
+    
 
-        "📊 Enterprise Inventory Dashboard"
+    products = get_inventory_view(warehouse_id=selected_wh_id)
 
-    )
+    if products:
 
+        df = pd.DataFrame(products)
 
-    st.caption(
+        for col in ['purchase_price', 'minimum_stock', 'qty', 'selling_price']:
 
-        f"Current Warehouse : {selected_wh_name}"
+            if col not in df.columns: df[col] = 0
 
-    )
+        
 
+        # Numeric conversion to prevent type errors
 
+        df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0)
 
-    # -----------------------------------------------------
-    # Inventory KPI
-    # -----------------------------------------------------
+        df["purchase_price"] = pd.to_numeric(df["purchase_price"], errors="coerce").fillna(0)
 
-    try:
+        df["selling_price"] = pd.to_numeric(df["selling_price"], errors="coerce").fillna(0)
 
+        
 
-        from erp_core.services.inventory_service import (
+        # Calculate stock value per item with rounding
 
-            InventoryService
+        df["stock_value"] = (df["qty"] * df["purchase_price"]).round(2)
 
-        )
+        
 
+        # Enterprise Inventory KPI
 
-        inventory = InventoryService(
-            db()
-        )
+        inventory_cost = df["stock_value"].sum()
 
+        inventory_value = (df["qty"] * df["selling_price"]).sum()
 
-        kpi = inventory.get_inventory_kpi()
-
-
-
-        if kpi.get(
-            "success"
-        ) is False:
+        potential_profit = inventory_value - inventory_cost
 
 
-            st.error(
-                kpi.get(
-                    "message"
-                )
-            )
 
+        m1, m2, m3, m4, m5 = st.columns(5)
+
+
+
+        m1.metric("📦 Total Products", len(df))
+
+        m2.metric("📊 Stock Qty", int(df["qty"].sum()))
+
+        m3.metric("💰 Stock Value", f"{inventory_cost:,.0f} MMK")
+
+        m4.metric("💵 Selling Value", f"{inventory_value:,.0f} MMK")
+
+        m5.metric("📈 Potential Profit", f"{potential_profit:,.0f} MMK")
+
+
+
+        st.divider()
+
+        st.subheader("📋 Inventory Summary")
+
+        summary = df.reindex(columns=[
+
+            "sku",
+
+            "name",
+
+            "qty",
+
+            "purchase_price",
+
+            "selling_price",
+
+            "stock_value"
+
+        ])
+
+        show_table(summary)
+
+
+
+        st.divider()
+
+        st.subheader("⚠️ Low Stock Alert")
+
+        low_stock = df[df["qty"] <= df["minimum_stock"]]
+
+        if not low_stock.empty:
+
+            low_stock_summary = low_stock.reindex(columns=[
+
+                "sku",
+
+                "name",
+
+                "qty",
+
+                "minimum_stock",
+
+                "purchase_price"
+
+            ])
+
+            show_table(low_stock_summary)
 
         else:
 
+            st.success("No Low Stock Products found in this warehouse.")
 
-            c1,c2,c3,c4,c5 = st.columns(5)
+    else:
 
+        st.write("No data available for dashboard.")
 
-            c1.metric(
+if name == "main":
 
-                "📦 Products",
+run()
 
-                kpi.get(
-                    "total_products",
-                    0
-                )
-
-            )
-
-
-            c2.metric(
-
-                "🏭 Warehouses",
-
-                kpi.get(
-                    "total_warehouses",
-                    0
-                )
-
-            )
-
-
-            c3.metric(
-
-                "📊 Stock Qty",
-
-                kpi.get(
-                    "total_stock_qty",
-                    0
-                )
-
-            )
-
-
-            c4.metric(
-
-                "💰 Inventory Value",
-
-                f"{float(kpi.get('total_inventory_value',0)):,.0f} MMK"
-
-            )
-
-
-            c5.metric(
-
-                "⚠ Low Stock",
-
-                kpi.get(
-                    "low_stock_items",
-                    0
-                )
-
-            )
-
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            f"Inventory KPI Error : {e}"
-
-        )
-
-
-
-
-
-    st.divider()
-
-
-
-    # -----------------------------------------------------
-    # Warehouse KPI
-    # -----------------------------------------------------
-
-
-    st.subheader(
-
-        "🏭 Warehouse Inventory"
-
-    )
-
-
-    try:
-
-
-        warehouse_data = (
-
-            inventory
-
-            .get_warehouse_inventory_kpi()
-
-        )
-
-
-
-        if warehouse_data:
-
-
-            show_table(
-
-                warehouse_data
-
-            )
-
-
-        else:
-
-
-            st.info(
-
-                "No warehouse data"
-
-            )
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            str(e)
-
-        )
-
-
-
-
-
-    st.divider()
-
-
-
-    # -----------------------------------------------------
-    # FIFO VALUATION
-    # -----------------------------------------------------
-
-
-    st.subheader(
-
-        "💰 FIFO Inventory Valuation"
-
-    )
-
-
-    try:
-
-
-        valuation = (
-
-            inventory
-
-            .get_inventory_valuation()
-
-        )
-
-
-        if valuation:
-
-
-            show_table(
-
-                valuation
-
-            )
-
-        else:
-
-            st.info(
-
-                "No FIFO layers"
-
-            )
-
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            str(e)
-
-        )
-
-
-
-
-
-    st.divider()
-
-
-
-    # -----------------------------------------------------
-    # LOSS ANALYTICS
-    # -----------------------------------------------------
-
-
-    st.subheader(
-
-        "📉 Inventory Loss Analytics"
-
-    )
-
-
-
-    try:
-
-
-        loss = (
-
-            inventory
-
-            .get_inventory_loss_report()
-
-        )
-
-
-
-        if loss:
-
-
-            show_table(
-
-                loss
-
-            )
-
-
-        else:
-
-
-            st.success(
-
-                "No inventory loss"
-
-            )
-
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            str(e)
-
-        )
+#ပြုပြင်ဆရာရှိတာပြုပြင်ပြီး ကုတ်အပြည့်အစုံပေးပါ ဆရာကြီး
