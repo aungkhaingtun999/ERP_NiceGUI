@@ -256,7 +256,7 @@ def run():
                         st.error(result.get("message", "Update Failed"))
 
     # ==========================================================================
-    # TAB 4 # ENTERPRISE STOCK ADJUSTMENT (FIXED)
+    # TAB 4 # ENTERPRISE STOCK ADJUSTMENT (FIXED FOR UNIT COST)
     # ==========================================================================
     with tab4:
         st.subheader("🔧 Enterprise Stock Adjustment")
@@ -312,13 +312,14 @@ def run():
                     st.warning("Quantity cannot be zero")
                     st.stop()
                 try:
-                    # Direct InventoryService call to prevent UUID int() conversion errors
+                    # Direct InventoryService call including unit_cost to prevent not-null constraint error
                     result = inventory_service.adjust_stock(
                         product_id=product_id,
                         warehouse_id=int(selected_wh_id),
                         quantity=int(adjustment_qty),
                         reason=reason,
                         created_by=st.session_state.get("user_id"),
+                        unit_cost=float(selected_product.get("purchase_price", 0.0)),
                     )
                     if result.get("success"):
                         st.success("✅ Stock Adjustment Created")
