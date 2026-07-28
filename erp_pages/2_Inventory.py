@@ -1,6 +1,6 @@
 # ==============================================================================
 # pages/2_Inventory.py
-# ERP ENTERPRISE PRODUCT MASTER v4.4 - PRODUCTION HARDENED
+# ERP ENTERPRISE PRODUCT MASTER v4.4 - PRODUCTION HARDENED & FIXED
 # ==============================================================================
 
 import time
@@ -15,7 +15,6 @@ from database import (
     db,
     get_inventory_view,
     get_warehouses,
-    stock_adjustment_rpc,
     update_product_rpc,
 )
 
@@ -257,7 +256,7 @@ def run():
                         st.error(result.get("message", "Update Failed"))
 
     # ==========================================================================
-    # TAB 4 # ENTERPRISE STOCK ADJUSTMENT
+    # TAB 4 # ENTERPRISE STOCK ADJUSTMENT (FIXED)
     # ==========================================================================
     with tab4:
         st.subheader("🔧 Enterprise Stock Adjustment")
@@ -313,7 +312,8 @@ def run():
                     st.warning("Quantity cannot be zero")
                     st.stop()
                 try:
-                    result = stock_adjustment_rpc(
+                    # Direct InventoryService call to prevent UUID int() conversion errors
+                    result = inventory_service.adjust_stock(
                         product_id=product_id,
                         warehouse_id=int(selected_wh_id),
                         quantity=int(adjustment_qty),
@@ -334,14 +334,8 @@ def run():
             st.divider()
             st.subheader("📜 Stock Adjustment History")
             try:
-                # Direct Supabase query for stock adjustment history table if service method is missing
-                history = (
-                    db()
-                    .table("stock_adjustments")
-                    .select("*")
-                    .eq("warehouse_id", int(selected_wh_id))
-                    .execute()
-                    .data
+                history = inventory_service.get_stock_adjustments(
+                    warehouse_id=selected_wh_id
                 )
                 if history:
                     show_table(history)
