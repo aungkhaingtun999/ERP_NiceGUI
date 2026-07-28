@@ -1,8 +1,6 @@
 # ==============================================================================
 # erp_core/loaders/product_loader.py
-# ERP ENTERPRISE PRODUCT LOADER v30.2
-#
-# SINGLE SOURCE OF TRUTH
+# ERP ENTERPRISE PRODUCT LOADER v30.3 FINAL
 #
 # Database
 #      ↓
@@ -39,7 +37,8 @@ from erp_core.context import (
 
 
 from erp_core.config import (
-    DEFAULT_PAGE_SIZE
+    DEFAULT_PAGE_SIZE,
+    CACHE_KEYS
 )
 
 
@@ -52,7 +51,7 @@ from erp_core.repositories import (
 
 
 # ==============================================================================
-# INTERNAL CACHE QUERY
+# CACHE QUERY
 # ==============================================================================
 
 
@@ -92,12 +91,17 @@ def _get_products_cached(
 
 
 
+
     except Exception as e:
 
 
         log_error(
 
-            f"Product loader error: {e}"
+            message=
+
+            "Product cache query failed",
+
+            exception=e
 
         )
 
@@ -123,13 +127,6 @@ def normalize_product(
 
 ):
 
-    """
-    Convert database product view
-    into ERP standard product object
-
-    """
-
-
 
     if not product:
 
@@ -138,39 +135,48 @@ def normalize_product(
 
 
 
-
     return {
 
 
+        # --------------------------------------------------
+        # BASIC INFO
+        # --------------------------------------------------
+
         "id":
 
-            product.get(
-                "id"
-            ),
-
+            product.get("id"),
 
 
         "name":
 
             product.get(
-                "name",
-                ""
-            ),
 
+                "name",
+
+                ""
+
+            ),
 
 
         "sku":
 
             product.get(
-                "sku"
-            ),
 
+                "sku",
+
+                ""
+
+            ),
 
 
         "barcode":
 
             product.get(
-                "barcode"
+
+                "barcode",
+
+                ""
+
             ),
 
 
@@ -178,41 +184,52 @@ def normalize_product(
         "category_id":
 
             product.get(
-                "category_id"
-            ),
 
+                "category_id"
+
+            ),
 
 
         "category":
 
             product.get(
+
                 "category"
+
             ),
 
 
 
-        # --------------------------
+
+        # --------------------------------------------------
         # COST
-        # --------------------------
+        # --------------------------------------------------
 
         "purchase_price":
 
             product.get(
+
                 "purchase_price",
+
                 0
+
             ),
 
 
 
-        # --------------------------
+
+        # --------------------------------------------------
         # PRICE ENGINE
-        # --------------------------
+        # --------------------------------------------------
 
         "selling_price":
 
             product.get(
+
                 "selling_price",
+
                 0
+
             ),
 
 
@@ -220,17 +237,24 @@ def normalize_product(
         "owner_selling_price":
 
             product.get(
+
                 "owner_selling_price"
+
             ),
+
 
 
 
         "owner_price_locked":
 
             product.get(
+
                 "owner_price_locked",
+
                 False
+
             ),
+
 
 
 
@@ -252,21 +276,24 @@ def normalize_product(
 
 
 
+
         "price_source":
 
             product.get(
 
                 "price_source",
 
-                "MANUAL"
+                "SYSTEM"
 
             ),
 
 
 
-        # --------------------------
-        # INVENTORY
-        # --------------------------
+
+
+        # --------------------------------------------------
+        # STOCK
+        # --------------------------------------------------
 
         "warehouse_id":
 
@@ -277,6 +304,7 @@ def normalize_product(
                 warehouse_id
 
             ),
+
 
 
 
@@ -304,6 +332,7 @@ def normalize_product(
 
 
 
+
         "available_qty":
 
             product.get(
@@ -322,6 +351,7 @@ def normalize_product(
 
 
 
+
         "minimum_stock":
 
             product.get(
@@ -331,6 +361,7 @@ def normalize_product(
                 0
 
             ),
+
 
 
 
@@ -366,7 +397,7 @@ def get_products(
 
     limit=DEFAULT_PAGE_SIZE
 
-):
+) -> List[Dict[str, Any]]:
 
 
     products = _get_products_cached(
@@ -380,7 +411,7 @@ def get_products(
 
         CacheManager.get_version(
 
-            "inventory_version"
+            CACHE_KEYS["inventory"]
 
         )
 
@@ -388,24 +419,20 @@ def get_products(
 
 
 
-    return [
 
+    return [
 
         normalize_product(
 
-            p,
+            product,
 
             warehouse_id
 
         )
 
+        for product in products
 
-        for p in products
-
-
-        if p
-
-
+        if product
 
     ]
 
@@ -431,11 +458,11 @@ def get_pos_products(
 
     products = get_products(
 
-        warehouse_id=warehouse_id,
+        warehouse_id,
 
-        offset=0,
+        0,
 
-        limit=DEFAULT_PAGE_SIZE
+        DEFAULT_PAGE_SIZE
 
     )
 
@@ -454,14 +481,12 @@ def get_pos_products(
 
 
 
-        products = [
 
+        products = [
 
             p
 
-
             for p in products
-
 
             if (
 
@@ -478,7 +503,9 @@ def get_pos_products(
                 ).lower()
 
 
+
                 or
+
 
 
                 keyword in str(
@@ -494,7 +521,9 @@ def get_pos_products(
                 ).lower()
 
 
+
                 or
+
 
 
                 keyword in str(
@@ -517,8 +546,6 @@ def get_pos_products(
 
 
 
-
-
     return products
 
 
@@ -535,15 +562,25 @@ def get_pos_products(
 def get_active_products():
 
 
-    return get_products(
+    products = get_products()
 
-        warehouse_id=None,
 
-        offset=0,
 
-        limit=DEFAULT_PAGE_SIZE
+    return [
 
-    )
+        p
+
+        for p in products
+
+        if p.get(
+
+            "is_active",
+
+            True
+
+        )
+
+    ]
 
 
 
@@ -564,19 +601,30 @@ def refresh_products_cache():
 
         CacheManager.bump(
 
-            "inventory_version"
+            CACHE_KEYS["inventory"]
 
         )
 
 
         CacheManager.bump(
 
-            "product_version"
+            CACHE_KEYS["products"]
 
         )
 
 
+
+        CacheManager.bump(
+
+            CACHE_KEYS["pricing"]
+
+        )
+
+
+
+
         _get_products_cached.clear()
+
 
 
 
@@ -585,6 +633,10 @@ def refresh_products_cache():
 
         log_error(
 
-            f"Product cache refresh error: {e}"
+            message=
+
+            "Product cache refresh failed",
+
+            exception=e
 
         )
