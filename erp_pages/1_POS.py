@@ -1679,38 +1679,66 @@ TOTAL:
 
                 if result.get(
 
-                    "success",
+    "success",
 
-                    False
+    False
 
-                ):
-
-
-
-                    data = result.get(
-
-                        "data",
-
-                        {}
-
-                    )
+):
 
 
+    data = result.get(
+
+        "data",
+
+        {}
+
+    )
+
+
+    if isinstance(
+
+        data,
+
+        list
+
+    ):
+
+
+        data = data[0] if data else {}
 
 
 
-                    if isinstance(
+    # ======================================================
+    # CACHE INVALIDATION AFTER SUCCESSFUL SALE
+    # ======================================================
 
-                        data,
+    CacheManager.bump(
 
-                        list
+        "inventory_version"
 
-                    ):
+    )
 
 
+    CacheManager.bump(
 
-                        data = data[0] if data else {}
+        "product_version"
 
+    )
+
+
+    CacheManager.bump(
+
+        "sales_version"
+
+    )
+
+
+    st.cache_data.clear()
+
+
+    # ======================================================
+    # CONTINUE RECEIPT PROCESS
+    # ======================================================
 
 
 
