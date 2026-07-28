@@ -190,7 +190,7 @@ def run():
                         CacheManager.bump(
     "inventory_version"
 )
-CacheManager.bump(
+                        CacheManager.bump(
     "product_version"
 )
 st.cache_data.clear()
