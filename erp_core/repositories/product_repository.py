@@ -109,8 +109,8 @@ class ProductRepository(BaseRepository):
 
                 self.client
                 .table(
-                    Tables.PRODUCTS
-                )
+                TABLE_PRODUCT_VIEW
+)
                 .select("*")
                 .eq(
                     "id",
