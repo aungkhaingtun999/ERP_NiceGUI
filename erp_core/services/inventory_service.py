@@ -463,4 +463,5 @@ class InventoryService:
 # ==============================================================================
 
 
-inventory_service = InventoryService()
+# Export helper only
+inventory_service = None()
