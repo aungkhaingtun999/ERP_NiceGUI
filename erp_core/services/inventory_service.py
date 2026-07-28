@@ -34,6 +34,14 @@ from ..base_repo import (
 class InventoryService:
 
 
+    def __init__(
+        self,
+        client
+    ):
+
+        self.client = client
+
+
     # ==========================================================================
     # Inventory KPI
     # ==========================================================================
@@ -46,9 +54,8 @@ class InventoryService:
 
             result = (
 
-                db()
-
-                .table(
+                self.client
+                  .table()(
                     "inventory_kpi_view"
                 )
 
@@ -158,9 +165,8 @@ class InventoryService:
 
             result = (
 
-                db()
-
-                .table(
+                self.client
+                 .table()(
                     "warehouse_inventory_kpi_view"
                 )
 
@@ -209,9 +215,8 @@ class InventoryService:
 
             result = (
 
-                db()
-
-                .table(
+                self.client
+                  .table()(
                     "inventory_valuation_view"
                 )
 
@@ -260,9 +265,8 @@ class InventoryService:
 
             result = (
 
-                db()
-
-                .table(
+                self.client
+                  .table()(
                     "inventory_loss_kpi_view"
                 )
 
@@ -317,9 +321,8 @@ class InventoryService:
 
             result = (
 
-                db()
-
-                .table(
+                self.client
+                  .table()(
                     "stock_card_view"
                 )
 
@@ -390,9 +393,8 @@ class InventoryService:
 
             result = (
 
-                db()
-
-                .table(
+                self.client
+                  .table()(
                     "inventory_kpi_view"
                 )
 
