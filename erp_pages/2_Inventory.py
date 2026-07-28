@@ -21,8 +21,8 @@ from database import (
 # ==============================================================================
 # ERP CORE SERVICES
 # ==============================================================================
-from erp_core.services.inventory_service import InventoryService
 from erp_core.context import CacheManager
+from erp_core.services.inventory_service import InventoryService
 from erp_core.services.pricing_service import PricingService
 
 # ==============================================================================
@@ -170,61 +170,23 @@ def run():
                     if isinstance(result, list):
                         result = result[0]
 
-                    if result.get(
+                    if result.get("success"):
+                        st.success("✅ Stock Adjustment Created")
 
-                        "success"
+                        # ======================================================
+                        # CACHE INVALIDATION AFTER STOCK CHANGE
+                        # ======================================================
+                        CacheManager.bump("inventory_version")
+                        CacheManager.bump("product_version")
+                        st.cache_data.clear()
+                        st.json(result)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(result.get("message", "Create Failed"))
 
-):
-
-                        st.success(
-
-        "✅ Stock Adjustment Created"
-
-    )
-
-
-    # CacheManager.bump(
-    "inventory_version"
-)
-CacheManager.bump(
-    "product_version"
-)
-st.cache_data.clear()
-st.json(
-    result
-)
-time.sleep(1)
-st.rerun()
-
-else:
-    st.error(result.get("message", "Create Failed"))
-
-except Exception as e:
-    st.error(f"Create Product Error : {e}")
-    # ======================================================
-    # CACHE INVALIDATION AFTER STOCK CHANGE
-    # ======================================================
-    try:
-        # (အပေါ်ပိုင်း ကုဒ်များရှိလျှင် ဤနေရာတွင် ရှိမည်)
-        
-        CacheManager.bump(
-            "inventory_version"
-        )
-        CacheManager.bump(
-            "product_version"
-        )
-        st.cache_data.clear()
-        st.json(
-            result
-        )
-        time.sleep(1)
-        st.rerun()
-
-    else:
-        st.error(result.get("message", "Create Failed"))
-
-    except Exception as e:
-        st.error(f"Create Product Error : {e}")
+                except Exception as e:
+                    st.error(f"Create Product Error : {e}")
 
     # ==========================================================================
     # TAB 3 # EDIT PRODUCT
@@ -385,23 +347,21 @@ except Exception as e:
                     warehouse_id=selected_wh_id
                 )
                 if history:
-                    # Maker & Checker: PENDING စာရင်းများအတွက် Segregation of Duties နှင့် Approve/Cancel ပြသခြင်း
                     st.markdown("### 🔔 Pending Approvals (Checker Queue)")
                     pending_found = False
                     current_user_id = str(st.session_state.get("user_id", ""))
-                    
+
                     for item in history:
                         if item.get("status") and item.get("status").upper() == "PENDING":
                             pending_found = True
                             requested_by = str(item.get("requested_by", ""))
-                            
+
                             col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
                             col1.write(f"ID: {item.get('id')} | Qty: {item.get('qty')} | Reason: {item.get('reason')}")
                             col2.warning("Status: PENDING")
-                            
-                            # Maker နှင့် Checker တူမနေရ (Segregation of Duties) စစ်ဆေးခြင်း
+
                             is_maker = (current_user_id and requested_by and current_user_id == requested_by)
-                            
+
                             if is_maker:
                                 col3.caption("🚫 Cannot approve own request")
                             else:
@@ -419,10 +379,8 @@ except Exception as e:
                                             time.sleep(1)
                                             st.rerun()
                                         else:
-                                            # FIFO Stock မလုံလောက်သည့် အခြေအနေ (Not enough FIFO stock) အပါအဝင် Error များကို ရှင်းလင်းစွာပြရန်
                                             st.error(f"Approval Failed: {res.get('message')}")
-                            
-                            # Cancel / Reject လုပ်ရန် ခလုတ်
+
                             if col4.button("❌ Cancel", key=f"cancel_adj_{item.get('id')}"):
                                 try:
                                     cancel_res = db().rpc(
@@ -435,7 +393,7 @@ except Exception as e:
                                     cancel_data = cancel_res.data
                                     if isinstance(cancel_data, list):
                                         cancel_data = cancel_data[0]
-                                        
+
                                     if cancel_data.get("success"):
                                         st.success("🗑️ Stock Adjustment Cancelled Successfully!")
                                         st.cache_data.clear()
@@ -445,7 +403,7 @@ except Exception as e:
                                         st.error(cancel_data.get("message", "Cancel failed"))
                                 except Exception as err:
                                     st.error(f"Error cancelling: {err}")
-                    
+
                     if not pending_found:
                         st.info("No pending stock adjustments waiting for approval.")
 
