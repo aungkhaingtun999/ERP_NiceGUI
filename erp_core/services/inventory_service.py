@@ -459,9 +459,12 @@ class InventoryService:
 
 
 # ==============================================================================
-# Export Instance
+# Export
 # ==============================================================================
 
 
-# Export helper only
-inventory_service = None()
+__all__ = [
+
+    "InventoryService"
+
+]
