@@ -25,7 +25,25 @@ from sidebar import (
 from utils.notification import (
     show_notification
 )
+import streamlit as st
+# သင့် Project ထဲက Supabase client ကို import လုပ်ပါ (ဥပမာ - from database import supabase)
+from pos_sync import render_pos_sync_sidebar, get_cached_products
 
+st.title("POS အရောင်းမျက်နှာပြင်")
+
+# 1. Sidebar ထဲတွင် Sync ခလုတ် ထည့်သွင်းခြင်း
+render_pos_sync_sidebar(supabase)
+
+# 2. POS Screen အတွက် Product စာရင်းများကို Cache ထဲမှ ယူသုံးခြင်း
+products = get_cached_products(supabase)
+
+# 3. Product များကို POS Screen ပေါ်တွင် ပြသခြင်း
+if products:
+    for p in products:
+        st.write(f"ပစ္စည်းအမည်: {p.get('name')} | လက်ကျန်: {p.get('stock')}")
+else:
+    st.info("ပြရန် Product များ မရှိသေးပါ။")
+    
 
 # ==============================================================================
 # PATH SETUP
