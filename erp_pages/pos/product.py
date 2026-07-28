@@ -1,13 +1,6 @@
 # ==============================================================================
 # erp_pages/pos/product.py
-# ERP ENTERPRISE POS PRODUCT MODULE v12.2
-#
-# Product Loading
-# Search
-# Barcode / SKU
-# Selection
-# Stock Validation
-#
+# ERP ENTERPRISE POS PRODUCT MODULE v12.2 FINAL
 # ==============================================================================
 
 
@@ -27,69 +20,48 @@ from erp_core.loaders.product_loader import (
 )
 
 
-
 from .cart import (
     add_to_cart,
     check_available_stock
 )
 
 
+from .engine import (
+    get_final_price
+)
 
 
 
-# ==============================================================================
-# MONEY FORMAT
-# ==============================================================================
 
 
 def money(value):
 
     try:
-
         return f"{float(value):,.0f} MMK"
 
     except Exception:
-
         return "0 MMK"
 
 
 
 
 
-
-
-# ==============================================================================
-# LOAD PRODUCTS
-# ==============================================================================
-
-
 def load_pos_products(
-
     warehouse_id=None
-
-) -> List[Dict[str, Any]]:
-
+):
 
     try:
 
-
         return get_pos_products(
-
             warehouse_id=warehouse_id
-
         ) or []
-
 
 
     except Exception as e:
 
-
         st.error(
-
             f"Product Load Error: {e}"
-
         )
-
 
         return []
 
@@ -99,31 +71,18 @@ def load_pos_products(
 
 
 
-# ==============================================================================
-# SEARCH ENGINE
-# ==============================================================================
-
-
 def search_products(
-
     products,
-
     keyword=""
-
 ):
 
 
     if not keyword:
-
         return products
 
 
 
-    keyword = str(
-
-        keyword
-
-    ).lower().strip()
+    keyword = str(keyword).lower().strip()
 
 
 
@@ -136,47 +95,19 @@ def search_products(
         if (
 
             keyword in str(
-
-                p.get(
-
-                    "name",
-
-                    ""
-
-                )
-
+                p.get("name","")
             ).lower()
-
 
             or
 
-
             keyword in str(
-
-                p.get(
-
-                    "sku",
-
-                    ""
-
-                )
-
+                p.get("sku","")
             ).lower()
-
 
             or
 
-
             keyword in str(
-
-                p.get(
-
-                    "barcode",
-
-                    ""
-
-                )
-
+                p.get("barcode","")
             ).lower()
 
         )
@@ -189,47 +120,24 @@ def search_products(
 
 
 
-
-# ==============================================================================
-# STOCK CHECK
-# ==============================================================================
-
-
 def check_stock(
-
     product,
-
     qty
-
 ):
-
-
-    cart = st.session_state.get(
-
-        "cart",
-
-        []
-
-    )
-
 
 
     return check_available_stock(
 
-        cart,
-
-        product.get(
-
-            "id"
-
+        st.session_state.get(
+            "cart",
+            []
         ),
 
+        product.get("id"),
+
         product.get(
-
             "available_qty",
-
             0
-
         ),
 
         qty
@@ -242,77 +150,10 @@ def check_stock(
 
 
 
-
-# ==============================================================================
-# PRODUCT PRICE
-# ==============================================================================
+def product_label(product):
 
 
-def get_product_price(
-
-    product
-
-):
-
-
-    return {
-
-        "price":
-
-            float(
-
-                product.get(
-
-                    "final_selling_price",
-
-                    product.get(
-
-                        "selling_price",
-
-                        0
-
-                    )
-
-                )
-
-            ),
-
-
-        "source":
-
-            product.get(
-
-                "price_source",
-
-                "MANUAL"
-
-            )
-
-    }
-
-
-
-
-
-
-
-# ==============================================================================
-# PRODUCT LABEL
-# ==============================================================================
-
-
-def product_label(
-
-    product
-
-):
-
-
-    price = get_product_price(
-
-        product
-
-    )
+    price = get_final_price(product)
 
 
     return (
@@ -334,153 +175,54 @@ def product_label(
 
 
 
-# ==============================================================================
-# FIND PRODUCT
-# ==============================================================================
-
-
-def get_product_by_id(
-
-    products,
-
-    product_id
-
-):
-
-
-    for product in products:
-
-
-        if int(
-
-            product.get("id")
-
-        ) == int(product_id):
-
-
-            return product
-
-
-
-    return None
-
-
-
-
-
-
-
-
-# ==============================================================================
-# PRODUCT UI
-# ==============================================================================
-
-
 def render_products(
-
     warehouse_id
-
 ):
 
 
     products = load_pos_products(
-
         warehouse_id
-
     )
 
 
 
     if not products:
 
-
         st.warning(
-
             "No Products Found"
-
         )
-
 
         return []
 
 
 
 
-
-
-
     st.subheader(
-
         "🔍 Product Search"
-
     )
 
 
 
-    col1, col2 = st.columns(2)
-
-
-
-    with col1:
-
-
-        name_search = st.text_input(
-
-            "Product Name"
-
-        )
-
-
-
-    with col2:
-
-
-        code_search = st.text_input(
-
-            "SKU / Barcode"
-
-        )
-
-
-
-
-    keyword = (
-
-        name_search
-
-        or
-
-        code_search
-
+    keyword = st.text_input(
+        "Name / SKU / Barcode"
     )
 
 
 
     filtered = search_products(
-
         products,
-
         keyword
-
     )
-
 
 
 
     if not filtered:
 
-
         st.warning(
-
             "Product not found"
-
         )
 
-
         return products
-
-
-
 
 
 
@@ -494,8 +236,6 @@ def render_products(
         format_func=product_label
 
     )
-
-
 
 
 
@@ -515,16 +255,11 @@ def render_products(
 
 
 
-
-
-
     if selected:
 
 
-        price_data = get_product_price(
-
+        price_data = get_final_price(
             selected
-
         )
 
 
@@ -534,28 +269,21 @@ def render_products(
             f"""
 
 Product:
-
 {selected.get('name')}
 
 
-
 Price:
-
 {money(price_data['price'])}
 
 
-
-Price Source:
-
+Source:
 {price_data['source']}
 
 
-
-Available Stock:
-
+Stock:
 {selected.get('available_qty',0)}
 
-            """
+"""
 
         )
 
@@ -563,53 +291,30 @@ Available Stock:
 
 
 
-
         if st.button(
-
             "➕ Add To Cart",
-
             use_container_width=True
-
         ):
 
 
 
             if not check_stock(
-
                 selected,
-
                 qty
-
             ):
 
-
                 st.error(
-
                     "Insufficient Stock"
-
                 )
-
 
                 return products
 
 
 
 
-
-
-            cart = st.session_state.get(
-
-                "cart",
-
-                []
-
-            )
-
-
-
             add_to_cart(
 
-                cart,
+                st.session_state.cart,
 
                 selected,
 
@@ -623,21 +328,13 @@ Available Stock:
 
 
 
-            st.session_state.cart = cart
-
-
-
             st.success(
-
                 "Added to cart"
-
             )
 
 
+
             st.rerun()
-
-
-
 
 
 
