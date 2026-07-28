@@ -8,7 +8,7 @@
 import streamlit as st
 
 
-from supabase_client import supabase
+from supabase_client import get_supabase
 
 
 from erp_core.services.inventory_service import (
