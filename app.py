@@ -25,7 +25,7 @@ from sidebar import (
 from utils.notification import (
     show_notification
 )
-import streamlit as st
+
 # သင့် Project ထဲက Supabase client ကို import လုပ်ပါ (ဥပမာ - from database import supabase)
 from pos_sync import render_pos_sync_sidebar, get_cached_products
 
