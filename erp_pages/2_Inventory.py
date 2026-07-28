@@ -1,463 +1,1853 @@
-==============================================================================
+# ==============================================================================
+# pages/2_Inventory.py
+# ERP ENTERPRISE PRODUCT MASTER v4.4
+#
+# Enterprise DI Connected
+#
+# Features:
+#   - InventoryService DI
+#   - PricingService Connected
+#   - Warehouse Control
+#   - Product Master
+#   - Stock Adjustment Ready
+#   - FIFO Dashboard Ready
+#
+# Compatible:
+#   app.py Custom Router v30.12
+#   erp_core.services.inventory_service
+#   erp_core.services.pricing_service
+#
+# ==============================================================================
 
-pages/2_Inventory.py
-
-ERP ENTERPRISE PRODUCT MASTER v4.3 - PRODUCTION HARDENED
-
-==============================================================================
 
 import streamlit as st
-
 import pandas as pd
-
 import time
+
+
+
+# ==============================================================================
+# DATABASE BRIDGE
+# ==============================================================================
+
 
 from database import (
 
-db,
+    db,
 
-get_inventory_view,
+    get_inventory_view,
 
-get_warehouses,
+    get_warehouses,
 
-update_product_rpc,
+    update_product_rpc,
 
-stock_adjustment_rpc
+    stock_adjustment_rpc
 
 )
 
+
+
+# ==============================================================================
+# ERP CORE SERVICES
+# ==============================================================================
+
+
+from erp_core.services.inventory_service import (
+
+    InventoryService
+
+)
+
+
+
+from erp_core.services.pricing_service import (
+
+    PricingService
+
+)
+
+
+
+# ==============================================================================
+# UI
+# ==============================================================================
+
+
 from utils.ui import show_table
+
+
+
+
+
+# ==============================================================================
+# PAGE RUNNER
+# ==============================================================================
+
 
 def run():
 
-st.title("🏭 Enterprise Product Master v4.3")
 
+    st.title(
+        "🏭 Enterprise Product Master v4.4"
+    )
 
 
-# Warehouse Selection
+    st.caption(
+        "ERP Inventory Control Center"
+    )
 
-warehouses = get_warehouses()
 
-if not warehouses:
 
-    st.error("No active warehouses found. Please check database.")
 
-    st.stop()
 
+    # ==========================================================================
+    # SERVICE INITIALIZATION
+    # ==========================================================================
 
 
-wh_map = {w['name']: w['id'] for w in warehouses}
+    try:
 
-selected_wh_name = st.selectbox("📍 Select Warehouse", list(wh_map.keys()))
 
-selected_wh_id = wh_map[selected_wh_name]
+        client = db()
 
 
+        inventory_service = InventoryService(
+            client
+        )
 
-# Tab ၅ ခု
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        pricing_service = PricingService(
+            client
+        )
 
-    "📋 Product Master",
 
-    "➕ Add Product",
+    except Exception as e:
 
-    "✏️ Edit Product",
 
-    "🔧 Stock Adjustment",
+        st.error(
+            f"ERP Service Connection Failed : {e}"
+        )
 
-    "📊 Enterprise Dashboard"
+        st.stop()
 
-])
 
 
 
-with tab1:
 
-    search = st.text_input("🔍 Search Products (Name, SKU, Barcode)", key="search_bar")
 
-    products = get_inventory_view(warehouse_id=selected_wh_id, search=search)
 
-    
+    # ==========================================================================
+    # WAREHOUSE SELECTOR
+    # ==========================================================================
 
-    if products:
 
-        show_table(products)
+    warehouses = get_warehouses()
 
-    else:
 
-        st.info("No products found in this warehouse.")
 
+    if not warehouses:
 
 
-with tab2:
+        st.error(
+            "No active warehouses found"
+        )
 
-    with st.form("add_product_form", clear_on_submit=True):
+        st.stop()
 
-        c1, c2 = st.columns(2)
 
-        data = {
 
-            "name": c1.text_input("Product Name*"),
+    warehouse_map = {
 
-            "sku": c1.text_input("SKU*"),
 
-            "barcode": c2.text_input("Barcode"),
+        w.get("name"):
 
-            "purchase_price": c1.number_input("Purchase Price", value=0.0),
+            w.get("id")
 
-            "selling_price": c2.number_input("Selling Price", value=0.0),
 
-            "category_id": 1,
+        for w in warehouses
 
-            "unit": c2.selectbox("Unit", ["pcs", "kg", "box"]),
 
-            "minimum_stock": c1.number_input("Minimum Stock", value=5)
+    }
 
-        }
 
-        init_qty = st.number_input("Initial Stock", min_value=0)
 
-        
+    selected_wh_name = st.selectbox(
 
-        if st.form_submit_button("Save Product", use_container_width=True):
+        "📍 Select Warehouse",
 
-            try:
+        list(
+            warehouse_map.keys()
+        )
 
-                res = db().rpc("create_product_full", {
+    )
 
-                    "p_data": data, 
 
-                    "p_warehouse_id": int(selected_wh_id), 
 
-                    "p_initial_qty": int(init_qty)
+    selected_wh_id = warehouse_map[
 
-                }).execute()
+        selected_wh_name
 
-                
+    ]
 
-                result = res.data
 
-                if isinstance(result, list): result = result[0]
 
-                
 
-                if result and result.get('status') == 'success':
 
-                    st.success("Product created successfully!")
 
-                else:
+    # ==========================================================================
+    # LOAD PRODUCTS
+    # ==========================================================================
 
-                    st.error(f"Error: {result.get('message', 'Unknown Error')}")
 
-            except Exception as e:
+    search = st.text_input(
 
-                st.error(f"Transaction failed: {str(e)}")
+        "🔍 Search Product",
 
+        placeholder="Name / SKU / Barcode"
 
+    )
 
-with tab3:
 
-    st.subheader("✏️ Edit Product Master")
 
-    products = get_inventory_view(warehouse_id=selected_wh_id)
+    try:
 
 
+        products = get_inventory_view(
 
-    if not products:
+            warehouse_id=selected_wh_id,
 
-        st.info("No products available")
+            search=search
 
-    else:
+        )
 
-        product_map = {f"{p.get('sku','')} | {p.get('name','')}": p for p in products}
 
-        selected_name = st.selectbox("Select Product", list(product_map.keys()))
+    except Exception as e:
 
-        selected_product = product_map[selected_name]
 
+        st.error(
 
+            f"Product loading error : {e}"
 
-        st.divider()
+        )
 
+        products = []
 
 
-        with st.form(f"edit_product_form_{selected_product['id']}"):
 
-            c1, c2 = st.columns(2)
 
-            name = c1.text_input("Product Name", value=selected_product.get("name",""))
 
-            sku = c1.text_input("SKU", value=selected_product.get("sku",""))
 
-            barcode = c2.text_input("Barcode", value=selected_product.get("barcode",""))
+    # ==========================================================================
+    # TABS
+    # ==========================================================================
 
-            purchase_price = c1.number_input("Purchase Price", value=float(selected_product.get("purchase_price", 0)))
 
-            selling_price = c2.number_input("Selling Price", value=float(selected_product.get("selling_price", 0)))
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
 
-            minimum_stock = c1.number_input("Minimum Stock", value=int(selected_product.get("minimum_stock", 0)))
+        [
 
-            
+            "📋 Product Master",
 
-            unit_options = ["pcs", "kg", "box"]
+            "➕ Add Product",
 
-            unit_val = selected_product.get("unit", "pcs")
+            "✏️ Edit Product",
 
-            unit = c2.selectbox("Unit", unit_options, index=unit_options.index(unit_val) if unit_val in unit_options else 0)
+            "🔧 Stock Adjustment",
 
-            
+            "📊 Enterprise Dashboard"
 
-            notes = st.text_area("Notes", value=selected_product.get("notes", ""))
+        ]
 
-            is_active = st.checkbox("Active Product", value=selected_product.get("is_active", True))
+    )
 
 
 
-            if st.form_submit_button("💾 Update Product", use_container_width=True):
 
-                result = update_product_rpc(
 
-                    product_id=selected_product["id"],
+    # ==========================================================================
+    # TAB 1
+    # PRODUCT MASTER
+    # ==========================================================================
 
-                    name=name,
 
-                    sku=sku,
+    with tab1:
 
-                    barcode=barcode,
 
-                    purchase_price=purchase_price,
+        st.subheader(
 
-                    selling_price=selling_price,
+            "📋 Product Master"
 
-                    minimum_stock=minimum_stock,
+        )
 
-                    unit=unit,
 
-                    notes=notes,
 
-                    is_active=is_active
+        if products:
 
-                )
 
+            show_table(
 
+                products
 
-                if result.get("success"):
+            )
 
-                    st.success(f"✅ '{name}' ကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
 
-                    time.sleep(1)
+        else:
 
-                    st.rerun()
 
-                else:
+            st.info(
 
-                    st.error(result.get("message", "Update failed"))
-
-
-
-# =========================================================
-
-# 🔧 STOCK ADJUSTMENT
-
-# =========================================================
-
-with tab4:
-
-    st.subheader("🔧 Stock Adjustment")
-
-    products = get_inventory_view(warehouse_id=selected_wh_id)
-
-
-
-    if not products:
-
-        st.warning("No products found")
-
-    else:
-
-        product_map = {f"{p['id']} | {p['name']}": p for p in products}
-
-        selected = st.selectbox("Select Product", list(product_map.keys()))
-
-        product = product_map[selected]
-
-        product_id = product["id"]
-
-        current_stock = product.get("stock", product.get("qty", 0))
-
-
-
-        st.info(f"📦 Product : {product['name']}\n🆔 ID : {product_id}\n📊 Current Stock : {current_stock}")
-
-
-
-        adjustment_qty = st.number_input("Adjustment Quantity (+/-)", value=0, step=1)
-
-        reason = st.text_input("Reason", "Stock Adjustment")
-
-
-
-        if st.button("💾 Apply Adjustment", use_container_width=True):
-
-            result = stock_adjustment_rpc(
-
-                product_id=product_id,
-
-                warehouse_id=selected_wh_id,
-
-                quantity=int(adjustment_qty),
-
-                reason=reason,
-
-                created_by=st.session_state.get("user_id")
+                "No products found"
 
             )
 
 
 
-            if result.get("success"):
 
-                st.success("✅ Stock Updated Successfully")
 
-                st.json(result.get("data"))
+    # ==========================================================================
+    # TAB 2
+    # ADD PRODUCT (PART 2)
+    # ==========================================================================
 
 
+    with tab2:
 
-                # Clear Streamlit cache
 
-                st.cache_data.clear()
+        st.info(
 
+            "➕ Add Product Module - Part 2"
 
+        )
 
-                time.sleep(1)
 
-                st.rerun()
 
-            else:
 
-                st.error(result.get("message", "Adjustment Failed"))
 
+    # ==========================================================================
+    # TAB 3
+    # EDIT PRODUCT (PART 2)
+    # ==========================================================================
 
 
-with tab5:
+    with tab3:
 
-    st.caption(f"Current Warehouse : {selected_wh_name}")
 
-    
+        st.info(
 
-    products = get_inventory_view(warehouse_id=selected_wh_id)
+            "✏️ Edit Product Module - Part 2"
 
-    if products:
+        )
 
-        df = pd.DataFrame(products)
 
-        for col in ['purchase_price', 'minimum_stock', 'qty', 'selling_price']:
 
-            if col not in df.columns: df[col] = 0
 
-        
 
-        # Numeric conversion to prevent type errors
+    # ==========================================================================
+    # TAB 4
+    # STOCK ADJUSTMENT (PART 3)
+    # ==========================================================================
 
-        df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0)
 
-        df["purchase_price"] = pd.to_numeric(df["purchase_price"], errors="coerce").fillna(0)
+    with tab4:
 
-        df["selling_price"] = pd.to_numeric(df["selling_price"], errors="coerce").fillna(0)
 
-        
+        st.info(
 
-        # Calculate stock value per item with rounding
+            "🔧 Stock Adjustment Module - Part 3"
 
-        df["stock_value"] = (df["qty"] * df["purchase_price"]).round(2)
+        )
 
-        
 
-        # Enterprise Inventory KPI
 
-        inventory_cost = df["stock_value"].sum()
 
-        inventory_value = (df["qty"] * df["selling_price"]).sum()
 
-        potential_profit = inventory_value - inventory_cost
+    # ==========================================================================
+    # TAB 5
+    # DASHBOARD (PART 4)
+    # ==========================================================================
 
 
+    with tab5:
 
-        m1, m2, m3, m4, m5 = st.columns(5)
 
+        st.info(
 
+            "📊 Enterprise Dashboard Module - Part 4"
 
-        m1.metric("📦 Total Products", len(df))
+        )
 
-        m2.metric("📊 Stock Qty", int(df["qty"].sum()))
 
-        m3.metric("💰 Stock Value", f"{inventory_cost:,.0f} MMK")
 
-        m4.metric("💵 Selling Value", f"{inventory_value:,.0f} MMK")
 
-        m5.metric("📈 Potential Profit", f"{potential_profit:,.0f} MMK")
 
+# ==============================================================================
+# ENTRY
+# ==============================================================================
 
 
-        st.divider()
+if __name__ == "__main__":
 
-        st.subheader("📋 Inventory Summary")
+    run()
+        # ==========================================================================
+    # TAB 2
+    # ADD PRODUCT
+    # ==========================================================================
 
-        summary = df.reindex(columns=[
+    with tab2:
 
-            "sku",
 
-            "name",
+        st.subheader(
+            "➕ Add New Product"
+        )
 
-            "qty",
 
-            "purchase_price",
+        with st.form(
+            "add_product_form",
+            clear_on_submit=True
+        ):
 
-            "selling_price",
 
-            "stock_value"
+            c1, c2 = st.columns(2)
 
-        ])
 
-        show_table(summary)
 
+            name = c1.text_input(
+                "Product Name *"
+            )
 
 
-        st.divider()
+            sku = c1.text_input(
+                "SKU *"
+            )
 
-        st.subheader("⚠️ Low Stock Alert")
 
-        low_stock = df[df["qty"] <= df["minimum_stock"]]
+            barcode = c2.text_input(
+                "Barcode"
+            )
 
-        if not low_stock.empty:
 
-            low_stock_summary = low_stock.reindex(columns=[
+            unit = c2.selectbox(
 
-                "sku",
+                "Unit",
 
-                "name",
+                [
+                    "pcs",
+                    "kg",
+                    "box"
+                ]
 
-                "qty",
+            )
 
-                "minimum_stock",
 
-                "purchase_price"
 
-            ])
+            purchase_price = c1.number_input(
 
-            show_table(low_stock_summary)
+                "Purchase Cost",
+
+                min_value=0.0,
+
+                value=0.0
+
+            )
+
+
+
+            minimum_stock = c2.number_input(
+
+                "Minimum Stock",
+
+                min_value=0,
+
+                value=5
+
+            )
+
+
+
+            initial_qty = st.number_input(
+
+                "Initial Stock Qty",
+
+                min_value=0,
+
+                value=0
+
+            )
+
+
+
+            # --------------------------------------------------
+            # PRICING ENGINE PREVIEW
+            # --------------------------------------------------
+
+
+            if purchase_price > 0:
+
+
+                try:
+
+
+                    preview = pricing_service.calculate_selling_price(
+
+                        cost=purchase_price,
+
+                        product_id=None
+
+                    )
+
+
+                    st.info(
+
+                        f"""
+💰 Pricing Preview
+
+Cost :
+{purchase_price:,.2f} MMK
+
+
+Markup :
+{preview.get('final_markup_percent',0)} %
+
+
+Selling Price :
+{preview.get('selling_price',0):,.2f} MMK
+
+
+Source :
+{preview.get('markup_source')}
+"""
+
+                    )
+
+
+                except Exception as e:
+
+
+                    st.warning(
+
+                        f"Pricing preview unavailable : {e}"
+
+                    )
+
+
+
+
+
+
+            submit = st.form_submit_button(
+
+                "💾 Create Product",
+
+                use_container_width=True
+
+            )
+
+
+
+            if submit:
+
+
+
+                try:
+
+
+
+                    payload = {
+
+
+                        "name":
+                            name,
+
+
+                        "sku":
+                            sku,
+
+
+                        "barcode":
+                            barcode,
+
+
+                        "purchase_price":
+                            purchase_price,
+
+
+                        "selling_price":
+                            preview.get(
+                                "selling_price",
+                                purchase_price
+                            )
+                            if purchase_price > 0
+                            else purchase_price,
+
+
+                        "unit":
+                            unit,
+
+
+                        "minimum_stock":
+                            minimum_stock,
+
+
+                        "category_id":
+                            1
+
+
+                    }
+
+
+
+
+                    response = db().rpc(
+
+                        "create_product_full",
+
+                        {
+
+                            "p_data":
+                                payload,
+
+
+                            "p_warehouse_id":
+                                int(selected_wh_id),
+
+
+                            "p_initial_qty":
+                                int(initial_qty)
+
+                        }
+
+                    ).execute()
+
+
+
+                    result = response.data
+
+
+
+                    if isinstance(
+                        result,
+                        list
+                    ):
+
+                        result = result[0]
+
+
+
+
+                    if result.get(
+                        "success"
+                    ) or result.get(
+                        "status"
+                    ) == "success":
+
+
+                        st.success(
+
+                            "✅ Product Created Successfully"
+
+                        )
+
+
+                        time.sleep(1)
+
+                        st.rerun()
+
+
+
+                    else:
+
+
+                        st.error(
+
+                            result.get(
+
+                                "message",
+
+                                "Create Failed"
+
+                            )
+
+                        )
+
+
+
+                except Exception as e:
+
+
+                    st.error(
+
+                        f"Create Product Error : {e}"
+
+                    )
+
+
+
+
+
+
+
+
+
+    # ==========================================================================
+    # TAB 3
+    # EDIT PRODUCT
+    # ==========================================================================
+
+
+    with tab3:
+
+
+        st.subheader(
+
+            "✏️ Edit Product Master"
+
+        )
+
+
+
+        if not products:
+
+
+            st.info(
+
+                "No product available"
+
+            )
+
 
         else:
 
-            st.success("No Low Stock Products found in this warehouse.")
 
-    else:
 
-        st.write("No data available for dashboard.")
+            product_map = {
 
-if name == "main":
 
-run()
+                f"{p.get('id')} | {p.get('name')}":
 
-#ပြုပြင်ဆရာရှိတာပြုပြင်ပြီး ကုတ်အပြည့်အစုံပေးပါ ဆရာကြီး
+                    p
+
+
+                for p in products
+
+
+            }
+
+
+
+            selected_product_name = st.selectbox(
+
+                "Select Product",
+
+                list(product_map.keys())
+
+            )
+
+
+
+            selected_product = product_map[
+
+                selected_product_name
+
+            ]
+
+
+
+
+
+            with st.form(
+
+                f"edit_product_{selected_product.get('id')}"
+
+            ):
+
+
+
+                c1,c2 = st.columns(2)
+
+
+
+                name = c1.text_input(
+
+                    "Product Name",
+
+                    value=selected_product.get(
+
+                        "name",
+
+                        ""
+
+                    )
+
+                )
+
+
+
+                sku = c1.text_input(
+
+                    "SKU",
+
+                    value=selected_product.get(
+
+                        "sku",
+
+                        ""
+
+                    )
+
+                )
+
+
+
+                barcode = c2.text_input(
+
+                    "Barcode",
+
+                    value=selected_product.get(
+
+                        "barcode",
+
+                        ""
+
+                    )
+
+                )
+
+
+
+                purchase_price = c1.number_input(
+
+                    "Purchase Cost",
+
+                    value=float(
+
+                        selected_product.get(
+
+                            "purchase_price",
+
+                            0
+
+                        )
+
+                    )
+
+                )
+
+
+
+                selling_price = c2.number_input(
+
+                    "Selling Price",
+
+                    value=float(
+
+                        selected_product.get(
+
+                            "selling_price",
+
+                            0
+
+                        )
+
+                    )
+
+                )
+
+
+
+                minimum_stock = c1.number_input(
+
+                    "Minimum Stock",
+
+                    value=int(
+
+                        selected_product.get(
+
+                            "minimum_stock",
+
+                            0
+
+                        )
+
+                    )
+
+                )
+
+
+
+                notes = st.text_area(
+
+                    "Notes",
+
+                    value=selected_product.get(
+
+                        "notes",
+
+                        ""
+
+                    )
+
+                )
+
+
+
+
+
+                update = st.form_submit_button(
+
+                    "💾 Update Product",
+
+                    use_container_width=True
+
+                )
+
+
+
+
+
+                if update:
+
+
+
+                    result = update_product_rpc(
+
+                        product_id=
+
+                            selected_product.get(
+
+                                "id"
+
+                            ),
+
+
+                        name=name,
+
+
+                        sku=sku,
+
+
+                        barcode=barcode,
+
+
+                        purchase_price=purchase_price,
+
+
+                        selling_price=selling_price,
+
+
+                        minimum_stock=minimum_stock,
+
+
+                        unit=
+
+                            selected_product.get(
+
+                                "unit",
+
+                                "pcs"
+
+                            ),
+
+
+                        notes=notes,
+
+
+                        is_active=True
+
+                    )
+
+
+
+
+                    if result.get(
+
+                        "success"
+
+                    ):
+
+
+                        st.success(
+
+                            "✅ Product Updated"
+
+                        )
+
+
+                        time.sleep(1)
+
+                        st.rerun()
+
+
+
+                    else:
+
+
+                        st.error(
+
+                            result.get(
+
+                                "message",
+
+                                "Update Failed"
+
+                            )
+
+                        )
+                  # ==========================================================================
+    # TAB 4
+    # ENTERPRISE STOCK ADJUSTMENT
+    # ==========================================================================
+
+    with tab4:
+
+
+        st.subheader(
+            "🔧 Enterprise Stock Adjustment"
+        )
+
+
+        if not products:
+
+
+            st.warning(
+                "No products available"
+            )
+
+
+        else:
+
+
+            product_map = {
+
+
+                f"{p.get('id')} | {p.get('name')}":
+
+                    p
+
+
+                for p in products
+
+
+            }
+
+
+
+            selected_product_name = st.selectbox(
+
+                "📦 Select Product",
+
+                list(product_map.keys())
+
+            )
+
+
+
+            selected_product = product_map[
+
+                selected_product_name
+
+            ]
+
+
+
+            product_id = int(
+
+                selected_product.get(
+                    "id"
+                )
+
+            )
+
+
+
+            current_qty = (
+
+                selected_product.get(
+                    "available_qty"
+                )
+
+                or
+
+                selected_product.get(
+                    "qty"
+                )
+
+                or
+
+                selected_product.get(
+                    "stock"
+                )
+
+                or 0
+
+            )
+
+
+
+
+
+            st.info(
+                f"""
+📦 Product :
+{selected_product.get('name')}
+
+
+🆔 Product ID :
+{product_id}
+
+
+🏭 Warehouse :
+{selected_wh_name}
+
+
+📊 Current Quantity :
+{current_qty}
+"""
+            )
+
+
+
+
+            st.divider()
+
+
+
+            # ------------------------------------------------------
+            # Adjustment Type
+            # ------------------------------------------------------
+
+
+            adjustment_type = st.selectbox(
+
+                "Adjustment Type",
+
+                [
+
+                    "DAMAGE",
+
+                    "COUNT_CORRECTION",
+
+                    "MANUAL_IN",
+
+                    "MANUAL_OUT"
+
+                ]
+
+            )
+
+
+
+
+
+            adjustment_qty = st.number_input(
+
+                "Quantity (+/-)",
+
+                value=0,
+
+                step=1
+
+            )
+
+
+
+
+
+            reason = st.text_input(
+
+                "Reason",
+
+                value=
+
+                (
+                    "Physical stock adjustment"
+                    if adjustment_type ==
+                    "COUNT_CORRECTION"
+
+                    else
+
+                    "Damaged stock"
+                    if adjustment_type ==
+                    "DAMAGE"
+
+                    else
+
+                    "Manual adjustment"
+                )
+
+            )
+
+
+
+
+
+
+            st.divider()
+
+
+
+            # ------------------------------------------------------
+            # APPLY ADJUSTMENT
+            # ------------------------------------------------------
+
+
+            if st.button(
+
+                "💾 Apply Stock Adjustment",
+
+                use_container_width=True
+
+            ):
+
+
+
+                if adjustment_qty == 0:
+
+
+                    st.warning(
+
+                        "Quantity cannot be zero"
+
+                    )
+
+                    st.stop()
+
+
+
+
+                try:
+
+
+
+                    result = stock_adjustment_rpc(
+
+                        product_id=
+
+                            product_id,
+
+
+                        warehouse_id=
+
+                            int(
+                                selected_wh_id
+                            ),
+
+
+                        quantity=
+
+                            int(
+                                adjustment_qty
+                            ),
+
+
+                        reason=
+
+                            reason,
+
+
+                        created_by=
+
+                            st.session_state.get(
+
+                                "user_id"
+
+                            )
+
+                    )
+
+
+
+
+
+                    if result.get(
+
+                        "success"
+
+                    ):
+
+
+
+                        st.success(
+
+                            "✅ Stock Adjustment Created"
+
+                        )
+
+
+
+                        st.json(
+
+                            result
+
+                        )
+
+
+
+                        st.cache_data.clear()
+
+
+
+                        time.sleep(1)
+
+
+                        st.rerun()
+
+
+
+
+                    else:
+
+
+
+                        st.error(
+
+                            result.get(
+
+                                "message",
+
+                                "Adjustment Failed"
+
+                            )
+
+                        )
+
+
+
+
+
+                except Exception as e:
+
+
+
+                    st.error(
+
+                        f"Adjustment Error : {e}"
+
+                    )
+
+
+
+
+
+
+
+        # ==============================================================
+        # ADJUSTMENT HISTORY
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+
+            "📜 Stock Adjustment History"
+
+        )
+
+
+
+        try:
+
+
+            history = (
+
+                inventory_service
+
+                .get_stock_adjustments(
+
+                    warehouse_id=
+
+                    selected_wh_id
+
+                )
+
+            )
+
+
+
+            if history:
+
+
+                show_table(
+
+                    history
+
+                )
+
+
+            else:
+
+
+                st.info(
+
+                    "No adjustment history"
+
+                )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"History Error : {e}"
+
+            )
+       # ==========================================================================
+    # TAB 5
+    # ENTERPRISE INVENTORY DASHBOARD
+    # ==========================================================================
+
+    with tab5:
+
+
+        st.subheader(
+            "📊 Enterprise Inventory Dashboard"
+        )
+
+
+        st.caption(
+            f"Current Warehouse : {selected_wh_name}"
+        )
+
+
+
+        # ==============================================================
+        # GLOBAL INVENTORY KPI
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+            "🏭 Inventory KPI"
+        )
+
+
+        try:
+
+
+            kpi = inventory_service.get_inventory_kpi()
+
+
+
+            if kpi.get("success") is False:
+
+
+                st.error(
+                    kpi.get(
+                        "message",
+                        "KPI Loading Failed"
+                    )
+                )
+
+
+            else:
+
+
+
+                c1, c2, c3, c4, c5 = st.columns(5)
+
+
+
+                c1.metric(
+
+                    "📦 Products",
+
+                    kpi.get(
+                        "total_products",
+                        0
+                    )
+
+                )
+
+
+
+                c2.metric(
+
+                    "🏭 Warehouses",
+
+                    kpi.get(
+                        "total_warehouses",
+                        0
+                    )
+
+                )
+
+
+
+                c3.metric(
+
+                    "📊 Stock Qty",
+
+                    kpi.get(
+                        "total_stock_qty",
+                        0
+                    )
+
+                )
+
+
+
+                c4.metric(
+
+                    "💰 Inventory Value",
+
+                    f"{float(kpi.get('total_inventory_value',0)):,.0f} MMK"
+
+                )
+
+
+
+                c5.metric(
+
+                    "⚠ Low Stock",
+
+                    kpi.get(
+                        "low_stock_items",
+                        0
+                    )
+
+                )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"KPI Error : {e}"
+
+            )
+
+
+
+
+
+
+
+        # ==============================================================
+        # WAREHOUSE KPI
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+            "🏭 Warehouse Inventory"
+        )
+
+
+
+        try:
+
+
+            warehouse_data = (
+
+                inventory_service
+
+                .get_warehouse_inventory_kpi()
+
+            )
+
+
+
+            if warehouse_data:
+
+
+                show_table(
+
+                    warehouse_data
+
+                )
+
+
+            else:
+
+
+                st.info(
+                    "No warehouse data"
+                )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"Warehouse KPI Error : {e}"
+
+            )
+
+
+
+
+
+
+
+        # ==============================================================
+        # FIFO VALUATION
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+            "💰 FIFO Inventory Valuation"
+        )
+
+
+
+        try:
+
+
+            valuation = (
+
+                inventory_service
+
+                .get_inventory_valuation()
+
+            )
+
+
+
+            if valuation:
+
+
+                show_table(
+
+                    valuation
+
+                )
+
+
+            else:
+
+
+                st.info(
+                    "No FIFO layers found"
+                )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"FIFO Error : {e}"
+
+            )
+
+
+
+
+
+
+
+        # ==============================================================
+        # LOSS ANALYTICS
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+            "📉 Inventory Loss Analytics"
+        )
+
+
+
+        try:
+
+
+            loss_data = (
+
+                inventory_service
+
+                .get_inventory_loss_report()
+
+            )
+
+
+
+            if loss_data:
+
+
+                show_table(
+
+                    loss_data
+
+                )
+
+
+            else:
+
+
+                st.success(
+                    "No inventory loss detected"
+                )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                f"Loss Analytics Error : {e}"
+
+            )
+
+
+
+
+
+
+
+        # ==============================================================
+        # STOCK CARD VIEWER
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+            "📜 Stock Card"
+        )
+
+
+
+        if products:
+
+
+            product_map = {
+
+
+                f"{p.get('id')} | {p.get('name')}":
+
+                    p
+
+
+                for p in products
+
+
+            }
+
+
+
+            selected_stock_product = st.selectbox(
+
+                "Select Product For Stock Card",
+
+                list(product_map.keys()),
+
+                key="stock_card_product"
+
+            )
+
+
+
+            stock_product = product_map[
+
+                selected_stock_product
+
+            ]
+
+
+
+            stock_card = (
+
+                inventory_service
+
+                .get_stock_card(
+
+                    product_id=int(
+                        stock_product.get("id")
+                    ),
+
+                    warehouse_id=int(
+                        selected_wh_id
+                    )
+
+                )
+
+            )
+
+
+
+            if stock_card:
+
+
+                show_table(
+
+                    stock_card
+
+                )
+
+
+            else:
+
+
+                st.info(
+                    "No stock movement history"
+                )
+
+
+
+
+
+
+
+
+
+        # ==============================================================
+        # SERVICE HEALTH
+        # ==============================================================
+
+
+        st.divider()
+
+
+        st.subheader(
+            "🩺 Inventory Service Health"
+        )
+
+
+
+        try:
+
+
+            health = (
+
+                inventory_service
+
+                .health_check()
+
+            )
+
+
+            st.json(
+
+                health
+
+            )
+
+
+
+        except Exception as e:
+
+
+            st.error(
+
+                str(e)
+
+            )       
