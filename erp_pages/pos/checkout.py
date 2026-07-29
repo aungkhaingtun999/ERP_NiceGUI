@@ -1,11 +1,11 @@
 # ==============================================================================
-# ERP POS CHECKOUT ENGINE v12.5 FINAL
+# ERP POS CHECKOUT ENGINE v12.6 FINAL
 #
 # Cart
 #   ↓
 # Checkout RPC
 #   ↓
-# Sale Data Builder
+# Receipt Builder
 #   ↓
 # Receipt Ready
 #
@@ -15,11 +15,13 @@
 from datetime import datetime
 
 
+import streamlit as st
+
+
 from erp_core import checkout_sale_rpc
 
 
 from erp_core.context import CacheManager
-
 
 from erp_core.config import CACHE_KEYS
 
@@ -35,28 +37,45 @@ def build_cart_payload(cart):
 
     payload = []
 
+
     for item in cart:
 
+
         payload.append(
+
             {
+
                 "id":
                     int(item.get("id")),
 
+
                 "qty":
-                    int(item.get("qty", 0)),
+                    int(item.get("qty",0)),
+
 
                 "selling_price":
                     float(
+
                         item.get(
+
                             "selling_price",
+
                             item.get(
+
                                 "unit_price",
+
                                 0
+
                             )
+
                         )
+
                     )
+
             }
+
         )
+
 
     return payload
 
@@ -64,36 +83,58 @@ def build_cart_payload(cart):
 
 
 
+
 # ==============================================================================
-# RECEIPT DATA BUILDER
+# RECEIPT BUILDER
 # ==============================================================================
 
 def build_receipt_data(
+
     cart,
+
     rpc_data,
+
     paid_amount,
+
     tax_rate,
+
     discount
+
 ):
 
 
     subtotal = sum(
 
         float(
+
             item.get(
+
                 "selling_price",
+
                 item.get(
+
                     "unit_price",
+
                     0
+
                 )
+
             )
+
         )
+
         *
+
         int(
+
             item.get(
+
                 "qty",
+
                 0
+
             )
+
         )
 
         for item in cart
@@ -101,12 +142,28 @@ def build_receipt_data(
     )
 
 
+
+
+
+    tax_rate = float(tax_rate or 0)
+
+
+    discount = float(discount or 0)
+
+
+
+
+
     tax_amount = round(
 
         subtotal
+
         *
-        float(tax_rate)
+
+        tax_rate
+
         /
+
         100,
 
         2
@@ -114,42 +171,63 @@ def build_receipt_data(
     )
 
 
+
+
+
     grand_total = max(
 
         0,
 
         subtotal
+
         +
+
         tax_amount
+
         -
-        float(discount)
+
+        discount
 
     )
 
 
-    items = []
+
+
+
+    items=[]
+
 
 
     for item in cart:
 
-        price = float(
+
+        price=float(
 
             item.get(
+
                 "selling_price",
+
                 item.get(
+
                     "unit_price",
+
                     0
+
                 )
+
             )
 
         )
 
 
-        qty = int(
+        qty=int(
 
             item.get(
+
                 "qty",
+
                 0
+
             )
 
         )
@@ -159,43 +237,116 @@ def build_receipt_data(
 
             {
 
+
                 "name":
+
                     item.get(
+
                         "name",
+
                         ""
+
                     ),
+
 
 
                 "product_id":
+
                     item.get(
+
                         "id"
+
                     ),
+
 
 
                 "quantity":
+
                     qty,
 
 
+
+                "qty":
+
+                    qty,
+
+
+
                 "unit_price":
+
                     price,
 
 
+
+                "selling_price":
+
+                    price,
+
+
+
                 "price_source":
+
                     item.get(
+
                         "price_source",
+
                         "SYSTEM"
+
                     ),
 
 
+
                 "total":
+
                     price * qty
+
 
             }
 
         )
 
 
+
+
+
+
+    user = st.session_state.get(
+
+        "user",
+
+        {}
+
+    )
+
+
+    if isinstance(user,dict):
+
+        cashier = (
+
+            user.get("full_name")
+
+            or
+
+            user.get("username")
+
+            or
+
+            "Admin"
+
+        )
+
+    else:
+
+        cashier="Admin"
+
+
+
+
+
+
+
     return {
+
 
         "invoice_no":
 
@@ -203,25 +354,40 @@ def build_receipt_data(
 
                 "invoice_no",
 
-                "INV-"
-                +
-                datetime.now().strftime(
-                    "%Y%m%d%H%M%S"
+                rpc_data.get(
+
+                    "invoice",
+
+                    "INV-"
+
+                    +
+
+                    datetime.now().strftime(
+
+                        "%Y%m%d%H%M%S"
+
+                    )
+
                 )
 
             ),
 
 
+
         "date":
 
             datetime.now().strftime(
+
                 "%Y-%m-%d %H:%M:%S"
+
             ),
+
 
 
         "cashier":
 
-            "Admin",
+            cashier,
+
 
 
         "items":
@@ -229,14 +395,17 @@ def build_receipt_data(
             items,
 
 
+
         "subtotal":
 
             subtotal,
 
 
+
         "tax_rate":
 
-            float(tax_rate),
+            tax_rate,
+
 
 
         "tax_amount":
@@ -244,9 +413,11 @@ def build_receipt_data(
             tax_amount,
 
 
+
         "discount":
 
-            float(discount),
+            discount,
+
 
 
         "grand_total":
@@ -254,9 +425,11 @@ def build_receipt_data(
             grand_total,
 
 
+
         "paid":
 
             float(paid_amount),
+
 
 
         "change":
@@ -266,7 +439,9 @@ def build_receipt_data(
                 0,
 
                 float(paid_amount)
+
                 -
+
                 grand_total
 
             )
@@ -305,14 +480,17 @@ def process_checkout(
 
         result = checkout_sale_rpc(
 
+
             cart=
 
                 build_cart_payload(cart),
 
 
+
             paid_amount=
 
-                paid_amount,
+                float(paid_amount),
+
 
 
             warehouse_id=
@@ -320,9 +498,11 @@ def process_checkout(
                 warehouse_id,
 
 
+
             cashier_id=
 
                 cashier_id,
+
 
 
             payment_method=
@@ -330,35 +510,49 @@ def process_checkout(
                 payment_method,
 
 
+
             tax_rate=
 
-                tax_rate,
+                float(tax_rate),
+
 
 
             discount=
 
-                discount
+                float(discount)
 
         )
 
 
 
+
+
+
         if not result.get(
+
             "success",
+
             False
+
         ):
 
 
             return {
 
+
                 "success":
+
                     False,
 
 
                 "message":
+
                     result.get(
+
                         "message",
+
                         "Checkout Failed"
+
                     )
 
             }
@@ -367,24 +561,32 @@ def process_checkout(
 
 
 
+
         # ==============================================================
-        # CACHE UPDATE
+        # CACHE REFRESH
         # ==============================================================
 
         try:
 
+
             CacheManager.bump(
+
                 CACHE_KEYS["inventory"]
+
             )
 
 
             CacheManager.bump(
+
                 CACHE_KEYS["products"]
+
             )
 
 
             CacheManager.bump(
+
                 CACHE_KEYS["sales"]
+
             )
 
 
@@ -396,18 +598,36 @@ def process_checkout(
 
 
 
-        rpc_data = result.get(
+
+        rpc_data=result.get(
+
             "data",
+
             {}
+
         )
 
 
+
         if isinstance(
+
             rpc_data,
+
             list
+
         ):
 
-            rpc_data = rpc_data[0] if rpc_data else {}
+
+            rpc_data = (
+
+                rpc_data[0]
+
+                if rpc_data
+
+                else {}
+
+            )
+
 
 
 
@@ -431,6 +651,7 @@ def process_checkout(
 
 
 
+
         return {
 
 
@@ -445,8 +666,6 @@ def process_checkout(
 
 
         }
-
-
 
 
 
