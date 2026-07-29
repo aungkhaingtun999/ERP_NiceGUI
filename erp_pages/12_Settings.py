@@ -8,7 +8,19 @@
 
 import streamlit as st
 
-from supabase_client import supabase
+from erp_core.loaders.settings_loader import (
+
+    get_all_settings_cached,
+
+    get_bool,
+
+    get_float,
+
+    save_setting as save_erp_setting,
+
+    clear_settings_cache
+
+)
 
 from utils.notification import (
     notify_success,
@@ -58,48 +70,20 @@ def require_admin():
 
 
 # ==============================================================================
-# LOAD SETTINGS
+# LOAD SETTINGS FROM ERP SERVICE
 # ==============================================================================
 
 
-@st.cache_data(
-    ttl=60
-)
-
 def load_settings():
-
 
     try:
 
-
-        rows = (
-
-            supabase.table(
-    "erp_settings"
-)
-
-            .select(
-                "*"
-            )
-
-            .execute()
-
-            .data
-
-            or []
-
+        from erp_core.loaders.settings_loader import (
+            get_all_settings_cached
         )
 
 
-        return {
-
-            row["key"]:
-            row["value"]
-
-            for row in rows
-
-        }
-
+        return get_all_settings_cached()
 
 
     except Exception as e:
@@ -109,14 +93,10 @@ def load_settings():
             f"Settings Load Error : {e}"
         )
 
+
         return {}
-
-
-
-
-
 # ==============================================================================
-# SAVE SETTINGS
+# SAVE SETTING THROUGH SERVICE
 # ==============================================================================
 
 
@@ -129,37 +109,35 @@ def save_setting(
 ):
 
 
-    try:
+    result = save_setting(
+
+        key,
+
+        value
+
+    )
 
 
-        supabase.table("erp_settings").upsert(
+    if not result.get(
 
-            {
+        "success",
 
-                "key":
-                    key,
+        False
 
-
-                "value":
-                    str(value)
-
-            },
-
-            on_conflict="key"
-
-        ).execute()
+    ):
 
 
+        raise Exception(
 
-    except Exception as e:
+            result.get(
 
+                "message",
 
-        raise e
+                "Save failed"
 
+            )
 
-
-
-
+        )
 # ==============================================================================
 # HELPERS
 # ==============================================================================
@@ -1129,7 +1107,7 @@ f"""
             )
 
 
-            st.cache_data.clear()
+            clear_settings_cache()
 
 
             notify_success(
