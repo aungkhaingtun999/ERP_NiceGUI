@@ -1,6 +1,7 @@
 # ==============================================================================
 # erp_pages/pos/product.py
-# ERP ENTERPRISE POS PRODUCT MODULE v12.6 FINAL FIX
+# ERP ENTERPRISE POS PRODUCT MODULE v12.7 FINAL
+# TWO SEARCH BOX VERSION
 # ==============================================================================
 
 from typing import List, Dict, Any
@@ -8,12 +9,7 @@ from typing import List, Dict, Any
 import streamlit as st
 
 from erp_core.loaders.product_loader import get_pos_products
-
-from .cart import (
-    add_to_cart,
-    check_available_stock,
-)
-
+from .cart import add_to_cart, check_available_stock
 from .engine import get_final_price
 
 
@@ -22,10 +18,8 @@ from .engine import get_final_price
 # ==============================================================================
 
 def money(value):
-
     try:
         return f"{float(value):,.0f} MMK"
-
     except Exception:
         return "0 MMK"
 
@@ -35,59 +29,11 @@ def money(value):
 # ==============================================================================
 
 def load_pos_products(warehouse_id=None) -> List[Dict[str, Any]]:
-
     try:
-        return get_pos_products(
-            warehouse_id=warehouse_id
-        ) or []
-
+        return get_pos_products(warehouse_id=warehouse_id) or []
     except Exception as e:
-
-        st.error(
-            f"Product Load Error : {e}"
-        )
-
+        st.error(f"Product Load Error : {e}")
         return []
-
-
-# ==============================================================================
-# SEARCH
-# ==============================================================================
-
-def search_products(products, keyword=""):
-
-    if not keyword:
-        return products
-
-    keyword = str(keyword).lower().strip()
-
-    return [
-
-        p
-
-        for p in products
-
-        if (
-
-            keyword in str(
-                p.get("name", "")
-            ).lower()
-
-            or
-
-            keyword in str(
-                p.get("sku", "")
-            ).lower()
-
-            or
-
-            keyword in str(
-                p.get("barcode", "")
-            ).lower()
-
-        )
-
-    ]
 
 
 # ==============================================================================
@@ -95,23 +41,11 @@ def search_products(products, keyword=""):
 # ==============================================================================
 
 def check_stock(product, qty):
-
     return check_available_stock(
-
-        st.session_state.get(
-            "cart",
-            []
-        ),
-
+        st.session_state.get("cart", []),
         product.get("id"),
-
-        product.get(
-            "available_qty",
-            0
-        ),
-
+        product.get("available_qty", 0),
         qty,
-
     )
 
 
@@ -120,9 +54,7 @@ def check_stock(product, qty):
 # ==============================================================================
 
 def product_label(product):
-
     price = get_final_price(product)
-
     sku = product.get("sku") or "NO-SKU"
 
     return (
@@ -142,57 +74,91 @@ def render_products(warehouse_id):
     products = load_pos_products(warehouse_id)
 
     if not products:
-
         st.warning("No products found")
-
         return []
 
 
     # --------------------------------------------------------------------------
-    # SEARCH
+    # SEARCH AREA (TWO BOXES)
     # --------------------------------------------------------------------------
-
     st.subheader("🔍 Product Search")
 
-    # IMPORTANT: no explicit key
-    keyword = st.text_input("Name / SKU / Barcode")
+    col1, col2 = st.columns(2)
 
-    filtered = search_products(products, keyword)
+    with col1:
+        name_search = st.text_input(
+            "🔍 Product Name",
+            key=f"pos_name_search_{warehouse_id}"
+        )
 
-    if not filtered:
+    with col2:
+        barcode_search = st.text_input(
+            "📦 SKU / Barcode",
+            key=f"pos_barcode_search_{warehouse_id}"
+        )
 
+
+    # --------------------------------------------------------------------------
+    # FILTER
+    # --------------------------------------------------------------------------
+    matches = []
+
+    for product in products:
+
+        name = str(product.get("name", ""))
+        sku = str(product.get("sku", ""))
+        barcode = str(product.get("barcode", ""))
+
+        name_ok = True
+        code_ok = True
+
+        if name_search:
+            name_ok = name_search.lower() in name.lower()
+
+        if barcode_search:
+            search = barcode_search.lower()
+
+            code_ok = (
+                search in sku.lower()
+                or
+                search in barcode.lower()
+            )
+
+        if name_ok and code_ok:
+            matches.append(product)
+
+
+    if not matches:
         st.warning("Product not found")
-
         return products
 
 
     # --------------------------------------------------------------------------
     # SELECT PRODUCT
     # --------------------------------------------------------------------------
-
     selected = st.selectbox(
         "Select Product",
-        filtered,
-        format_func=product_label
+        matches,
+        format_func=product_label,
+        key=f"pos_product_selectbox_{warehouse_id}"
     )
 
 
     # --------------------------------------------------------------------------
     # QUANTITY
     # --------------------------------------------------------------------------
-
     qty = st.number_input(
         "Quantity",
         min_value=1,
         value=1,
-        step=1
+        step=1,
+        key=f"pos_product_qty_{warehouse_id}"
     )
 
 
     # --------------------------------------------------------------------------
     # PRODUCT INFO
     # --------------------------------------------------------------------------
-
     if selected:
 
         price_data = get_final_price(selected)
@@ -206,25 +172,22 @@ def render_products(warehouse_id):
 **Price Source:** {price_data['source']}
 
 **Available Stock:** {selected.get('available_qty',0)}
-            """
+"""
         )
 
 
         # ----------------------------------------------------------------------
         # ADD TO CART
         # ----------------------------------------------------------------------
-
         if st.button(
             "➕ Add To Cart",
-            use_container_width=True
+            use_container_width=True,
+            key=f"pos_add_to_cart_{warehouse_id}_{selected.get('id')}"
         ):
 
             if not check_stock(selected, qty):
-
                 st.error("Insufficient stock")
-
                 return products
-
 
             add_to_cart(
                 st.session_state.cart,
@@ -235,7 +198,6 @@ def render_products(warehouse_id):
             )
 
             st.success("Added to cart")
-
             st.rerun()
 
 
