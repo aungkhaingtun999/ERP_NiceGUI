@@ -248,42 +248,12 @@ def run():
         "🛒 ERP Enterprise POS"
 
     )
-
-
-
     st.caption(
-
-        """
-
-OWNER PRICE
-
-↓
-
-PRODUCT MARKUP
-
-↓
-
-CATEGORY MARKUP
-
-↓
-
-GLOBAL MARKUP
-
-↓
-
-FINAL SELLING PRICE
+    "Fast & Simple Sales System"
+)
 
 
-ERP POS FINAL PRICE ENGINE ACTIVE
-
-"""
-
-    )
-
-
-
-
-
+    
     st.divider()
 
 
