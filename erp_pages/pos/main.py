@@ -424,108 +424,102 @@ ERP POS FINAL PRICE ENGINE ACTIVE
             hide_index=True
 
         )
-# ==========================================================================
-# CART ITEM CONTROL
-# ==========================================================================
+    # --------------------------------------------------------------------------
+    # CART ITEM CONTROL
+    # --------------------------------------------------------------------------
 
-st.subheader(
-    "🛠 Cart Control"
-)
-
-
-for index, item in enumerate(cart):
-
-
-    col1, col2, col3, col4 = st.columns(
-        [5,1,1,1]
+    st.subheader(
+        "🛠 Cart Control"
     )
 
 
-    with col1:
+    for index, item in enumerate(cart):
 
-        st.write(
 
-            f"{item.get('name','')}  "
-            f"x {item.get('qty',0)}"
-
+        col1, col2, col3, col4 = st.columns(
+            [5,1,1,1]
         )
 
 
+        with col1:
 
-    with col2:
+            st.write(
 
-        if st.button(
-            "➕",
-            key=f"add_{index}"
-        ):
+                f"{item.get('name','')} "
+                f"x {item.get('qty',0)}"
 
-            increase_quantity(
-                cart,
-                index
             )
 
-            st.session_state.cart = cart
 
-            st.rerun()
+        with col2:
 
+            if st.button(
+                "➕",
+                key=f"add_{index}"
+            ):
 
+                increase_quantity(
+                    cart,
+                    index
+                )
 
-    with col3:
+                st.session_state.cart = cart
 
-        if st.button(
-            "➖",
-            key=f"minus_{index}"
-        ):
-
-            decrease_quantity(
-                cart,
-                index
-            )
-
-            st.session_state.cart = cart
-
-            st.rerun()
+                st.rerun()
 
 
 
-    with col4:
+        with col3:
 
-        if st.button(
-            "🗑",
-            key=f"remove_{index}"
-        ):
+            if st.button(
+                "➖",
+                key=f"minus_{index}"
+            ):
 
-            remove_from_cart(
-                cart,
-                index
-            )
+                decrease_quantity(
+                    cart,
+                    index
+                )
 
-            st.session_state.cart = cart
+                st.session_state.cart = cart
 
-            st.rerun()        
-
-
+                st.rerun()
 
 
 
+        with col4:
+
+            if st.button(
+                "🗑",
+                key=f"remove_{index}"
+            ):
+
+                remove_from_cart(
+                    cart,
+                    index
+                )
+
+                st.session_state.cart = cart
+
+                st.rerun()
 
 
 
-# --------------------------------------------------------------------------
-# CART TOTAL
-# --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    # CART TOTAL
+    # --------------------------------------------------------------------------
 
-subtotal = calculate_subtotal(
-    cart
-)
-
-
-total_qty = calculate_total_qty(
-    cart
-)
+    subtotal = calculate_subtotal(
+        cart
+    )
 
 
-st.success(
+    total_qty = calculate_total_qty(
+        cart
+    )
+
+
+    st.success(
 
 f"""
 
@@ -557,53 +551,20 @@ Controlled by ERP Settings
 
 Calculated in Payment Module
 
-
 """
 
-)
-    # --------------------------------------------------------------------------
-    # TAX FROM SETTINGS
-    # --------------------------------------------------------------------------
-
-    tax_rate = get_default_tax_rate()
-
-    tax_amount = (
-        subtotal
-        *
-        tax_rate
-        /
-        100
     )
 
-    st.success(
-        f"""
-Items :
-{len(cart)}
 
-Total Qty :
-{total_qty}
-
-Subtotal :
-{money(subtotal)}
-
-🧾 System Tax Rate :
-{tax_rate:.2f}%
-
-Tax Amount :
-{money(tax_amount)}
-
-Grand Total :
-{money(subtotal + tax_amount)}
-"""
-    )
 
     # --------------------------------------------------------------------------
     # PAYMENT
     # --------------------------------------------------------------------------
 
-
     render_payment(
 
         warehouse_id
 
-    )
+    )            
+
+
