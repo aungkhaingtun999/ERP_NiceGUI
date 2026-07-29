@@ -19,7 +19,7 @@
 from typing import Any, Dict, List
 
 from ..base_repo import db, log_error
-
+from ..config import Tables
 # ==============================================================================
 # Inventory Service
 # ==============================================================================
