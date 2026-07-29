@@ -1,25 +1,22 @@
 # ==============================================================================
 # erp_core/services/settings_service.py
-# ERP ENTERPRISE SETTINGS SERVICE v1.0 FINAL
+# ERP ENTERPRISE SETTINGS SERVICE v1.0
 #
-# Central Configuration Engine
+# Responsibilities:
 #
-# Database:
-#       erp_settings
+# - ERP Settings Read
+# - ERP Settings Write
+# - Cache Control
+# - Default Value Handling
+# - Pricing / Tax / Inventory Config Support
 #
-# Used By:
-#       PricingService
-#       InventoryService
-#       SalesService
-#       Dashboard
+# Flow:
 #
-# Features:
-#       - Safe Settings Read
-#       - Type Conversion
-#       - Cache Support
-#       - Update Settings
-#       - Delete Settings
-#       - Health Check
+# Supabase
+#      ↓
+# SettingsService
+#      ↓
+# Loader / UI / Engine
 #
 # ==============================================================================
 
@@ -27,11 +24,9 @@
 from typing import (
     Any,
     Dict,
-    List
+    List,
+    Optional
 )
-
-
-import streamlit as st
 
 
 from ..base_repo import (
@@ -55,14 +50,32 @@ from ..config import (
 class SettingsService:
 
 
+    """
+    ERP Central Settings Manager
+
+    Table:
+
+        erp_settings
+
+
+    Schema:
+
+        id
+        key
+        value
+        created_at
+        updated_at
+
+    """
+
+
+
     # ==========================================================================
-    # Constructor
+    # INIT
     # ==========================================================================
 
-    def __init__(
-        self,
-        client
-    ):
+
+    def __init__(self, client):
 
         self.client = client
 
@@ -75,7 +88,7 @@ class SettingsService:
     # ==========================================================================
 
 
-    def get(
+    def get_setting(
 
         self,
 
@@ -99,17 +112,21 @@ class SettingsService:
 
                 )
 
-                .select(
-
-                    "value"
-
-                )
+                .select("*")
 
                 .eq(
 
                     "key",
 
                     key
+
+                )
+
+                .order(
+
+                    "id",
+
+                    desc=True
 
                 )
 
@@ -137,9 +154,7 @@ class SettingsService:
 
             log_error(
 
-                message=
-
-                f"Settings get failed: {key}",
+                message="Settings get failed",
 
                 exception=e
 
@@ -154,12 +169,13 @@ class SettingsService:
 
 
 
+
     # ==========================================================================
     # GET ALL SETTINGS
     # ==========================================================================
 
 
-    def get_all(
+    def get_all_settings(
 
         self
 
@@ -179,11 +195,7 @@ class SettingsService:
 
                 )
 
-                .select(
-
-                    "*"
-
-                )
+                .select("*")
 
                 .execute()
 
@@ -200,11 +212,12 @@ class SettingsService:
 
                 row["key"]:
 
-                row.get(
+                    row.get(
 
-                    "value"
+                        "value"
 
-                )
+                    )
+
 
                 for row in rows
 
@@ -217,7 +230,7 @@ class SettingsService:
 
             log_error(
 
-                message="Settings get_all failed",
+                message="Load all settings failed",
 
                 exception=e
 
@@ -231,158 +244,14 @@ class SettingsService:
 
 
 
-    # ==========================================================================
-    # NUMBER
-    # ==========================================================================
-
-
-    def get_float(
-
-        self,
-
-        key,
-
-        default=0.0
-
-    ):
-
-
-        try:
-
-
-            return float(
-
-                self.get(
-
-                    key,
-
-                    default
-
-                )
-
-            )
-
-
-        except Exception:
-
-
-            return float(
-
-                default
-
-            )
-
-
-
-
-
 
 
     # ==========================================================================
-    # INTEGER
+    # SAVE SETTING
     # ==========================================================================
 
 
-    def get_int(
-
-        self,
-
-        key,
-
-        default=0
-
-    ):
-
-
-        try:
-
-
-            return int(
-
-                float(
-
-                    self.get(
-
-                        key,
-
-                        default
-
-                    )
-
-                )
-
-            )
-
-
-        except Exception:
-
-
-            return int(
-
-                default
-
-            )
-
-
-
-
-
-
-
-    # ==========================================================================
-    # BOOLEAN
-    # ==========================================================================
-
-
-    def get_bool(
-
-        self,
-
-        key,
-
-        default=False
-
-    ):
-
-
-        value = str(
-
-            self.get(
-
-                key,
-
-                default
-
-            )
-
-        ).lower()
-
-
-
-        return value in (
-
-            "true",
-
-            "1",
-
-            "yes",
-
-            "on"
-
-        )
-
-
-
-
-
-
-
-    # ==========================================================================
-    # SAVE / UPDATE
-    # ==========================================================================
-
-
-    def save(
+    def save_setting(
 
         self,
 
@@ -430,9 +299,6 @@ class SettingsService:
             )
 
 
-            self.clear_cache()
-
-
 
             return {
 
@@ -450,15 +316,12 @@ class SettingsService:
 
 
 
-
         except Exception as e:
 
 
             log_error(
 
-                message=
-
-                f"Settings save failed: {key}",
+                message="Save setting failed",
 
                 exception=e
 
@@ -485,13 +348,127 @@ class SettingsService:
 
 
 
+    # ==========================================================================
+    # SAVE MULTIPLE SETTINGS
+    # ==========================================================================
+
+
+    def save_settings(
+
+        self,
+
+        settings: Dict[str, Any]
+
+    ):
+
+
+        try:
+
+
+            payload = [
+
+
+                {
+
+
+                    "key":
+
+                        key,
+
+
+                    "value":
+
+                        str(value)
+
+
+                }
+
+
+                for key, value in settings.items()
+
+
+            ]
+
+
+
+            result = (
+
+                self.client
+
+                .table(
+
+                    Tables.SETTINGS
+
+                )
+
+                .upsert(
+
+                    payload,
+
+                    on_conflict="key"
+
+                )
+
+                .execute()
+
+            )
+
+
+
+            return {
+
+
+                "success":
+
+                    True,
+
+
+                "data":
+
+                    result.data
+
+            }
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message="Bulk settings save failed",
+
+                exception=e
+
+            )
+
+
+            return {
+
+
+                "success":
+
+                    False,
+
+
+                "message":
+
+                    str(e)
+
+            }
+
+
+
+
+
+
 
     # ==========================================================================
-    # DELETE
+    # DELETE SETTING
     # ==========================================================================
 
 
-    def delete(
+    def delete_setting(
 
         self,
 
@@ -529,12 +506,19 @@ class SettingsService:
 
 
 
-            self.clear_cache()
+            return {
 
 
+                "success":
 
-            return True
+                    True,
 
+
+                "data":
+
+                    result.data
+
+            }
 
 
 
@@ -543,16 +527,26 @@ class SettingsService:
 
             log_error(
 
-                message=
-
-                f"Settings delete failed: {key}",
+                message="Delete setting failed",
 
                 exception=e
 
             )
 
 
-            return False
+            return {
+
+
+                "success":
+
+                    False,
+
+
+                "message":
+
+                    str(e)
+
+            }
 
 
 
@@ -561,89 +555,114 @@ class SettingsService:
 
 
     # ==========================================================================
-    # CACHE
+    # TYPE HELPERS
     # ==========================================================================
 
 
-    @staticmethod
-    def clear_cache():
+    def get_bool(
+
+        self,
+
+        key,
+
+        default=False
+
+    ):
+
+
+        value = self.get_setting(
+
+            key,
+
+            default
+
+        )
+
+
+        return (
+
+            str(value)
+
+            .lower()
+
+            ==
+
+            "true"
+
+        )
+
+
+
+
+
+    def get_float(
+
+        self,
+
+        key,
+
+        default=0.0
+
+    ):
 
 
         try:
 
-            st.cache_data.clear()
+
+            return float(
+
+                self.get_setting(
+
+                    key,
+
+                    default
+
+                )
+
+            )
 
 
         except Exception:
 
-            pass
+
+            return float(default)
 
 
 
 
 
 
+    def get_int(
 
-    # ==========================================================================
-    # COMMON ERP SETTINGS
-    # ==========================================================================
+        self,
 
+        key,
 
-    def get_default_tax_rate(self):
+        default=0
 
-
-        return self.get_float(
-
-            "DEFAULT_TAX_RATE",
-
-            0
-
-        )
+    ):
 
 
+        try:
 
 
+            return int(
 
-    def get_default_markup(self):
+                self.get_setting(
 
+                    key,
 
-        return self.get_float(
+                    default
 
-            "DEFAULT_MARKUP_PERCENT",
+                )
 
-            20
-
-        )
-
-
+            )
 
 
-
-    def get_min_stock_alert(self):
-
-
-        return self.get_float(
-
-            "MIN_STOCK_ALERT",
-
-            10
-
-        )
+        except Exception:
 
 
-
-
-
-    def get_currency(self):
-
-
-        return self.get(
-
-            "CURRENCY",
-
-            "MMK"
-
-        )
+            return int(default)
 
 
 
@@ -678,15 +697,12 @@ class SettingsService:
 
                 )
 
-                .limit(
-
-                    1
-
-                )
+                .limit(1)
 
                 .execute()
 
             )
+
 
 
             return {
