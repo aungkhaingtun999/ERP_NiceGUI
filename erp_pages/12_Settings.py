@@ -1020,8 +1020,7 @@ f"""
         7.0
     )
 )
-
-         st.markdown(
+st.markdown(
     f"""
     <div style="
         padding:18px;
