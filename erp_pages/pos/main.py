@@ -60,9 +60,7 @@ from .cart import (
 
 
 
-from .engine import (
-    get_default_tax_rate
-)
+
 
 
 
@@ -431,27 +429,56 @@ ERP POS FINAL PRICE ENGINE ACTIVE
 
 
 
-    # --------------------------------------------------------------------------
-    # CART TOTAL
-    # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# CART TOTAL
+# --------------------------------------------------------------------------
+
+subtotal = calculate_subtotal(
+    cart
+)
 
 
-    subtotal = calculate_subtotal(
-
-        cart
-
-    )
+total_qty = calculate_total_qty(
+    cart
+)
 
 
+st.success(
 
-    total_qty = calculate_total_qty(
+f"""
 
-        cart
+Items :
 
-    )
+{len(cart)}
 
 
 
+Total Qty :
+
+{total_qty}
+
+
+
+Subtotal :
+
+{money(subtotal)}
+
+
+
+🧾 Tax :
+
+Controlled by ERP Settings
+
+
+
+💳 Final Total :
+
+Calculated in Payment Module
+
+
+"""
+
+)
     # --------------------------------------------------------------------------
     # TAX FROM SETTINGS
     # --------------------------------------------------------------------------
