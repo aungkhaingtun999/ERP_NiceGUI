@@ -227,21 +227,24 @@ def load_pos_settings():
 
 def init_pos_session():
 
+    defaults = {
 
-    defaults = default_pos_state()
+        "cart": [],
+
+        "show_receipt": False,
+
+        "processing": False,
+
+        "products_cache": None
+
+    }
 
 
-
-    for key, value in defaults.items():
-
+    for key,value in defaults.items():
 
         if key not in st.session_state:
 
-
-            st.session_state[key] = value
-
-
-
+            st.session_state[key]=value
 
 
     # --------------------------------------------------
