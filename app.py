@@ -1,553 +1,77 @@
 # ==============================================================================
-# app.py
-# ERP ENTERPRISE APPLICATION CONTROLLER
-# SAFE PAGE ROUTER v30.14 - PRODUCTION SAFE
-# ==============================================================================
-
-
-import os
-import sys
-import importlib.util
-
-import streamlit as st
-
-
-
-# ==============================================================================
-# PAGE CONFIG
-# MUST BE FIRST STREAMLIT COMMAND
-# ==============================================================================
-
-st.set_page_config(
-
-    page_title="Myanmar ERP Enterprise",
-
-    page_icon="🏭",
-
-    layout="wide",
-
-    initial_sidebar_state="expanded"
-
-)
-
-
-
-# ==============================================================================
-# PATH SETUP
-# ==============================================================================
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-
-if BASE_DIR not in sys.path:
-
-    sys.path.insert(
-        0,
-        BASE_DIR
-    )
-
-
-
-# ==============================================================================
-# CORE IMPORTS
-# ==============================================================================
-
-
-from auth import (
-
-    login_page,
-
-    is_authenticated
-
-)
-
-
-from sidebar import (
-
-    show_sidebar
-
-)
-
-
-from utils.notification import (
-
-    show_notification
-
-)
-
-
-
-# ==============================================================================
-# OPTIONAL POS SYNC
-# ==============================================================================
-
-POS_SYNC_AVAILABLE = False
-
-
-try:
-
-
-    from database import db
-
-
-    from pos_sync import (
-
-        render_pos_sync_sidebar
-
-    )
-
-
-    POS_SYNC_AVAILABLE = True
-
-
-
-except Exception as e:
-
-
-    POS_SYNC_AVAILABLE = False
-
-    POS_SYNC_ERROR = str(e)
-
-
-
-
-
-# ==============================================================================
-# SESSION INITIALIZER
-# ==============================================================================
-
-
-def init_state():
-
-
-    defaults = {
-
-
-        "user": None,
-
-
-        "active_page":
-
-            "1_POS",
-
-
-        "language":
-
-            "English",
-
-
-        "auth_checked":
-
-            False
-
-
-    }
-
-
-
-    for key, value in defaults.items():
-
-
-        if key not in st.session_state:
-
-
-            st.session_state[key] = value
-
-
-
-
-
-
-# ==============================================================================
 # SAFE PAGE LOADER
 # ==============================================================================
 
-
 def load_page(page_id):
 
-
+    # --------------------------------------------------------------------------
+    # PAGE FILE PATH
+    # --------------------------------------------------------------------------
     page_folder = os.path.join(
-
         BASE_DIR,
-
-        "erp_pages"
-
+        'erp_pages'
     )
-
-
 
     file_path = os.path.join(
-
         page_folder,
-
-        f"{page_id}.py"
-
+        f'{page_id}.py'
     )
 
-
-
+    # --------------------------------------------------------------------------
+    # FILE EXISTS CHECK
+    # --------------------------------------------------------------------------
     if not os.path.exists(file_path):
 
-
         st.error(
-
-            f"Page file not found:\n{file_path}"
-
+            f'Page file not found:\n{file_path}'
         )
 
         return
 
-
-
-
-
     try:
 
+        # ----------------------------------------------------------------------
+        # MODULE NAME
+        # ----------------------------------------------------------------------
+        module_name = f'erp_pages.{page_id}'
 
-
-        module_name = (
-
-            f"erp_pages.{page_id}"
-
-        )
-
-
-
+        # ----------------------------------------------------------------------
+        # LOAD MODULE
+        # ----------------------------------------------------------------------
         spec = importlib.util.spec_from_file_location(
-
             module_name,
-
             file_path
-
         )
-
-
 
         if spec is None:
 
-
             raise ImportError(
-
-                f"Cannot load {module_name}"
-
+                f'Cannot load {module_name}'
             )
 
-
-
-        module = importlib.util.module_from_spec(
-
-            spec
-
-        )
-
-
+        module = importlib.util.module_from_spec(spec)
 
         sys.modules[module_name] = module
 
+        spec.loader.exec_module(module)
 
-
-        spec.loader.exec_module(
-
-            module
-
-        )
-
-
-
-
-        if hasattr(module,"run"):
-
-
-            module.run()
-
-
-
-        elif hasattr(module,"main"):
-
-
-            module.main()
-
-
-
-        else:
-
-
-            st.warning(
-
-                f"{page_id}.py has no run()"
-
-            )
-
-
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            f"Page Load Error : {e}"
-
-        )
-
-
-        with st.expander(
-
-            "Debug Trace"
-
-        ):
-
-
-            st.exception(e)
-
-
-
-
-
-
-# ==============================================================================
-# PAGE ROUTER
-# ==============================================================================
-
-
-def page_router():
-
-
-    if not st.session_state.get(
-
-        "user"
-
-    ):
-
-
-        st.error(
-
-            "Please login first"
-
-        )
+        # ----------------------------------------------------------------------
+        # IMPORTANT
+        # ----------------------------------------------------------------------
+        # DO NOT CALL module.run() HERE
+        #
+        # 1_POS.py already executes run() itself.
+        # Calling run() again here causes duplicate Streamlit widgets.
+        # ----------------------------------------------------------------------
 
         return
 
-
-
-
-
-    page_id = st.session_state.get(
-
-        "active_page",
-
-        "1_POS"
-
-    )
-
-
-
-
-
-    if page_id == "dashboard":
-
-
-        st.title(
-
-            "🏭 ERP Control Dashboard"
-
-        )
-
-
-        st.info(
-
-            "Welcome to Enterprise Core"
-
-        )
-
-
-        return
-
-
-
-
-
-    load_page(
-
-        page_id
-
-    )
-
-
-
-
-
-
-
-
-# ==============================================================================
-# MAIN
-# ==============================================================================
-
-
-def main():
-
-
-
-    init_state()
-
-
-
-    if not is_authenticated():
-
-
-        login_page()
-
-
-        st.stop()
-
-
-
-
-
-    # --------------------------------------------------
-    # Notification
-    # --------------------------------------------------
-
-
-    try:
-
-
-        show_notification()
-
-
     except Exception as e:
 
-
-        st.warning(
-
-            f"Notification error : {e}"
-
+        st.error(
+            f'Page Load Error : {e}'
         )
 
-
-
-
-
-
-    # --------------------------------------------------
-    # Sidebar
-    # --------------------------------------------------
-
-
-    try:
-
-
-        show_sidebar()
-
-
-
-    except Exception as e:
-
-
-        st.sidebar.error(
-
-            "Sidebar loading error"
-
-        )
-
-
-        with st.sidebar.expander(
-
-            "Debug"
-
-        ):
-
+        with st.expander('Debug Trace'):
 
             st.exception(e)
-
-
-
-
-
-
-
-
-    # --------------------------------------------------
-    # POS Sync
-    # --------------------------------------------------
-
-
-    if POS_SYNC_AVAILABLE:
-
-
-        try:
-
-
-            render_pos_sync_sidebar(
-
-                db()
-
-            )
-
-
-        except Exception as e:
-
-
-            st.sidebar.warning(
-
-                f"POS Sync Error : {e}"
-
-            )
-
-
-
-    else:
-
-
-        with st.sidebar.expander(
-
-            "POS Sync Debug"
-
-        ):
-
-
-            st.write(
-
-                "POS Sync disabled"
-
-            )
-
-
-            st.write(
-
-                POS_SYNC_ERROR
-
-            )
-
-
-
-
-
-
-
-    # --------------------------------------------------
-    # Load ERP Page
-    # --------------------------------------------------
-
-
-    page_router()
-
-
-
-
-
-
-
-
-# ==============================================================================
-# ENTRY POINT
-# ==============================================================================
-
-
-if __name__ == "__main__":
-
-
-    main()
