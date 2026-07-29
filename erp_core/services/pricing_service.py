@@ -40,7 +40,7 @@ except Exception:
 from ..base_repo import (
     log_error
 )
-
+from ..config import Tables
 
 
 # ==============================================================================
@@ -154,16 +154,15 @@ class PricingService:
 
         data = self.safe_query(
 
-            "settings",
+            Tables.SETTINGS,
 
             "value",
 
-            {
-                "key": key
-            }
+         {
+            "key": key
+    }
 
-        )
-
+)
 
         if data:
 
