@@ -1,9 +1,9 @@
 # ==============================================================================
 # erp_pages/pos/session.py
-# ERP ENTERPRISE POS SESSION MANAGER v12.1
+# ERP ENTERPRISE POS SESSION MANAGER v12.5 FINAL
 #
-# Responsibilities:
 # - Initialize POS session
+# - Load TAX setting
 # - Reset transaction
 # - Manage checkout state
 #
@@ -13,6 +13,38 @@
 import streamlit as st
 
 
+from erp_core import get_setting
+
+
+
+
+
+# ==============================================================================
+# LOAD TAX
+# ==============================================================================
+
+def load_tax_rate():
+
+    try:
+
+        value = get_setting(
+
+            "DEFAULT_TAX_RATE",
+
+            0
+
+        )
+
+
+        return float(value)
+
+
+    except Exception:
+
+
+        return 0.0
+
+
 
 
 
@@ -20,72 +52,90 @@ import streamlit as st
 # DEFAULT SESSION FACTORY
 # ==============================================================================
 
-
 def default_pos_state():
+
 
     return {
 
+
         # Cart
 
-        "cart": [],
+        "cart":
+
+            [],
 
 
 
-        # Sale result
+        # Sale
 
-        "sale_data": None,
+        "sale_data":
+
+            None,
 
 
 
         # Receipt
 
-        "show_receipt": False,
+        "show_receipt":
+
+            False,
 
 
 
-        # Checkout lock
+        # Checkout
 
-        "processing": False,
+        "processing":
+
+            False,
 
 
 
-        # Tax
+        # TAX
 
-        "tax_rate": 0,
+        "tax_rate":
+
+            load_tax_rate(),
 
 
 
         # Discount
 
-        "discount_policy": "allowed",
+        "discount_policy":
+
+            "allowed",
 
 
 
         # Product
 
-        "selected_product": None,
+        "selected_product":
+
+            None,
 
 
 
         # Search
 
-        "product_search": "",
+        "product_search":
+
+            "",
 
 
 
         # Payment
 
-        "payment_method": "CASH",
+        "payment_method":
+
+            "CASH",
 
 
 
-        "received_amount": 0,
+        "received_amount":
 
+            0,
 
 
     }
-
-
 
 
 
@@ -95,12 +145,8 @@ def default_pos_state():
 # INIT SESSION
 # ==============================================================================
 
-
 def init_pos_session():
 
-    """
-    Initialize POS session state
-    """
 
     defaults = default_pos_state()
 
@@ -117,88 +163,54 @@ def init_pos_session():
 
 
 
+    # Safety reload TAX if missing
+
+    if "tax_rate" not in st.session_state:
+
+
+        st.session_state.tax_rate = load_tax_rate()
+
+
+
 
 
 # ==============================================================================
 # RESET SALE
 # ==============================================================================
 
-
 def reset_sale():
 
-    """
-    Reset current transaction only.
 
-    Login session remains.
-    """
+    st.session_state.cart = []
 
 
-    reset_keys = [
+    st.session_state.sale_data = None
 
-        "cart",
 
-        "sale_data",
+    st.session_state.show_receipt = False
 
-        "show_receipt",
 
-        "processing",
+    st.session_state.processing = False
 
-        "selected_product",
 
-        "product_search",
+    st.session_state.selected_product = None
 
-        "payment_method",
 
-        "received_amount",
+    st.session_state.product_search = ""
 
-    ]
+
+    st.session_state.payment_method = "CASH"
+
+
+    st.session_state.received_amount = 0
 
 
 
-    for key in reset_keys:
 
 
-        if key == "cart":
+    # Keep TAX
 
-
-            st.session_state[key] = []
-
-
-
-        elif key == "processing":
-
-
-            st.session_state[key] = False
-
-
-
-        elif key == "show_receipt":
-
-
-            st.session_state[key] = False
-
-
-
-        elif key == "sale_data":
-
-
-            st.session_state[key] = None
-
-
-
-        elif key == "received_amount":
-
-
-            st.session_state[key] = 0
-
-
-
-        else:
-
-
-            st.session_state[key] = None
-
-
+    st.session_state.tax_rate = load_tax_rate()
 
 
 
@@ -207,7 +219,6 @@ def reset_sale():
 # ==============================================================================
 # CART CHECK
 # ==============================================================================
-
 
 def has_cart():
 
@@ -228,12 +239,9 @@ def has_cart():
 
 
 
-
-
 # ==============================================================================
 # RECEIPT MODE
 # ==============================================================================
-
 
 def is_receipt_mode():
 
@@ -254,15 +262,11 @@ def is_receipt_mode():
 
 
 
-
-
 # ==============================================================================
 # PROCESS LOCK
 # ==============================================================================
 
-
 def start_processing():
-
 
     st.session_state.processing = True
 
@@ -270,12 +274,9 @@ def start_processing():
 
 
 
-
 def stop_processing():
 
-
     st.session_state.processing = False
-
 
 
 
