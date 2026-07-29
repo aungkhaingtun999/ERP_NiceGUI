@@ -1,7 +1,8 @@
 # ==============================================================================
 # erp_pages/2_Receipt.py
-# ERP ENTERPRISE RECEIPT VIEWER v4.0
+# ERP ENTERPRISE RECEIPT VIEWER v5.0
 # ERP CORE CONNECTED
+# PDF + THERMAL PRINT READY
 # Myanmar Time Supported
 # ==============================================================================
 
@@ -10,15 +11,21 @@ import streamlit as st
 import pandas as pd
 
 
+
 # ==============================================================================
 # ERP DATABASE BRIDGE
 # ==============================================================================
 
 from database import (
+
     search_receipts,
+
     get_receipt,
+
     get_sale_items,
+
 )
+
 
 
 # ==============================================================================
@@ -26,18 +33,31 @@ from database import (
 # ==============================================================================
 
 from utils.timezone import (
+
     format_db_datetime
+
 )
 
 
+
 # ==============================================================================
-# PDF / RECEIPT
+# RECEIPT ENGINE
 # ==============================================================================
 
-from utils.receipt_pdf import generate_pdf
-from utils.thermal_receipt import build_receipt_data
+from utils.receipt_pdf import (
+
+    generate_pdf
+
+)
 
 
+from utils.thermal_receipt import (
+
+    build_receipt_data,
+
+    print_thermal
+
+)
 
 # ==============================================================================
 # PAGE
@@ -62,7 +82,7 @@ def run():
 
 
     st.title(
-        "🧾 ERP Enterprise Receipt Viewer"
+        "🧾 ERP Enterprise Receipt Viewer v5.0"
     )
 
 
@@ -76,6 +96,7 @@ def run():
         st.session_state.selected_receipt = None
 
 
+
     if "receipt_data" not in st.session_state:
 
         st.session_state.receipt_data = None
@@ -83,7 +104,7 @@ def run():
 
 
     # --------------------------------------------------------------------------
-    # SEARCH
+    # SEARCH RECEIPT
     # --------------------------------------------------------------------------
 
     keyword = st.text_input(
@@ -96,14 +117,17 @@ def run():
 
 
         results = search_receipts(
+
             keyword
+
         )
 
 
         if not results:
 
+
             st.error(
-                "No receipt found"
+                "❌ No receipt found"
             )
 
             st.stop()
@@ -112,11 +136,15 @@ def run():
 
         options = {
 
+
             f"{r.get('invoice_no')} | "
             f"{float(r.get('total',0)):,.0f} MMK":
+
             r
 
+
             for r in results
+
 
         }
 
@@ -137,8 +165,11 @@ def run():
 
 
         if st.button(
+
             "📥 Load Receipt"
+
         ):
+
 
 
             receipt = get_receipt(
@@ -150,17 +181,15 @@ def run():
             )
 
 
+
             st.session_state.receipt_data = receipt
 
 
-            st.rerun()
 
-
-
-
+            st.rerun)
 
     # --------------------------------------------------------------------------
-    # LOAD
+    # LOAD RECEIPT
     # --------------------------------------------------------------------------
 
     receipt = st.session_state.receipt_data
@@ -169,8 +198,11 @@ def run():
 
     if not receipt:
 
+
         st.info(
+
             "Search and load receipt"
+
         )
 
         st.stop()
@@ -178,15 +210,18 @@ def run():
 
 
     # --------------------------------------------------------------------------
-    # ITEMS
+    # LOAD ITEMS
     # --------------------------------------------------------------------------
 
     sale_id = receipt.get(
+
         "id"
+
     )
 
 
     items = []
+
 
 
     if sale_id:
@@ -201,31 +236,37 @@ def run():
 
 
     # --------------------------------------------------------------------------
-    # HEADER
+    # RECEIPT SUMMARY
     # --------------------------------------------------------------------------
 
     st.divider()
 
 
     st.subheader(
+
         "🧾 Receipt Summary"
+
     )
 
 
 
-    c1,c2,c3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
 
 
 
     with c1:
+
 
         st.metric(
 
             "Invoice No",
 
             receipt.get(
+
                 "invoice_no",
+
                 "-"
+
             )
 
         )
@@ -233,6 +274,7 @@ def run():
 
 
     with c2:
+
 
         st.metric(
 
@@ -246,13 +288,17 @@ def run():
 
     with c3:
 
+
         st.metric(
 
             "Status",
 
             receipt.get(
+
                 "status",
+
                 "-"
+
             )
 
         )
@@ -262,12 +308,13 @@ def run():
 
 
     # --------------------------------------------------------------------------
-    # MYANMAR TIME DISPLAY
+    # DATE
     # --------------------------------------------------------------------------
 
-
     if receipt.get(
+
         "created_at"
+
     ):
 
 
@@ -277,9 +324,11 @@ def run():
 
             format_db_datetime(
 
-                receipt[
+                receipt.get(
+
                     "created_at"
-                ]
+
+                )
 
             )
 
@@ -288,16 +337,18 @@ def run():
 
 
 
-    # --------------------------------------------------------------------------
-    # ITEMS
-    # --------------------------------------------------------------------------
 
+    # --------------------------------------------------------------------------
+    # ITEMS TABLE
+    # --------------------------------------------------------------------------
 
     st.divider()
 
 
     st.subheader(
+
         "🛒 Sale Items"
+
     )
 
 
@@ -309,21 +360,29 @@ def run():
     for item in items:
 
 
+
         qty = float(
 
             item.get(
+
                 "quantity",
+
                 0
+
             )
 
         )
 
 
+
         price = float(
 
             item.get(
+
                 "unit_price",
+
                 0
+
             )
 
         )
@@ -333,8 +392,11 @@ def run():
         total = float(
 
             item.get(
+
                 "total",
+
                 qty * price
+
             )
 
         )
@@ -345,26 +407,41 @@ def run():
 
             {
 
-                "Product ID":
+                "Product":
+
                     item.get(
-                        "product_id"
+
+                        "name",
+
+                        item.get(
+
+                            "product_id",
+
+                            "-"
+
+                        )
+
                     ),
 
 
                 "Quantity":
+
                     qty,
 
 
                 "Unit Price":
+
                     f"{price:,.0f}",
 
 
                 "Amount":
+
                     f"{total:,.0f}"
 
             }
 
         )
+
 
 
 
@@ -386,27 +463,31 @@ def run():
 
 
         st.warning(
+
             "No items found"
+
         )
 
 
 
 
-    # --------------------------------------------------------------------------
-    # PAYMENT
-    # --------------------------------------------------------------------------
 
+    # --------------------------------------------------------------------------
+    # PAYMENT DETAILS
+    # --------------------------------------------------------------------------
 
     st.divider()
 
 
     st.subheader(
+
         "💰 Payment Details"
+
     )
 
 
 
-    col1,col2,col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
 
 
@@ -415,7 +496,7 @@ def run():
 
         st.write(
 
-            "Subtotal:",
+            "Subtotal",
 
             f"{float(receipt.get('subtotal',0)):,.0f} MMK"
 
@@ -428,7 +509,7 @@ def run():
 
         st.write(
 
-            "Tax:",
+            "Tax",
 
             f"{float(receipt.get('tax',0)):,.0f} MMK"
 
@@ -441,27 +522,36 @@ def run():
 
         st.write(
 
-            "Grand Total:",
+            "Tax Rate",
 
-            f"{float(receipt.get('total',0)):,.0f} MMK"
+            f"{float(receipt.get('tax_rate',0)):,.2f}%"
 
         )
 
 
 
+    with col4:
 
+
+        st.write(
+
+            "Grand Total",
+
+            f"{float(receipt.get('total',0)):,.0f} MMK"
+
+        )
 
     # --------------------------------------------------------------------------
-    # PDF
+    # PDF GENERATE
     # --------------------------------------------------------------------------
-
 
     st.divider()
 
 
-
     if st.button(
+
         "📄 Generate PDF"
+
     ):
 
 
@@ -474,11 +564,13 @@ def run():
         )
 
 
+
         result = generate_pdf(
 
             data
 
         )
+
 
 
         if result:
@@ -501,6 +593,101 @@ def run():
             )
 
 
+        else:
+
+
+            st.error(
+
+                "❌ PDF generation failed"
+
+            )
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # THERMAL PRINT
+    # --------------------------------------------------------------------------
+
+    st.divider()
+
+
+    if st.button(
+
+        "🖨 Print Receipt"
+
+    ):
+
+
+        data = build_receipt_data(
+
+            receipt,
+
+            items
+
+        )
+
+
+
+        result = print_thermal(
+
+            data
+
+        )
+
+
+
+        if result:
+
+
+            st.success(
+
+                "✅ Receipt printed successfully"
+
+            )
+
+
+        else:
+
+
+            st.error(
+
+                "❌ Print failed"
+
+            )
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # REPRINT DATA CHECK
+    # --------------------------------------------------------------------------
+
+    with st.expander(
+
+        "🔎 Debug Receipt Data"
+
+    ):
+
+
+        data = build_receipt_data(
+
+            receipt,
+
+            items
+
+        )
+
+
+        st.json(
+
+            data
+
+        )
+
+
 
 
 
@@ -508,9 +695,13 @@ def run():
     # CLEAR
     # --------------------------------------------------------------------------
 
+    st.divider()
+
 
     if st.button(
-        "🆕 Clear"
+
+        "🆕 Clear Receipt"
+
     ):
 
 
@@ -524,6 +715,14 @@ def run():
 
 
 
+# ==============================================================================
+# MAIN
+# ==============================================================================
+
+
 if __name__ == "__main__":
 
+
     run()
+
+
