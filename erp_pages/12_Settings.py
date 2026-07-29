@@ -2,13 +2,16 @@
 # erp_pages/12_Settings.py
 # ERP ENTERPRISE CONTROL CENTER v5.0 FINAL
 #
-# Settings UI
+# Settings Management UI
 #
 # Connected:
 #
 # settings_loader
 # SettingsService
-# ERP Cache
+# Pricing Engine
+#
+# NO DEFAULT TAX
+# NO GLOBAL MARKUP
 #
 # ==============================================================================
 
@@ -16,19 +19,19 @@
 import streamlit as st
 
 
+
 from erp_core.loaders.settings_loader import (
 
-    get_setting,
+    get_all_settings_cached,
 
     get_bool,
-
-    get_float,
 
     save_setting,
 
     clear_settings_cache
 
 )
+
 
 
 from utils.notification import (
@@ -43,6 +46,7 @@ from utils.notification import (
 
 
 
+
 # ==============================================================================
 # SECURITY
 # ==============================================================================
@@ -52,14 +56,19 @@ def require_admin():
 
 
     user = st.session_state.get(
+
         "user"
+
     )
 
 
     if not user:
 
+
         st.error(
+
             "⛔ Please login first"
+
         )
 
         st.stop()
@@ -67,12 +76,16 @@ def require_admin():
 
 
     if user.get(
+
         "role_id"
+
     ) != 1:
 
 
         st.error(
-            "⛔ Admin permission required"
+
+            "⛔ Admin Access Only"
+
         )
 
         st.stop()
@@ -86,32 +99,13 @@ def require_admin():
 
 
 
-# ==============================================================================
-# SAFE DISPLAY
-# ==============================================================================
-
-
-def display_value(value):
-
-
-    if value is None:
-
-        return "⚠ Not Configured"
-
-
-    return value
-
-
-
-
-
 
 # ==============================================================================
 # SAVE WRAPPER
 # ==============================================================================
 
 
-def save_config(
+def save_value(
 
     key,
 
@@ -154,6 +148,8 @@ def save_config(
 
 
 
+
+
 # ==============================================================================
 # MAIN
 # ==============================================================================
@@ -165,24 +161,35 @@ def run():
     user = require_admin()
 
 
+    settings = get_all_settings_cached()
+
+
+
+
+
+    # ==========================================================================
+    # HEADER
+    # ==========================================================================
+
 
     st.title(
-        "⚙ ERP Control Center"
-    )
 
+        "⚙ ERP Control Center"
+
+    )
 
 
     st.success(
 
-        f"🔐 Welcome Admin : "
-        f"{user.get('full_name','Admin')}"
+        f"🔐 Welcome Admin : {user.get('full_name','Admin')}"
 
     )
 
 
-
     st.caption(
+
         "Enterprise Configuration Center"
+
     )
 
 
@@ -198,14 +205,16 @@ def run():
 
 
     st.subheader(
+
         "💰 Pricing Engine"
+
     )
 
 
-
     st.info(
+
 """
-Pricing Flow
+Pricing Rule Priority
 
 
 Product Markup
@@ -216,11 +225,12 @@ Category Markup
 
         ↓
 
-Global Markup
+Current Selling Price
 
 
-Controlled completely by ERP Settings.
+System uses the first available pricing rule.
 """
+
     )
 
 
@@ -229,148 +239,156 @@ Controlled completely by ERP Settings.
 
 
 
-    current_markup = get_float(
-
-        "DEFAULT_MARKUP_PERCENT"
-
-    )
+    # --------------------------------------------------------------------------
+    # PRIORITY
+    # --------------------------------------------------------------------------
 
 
-
-    st.metric(
-
-        "Current Global Markup",
-
-        (
-
-            f"{current_markup:.2f}%"
-
-            if current_markup is not None
-
-            else
-
-            "Not Configured"
-
-        )
-
-    )
-
-
-
-    markup_input = st.number_input(
-
-        "Set Global Markup (%)",
-
-        min_value=0.0,
-
-        max_value=500.0,
-
-        value=(
-
-            float(current_markup)
-
-            if current_markup is not None
-
-            else 0.0
-
-        )
-
-    )
-
-
-
-    priority = get_setting(
-
-        "PRICING_PRIORITY"
-
-    )
-
-
-
-    priority_options = [
+    priority_list = [
 
         "PRODUCT_FIRST",
 
         "CATEGORY_FIRST",
 
-        "GLOBAL_FIRST"
+        "CURRENT_PRICE"
 
     ]
 
 
 
-    selected_priority = st.selectbox(
+    priority_name = {
 
-        "Pricing Priority",
 
-        priority_options,
+        "PRODUCT_FIRST":
+
+            "Product → Category → Current Price",
+
+
+        "CATEGORY_FIRST":
+
+            "Category → Product → Current Price",
+
+
+        "CURRENT_PRICE":
+
+            "Use Current Price"
+
+    }
+
+
+
+    current_priority = settings.get(
+
+        "PRICING_PRIORITY",
+
+        "PRODUCT_FIRST"
+
+    )
+
+
+
+    pricing_priority = st.selectbox(
+
+        "⚙ Pricing Priority",
+
+        priority_list,
 
         index=(
 
-            priority_options.index(priority)
+            priority_list.index(
 
-            if priority in priority_options
+                current_priority
+
+            )
+
+            if current_priority in priority_list
 
             else 0
 
-        )
+        ),
+
+        format_func=lambda x:
+
+            priority_name.get(
+
+                x,
+
+                x
+
+            )
 
     )
 
-# ==============================================================================
-# PART 2
-# PRICING CONTROL
-# ==============================================================================
 
 
 
-    # ==========================================================================
+
+
+
+    # --------------------------------------------------------------------------
     # MARKUP CONTROL
-    # ==========================================================================
+    # --------------------------------------------------------------------------
 
 
-    col1, col2 = st.columns(2)
-
-
-
-    product_markup_enabled = st.checkbox(
-
-        "☑ Enable Product Markup Override",
-
-        value=get_bool(
-
-            "ENABLE_PRODUCT_MARKUP"
-
-        )
-
-    )
+    col1,col2 = st.columns(2)
 
 
 
-    category_markup_enabled = st.checkbox(
+    with col1:
 
-        "☑ Enable Category Markup",
 
-        value=get_bool(
+        enable_product = st.toggle(
 
-            "ENABLE_CATEGORY_MARKUP"
+            "☑ Enable Product Markup",
+
+            value=get_bool(
+
+                settings,
+
+                "ENABLE_PRODUCT_MARKUP",
+
+                True
+
+            )
 
         )
 
-    )
+
+
+
+    with col2:
+
+
+        enable_category = st.toggle(
+
+            "☑ Enable Category Markup",
+
+            value=get_bool(
+
+                settings,
+
+                "ENABLE_CATEGORY_MARKUP",
+
+                True
+
+            )
+
+        )
 
 
 
 
 
-    # ==========================================================================
-    # PRICING METHOD
-    # ==========================================================================
+
+
+    # --------------------------------------------------------------------------
+    # PRICE METHOD
+    # --------------------------------------------------------------------------
 
 
     pricing_method = st.selectbox(
 
-        "📊 Pricing Calculation Method",
+        "📊 Price Calculation Method",
 
         [
 
@@ -384,13 +402,15 @@ Controlled completely by ERP Settings.
 
             0
 
-            if get_setting(
+            if settings.get(
 
-                "PRICING_METHOD"
+                "PRICING_METHOD",
+
+                "MARKUP"
 
             )
 
-            != "MARGIN"
+            == "MARKUP"
 
             else 1
 
@@ -402,42 +422,49 @@ Controlled completely by ERP Settings.
 
 
 
-    # ==========================================================================
-    # PRICE CONTROL
-    # ==========================================================================
 
 
-    col3, col4 = st.columns(2)
+    col3,col4 = st.columns(2)
 
 
 
     with col3:
 
 
-        auto_update_price = st.checkbox(
+        auto_update = st.toggle(
 
             "🔄 Auto Update Selling Price",
 
             value=get_bool(
 
-                "AUTO_UPDATE_SELLING_PRICE"
+                settings,
+
+                "AUTO_UPDATE_SELLING_PRICE",
+
+                True
 
             )
 
         )
+
+
 
 
 
     with col4:
 
 
-        manual_override = st.checkbox(
+        manual_override = st.toggle(
 
             "✏ Allow Manual Price Override",
 
             value=get_bool(
 
-                "ALLOW_MANUAL_PRICE_OVERRIDE"
+                settings,
+
+                "ALLOW_MANUAL_PRICE_OVERRIDE",
+
+                True
 
             )
 
@@ -448,9 +475,6 @@ Controlled completely by ERP Settings.
 
 
 
-    # ==========================================================================
-    # SAVE PRICING SETTINGS
-    # ==========================================================================
 
 
     if st.button(
@@ -465,43 +489,34 @@ Controlled completely by ERP Settings.
         try:
 
 
-            save_config(
-
-                "DEFAULT_MARKUP_PERCENT",
-
-                markup_input
-
-            )
-
-
-            save_config(
+            save_value(
 
                 "PRICING_PRIORITY",
 
-                selected_priority
+                pricing_priority
 
             )
 
 
-            save_config(
+            save_value(
 
                 "ENABLE_PRODUCT_MARKUP",
 
-                product_markup_enabled
+                enable_product
 
             )
 
 
-            save_config(
+            save_value(
 
                 "ENABLE_CATEGORY_MARKUP",
 
-                category_markup_enabled
+                enable_category
 
             )
 
 
-            save_config(
+            save_value(
 
                 "PRICING_METHOD",
 
@@ -510,16 +525,16 @@ Controlled completely by ERP Settings.
             )
 
 
-            save_config(
+            save_value(
 
                 "AUTO_UPDATE_SELLING_PRICE",
 
-                auto_update_price
+                auto_update
 
             )
 
 
-            save_config(
+            save_value(
 
                 "ALLOW_MANUAL_PRICE_OVERRIDE",
 
@@ -540,7 +555,6 @@ Controlled completely by ERP Settings.
             )
 
 
-
             st.rerun()
 
 
@@ -553,674 +567,4 @@ Controlled completely by ERP Settings.
                 str(e)
 
             )
-
-
-
-
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # TAX SETTINGS
-    # ==========================================================================
-
-
-    st.subheader(
-
-        "🧾 Accounting & Tax"
-
-    )
-
-
-
-    tax_rate = get_float(
-
-        "DEFAULT_TAX_RATE"
-
-    )
-
-
-
-    if tax_rate is None:
-
-
-        st.warning(
-
-            "⚠ Tax Rate is not configured"
-
-        )
-
-
-    else:
-
-
-        st.metric(
-
-            "Current Active Tax Rate",
-
-            f"{tax_rate:.2f}%"
-
-        )
-
-
-
-
-
-    new_tax_rate = st.number_input(
-
-        "Set Tax Rate (%)",
-
-        min_value=0.0,
-
-        max_value=100.0,
-
-        value=(
-
-            float(tax_rate)
-
-            if tax_rate is not None
-
-            else 0.0
-
-        ),
-
-        step=0.1
-
-    )
-
-
-
-
-
-    discount_policy = st.selectbox(
-
-        "Discount Policy",
-
-        [
-
-            "allowed",
-
-            "restricted"
-
-        ],
-
-        index=(
-
-            0
-
-            if get_setting(
-
-                "DISCOUNT_POLICY"
-
-            )
-
-            != "restricted"
-
-            else 1
-
-        )
-
-    )
-
-
-
-
-
-    if st.button(
-
-        "💾 Save Tax Settings",
-
-        use_container_width=True
-
-    ):
-
-
-        try:
-
-
-            save_config(
-
-                "DEFAULT_TAX_RATE",
-
-                new_tax_rate
-
-            )
-
-
-            save_config(
-
-                "DISCOUNT_POLICY",
-
-                discount_policy
-
-            )
-
-
-
-            clear_settings_cache()
-
-
-
-            notify_success(
-
-                "🧾 Tax settings saved"
-
-            )
-
-
-            st.rerun()
-
-
-
-        except Exception as e:
-
-
-            notify_error(
-
-                str(e)
-
-            )
-
-# ==============================================================================
-# PART 3
-# INVENTORY + FINANCE SETTINGS
-# ==============================================================================
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # INVENTORY RULES
-    # ==========================================================================
-
-
-    st.subheader(
-
-        "📦 Inventory Rules"
-
-    )
-
-
-
-    minimum_stock = get_float(
-
-        "MIN_STOCK_ALERT"
-
-    )
-
-
-
-    if minimum_stock is None:
-
-        minimum_stock_value = 0.0
-
-
-    else:
-
-        minimum_stock_value = float(
-
-            minimum_stock
-
-        )
-
-
-
-
-
-    stock_alert = st.number_input(
-
-        "Minimum Stock Alert",
-
-        min_value=0.0,
-
-        value=minimum_stock_value,
-
-        step=1.0
-
-    )
-
-
-
-
-
-    auto_reorder = st.checkbox(
-
-        "🔄 Enable Auto Reorder",
-
-        value=get_bool(
-
-            "AUTO_REORDER"
-
-        )
-
-    )
-
-
-
-
-
-    if st.button(
-
-        "💾 Save Inventory Settings",
-
-        use_container_width=True
-
-    ):
-
-
-        try:
-
-
-            save_config(
-
-                "MIN_STOCK_ALERT",
-
-                stock_alert
-
-            )
-
-
-            save_config(
-
-                "AUTO_REORDER",
-
-                auto_reorder
-
-            )
-
-
-
-            clear_settings_cache()
-
-
-
-            notify_success(
-
-                "📦 Inventory settings saved"
-
-            )
-
-
-            st.rerun()
-
-
-
-        except Exception as e:
-
-
-            notify_error(
-
-                str(e)
-
-            )
-
-
-
-
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # FINANCE SETTINGS
-    # ==========================================================================
-
-
-    st.subheader(
-
-        "💱 Finance Settings"
-
-    )
-
-
-
-    currency_list = [
-
-        "MMK",
-
-        "USD",
-
-        "THB",
-
-        "SGD"
-
-    ]
-
-
-
-    current_currency = get_setting(
-
-        "CURRENCY"
-
-    )
-
-
-
-
-    currency = st.selectbox(
-
-        "Base Currency",
-
-        currency_list,
-
-        index=(
-
-            currency_list.index(
-
-                current_currency
-
-            )
-
-            if current_currency in currency_list
-
-            else 0
-
-        )
-
-    )
-
-
-
-
-
-
-    payment_options = [
-
-        "Cash",
-
-        "Bank Transfer",
-
-        "Mobile Pay",
-
-        "Credit"
-
-    ]
-
-
-
-    current_payment = get_setting(
-
-        "PAYMENT_METHODS"
-
-    )
-
-
-
-    if current_payment:
-
-
-        default_payment = current_payment.split(",")
-
-
-    else:
-
-
-        default_payment = []
-
-
-
-
-
-    payment_methods = st.multiselect(
-
-        "Enabled Payment Methods",
-
-        payment_options,
-
-        default=default_payment
-
-    )
-
-
-
-
-
-
-
-    if st.button(
-
-        "💾 Save Finance Settings",
-
-        use_container_width=True
-
-    ):
-
-
-        try:
-
-
-            save_config(
-
-                "CURRENCY",
-
-                currency
-
-            )
-
-
-            save_config(
-
-                "PAYMENT_METHODS",
-
-                ",".join(
-
-                    payment_methods
-
-                )
-
-            )
-
-
-
-            clear_settings_cache()
-
-
-
-            notify_success(
-
-                "💱 Finance settings saved"
-
-            )
-
-
-            st.rerun()
-
-
-
-        except Exception as e:
-
-
-            notify_error(
-
-                str(e)
-
-            )
-
-# ==============================================================================
-# PART 4
-# SYSTEM STATUS + ENTRY POINT
-# ==============================================================================
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # SYSTEM STATUS
-    # ==========================================================================
-
-
-    st.subheader(
-
-        "🖥 System Status"
-
-    )
-
-
-
-    st.success(
-"""
-✔ ERP Core Active
-
-✔ Database Connected
-
-✔ Settings Service Connected
-
-✔ Settings Cache Active
-
-✔ Pricing Engine Connected
-
-✔ Tax Engine Connected
-
-✔ Inventory Engine Connected
-
-✔ Finance Module Connected
-
-✔ POS Ready
-
-✔ ERP Configuration Synced
-"""
-    )
-
-
-
-
-
-    # ==========================================================================
-    # SETTINGS HEALTH CHECK
-    # ==========================================================================
-
-
-    st.subheader(
-
-        "❤️ Settings Health"
-
-    )
-
-
-    try:
-
-
-        from erp_core.services.settings_service import (
-
-            SettingsService
-
-        )
-
-
-        from erp_core.base_repo import db
-
-
-
-        service = SettingsService(
-
-            db()
-
-        )
-
-
-        health = service.health_check()
-
-
-
-        if health.get(
-
-            "status"
-
-        ) == "PASS":
-
-
-            st.success(
-
-                f"""
-Settings Service : PASS
-
-Database : Connected
-
-Rows : {health.get('rows',0)}
-"""
-
-            )
-
-
-        else:
-
-
-            st.error(
-
-                str(health)
-
-            )
-
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            f"Health Check Failed : {e}"
-
-        )
-
-
-
-
-
-
-
-    # ==========================================================================
-    # FINAL MESSAGE
-    # ==========================================================================
-
-
-    st.success(
-
-        "🚀 ERP Enterprise Control Center Fully Operational"
-
-    )
-
-
-
-
-
-
-# ==============================================================================
-# ENTRY POINT
-# ==============================================================================
-
-
-if __name__ == "__main__":
-
-
-    st.set_page_config(
-
-        page_title=
-
-        "ERP Control Center",
-
-        page_icon=
-
-        "⚙️",
-
-        layout=
-
-        "wide"
-
-    )
-
-
-    run()
 
