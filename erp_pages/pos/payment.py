@@ -1,12 +1,19 @@
 # ==============================================================================
 # erp_pages/pos/payment.py
-# ERP ENTERPRISE POS PAYMENT MODULE v12.9 FINAL
+# ERP ENTERPRISE POS PAYMENT MODULE v13.0
 #
-# Responsibilities:
-# - Payment input
-# - Discount handling
-# - Checkout trigger
-# - Receipt preparation
+# SETTINGS TAX ENGINE CONNECTED
+#
+# Tax Source:
+#
+# ERP Settings
+#      |
+# DEFAULT_TAX_RATE
+#      |
+# POS DISPLAY
+#      |
+# RECEIPT
+#
 # ==============================================================================
 
 
@@ -29,8 +36,8 @@ from .cart import (
 )
 
 
-from .engine import (
-    get_default_tax_rate
+from erp_core.loaders.settings_loader import (
+    get_setting
 )
 
 
@@ -48,10 +55,40 @@ def money(value):
 
         return f"{float(value):,.0f} MMK"
 
+    except:
+
+        return "0 MMK"
+
+
+
+
+
+# ==============================================================================
+# TAX FROM ERP SETTINGS
+# ==============================================================================
+
+
+def get_default_tax_rate():
+
+
+    try:
+
+        return float(
+
+            get_setting(
+
+                "DEFAULT_TAX_RATE",
+
+                0
+
+            )
+
+        )
+
 
     except Exception:
 
-        return "0 MMK"
+        return 0.0
 
 
 
@@ -78,11 +115,9 @@ def render_payment(
     )
 
 
-
     if not cart:
 
         return
-
 
 
 
@@ -99,9 +134,8 @@ def render_payment(
 
 
 
-
     # --------------------------------------------------
-    # SUBTOTAL & TAX FROM SETTINGS (AUTOMATIC)
+    # SUBTOTAL
     # --------------------------------------------------
 
 
@@ -111,6 +145,11 @@ def render_payment(
 
     )
 
+
+
+    # --------------------------------------------------
+    # TAX FROM SETTINGS
+    # --------------------------------------------------
 
 
     tax_rate = get_default_tax_rate()
@@ -133,6 +172,27 @@ def render_payment(
 
 
 
+    st.info(
+
+        f"""
+
+🧾 Tax Rate (System Setting)
+
+{tax_rate:.2f}%
+
+
+
+Tax Amount
+
+{money(tax_amount)}
+
+"""
+
+    )
+
+
+
+
 
 
     # --------------------------------------------------
@@ -149,13 +209,11 @@ def render_payment(
     )
 
 
-
     discount = 0.0
 
 
 
     if discount_policy == "allowed":
-
 
 
         discount = st.number_input(
@@ -188,7 +246,6 @@ def render_payment(
         )
 
 
-
         st.session_state.discount = discount
 
 
@@ -206,6 +263,12 @@ def render_payment(
 
 
 
+
+    # --------------------------------------------------
+    # TOTAL
+    # --------------------------------------------------
+
+
     grand_total = max(
 
         0,
@@ -218,7 +281,39 @@ def render_payment(
 
         -
 
-        float(discount)
+        discount
+
+    )
+
+
+
+    st.success(
+
+        f"""
+
+Subtotal:
+
+{money(subtotal)}
+
+
+
+Tax:
+
+{money(tax_amount)}
+
+
+
+Discount:
+
+{money(discount)}
+
+
+
+Grand Total:
+
+{money(grand_total)}
+
+"""
 
     )
 
@@ -247,13 +342,9 @@ def render_payment(
 
             "CREDIT"
 
-        ],
-
-
-        index=0
+        ]
 
     )
-
 
 
     st.session_state.payment_method = payment_method
@@ -262,8 +353,9 @@ def render_payment(
 
 
 
+
     # --------------------------------------------------
-    # RECEIVED MONEY
+    # RECEIVED
     # --------------------------------------------------
 
 
@@ -296,6 +388,7 @@ def render_payment(
 
 
     st.session_state.received_amount = received
+
 
 
 
@@ -332,9 +425,8 @@ Change:
 
 
 
-
     # --------------------------------------------------
-    # CHECKOUT BUTTON
+    # CHECKOUT
     # --------------------------------------------------
 
 
@@ -363,9 +455,7 @@ Change:
 
             )
 
-
             return
-
 
 
 
@@ -385,7 +475,6 @@ Change:
 
             )
 
-
             return
 
 
@@ -400,7 +489,6 @@ Change:
 
 
 
-            # process_checkout ခေါ်သည့်အခါ tax_rate ကို ဖြုတ်ပြီးသားဖြစ်ပါသည် (Settings ကနေ အလိုအလျောက် ယူပါမည်)
             result = process_checkout(
 
 
@@ -431,7 +519,6 @@ Change:
 
                 discount=discount
 
-
             )
 
 
@@ -455,9 +542,7 @@ Change:
                 )
 
 
-
                 st.session_state.show_receipt = True
-
 
 
                 st.success(
@@ -467,15 +552,12 @@ Change:
                 )
 
 
-
                 st.rerun()
 
 
 
 
-
             else:
-
 
 
                 st.error(
@@ -492,8 +574,9 @@ Change:
 
 
 
-        except Exception as e:
 
+
+        except Exception as e:
 
 
             st.error(
@@ -505,7 +588,6 @@ Change:
 
 
         finally:
-
 
 
             stop_processing()
