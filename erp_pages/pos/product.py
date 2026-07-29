@@ -1,52 +1,98 @@
 # ==============================================================================
 # erp_pages/pos/product.py
-# ERP ENTERPRISE POS PRODUCT MODULE v12.7 FINAL
-# TWO SEARCH BOX VERSION
+# ERP ENTERPRISE POS PRODUCT MODULE v12.8 FINAL
+# TWO SEARCH BOX + CART FIX
 # ==============================================================================
 
 from typing import List, Dict, Any
 
 import streamlit as st
 
-from erp_core.loaders.product_loader import get_pos_products
-from .cart import add_to_cart, check_available_stock
-from .engine import get_final_price
+
+from erp_core.loaders.product_loader import (
+    get_pos_products
+)
+
+
+from .cart import (
+    add_to_cart,
+    check_available_stock
+)
+
+
+from .engine import (
+    get_final_price
+)
 
 
 # ==============================================================================
-# MONEY FORMAT
+# MONEY
 # ==============================================================================
 
 def money(value):
+
     try:
         return f"{float(value):,.0f} MMK"
+
     except Exception:
         return "0 MMK"
+
 
 
 # ==============================================================================
 # LOAD PRODUCTS
 # ==============================================================================
 
-def load_pos_products(warehouse_id=None) -> List[Dict[str, Any]]:
+def load_pos_products(
+    warehouse_id=None
+) -> List[Dict[str, Any]]:
+
     try:
-        return get_pos_products(warehouse_id=warehouse_id) or []
+
+        return get_pos_products(
+            warehouse_id=warehouse_id
+        ) or []
+
+
     except Exception as e:
-        st.error(f"Product Load Error : {e}")
+
+        st.error(
+            f"Product Load Error : {e}"
+        )
+
         return []
+
 
 
 # ==============================================================================
 # STOCK CHECK
 # ==============================================================================
 
-def check_stock(product, qty):
+def check_stock(
+    product,
+    qty
+):
+
+    if "cart" not in st.session_state:
+
+        st.session_state.cart = []
+
+
     return check_available_stock(
-        st.session_state.get("cart", []),
+
+        st.session_state.cart,
+
         product.get("id"),
-        product.get("available_qty", 0),
-        qty,
+
+        product.get(
+            "available_qty",
+            0
+        ),
+
+        int(qty)
+
     )
+
 
 
 # ==============================================================================
@@ -54,151 +100,309 @@ def check_stock(product, qty):
 # ==============================================================================
 
 def product_label(product):
-    price = get_final_price(product)
-    sku = product.get("sku") or "NO-SKU"
+
+    price = get_final_price(
+        product
+    )
 
     return (
-        f"{sku} | "
+
+        f"{product.get('sku','NO-SKU')} | "
+
         f"{product.get('name','')} | "
+
         f"Stock:{product.get('available_qty',0)} | "
-        f"{money(price['price'])}"
+
+        f"{money(price.get('price',0))}"
+
     )
+
 
 
 # ==============================================================================
 # PRODUCT UI
 # ==============================================================================
 
-def render_products(warehouse_id):
+def render_products(
+    warehouse_id
+):
 
-    products = load_pos_products(warehouse_id)
+
+    # Ensure cart exists
+
+    if "cart" not in st.session_state:
+
+        st.session_state.cart = []
+
+
+
+    products = load_pos_products(
+        warehouse_id
+    )
+
 
     if not products:
-        st.warning("No products found")
+
+        st.warning(
+            "No products found"
+        )
+
         return []
 
 
+
     # --------------------------------------------------------------------------
-    # SEARCH AREA (TWO BOXES)
+    # SEARCH
     # --------------------------------------------------------------------------
-    st.subheader("🔍 Product Search")
+
+    st.subheader(
+        "🔍 Product Search"
+    )
+
 
     col1, col2 = st.columns(2)
 
+
+
     with col1:
+
         name_search = st.text_input(
+
             "🔍 Product Name",
-            key=f"pos_name_search_{warehouse_id}"
+
+            key="pos_name_search_box"
+
         )
 
+
+
     with col2:
+
         barcode_search = st.text_input(
+
             "📦 SKU / Barcode",
-            key=f"pos_barcode_search_{warehouse_id}"
+
+            key="pos_barcode_search_box"
+
         )
+
 
 
     # --------------------------------------------------------------------------
     # FILTER
     # --------------------------------------------------------------------------
+
     matches = []
+
 
     for product in products:
 
-        name = str(product.get("name", ""))
-        sku = str(product.get("sku", ""))
-        barcode = str(product.get("barcode", ""))
+
+        name = str(
+            product.get(
+                "name",
+                ""
+            )
+        ).lower()
+
+
+        sku = str(
+            product.get(
+                "sku",
+                ""
+            )
+        ).lower()
+
+
+        barcode = str(
+            product.get(
+                "barcode",
+                ""
+            )
+        ).lower()
+
+
 
         name_ok = True
+
         code_ok = True
 
+
+
         if name_search:
-            name_ok = name_search.lower() in name.lower()
 
-        if barcode_search:
-            search = barcode_search.lower()
+            name_ok = (
 
-            code_ok = (
-                search in sku.lower()
-                or
-                search in barcode.lower()
+                name_search.lower()
+
+                in
+
+                name
+
             )
 
+
+
+        if barcode_search:
+
+            key = barcode_search.lower()
+
+
+            code_ok = (
+
+                key in sku
+
+                or
+
+                key in barcode
+
+            )
+
+
+
         if name_ok and code_ok:
-            matches.append(product)
+
+            matches.append(
+                product
+            )
+
 
 
     if not matches:
-        st.warning("Product not found")
+
+        st.warning(
+            "Product not found"
+        )
+
         return products
 
 
+
     # --------------------------------------------------------------------------
-    # SELECT PRODUCT
+    # SELECT
     # --------------------------------------------------------------------------
+
     selected = st.selectbox(
+
         "Select Product",
+
         matches,
+
         format_func=product_label,
-        key=f"pos_product_selectbox_{warehouse_id}"
+
+        key="pos_product_selectbox"
+
     )
 
 
-    # --------------------------------------------------------------------------
-    # QUANTITY
-    # --------------------------------------------------------------------------
+
     qty = st.number_input(
+
         "Quantity",
+
         min_value=1,
+
         value=1,
+
         step=1,
-        key=f"pos_product_qty_{warehouse_id}"
+
+        key="pos_product_qty"
+
     )
 
 
+
     # --------------------------------------------------------------------------
-    # PRODUCT INFO
+    # INFO
     # --------------------------------------------------------------------------
+
     if selected:
 
-        price_data = get_final_price(selected)
 
-        st.info(
-            f"""
-**Product:** {selected.get('name')}
-
-**Price:** {money(price_data['price'])}
-
-**Price Source:** {price_data['source']}
-
-**Available Stock:** {selected.get('available_qty',0)}
-"""
+        price_data = get_final_price(
+            selected
         )
 
 
+        st.info(
+
+            f"""
+**Product:** {selected.get('name')}
+
+**Price:** {money(price_data.get('price',0))}
+
+**Price Source:** {price_data.get('source','SYSTEM')}
+
+**Available Stock:** {selected.get('available_qty',0)}
+"""
+
+        )
+
+
+
         # ----------------------------------------------------------------------
-        # ADD TO CART
+        # ADD CART
         # ----------------------------------------------------------------------
+
         if st.button(
+
             "➕ Add To Cart",
+
             use_container_width=True,
-            key=f"pos_add_to_cart_{warehouse_id}_{selected.get('id')}"
+
+            key="pos_add_cart_button"
+
         ):
 
-            if not check_stock(selected, qty):
-                st.error("Insufficient stock")
+
+            if not check_stock(
+                selected,
+                qty
+            ):
+
+                st.error(
+                    "Insufficient stock"
+                )
+
                 return products
 
+
+
             add_to_cart(
+
                 st.session_state.cart,
+
                 selected,
-                qty,
-                price_data["price"],
-                price_data["source"]
+
+                int(qty),
+
+                float(
+                    price_data.get(
+                        "price",
+                        0
+                    )
+                ),
+
+                price_data.get(
+                    "source",
+                    "SYSTEM"
+                )
+
             )
 
-            st.success("Added to cart")
+
+            st.session_state.cart = (
+                st.session_state.cart
+            )
+
+
+            st.success(
+                f"{selected.get('name')} added to cart"
+            )
+
+
             st.rerun()
+
 
 
     return products
