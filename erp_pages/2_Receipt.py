@@ -102,6 +102,11 @@ def run():
         st.session_state.receipt_data = None
 
 
+    if "pdf_result" not in st.session_state:
+
+        st.session_state.pdf_result = None
+
+
 
     # --------------------------------------------------------------------------
     # SEARCH RECEIPT
@@ -183,6 +188,8 @@ def run():
 
 
             st.session_state.receipt_data = receipt
+
+            st.session_state.pdf_result = None
 
 
 
@@ -576,31 +583,39 @@ def run():
         if result:
 
 
-            pdf_bytes, filename = result
-
-
-
-            st.download_button(
-
-                "⬇ Download Receipt",
-
-                pdf_bytes,
-
-                file_name=f"{filename}.pdf",
-
-                mime="application/pdf"
-
-            )
+            st.session_state.pdf_result = result
 
 
         else:
 
+
+            st.session_state.pdf_result = None
 
             st.error(
 
                 "❌ PDF generation failed"
 
             )
+
+
+    if st.session_state.pdf_result:
+
+
+        pdf_bytes, filename = st.session_state.pdf_result
+
+
+
+        st.download_button(
+
+            "⬇ Download Receipt",
+
+            pdf_bytes,
+
+            file_name=f"{filename}.pdf",
+
+            mime="application/pdf"
+
+        )
 
 
 
@@ -709,6 +724,8 @@ def run():
 
         st.session_state.selected_receipt = None
 
+        st.session_state.pdf_result = None
+
         st.rerun()
 
 
@@ -724,5 +741,3 @@ if __name__ == "__main__":
 
 
     run()
-
-
