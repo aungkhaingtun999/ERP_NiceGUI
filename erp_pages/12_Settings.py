@@ -885,7 +885,12 @@ Estimated Selling Price:
 
             # Clear cache after update
 
-            st.cache_data.clear()
+            from erp_core.loaders.settings_loader import (
+            clear_settings_cache
+            )
+
+
+            clear_settings_cache()
 
 
 
