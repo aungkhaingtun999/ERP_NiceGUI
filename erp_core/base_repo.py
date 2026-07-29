@@ -2,7 +2,7 @@
 # erp_core/base_repo.py
 # TEST CLEAN VERSION
 # ==============================================================================
-
+print("BASE_REPO IMPORT START")
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
@@ -15,7 +15,7 @@ from .config import (
     Tables,
     log_error
 )
-
+print("BASE_REPO IMPORT SUCCESS")
 
 @st.cache_resource
 def get_supabase():
