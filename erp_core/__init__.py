@@ -1,29 +1,18 @@
 # ==============================================================================
 # erp_core/__init__.py
-# ERP ENTERPRISE CORE PACKAGE v31.0
-# CLEAN LAZY IMPORT ARCHITECTURE
+# ERP ENTERPRISE CORE EXPORT HUB v30.8 FINAL
+#
+# Purpose:
+# - Single import gateway
+# - Prevent circular import
+# - Public API export
+#
+# Usage:
+#
+# from erp_core import checkout_sale_rpc
+# from erp_core import get_products
+#
 # ==============================================================================
-
-
-"""
-ERP CORE
-
-Structure:
-
-Pages
- |
- └── erp_core
-        |
-        ├── config
-        ├── context
-        ├── base_repo
-        ├── repositories
-        ├── services
-        ├── loaders
-        └── rpc
-
-
-"""
 
 
 
@@ -31,28 +20,22 @@ Pages
 # CONFIG
 # ==============================================================================
 
+
 from .config import (
+
     Tables,
-    TABLE_PRODUCT_VIEW,
+
+    CACHE_KEYS,
+
     DEFAULT_PAGE_SIZE,
+
+    ERP_VERSION,
+
     log_error
+
 )
 
 
-
-# ==============================================================================
-# CONTEXT
-# ==============================================================================
-
-from .context import (
-    ERPContext,
-    CacheManager,
-    get_cache_version,
-    bump_cache,
-    bump_inventory_version,
-    bump_product_version,
-    bump_sales_version
-)
 
 
 
@@ -60,394 +43,327 @@ from .context import (
 # DATABASE CORE
 # ==============================================================================
 
+
 from .base_repo import (
 
-    db,
-
-    get_supabase,
-
-    get_connection,
-
-    DatabaseHealth,
-
-    database_health_check,
-
-    money,
-
-    money_float,
-
-    validate_uuid,
-
-    serialize_json,
-
-    safe_execute
+    db
 
 )
 
 
 
+
+
 # ==============================================================================
-# REPOSITORIES
+# CONTEXT
 # ==============================================================================
 
-from .repositories import (
 
-    RepositoryCoordinator,
+from .context import (
 
-    BaseRepository,
-
-    ProductRepository,
-
-    WarehouseRepository,
-
-    CustomerRepository,
-
-    SupplierRepository,
-
-    SalesRepository
+    CacheManager
 
 )
 
 
 
-# ==============================================================================
-# RPC ENGINE
-# ==============================================================================
-
-from .rpc.engine import RPCEngine
-
-
-
-
-ERP_CORE_VERSION = "31.0 CLEAN LAZY ARCHITECTURE"
-
 
 
 # ==============================================================================
-# LAZY EXPORT MAP
+# PRODUCT
 # ==============================================================================
 
 
-_EXPORTS = {
+from .loaders.product_loader import (
 
+    get_products,
 
-    # ----------------------------------------------------------
-    # LOADERS
-    # ----------------------------------------------------------
+    get_pos_products,
 
-    "get_setting":
-        ("loaders", "get_setting"),
+    get_active_products,
 
+    refresh_products_cache
 
-    "get_products":
-        ("loaders", "get_products"),
-
-
-    "get_inventory_view":
-        ("loaders", "get_inventory_view"),
-
-
-    "get_default_warehouse_id":
-        ("loaders", "get_default_warehouse_id"),
-
-
-    "get_warehouses":
-        ("loaders", "get_warehouses"),
-
-
-    "get_customers":
-        ("loaders", "get_customers"),
-
-
-    "get_suppliers":
-        ("loaders", "get_suppliers"),
-
-
-
-    # ----------------------------------------------------------
-    # RECEIPT
-    # ----------------------------------------------------------
-
-    "get_receipt":
-        ("loaders", "get_receipt"),
-
-
-    "get_sale_items":
-        ("loaders", "get_sale_items"),
-
-
-    "search_receipts":
-        ("loaders", "search_receipts"),
-
-
-
-    # ----------------------------------------------------------
-    # SERVICES
-    # ----------------------------------------------------------
-
-    "SalesService":
-        ("services", "SalesService"),
-
-
-    "InventoryService":
-        ("services", "InventoryService"),
-
-
-    "PurchaseService":
-        ("services", "PurchaseService"),
-
-
-    "RefundService":
-        ("services", "RefundService"),
-
-
-    "CustomerService":
-        ("services", "CustomerService"),
-
-
-    "ReceiptService":
-        ("services", "ReceiptService"),
-
-
-    "DashboardService":
-        ("services", "DashboardService"),
-
-
-
-    # ----------------------------------------------------------
-    # RPC
-    # ----------------------------------------------------------
-
-    "checkout_sale_rpc":
-        (
-            "rpc.checkout_rpc",
-            "checkout_sale_rpc"
-        ),
-
-
-    "purchase_receive_rpc":
-        (
-            "rpc.purchase_rpc",
-            "purchase_receive_rpc"
-        ),
-
-
-    "refund_sale_rpc":
-        (
-            "rpc.refund_rpc",
-            "refund_sale_rpc"
-        ),
-
-
-    "stock_adjustment_rpc":
-        (
-            "rpc.stock_rpc",
-            "stock_adjustment_rpc"
-        ),
-
-
-    "update_product_rpc":
-        (
-            "rpc.stock_rpc",
-            "update_product_rpc"
-        ),
-
-
-
-        # ----------------------------------------------------------
-    # HELPERS
-    # ----------------------------------------------------------
-
-    "get_fifo_cogs":
-        (
-            "services",
-            "get_fifo_cogs"
-        ),
-
-
-    "create_audit_log":
-        (
-            "services",
-            "create_audit_log"
-        )
-
-}
+)
 
 
 
 
 
 # ==============================================================================
-# LAZY IMPORT FUNCTION
+# SETTINGS
 # ==============================================================================
 
 
-def __getattr__(name):
+from .loaders.settings_loader import (
 
+    get_setting
 
-    if name not in _EXPORTS:
-
-        raise AttributeError(
-            f"erp_core has no attribute '{name}'"
-        )
-
-
-
-    module_name, object_name = _EXPORTS[name]
-
-
-
-    # RPC
-
-    if module_name.startswith("rpc."):
-
-
-        module = __import__(
-
-            f"erp_core.{module_name}",
-
-            fromlist=[object_name]
-
-        )
-
-
-        return getattr(
-            module,
-            object_name
-        )
-
-
-
-    # SERVICES
-
-    if module_name == "services":
-
-
-        from . import services
-
-
-        return getattr(
-            services,
-            object_name
-        )
-
-
-
-    # LOADERS
-
-    if module_name == "loaders":
-
-
-        from . import loaders
-
-
-        return getattr(
-            loaders,
-            object_name
-        )
-
-
-
-    raise AttributeError(name)
+)
 
 
 
 
 
 # ==============================================================================
-# PUBLIC EXPORTS
+# WAREHOUSE
+# ==============================================================================
+
+
+try:
+
+
+    from .loaders.warehouse_loader import (
+
+        get_default_warehouse_id,
+
+        get_warehouses
+
+
+    )
+
+
+except Exception:
+
+
+
+    def get_default_warehouse_id():
+
+        return None
+
+
+
+    def get_warehouses():
+
+        return []
+
+
+
+
+
+
+
+# ==============================================================================
+# RECEIPT
+# ==============================================================================
+
+
+try:
+
+
+    from .services.receipt_service import (
+
+        ReceiptService
+
+    )
+
+
+except Exception:
+
+
+    ReceiptService = None
+
+
+
+
+
+
+
+# ==============================================================================
+# CHECKOUT RPC
+# ==============================================================================
+
+
+from .rpc.checkout_rpc import (
+
+    checkout_sale_rpc
+
+)
+
+
+
+
+
+
+
+# ==============================================================================
+# INVENTORY
+# ==============================================================================
+
+
+try:
+
+
+    from .services.inventory_service import (
+
+        InventoryService
+
+    )
+
+
+except Exception:
+
+
+    InventoryService = None
+
+
+
+
+
+
+
+# ==============================================================================
+# SALES
+# ==============================================================================
+
+
+try:
+
+
+    from .services.sales_service import (
+
+        SalesService
+
+    )
+
+
+except Exception:
+
+
+    SalesService = None
+
+
+
+
+
+
+
+# ==============================================================================
+# PURCHASE
+# ==============================================================================
+
+
+try:
+
+
+    from .services.purchase_service import (
+
+        PurchaseService
+
+    )
+
+
+except Exception:
+
+
+    PurchaseService = None
+
+
+
+
+
+
+
+# ==============================================================================
+# REFUND
+# ==============================================================================
+
+
+try:
+
+
+    from .services.refund_service import (
+
+        RefundService
+
+    )
+
+
+except Exception:
+
+
+    RefundService = None
+
+
+
+
+
+
+
+# ==============================================================================
+# VERSION INFO
 # ==============================================================================
 
 
 __all__ = [
 
 
-    "ERP_CORE_VERSION",
 
+    # Core
 
-    # DATABASE
-
-    "db",
-    "get_supabase",
-    "get_connection",
-
-
-    # MONEY
-
-    "money",
-    "money_float",
-
-
-    # CONFIG
+    "ERP_VERSION",
 
     "Tables",
-    "TABLE_PRODUCT_VIEW",
+
+    "CACHE_KEYS",
+
+    "DEFAULT_PAGE_SIZE",
+
+    "db",
+
+    "log_error",
 
 
-    # CACHE
+
+    # Context
 
     "CacheManager",
-    "get_cache_version",
-    "bump_cache",
-    "bump_inventory_version",
-    "bump_product_version",
-    "bump_sales_version",
 
 
-    # REPOSITORY
 
-    "RepositoryCoordinator",
-    "BaseRepository",
-    "ProductRepository",
+    # Product
+
+    "get_products",
+
+    "get_pos_products",
+
+    "get_active_products",
+
+    "refresh_products_cache",
 
 
-    # LOADERS
+
+    # Settings
 
     "get_setting",
-    "get_products",
-    "get_inventory_view",
+
+
+
+    # Warehouse
+
     "get_default_warehouse_id",
+
     "get_warehouses",
-    "get_customers",
-    "get_suppliers",
-    "get_receipt",
-    "get_sale_items",
-    "search_receipts",
 
 
-    # RPC
+
+    # Checkout
 
     "checkout_sale_rpc",
-    "purchase_receive_rpc",
-    "refund_sale_rpc",
-    "stock_adjustment_rpc",
-    "update_product_rpc",
 
 
-    # SERVICES
+
+    # Services
+
+    "ReceiptService",
+
+    "InventoryService",
 
     "SalesService",
-    "InventoryService",
+
     "PurchaseService",
-    "RefundService",
-    "CustomerService",
-    "ReceiptService",
-    "DashboardService",
-        # HELPERS
 
-    "get_fifo_cogs",
-    "create_audit_log",
+    "RefundService"
 
-
-    # RPC ENGINE
-
-    "RPCEngine"
 
 ]
-
-
-
-
-print(
-    "ERP_CORE v31.0 CLEAN LAZY ARCHITECTURE LOADED"
-)
