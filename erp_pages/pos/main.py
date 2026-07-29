@@ -166,7 +166,7 @@ POS uses FINAL SELLING PRICE
 
 
 
-    # --------------------------------------------------------------------------
+        # --------------------------------------------------------------------------
     # CART
     # --------------------------------------------------------------------------
 
@@ -176,17 +176,13 @@ POS uses FINAL SELLING PRICE
     )
 
 
-
     if not cart:
-
 
         st.info(
             "Cart is empty."
         )
 
         return
-
-
 
 
 
@@ -199,19 +195,138 @@ POS uses FINAL SELLING PRICE
 
 
 
+    # ==========================================================================
+    # CART DETAIL TABLE
+    # ==========================================================================
+
+    import pandas as pd
+
+
+    cart_rows = []
+
+
+    for item in cart:
+
+
+        qty = int(
+            item.get(
+                "qty",
+                0
+            )
+        )
+
+
+        price = float(
+
+            item.get(
+
+                "unit_price",
+
+                item.get(
+
+                    "selling_price",
+
+                    0
+
+                )
+
+            )
+
+        )
+
+
+        cart_rows.append(
+
+            {
+
+                "Product":
+
+                    item.get(
+                        "name",
+                        ""
+                    ),
+
+
+                "SKU":
+
+                    item.get(
+                        "sku",
+                        ""
+                    ),
+
+
+                "Qty":
+
+                    qty,
+
+
+                "Price Source":
+
+                    item.get(
+                        "price_source",
+                        "SYSTEM"
+                    ),
+
+
+                "Unit Price":
+
+                    money(price),
+
+
+                "Amount":
+
+                    money(
+                        price * qty
+                    )
+
+            }
+
+        )
+
+
+
+    if cart_rows:
+
+
+        cart_df = pd.DataFrame(
+            cart_rows
+        )
+
+
+        st.dataframe(
+
+            cart_df,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+
+
+    # ==========================================================================
+    # TOTAL
+    # ==========================================================================
+
+
     subtotal = calculate_subtotal(
         cart
     )
 
 
-
     total_qty = sum(
 
         int(
+
             item.get(
+
                 "qty",
+
                 0
+
             )
+
         )
 
         for item in cart
