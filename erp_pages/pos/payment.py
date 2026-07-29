@@ -194,7 +194,9 @@ def render_payment(
         0
 
     )
-
+    st.caption(
+    f"Tax Rate : {float(tax_rate):.2f}%"
+    )
 
 
     tax_amount = calculate_tax(
