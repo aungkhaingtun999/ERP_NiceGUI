@@ -565,7 +565,7 @@ Calculated in Payment Module
     # TAX FROM SETTINGS
     # --------------------------------------------------------------------------
 
-    tax_rate = get_default_tax_rate()
+tax_rate = get_default_tax_rate()
 
 
     tax_amount = (
