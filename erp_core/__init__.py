@@ -73,6 +73,17 @@ except Exception:
         return []
 
 # ==============================================================================
+# SUPPLIER (Added to fix the import error)
+# ==============================================================================
+try:
+    from .loaders.supplier_loader import (  
+        get_suppliers  
+    )
+except Exception:
+    def get_suppliers(*args, **kwargs):  
+        return []
+
+# ==============================================================================
 # SETTINGS
 # ==============================================================================
 try:
@@ -233,6 +244,9 @@ __all__ = [
     "get_active_products",  
     "refresh_products_cache",  
     "get_inventory_view",  
+
+    # Supplier  
+    "get_suppliers",
 
     # Settings  
     "get_setting",  
