@@ -178,7 +178,7 @@ def build_receipt_rows(items):
         )
 
 
-    return rows
+        return rows
 
 
 
@@ -205,7 +205,7 @@ with st.expander("DEBUG RECEIPT DATA"):
             "Receipt data missing"
         )
 
-    return
+      return
 
 
 
