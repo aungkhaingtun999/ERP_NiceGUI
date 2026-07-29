@@ -1,20 +1,14 @@
 # ==============================================================================
 # erp_core/base_repo.py
-# ERP ENTERPRISE DATABASE CORE v31.1 FIX
+# TEST CLEAN VERSION
 # ==============================================================================
 
-import time
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, Callable
+from typing import Optional
 
 import streamlit as st
 
-from supabase import create_client, Client
-
-try:
-    from postgrest.exceptions import APIError
-except Exception:
-    APIError = Exception
+from supabase import create_client
 
 
 from .config import (
@@ -23,33 +17,13 @@ from .config import (
 )
 
 
-
-# ==============================================================================
-# SUPABASE CONNECTION
-# ==============================================================================
-
 @st.cache_resource
-def get_supabase() -> Client:
+def get_supabase():
 
-    try:
-
-        return create_client(
-            st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"]
-        )
-
-    except Exception as e:
-
-        log_error(
-            message="Supabase connection failed",
-            exception=e
-        )
-
-        from .exceptions import DatabaseError
-
-        raise DatabaseError(
-            "Cannot connect database"
-        )
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"]
+    )
 
 
 
@@ -62,12 +36,6 @@ def db():
 get_connection = db
 
 
-
-
-
-# ==============================================================================
-# MONEY
-# ==============================================================================
 
 def money(value):
 
@@ -86,7 +54,6 @@ def money(value):
 
 
 
-
 def money_float(value):
 
     return float(
@@ -95,14 +62,11 @@ def money_float(value):
 
 
 
-
 def safe_float(value):
 
     try:
 
-        return float(
-            value or 0
-        )
+        return float(value or 0)
 
     except Exception:
 
@@ -110,13 +74,7 @@ def safe_float(value):
 
 
 
-
-
-# ==============================================================================
-# UUID
-# ==============================================================================
-
-def validate_uuid(value):
+def validate_uuid(value) -> Optional[str]:
 
     if not value:
 
@@ -139,12 +97,6 @@ def validate_uuid(value):
         return None
 
 
-
-
-
-# ==============================================================================
-# JSON SERIALIZER
-# ==============================================================================
 
 def serialize_json(data):
 
@@ -181,122 +133,29 @@ def serialize_json(data):
 
 
 
-
-
-# ==============================================================================
-# SAFE EXECUTE
-# ==============================================================================
-
-def safe_execute(
-    func: Callable,
-    error_message="Database operation failed"
-):
-
-    for attempt in range(3):
-
-        try:
-
-            result = func()
-
-
-            if hasattr(result,"data"):
-
-                return result.data
-
-
-            return result
-
-
-        except (
-            APIError,
-            ConnectionError,
-            TimeoutError
-        ) as e:
-
-
-            if attempt < 2:
-
-                time.sleep(
-                    0.5 * (attempt+1)
-                )
-
-                continue
-
-
-            log_error(
-                message=error_message,
-                exception=e
-            )
-
-            raise
-
-
-        except Exception as e:
-
-
-            log_error(
-                message=error_message,
-                exception=e
-            )
-
-            raise
-
-
-
-    return None
-
-
-
-
-
-# ==============================================================================
-# DATABASE HEALTH
-# ==============================================================================
-
 class DatabaseHealth:
 
 
     @staticmethod
     def check():
 
-
         try:
 
-            result = (
-
-                db()
-
-                .table(
-                    Tables.PRODUCTS
-                )
-
-                .select(
-                    "id"
-                )
-
-                .limit(
-                    1
-                )
-
-                .execute()
-
-            )
+            db().table(
+                Tables.PRODUCTS
+            ).select(
+                "id"
+            ).limit(
+                1
+            ).execute()
 
 
-            return result is not None
+            return True
 
 
-        except Exception as e:
-
-
-            log_error(
-                message="Database health failed",
-                exception=e
-            )
+        except Exception:
 
             return False
-
-
 
 
 
@@ -306,13 +165,31 @@ def database_health_check():
 
 
 
+def safe_execute(
+    func,
+    error_message="Database Error"
+):
+
+    try:
+
+        return func()
+
+    except Exception as e:
+
+        log_error(
+            message=error_message,
+            exception=e
+        )
+
+        return None
+
 
 
 __all__ = [
 
-    "get_supabase",
-
     "db",
+
+    "get_supabase",
 
     "get_connection",
 
@@ -326,12 +203,10 @@ __all__ = [
 
     "serialize_json",
 
-    "safe_execute",
-
     "DatabaseHealth",
 
     "database_health_check",
 
-    "log_error"
+    "safe_execute"
 
 ]
