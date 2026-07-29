@@ -1,12 +1,12 @@
 # ==============================================================================
 # erp_pages/pos/receipt.py
-# ERP ENTERPRISE POS RECEIPT MODULE v12.0
+# ERP ENTERPRISE POS RECEIPT MODULE v12.5 FINAL
 #
-# Responsibilities:
 # - Receipt display
-# - PDF generation
-# - Thermal printing
-# - New sale reset
+# - Safe data mapping
+# - PDF
+# - Thermal
+# - New Sale reset
 #
 # ==============================================================================
 
@@ -15,38 +15,22 @@ import pandas as pd
 import streamlit as st
 
 
-
-from utils.receipt_pdf import (
-    generate_pdf
-)
-
-
-from utils.thermal_receipt import (
-    print_thermal
-)
-
-
-from utils.timezone import (
-    format_datetime
-)
-
+from utils.receipt_pdf import generate_pdf
+from utils.thermal_receipt import print_thermal
+from utils.timezone import format_datetime
 
 
 
 # ==============================================================================
-# MONEY FORMAT
+# MONEY
 # ==============================================================================
-
 
 def money(value):
 
     try:
-
         return f"{float(value):,.0f} MMK"
 
-
     except Exception:
-
         return "0 MMK"
 
 
@@ -54,12 +38,10 @@ def money(value):
 
 
 # ==============================================================================
-# RECEIPT TABLE
+# BUILD ITEMS
 # ==============================================================================
 
-
 def build_receipt_rows(items):
-
 
     rows = []
 
@@ -67,12 +49,41 @@ def build_receipt_rows(items):
     for item in items:
 
 
+        qty = int(
+            item.get(
+                "quantity",
+                item.get(
+                    "qty",
+                    0
+                )
+            )
+        )
+
+
+        price = float(
+            item.get(
+                "unit_price",
+                item.get(
+                    "selling_price",
+                    0
+                )
+            )
+        )
+
+
+        amount = float(
+            item.get(
+                "total",
+                price * qty
+            )
+        )
+
+
         rows.append(
 
             {
 
                 "Product":
-
                     item.get(
                         "name",
                         ""
@@ -80,15 +91,10 @@ def build_receipt_rows(items):
 
 
                 "Qty":
-
-                    item.get(
-                        "quantity",
-                        0
-                    ),
+                    qty,
 
 
                 "Price Source":
-
                     item.get(
                         "price_source",
                         "SYSTEM"
@@ -96,27 +102,11 @@ def build_receipt_rows(items):
 
 
                 "Unit Price":
-
-                    money(
-
-                        item.get(
-                            "unit_price",
-                            0
-                        )
-
-                    ),
+                    money(price),
 
 
                 "Amount":
-
-                    money(
-
-                        item.get(
-                            "total",
-                            0
-                        )
-
-                    )
+                    money(amount)
 
             }
 
@@ -130,17 +120,15 @@ def build_receipt_rows(items):
 
 
 # ==============================================================================
-# DISPLAY RECEIPT
+# RECEIPT DISPLAY
 # ==============================================================================
-
 
 def render_receipt():
 
 
     data = st.session_state.get(
-
-        "sale_data"
-
+        "sale_data",
+        {}
     )
 
 
@@ -148,9 +136,7 @@ def render_receipt():
 
 
         st.error(
-
             "Receipt data missing"
-
         )
 
         return
@@ -163,38 +149,130 @@ def render_receipt():
 
 
     st.title(
-
         "🧾 Sales Receipt"
-
     )
 
 
 
 
 
-    # ==============================================================
+    # ------------------------------------------------------------------
+    # SAFE DATA
+    # ------------------------------------------------------------------
+
+    invoice_no = data.get(
+        "invoice_no",
+        data.get(
+            "invoice",
+            "-"
+        )
+    )
+
+
+    date = data.get(
+        "date",
+        format_datetime()
+    )
+
+
+    cashier = data.get(
+        "cashier",
+        "Admin"
+    )
+
+
+    items = data.get(
+        "items",
+        []
+    )
+
+
+    subtotal = float(
+        data.get(
+            "subtotal",
+            0
+        )
+    )
+
+
+    tax_rate = float(
+        data.get(
+            "tax_rate",
+            st.session_state.get(
+                "tax_rate",
+                0
+            )
+        )
+    )
+
+
+    tax_amount = float(
+        data.get(
+            "tax_amount",
+            0
+        )
+    )
+
+
+    discount = float(
+        data.get(
+            "discount",
+            0
+        )
+    )
+
+
+    total = float(
+        data.get(
+            "grand_total",
+            subtotal + tax_amount - discount
+        )
+    )
+
+
+    paid = float(
+        data.get(
+            "paid",
+            st.session_state.get(
+                "received_amount",
+                0
+            )
+        )
+    )
+
+
+    change = float(
+        data.get(
+            "change",
+            max(
+                0,
+                paid-total
+            )
+        )
+    )
+
+
+
+
+
+    # ------------------------------------------------------------------
     # HEADER
-    # ==============================================================
+    # ------------------------------------------------------------------
 
     st.info(
 
         f"""
-
 Invoice No:
-
-{data.get('invoice_no','')}
+{invoice_no}
 
 
 Date:
-
-{data.get('date',format_datetime())}
+{date}
 
 
 Cashier:
-
-{data.get('cashier','Unknown')}
-
-        """
+{cashier}
+"""
 
     )
 
@@ -202,34 +280,21 @@ Cashier:
 
 
 
-    # ==============================================================
-    # ITEMS
-    # ==============================================================
-
+    # ------------------------------------------------------------------
+    # ITEMS TABLE
+    # ------------------------------------------------------------------
 
     rows = build_receipt_rows(
-
-        data.get(
-            "items",
-            []
-        )
-
+        items
     )
 
 
     if rows:
 
 
-        df = pd.DataFrame(
-
-            rows
-
-        )
-
-
         st.dataframe(
 
-            df,
+            pd.DataFrame(rows),
 
             use_container_width=True,
 
@@ -238,52 +303,54 @@ Cashier:
         )
 
 
+    else:
+
+        st.warning(
+            "No items in receipt"
+        )
 
 
 
-    # ==============================================================
+
+
+    # ------------------------------------------------------------------
     # TOTAL
-    # ==============================================================
-
+    # ------------------------------------------------------------------
 
     st.success(
 
         f"""
-
-Subtotal:
-
-{money(data.get('subtotal',0))}
+Subtotal :
+{money(subtotal)}
 
 
-Tax:
+Tax Rate :
+{tax_rate:.2f}%
 
-{money(data.get('tax_amount',0))}
+
+Tax Amount :
+{money(tax_amount)}
 
 
-Discount:
-
-{money(data.get('discount',0))}
+Discount :
+{money(discount)}
 
 
 ====================
 
-TOTAL:
-
-{money(data.get('grand_total',0))}
-
-
-Paid:
-
-{money(data.get('paid',0))}
-
-
-Change:
-
-{money(data.get('change',0))}
+GRAND TOTAL :
+{money(total)}
 
 ====================
 
-        """
+
+Paid :
+{money(paid)}
+
+
+Change :
+{money(change)}
+"""
 
     )
 
@@ -291,20 +358,13 @@ Change:
 
 
 
-    # ==============================================================
-    # ACTION BUTTONS
-    # ==============================================================
-
-
-    c1, c2, c3 = st.columns(3)
-
-
-
-
-
     # ------------------------------------------------------------------
-    # THERMAL PRINT
+    # BUTTONS
     # ------------------------------------------------------------------
+
+    c1,c2,c3 = st.columns(3)
+
+
 
     with c1:
 
@@ -320,37 +380,21 @@ Change:
 
             try:
 
-
-                print_thermal(
-
-                    data
-
-                )
-
+                print_thermal(data)
 
                 st.success(
-
-                    "Receipt sent to printer"
-
+                    "Printed"
                 )
-
 
             except Exception as e:
 
-
                 st.error(
-
-                    f"Printer Error: {e}"
-
+                    f"Printer Error : {e}"
                 )
 
 
 
 
-
-    # ------------------------------------------------------------------
-    # PDF
-    # ------------------------------------------------------------------
 
     with c2:
 
@@ -366,11 +410,8 @@ Change:
 
             try:
 
-
                 pdf_bytes, filename = generate_pdf(
-
                     data
-
                 )
 
 
@@ -379,7 +420,7 @@ Change:
 
                     st.download_button(
 
-                        label="⬇ Download PDF",
+                        "⬇ Download PDF",
 
                         data=pdf_bytes,
 
@@ -394,20 +435,13 @@ Change:
 
             except Exception as e:
 
-
                 st.error(
-
-                    f"PDF Error: {e}"
-
+                    f"PDF Error : {e}"
                 )
 
 
 
 
-
-    # ------------------------------------------------------------------
-    # NEW SALE
-    # ------------------------------------------------------------------
 
     with c3:
 
@@ -427,11 +461,9 @@ Change:
 
 
 
-
 # ==============================================================================
-# RESET POS
+# RESET
 # ==============================================================================
-
 
 def reset_pos():
 
@@ -448,11 +480,16 @@ def reset_pos():
     st.session_state.processing = False
 
 
+    # keep tax
+
+    st.session_state.tax_rate = st.session_state.get(
+        "tax_rate",
+        0
+    )
+
 
     st.success(
-
         "New Sale Ready"
-
     )
 
 
