@@ -1028,14 +1028,14 @@ f"""
             background:linear-gradient(135deg,#E8F5E9 0%,#F1F8E9 100%);
             border:1px solid #4CAF50;
             margin-bottom:18px;
-        ">
+               ">
 
             <div style="
                 font-size:14px;
                 color:#2E7D32;
                 margin-bottom:6px;
                 font-weight:600;
-            ">
+                 ">
                 📌 Current Active Tax Rate
             </div>
 
@@ -1044,7 +1044,7 @@ f"""
                 font-weight:700;
                 color:#1B5E20;
                 line-height:1.2;
-            ">
+                  ">
                 {active_tax_rate:.2f}%
             </div>
 
@@ -1052,7 +1052,7 @@ f"""
                 margin-top:6px;
                 font-size:13px;
                 color:#33691E;
-            ">
+                   ">
                 This rate is currently used by POS, Sales, Invoice, and Accounting modules.
             </div>
 
