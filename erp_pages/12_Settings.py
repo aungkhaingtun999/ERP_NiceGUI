@@ -1062,7 +1062,7 @@ st.markdown(
 )
 
     # Change form
-    tax_rate = st.number_input(
+        tax_rate = st.number_input(
         "Change Tax Rate (%)",
         min_value=float(0),
         max_value=float(100),
