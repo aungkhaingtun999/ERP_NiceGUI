@@ -1,21 +1,24 @@
 # ==============================================================================
 # erp_core/services/pricing_service.py
-# ERP ENTERPRISE PRICING ENGINE v4.0
-#
-# Dynamic Markup Priority Engine
-#
-# Priority:
-#       Product
-#          ↓
-#       Category
-#          ↓
-#       Global
+# ERP ENTERPRISE PRICING ENGINE v5.0 FINAL
 #
 # Features:
-#   - Safe Supabase Handling
-#   - Pricing Trace
-#   - Health Check
-#   - ERP Test Center Ready
+#
+#   Settings Cache
+#   Product Markup
+#   Category Markup
+#   Global Default Markup
+#   Priority Engine
+#   Price Trace
+#   POS Ready
+#
+# Flow:
+#
+# Product Markup
+#        ↓
+# Category Markup
+#        ↓
+# Global Default
 #
 # ==============================================================================
 
@@ -27,57 +30,77 @@ from decimal import (
 
 from typing import (
     Any,
-    Dict
+    Dict,
+    Optional
 )
 
-
-try:
-    from supabase import Client
-except Exception:
-    Client = Any
+import time
 
 
 from ..base_repo import (
     log_error
 )
-from ..config import Tables
-from .settings_service import (
-    SettingsService
-)
+
+
+
 
 
 # ==============================================================================
-# Pricing Service
+# PRICING SERVICE
 # ==============================================================================
 
 
 class PricingService:
 
 
+
     # ==========================================================================
-    # Constructor
+    # INIT
     # ==========================================================================
+
 
     def __init__(
+
         self,
-        client: Client
+
+        client
+
     ):
+
 
         self.client = client
-        self.settings = SettingsService( client )
+
+
+        self.settings_cache = {}
+
+
+        self.settings_cache_time = 0
+
+
+        self.cache_ttl = 300
+
+
+
 
 
 
     # ==========================================================================
-    # Safe Query Helper
+    # SAFE QUERY
     # ==========================================================================
+
 
     def safe_query(
+
         self,
-        table_name,
+
+        table,
+
         select="*",
+
         filters=None
+
     ):
+
 
         try:
 
@@ -87,14 +110,19 @@ class PricingService:
                 self.client
 
                 .table(
-                    table_name
+
+                    table
+
                 )
 
                 .select(
+
                     select
+
                 )
 
             )
+
 
 
             if filters:
@@ -108,17 +136,28 @@ class PricingService:
                         query
 
                         .eq(
+
                             key,
+
                             value
+
                         )
 
                     )
 
 
-            result = query.execute()
+
+            result = (
+
+                query
+
+                .execute()
+
+            )
 
 
             return result.data or []
+
 
 
 
@@ -128,7 +167,8 @@ class PricingService:
             log_error(
 
                 message=
-                f"Pricing query failed: {table_name}",
+
+                f"Pricing query failed {table}",
 
                 exception=e
 
@@ -141,9 +181,118 @@ class PricingService:
 
 
 
+
+
+
     # ==========================================================================
-    # Get Setting
+    # SETTINGS CACHE
     # ==========================================================================
+
+
+    def load_settings(self):
+
+
+        try:
+
+
+            now = time.time()
+
+
+
+            if (
+
+                self.settings_cache
+
+                and
+
+                now - self.settings_cache_time
+
+                <
+
+                self.cache_ttl
+
+            ):
+
+
+                return self.settings_cache
+
+
+
+
+
+            rows = self.safe_query(
+
+                "erp_settings",
+
+                "*"
+
+            )
+
+
+
+            self.settings_cache = {
+
+
+                row.get("key"):
+
+                row.get("value")
+
+
+                for row in rows
+
+
+            }
+
+
+
+            self.settings_cache_time = now
+
+
+
+            return self.settings_cache
+
+
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message="Settings cache load failed",
+
+                exception=e
+
+            )
+
+
+            return {}
+
+
+
+
+
+
+
+    def clear_settings_cache(self):
+
+
+        self.settings_cache = {}
+
+
+        self.settings_cache_time = 0
+
+
+
+
+
+
+
+    # ==========================================================================
+    # GET SETTING
+    # ==========================================================================
+
 
     def get_setting(
 
@@ -155,84 +304,136 @@ class PricingService:
 
     ):
 
-        return self.settings.get_setting( key, default )
+
+        settings = self.load_settings()
+
+
+
+        return settings.get(
+
+            key,
+
+            default
+
+        )
+
+
 
 
 
 
 
     # ==========================================================================
-    # Product Markup
+    # PRODUCT MARKUP
     # ==========================================================================
+
 
     def get_product_markup(
 
         self,
 
-        product_id
+        product_id:int
 
     ):
 
 
-        data = self.safe_query(
-
-            "products",
-
-            """
-            name,
-            markup_percent,
-            category_id
-            """,
-
-            {
-                "id": product_id
-            }
-
-        )
+        try:
 
 
-        if data:
+            rows = self.safe_query(
+
+                "products",
+
+                """
+                id,
+                name,
+                markup_percent,
+                category_id
+                """,
+
+                {
+
+                    "id":
+
+                    product_id
+
+                }
+
+            )
 
 
-            product = data[0]
+
+            if rows:
 
 
-            return {
+                product = rows[0]
 
 
-                "name":
-                    product.get(
-                        "name"
-                    ),
+
+                return {
 
 
-                "product_markup":
-                    product.get(
-                        "markup_percent"
-                    ),
+                    "product_id":
+
+                    product.get("id"),
 
 
-                "category_id":
-                    product.get(
-                        "category_id"
-                    )
 
-            }
+                    "name":
+
+                    product.get("name"),
+
+
+
+                    "markup":
+
+                    product.get("markup_percent"),
+
+
+
+                    "category_id":
+
+                    product.get("category_id")
+
+
+                }
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message="Product markup failed",
+
+                exception=e
+
+            )
+
 
 
         return {
 
 
+            "product_id":
+
+            product_id,
+
+
             "name":
-                "",
+
+            "",
 
 
-            "product_markup":
-                None,
+            "markup":
+
+            None,
 
 
             "category_id":
-                None
+
+            None
 
         }
 
@@ -240,9 +441,12 @@ class PricingService:
 
 
 
+
+
     # ==========================================================================
-    # Category Markup
+    # CATEGORY MARKUP
     # ==========================================================================
+
 
     def get_category_markup(
 
@@ -253,6 +457,7 @@ class PricingService:
     ):
 
 
+
         if not category_id:
 
 
@@ -260,53 +465,79 @@ class PricingService:
 
 
                 "name":
-                    None,
+
+                None,
 
 
                 "markup":
-                    None
+
+                None
 
             }
 
 
 
-        data = self.safe_query(
-
-            "categories",
-
-            """
-            name,
-            markup_percent
-            """,
-
-            {
-                "id": category_id
-            }
-
-        )
 
 
-        if data:
+        try:
 
 
-            category = data[0]
+            rows = self.safe_query(
+
+                "categories",
+
+                """
+                name,
+                markup_percent
+                """,
+
+                {
+
+                    "id":
+
+                    category_id
+
+                }
+
+            )
 
 
-            return {
+
+            if rows:
 
 
-                "name":
-                    category.get(
-                        "name"
-                    ),
+                category = rows[0]
 
 
-                "markup":
-                    category.get(
-                        "markup_percent"
-                    )
 
-            }
+                return {
+
+
+                    "name":
+
+                    category.get("name"),
+
+
+
+                    "markup":
+
+                    category.get("markup_percent")
+
+                }
+
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message="Category markup failed",
+
+                exception=e
+
+            )
 
 
 
@@ -314,11 +545,13 @@ class PricingService:
 
 
             "name":
-                None,
+
+            None,
 
 
             "markup":
-                None
+
+            None
 
         }
 
@@ -326,9 +559,62 @@ class PricingService:
 
 
 
+
     # ==========================================================================
-    # Price Calculation
+    # MARKUP CONVERTER
     # ==========================================================================
+
+
+    def to_decimal(
+
+        self,
+
+        value
+
+    ):
+
+
+        try:
+
+
+            return Decimal(
+
+                str(
+
+                    value or 0
+
+                )
+
+            )
+
+
+
+        except Exception:
+
+
+            return Decimal("0")
+
+
+
+
+# ============================================================================== 
+# PART 1 END
+# ==============================================================================
+# ==============================================================================
+# erp_core/services/pricing_service.py
+# ERP ENTERPRISE PRICING ENGINE v5.0 FINAL
+#
+# PART 2/2
+#
+# ==============================================================================
+
+
+
+
+    # ==========================================================================
+    # PRICE CALCULATION ENGINE
+    # ==========================================================================
+
 
     def calculate_selling_price(
 
@@ -345,16 +631,21 @@ class PricingService:
 
 
             cost = Decimal(
+
                 str(
+
                     cost or 0
+
                 )
+
             )
 
 
 
-            # --------------------------------------------------
-            # Settings
-            # --------------------------------------------------
+            # --------------------------------------------------------------
+            # LOAD SETTINGS
+            # --------------------------------------------------------------
+
 
             priority = self.get_setting(
 
@@ -363,6 +654,7 @@ class PricingService:
                 "PRODUCT_FIRST"
 
             )
+
 
 
             enable_product = (
@@ -382,6 +674,7 @@ class PricingService:
                 .lower()
 
                 ==
+
                 "true"
 
             )
@@ -405,23 +698,20 @@ class PricingService:
                 .lower()
 
                 ==
+
                 "true"
 
             )
 
 
 
-            global_markup = Decimal(
+            global_markup = self.to_decimal(
 
-                str(
+                self.get_setting(
 
-                    self.get_setting(
+                    "DEFAULT_MARKUP_PERCENT",
 
-                        "DEFAULT_MARKUP_PERCENT",
-
-                        "20"
-
-                    )
+                    "20"
 
                 )
 
@@ -430,74 +720,75 @@ class PricingService:
 
 
 
-            # --------------------------------------------------
-            # Markup Sources
-            # --------------------------------------------------
 
-            product = (
+            # --------------------------------------------------------------
+            # LOAD MARKUP SOURCES
+            # --------------------------------------------------------------
 
-                self
 
-                .get_product_markup(
+            product = self.get_product_markup(
 
-                    product_id
+                product_id
+
+            )
+
+
+
+            category = self.get_category_markup(
+
+                product.get(
+
+                    "category_id"
 
                 )
 
             )
 
 
-            product_markup = product.get(
 
-                "product_markup"
+            product_markup = self.to_decimal(
 
-            )
+                product.get(
 
-
-
-            category = (
-
-                self
-
-                .get_category_markup(
-
-                    product.get(
-                        "category_id"
-                    )
+                    "markup"
 
                 )
 
             )
 
 
-            category_markup = category.get(
 
-                "markup"
+            category_markup = self.to_decimal(
 
-            )
+                category.get(
 
+                    "markup"
 
-
-
-            # --------------------------------------------------
-            # Default
-            # --------------------------------------------------
-
-            final_markup = global_markup
-
-
-            source = (
-
-                "GLOBAL_DEFAULT_MARKUP"
+                )
 
             )
 
 
 
 
-            # --------------------------------------------------
-            # Priority Engine
-            # --------------------------------------------------
+
+            # --------------------------------------------------------------
+            # DEFAULT TRACE
+            # --------------------------------------------------------------
+
+
+            applied_markup = global_markup
+
+
+            source = "GLOBAL_DEFAULT_MARKUP"
+
+
+
+
+            # --------------------------------------------------------------
+            # PRIORITY ENGINE
+            # --------------------------------------------------------------
+
 
             if priority == "PRODUCT_FIRST":
 
@@ -507,25 +798,17 @@ class PricingService:
 
                     enable_product
 
-                    and product_markup is not None
+                    and
+
+                    product.get("markup") is not None
 
                 ):
 
 
-                    final_markup = Decimal(
-
-                        str(
-                            product_markup
-                        )
-
-                    )
+                    applied_markup = product_markup
 
 
-                    source = (
-
-                        "PRODUCT_MARKUP"
-
-                    )
+                    source = "PRODUCT_MARKUP"
 
 
 
@@ -533,25 +816,18 @@ class PricingService:
 
                     enable_category
 
-                    and category_markup is not None
+                    and
+
+                    category.get("markup") is not None
 
                 ):
 
 
-                    final_markup = Decimal(
-
-                        str(
-                            category_markup
-                        )
-
-                    )
+                    applied_markup = category_markup
 
 
-                    source = (
+                    source = "CATEGORY_MARKUP"
 
-                        "CATEGORY_MARKUP"
-
-                    )
 
 
 
@@ -565,25 +841,17 @@ class PricingService:
 
                     enable_category
 
-                    and category_markup is not None
+                    and
+
+                    category.get("markup") is not None
 
                 ):
 
 
-                    final_markup = Decimal(
-
-                        str(
-                            category_markup
-                        )
-
-                    )
+                    applied_markup = category_markup
 
 
-                    source = (
-
-                        "CATEGORY_MARKUP"
-
-                    )
+                    source = "CATEGORY_MARKUP"
 
 
 
@@ -591,25 +859,18 @@ class PricingService:
 
                     enable_product
 
-                    and product_markup is not None
+                    and
+
+                    product.get("markup") is not None
 
                 ):
 
 
-                    final_markup = Decimal(
-
-                        str(
-                            product_markup
-                        )
-
-                    )
+                    applied_markup = product_markup
 
 
-                    source = (
+                    source = "PRODUCT_MARKUP"
 
-                        "PRODUCT_MARKUP"
-
-                    )
 
 
 
@@ -618,44 +879,45 @@ class PricingService:
             elif priority == "GLOBAL_FIRST":
 
 
-                final_markup = global_markup
+                applied_markup = global_markup
 
 
-                source = (
-
-                    "GLOBAL_DEFAULT_MARKUP"
-
-                )
+                source = "GLOBAL_DEFAULT_MARKUP"
 
 
 
 
 
-            # --------------------------------------------------
-            # Calculate Final Price
-            # --------------------------------------------------
+
+
+            # --------------------------------------------------------------
+            # FINAL PRICE
+            # --------------------------------------------------------------
+
 
             selling_price = (
 
-                cost +
+                cost
+
+                +
 
                 (
 
-                    cost *
+                    cost
 
-                    final_markup /
+                    *
 
-                    Decimal(
-                        "100"
-                    )
+                    applied_markup
+
+                    /
+
+                    Decimal("100")
 
                 )
 
             ).quantize(
 
-                Decimal(
-                    "1"
-                ),
+                Decimal("1"),
 
                 rounding=ROUND_HALF_UP
 
@@ -665,63 +927,127 @@ class PricingService:
 
 
 
+
+
+            # --------------------------------------------------------------
+            # PRICE TRACE
+            # --------------------------------------------------------------
+
+
+            trace = {
+
+
+                "cost":
+
+                    float(cost),
+
+
+
+                "product_markup":
+
+                    float(product_markup),
+
+
+
+                "category_markup":
+
+                    float(category_markup),
+
+
+
+                "global_markup":
+
+                    float(global_markup),
+
+
+
+                "applied_markup":
+
+                    float(applied_markup),
+
+
+
+                "source":
+
+                    source,
+
+
+
+                "priority":
+
+                    priority
+
+            }
+
+
+
+
+
+
+
+            # --------------------------------------------------------------
+            # POS READY RESPONSE
+            # --------------------------------------------------------------
+
+
             return {
 
 
                 "success":
+
                     True,
 
 
+
                 "product_id":
+
                     product_id,
 
 
+
                 "product_name":
+
                     product.get(
+
                         "name"
+
                     ),
 
-
-                "cost":
-                    float(
-                        cost
-                    ),
-
-
-                "product_markup":
-                    float(product_markup)
-                    if product_markup is not None
-                    else None,
-
-
-                "category_markup":
-                    float(category_markup)
-                    if category_markup is not None
-                    else None,
-
-
-                "global_markup":
-                    float(
-                        global_markup
-                    ),
-
-
-                "final_markup_percent":
-                    float(
-                        final_markup
-                    ),
-
-
-                "markup_source":
-                    source,
 
 
                 "selling_price":
+
                     float(
+
                         selling_price
-                    )
+
+                    ),
+
+
+
+                "price_source":
+
+                    source,
+
+
+
+                "markup_percent":
+
+                    float(
+
+                        applied_markup
+
+                    ),
+
+
+
+                "trace":
+
+                    trace
 
             }
+
+
 
 
 
@@ -732,6 +1058,7 @@ class PricingService:
             log_error(
 
                 message=
+
                 "Pricing calculation failed",
 
                 exception=e
@@ -743,10 +1070,12 @@ class PricingService:
 
 
                 "success":
+
                     False,
 
 
                 "message":
+
                     str(e)
 
             }
@@ -755,9 +1084,45 @@ class PricingService:
 
 
 
+
+
     # ==========================================================================
-    # Pricing Health Check
+    # SIMPLE PRICE API FOR POS
     # ==========================================================================
+
+
+    def get_pos_price(
+
+        self,
+
+        product_id,
+
+        cost
+
+    ):
+
+
+        result = self.calculate_selling_price(
+
+            cost,
+
+            product_id
+
+        )
+
+
+        return result
+
+
+
+
+
+
+
+    # ==========================================================================
+    # HEALTH CHECK
+    # ==========================================================================
+
 
     def health_check(self):
 
@@ -770,15 +1135,21 @@ class PricingService:
                 self.client
 
                 .table(
+
                     "products"
+
                 )
 
                 .select(
+
                     "id"
+
                 )
 
                 .limit(
+
                     1
+
                 )
 
                 .execute()
@@ -786,27 +1157,44 @@ class PricingService:
             )
 
 
+
             return {
 
 
                 "service":
+
                     "PricingService",
 
 
+
+                "version":
+
+                    "5.0",
+
+
+
                 "status":
+
                     "PASS",
 
 
+
                 "database":
+
                     "CONNECTED",
 
 
+
                 "rows":
+
                     len(
+
                         result.data or []
+
                     )
 
             }
+
 
 
 
@@ -817,14 +1205,25 @@ class PricingService:
 
 
                 "service":
+
                     "PricingService",
 
 
+
+                "version":
+
+                    "5.0",
+
+
+
                 "status":
+
                     "FAIL",
 
 
+
                 "message":
+
                     str(e)
 
             }
@@ -833,8 +1232,9 @@ class PricingService:
 
 
 
+
 # ==============================================================================
-# Export
+# EXPORT
 # ==============================================================================
 
 
@@ -842,4 +1242,4 @@ __all__ = [
 
     "PricingService"
 
-]
+                ]
