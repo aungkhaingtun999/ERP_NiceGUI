@@ -1,24 +1,10 @@
 # ==============================================================================
 # erp_core/loaders/settings_loader.py
-# ERP ENTERPRISE SETTINGS LOADER v31 PERFORMANCE BUILD
-#
-# Database
-#      ↓
-# Cache Layer
-#      ↓
-# Price Engine / POS / ERP
-#
-# Optimization:
-# - Setting query cache
-# - Fast POS price calculation
-# - Safe fallback
-# - Cache refresh support
-#
+# ERP ENTERPRISE SETTINGS LOADER v31 FINAL
 # ==============================================================================
 
 
 import streamlit as st
-
 
 
 from ..base_repo import (
@@ -36,7 +22,7 @@ from ..config import (
 
 
 # ==============================================================================
-# INTERNAL DATABASE QUERY
+# CACHE LOAD
 # ==============================================================================
 
 
@@ -44,11 +30,7 @@ from ..config import (
     ttl=300,
     show_spinner=False
 )
-def _get_setting_from_db(
-
-    key: str
-
-):
+def get_setting_cached(key):
 
 
     try:
@@ -89,14 +71,11 @@ def _get_setting_from_db(
         )
 
 
-
         if result.data:
 
 
             return result.data[0].get(
-
                 "value"
-
             )
 
 
@@ -106,7 +85,9 @@ def _get_setting_from_db(
 
         log_error(
 
-            message=f"Setting query failed: {e}"
+            message="Settings cache load failed",
+
+            exception=e
 
         )
 
@@ -118,117 +99,41 @@ def _get_setting_from_db(
 
 
 
-
-
 # ==============================================================================
-# PUBLIC GET SETTING
+# GET SETTING
 # ==============================================================================
 
 
 def get_setting(
 
-    key: str,
+    key:str,
 
     default=None
 
 ):
 
 
-    try:
+    value = get_setting_cached(
+        key
+    )
 
 
-        value = _get_setting_from_db(
-
-            key
-
-        )
-
-
-        if value is None:
-
-
-            return default
-
-
-
-        return value
-
-
-
-    except Exception as e:
-
-
-        log_error(
-
-            message=f"get_setting error: {e}"
-
-        )
+    if value is None:
 
 
         return default
 
 
 
+    return value
+
 
 
 
 
 # ==============================================================================
-# COMMON TYPE HELPERS
+# NUMBER SETTING
 # ==============================================================================
-
-
-def get_bool_setting(
-
-    key,
-
-    default=False
-
-):
-
-
-    value = get_setting(
-
-        key,
-
-        default
-
-    )
-
-
-
-    if isinstance(
-
-        value,
-
-        bool
-
-    ):
-
-        return value
-
-
-
-    return str(
-
-        value
-
-    ).lower() in (
-
-        "true",
-
-        "1",
-
-        "yes",
-
-        "on"
-
-    )
-
-
-
-
-
 
 
 def get_float_setting(
@@ -242,7 +147,6 @@ def get_float_setting(
 
     try:
 
-
         return float(
 
             get_setting(
@@ -259,78 +163,71 @@ def get_float_setting(
     except Exception:
 
 
-        return float(
-
-            default
-
-        )
+        return float(default)
 
 
 
 
 
+# ==============================================================================
+# BOOLEAN SETTING
+# ==============================================================================
 
 
-def get_int_setting(
+def get_bool_setting(
 
     key,
 
-    default=0
+    default=False
 
 ):
 
 
-    try:
+    value = str(
 
+        get_setting(
 
-        return int(
-
-            get_setting(
-
-                key,
-
-                default
-
-            )
-
-        )
-
-
-    except Exception:
-
-
-        return int(
+            key,
 
             default
 
         )
 
+    ).lower()
 
+
+
+    return value == "true"
 
 
 
 
 
 # ==============================================================================
-# CACHE REFRESH
+# CLEAR CACHE
 # ==============================================================================
 
 
-def refresh_settings_cache():
+def clear_settings_cache():
 
-
-    try:
-
-
-        _get_setting_from_db.clear()
+    get_setting_cached.clear()
 
 
 
-    except Exception as e:
+
+# ==============================================================================
+# EXPORT
+# ==============================================================================
 
 
-        log_error(
+__all__ = [
 
-            message=f"Settings cache refresh failed: {e}"
+    "get_setting",
 
-        )
+    "get_float_setting",
+
+    "get_bool_setting",
+
+    "clear_settings_cache"
+
+]
