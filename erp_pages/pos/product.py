@@ -1,15 +1,6 @@
 # ==============================================================================
 # erp_pages/pos/product.py
-# ERP ENTERPRISE POS PRODUCT MODULE v12.5 FINAL
-#
-# RESPONSIBILITY
-# - Product loading
-# - Search
-# - Barcode / SKU lookup
-# - Product selection
-# - Stock validation
-# - Add to cart
-# - Duplicate-safe Streamlit widgets
+# ERP ENTERPRISE POS PRODUCT MODULE v12.6 FINAL FIX
 # ==============================================================================
 
 from typing import List, Dict, Any
@@ -158,29 +149,15 @@ def render_products(warehouse_id):
 
 
     # --------------------------------------------------------------------------
-    # UNIQUE KEY PREFIX
-    # --------------------------------------------------------------------------
-
-    # Use warehouse + page identity + session hash to avoid duplicate key
-    session_suffix = str(id(st.session_state))
-
-    prefix = f"pos_{warehouse_id}_{session_suffix}_"
-
-
-    # --------------------------------------------------------------------------
     # SEARCH
     # --------------------------------------------------------------------------
 
     st.subheader("🔍 Product Search")
 
-    keyword = st.text_input(
-        "Name / SKU / Barcode",
-        key=prefix + "search"
-    )
-
+    # IMPORTANT: no explicit key
+    keyword = st.text_input("Name / SKU / Barcode")
 
     filtered = search_products(products, keyword)
-
 
     if not filtered:
 
@@ -196,8 +173,7 @@ def render_products(warehouse_id):
     selected = st.selectbox(
         "Select Product",
         filtered,
-        format_func=product_label,
-        key=prefix + "select"
+        format_func=product_label
     )
 
 
@@ -209,8 +185,7 @@ def render_products(warehouse_id):
         "Quantity",
         min_value=1,
         value=1,
-        step=1,
-        key=prefix + "qty"
+        step=1
     )
 
 
@@ -241,8 +216,7 @@ def render_products(warehouse_id):
 
         if st.button(
             "➕ Add To Cart",
-            use_container_width=True,
-            key=prefix + "add_button"
+            use_container_width=True
         ):
 
             if not check_stock(selected, qty):
