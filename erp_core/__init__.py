@@ -1,16 +1,9 @@
 # ==============================================================================
 # erp_core/__init__.py
-# ERP ENTERPRISE CORE EXPORT HUB v30.8 FINAL
+# ERP ENTERPRISE CORE EXPORT HUB v30.9 FINAL
 #
-# Purpose:
-# - Single import gateway
-# - Prevent circular import
-# - Public API export
-#
-# Usage:
-#
-# from erp_core import checkout_sale_rpc
-# from erp_core import get_products
+# Public API Gateway
+# Legacy database.py compatible
 #
 # ==============================================================================
 
@@ -19,7 +12,6 @@
 # ==============================================================================
 # CONFIG
 # ==============================================================================
-
 
 from .config import (
 
@@ -40,9 +32,8 @@ from .config import (
 
 
 # ==============================================================================
-# DATABASE CORE
+# DATABASE
 # ==============================================================================
-
 
 from .base_repo import (
 
@@ -55,9 +46,33 @@ from .base_repo import (
 
 
 # ==============================================================================
-# CONTEXT
+# SUPABASE COMPATIBILITY
 # ==============================================================================
 
+
+def get_supabase():
+
+    """
+    Legacy compatibility wrapper
+
+    Old modules:
+        from erp_core import get_supabase
+
+    New architecture:
+        from erp_core.base_repo import db
+    """
+
+    return db()
+
+
+
+
+
+
+
+# ==============================================================================
+# CONTEXT
+# ==============================================================================
 
 from .context import (
 
@@ -72,7 +87,6 @@ from .context import (
 # ==============================================================================
 # PRODUCT
 # ==============================================================================
-
 
 from .loaders.product_loader import (
 
@@ -94,7 +108,6 @@ from .loaders.product_loader import (
 # SETTINGS
 # ==============================================================================
 
-
 from .loaders.settings_loader import (
 
     get_setting
@@ -112,13 +125,11 @@ from .loaders.settings_loader import (
 
 try:
 
-
     from .loaders.warehouse_loader import (
 
         get_default_warehouse_id,
 
         get_warehouses
-
 
     )
 
@@ -144,33 +155,7 @@ except Exception:
 
 
 # ==============================================================================
-# RECEIPT
-# ==============================================================================
-
-
-try:
-
-
-    from .services.receipt_service import (
-
-        ReceiptService
-
-    )
-
-
-except Exception:
-
-
-    ReceiptService = None
-
-
-
-
-
-
-
-# ==============================================================================
-# CHECKOUT RPC
+# CHECKOUT
 # ==============================================================================
 
 
@@ -187,12 +172,28 @@ from .rpc.checkout_rpc import (
 
 
 # ==============================================================================
-# INVENTORY
+# SERVICES
 # ==============================================================================
 
 
 try:
 
+    from .services.receipt_service import (
+
+        ReceiptService
+
+    )
+
+
+except Exception:
+
+    ReceiptService = None
+
+
+
+
+
+try:
 
     from .services.inventory_service import (
 
@@ -203,22 +204,13 @@ try:
 
 except Exception:
 
-
     InventoryService = None
 
 
 
 
 
-
-
-# ==============================================================================
-# SALES
-# ==============================================================================
-
-
 try:
-
 
     from .services.sales_service import (
 
@@ -229,22 +221,13 @@ try:
 
 except Exception:
 
-
     SalesService = None
 
 
 
 
 
-
-
-# ==============================================================================
-# PURCHASE
-# ==============================================================================
-
-
 try:
-
 
     from .services.purchase_service import (
 
@@ -255,22 +238,13 @@ try:
 
 except Exception:
 
-
     PurchaseService = None
 
 
 
 
 
-
-
-# ==============================================================================
-# REFUND
-# ==============================================================================
-
-
 try:
-
 
     from .services.refund_service import (
 
@@ -281,7 +255,6 @@ try:
 
 except Exception:
 
-
     RefundService = None
 
 
@@ -291,12 +264,11 @@ except Exception:
 
 
 # ==============================================================================
-# VERSION INFO
+# EXPORT LIST
 # ==============================================================================
 
 
 __all__ = [
-
 
 
     # Core
@@ -309,9 +281,15 @@ __all__ = [
 
     "DEFAULT_PAGE_SIZE",
 
+    "log_error",
+
+
+
+    # Database
+
     "db",
 
-    "log_error",
+    "get_supabase",
 
 
 
@@ -347,7 +325,7 @@ __all__ = [
 
 
 
-    # Checkout
+    # RPC
 
     "checkout_sale_rpc",
 
@@ -364,6 +342,5 @@ __all__ = [
     "PurchaseService",
 
     "RefundService"
-
 
 ]
