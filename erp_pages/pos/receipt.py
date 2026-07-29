@@ -45,6 +45,71 @@ def build_receipt_rows(items):
 
     rows = []
 
+    for item in items:
+
+        name = (
+            item.get("name")
+            or
+            item.get("product_name")
+            or
+            "Unknown Product"
+        )
+
+
+        qty = int(
+            item.get("quantity")
+            or
+            item.get("qty")
+            or
+            0
+        )
+
+
+        price = float(
+            item.get("unit_price")
+            or
+            item.get("selling_price")
+            or
+            item.get("price")
+            or
+            0
+        )
+
+
+        amount = float(
+            item.get("total")
+            or
+            item.get("amount")
+            or
+            (price * qty)
+        )
+
+
+        rows.append(
+            {
+                "Product": name,
+
+                "Qty": qty,
+
+                "Price Source":
+                    item.get(
+                        "price_source",
+                        "SYSTEM"
+                    ),
+
+                "Unit Price":
+                    money(price),
+
+                "Amount":
+                    money(amount)
+            }
+        )
+
+
+    return rows
+
+    rows = []
+
 
     for item in items:
 
@@ -130,7 +195,8 @@ def render_receipt():
         "sale_data",
         {}
     )
-
+with st.expander("DEBUG RECEIPT DATA"):
+    st.json(data)
 
     if not data:
 
