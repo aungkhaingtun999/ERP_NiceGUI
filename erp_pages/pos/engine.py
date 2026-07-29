@@ -166,6 +166,38 @@ def pricing_settings():
 
 
 # ==============================================================================
+# TAX ENGINE
+# ==============================================================================
+
+def get_default_tax_rate():
+
+    try:
+
+        from erp_core.loaders.settings_loader import get_setting
+
+
+        return safe_float(
+
+            get_setting(
+
+                "DEFAULT_TAX_RATE",
+
+                0
+
+            )
+
+        )
+
+
+    except Exception:
+
+        return 0.0
+
+
+
+
+
+# ==============================================================================
 # MARKUP CALCULATION
 # ==============================================================================
 
