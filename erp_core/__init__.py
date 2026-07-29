@@ -1,528 +1,489 @@
-# ==============================================================================
-# erp_core/__init__.py
-# ERP ENTERPRISE CORE EXPORT HUB v31.0 FINAL FIX
-#
-# Public API Gateway
-# Legacy database.py Compatible
-# Circular Import Safe
-# ==============================================================================
+==============================================================================
+
+erp_core/init.py
+
+ERP ENTERPRISE CORE EXPORT HUB v31.0 FINAL FIX
 
 
-# ==============================================================================
-# CONFIG
-# ==============================================================================
+
+Public API Gateway
+
+Legacy database.py Compatible
+
+Circular Import Safe
+
+==============================================================================
+
+==============================================================================
+
+CONFIG
+
+==============================================================================
 
 from .config import (
-    Tables,
-    CACHE_KEYS,
-    DEFAULT_PAGE_SIZE,
-    ERP_VERSION,
-    log_error
+Tables,
+CACHE_KEYS,
+DEFAULT_PAGE_SIZE,
+ERP_VERSION,
+log_error
 )
 
+==============================================================================
 
+DATABASE
 
-# ==============================================================================
-# DATABASE
-# ==============================================================================
+==============================================================================
 
 from .base_repo import (
 
-    db,
+db,  
 
-    get_supabase,
+get_supabase,  
 
-    get_connection,
+get_connection,  
 
-    DatabaseHealth,
+DatabaseHealth,  
 
-    database_health_check,
+database_health_check,  
 
-    money,
+money,  
 
-    money_float,
+money_float,  
 
-    safe_float,
+safe_float,  
 
-    validate_uuid,
+validate_uuid,  
 
-    serialize_json,
+serialize_json,  
 
-    safe_execute
+safe_execute
 
 )
 
+==============================================================================
 
+CONTEXT
 
-# ==============================================================================
-# CONTEXT
-# ==============================================================================
+==============================================================================
 
 from .context import (
 
-    CacheManager
+CacheManager
 
 )
 
+==============================================================================
 
+INVENTORY / PRODUCT
 
-# ==============================================================================
-# PRODUCT
-# ==============================================================================
-
-try:
-
-    from .loaders.product_loader import (
-
-        get_products,
-
-        get_pos_products,
-
-        get_active_products,
-
-        refresh_products_cache
-
-    )
-
-except Exception:
-
-
-    def get_products(*args, **kwargs):
-        return []
-
-
-    def get_pos_products(*args, **kwargs):
-        return []
-
-
-    def get_active_products(*args, **kwargs):
-        return []
-
-
-    def refresh_products_cache():
-        pass
-
-
-
-
-
-# ==============================================================================
-# SETTINGS
-# ==============================================================================
+==============================================================================
 
 try:
 
-    from .loaders.settings_loader import (
+from .loaders.product_loader import (  
 
-        get_setting
+    get_products,  
 
-    )
+    get_pos_products,  
+
+    get_active_products,  
+
+    refresh_products_cache  
+
+)
 
 except Exception:
 
-
-    def get_setting(
-        key,
-        default=None
-    ):
-
-        return default
+def get_products(*args, **kwargs):  
+    return []  
 
 
+def get_pos_products(*args, **kwargs):  
+    return []  
 
 
+def get_active_products(*args, **kwargs):  
+    return []  
 
-# ==============================================================================
-# WAREHOUSE
-# ==============================================================================
 
+def refresh_products_cache():  
+    pass
 
 try:
 
-    from .loaders.warehouse_loader import (
+from .loaders.inventory_loader import (  
 
-        get_default_warehouse_id,
+    get_inventory_view  
 
-        get_warehouses
-
-    )
-
+)
 
 except Exception:
 
+def get_inventory_view(*args, **kwargs):  
+    return []
 
-    def get_default_warehouse_id():
+==============================================================================
 
-        return None
+SETTINGS
 
-
-    def get_warehouses():
-
-        return []
-
-
-
-
-
-# ==============================================================================
-# RECEIPT
-# ==============================================================================
-
+==============================================================================
 
 try:
 
-    from .loaders.receipt_loader import (
+from .loaders.settings_loader import (  
 
-        get_receipt,
+    get_setting  
 
-        get_sale_items,
-
-        search_receipts
-
-    )
+)
 
 except Exception:
 
+def get_setting(  
+    key,  
+    default=None  
+):  
 
-    def get_receipt(*args, **kwargs):
+    return default
 
-        return None
+==============================================================================
 
+WAREHOUSE
 
-
-    def get_sale_items(*args, **kwargs):
-
-        return []
-
-
-
-    def search_receipts(*args, **kwargs):
-
-        return []
-
-
-
-
-
-# ==============================================================================
-# RPC
-# ==============================================================================
-
+==============================================================================
 
 try:
 
-    from .rpc.checkout_rpc import (
+from .loaders.warehouse_loader import (  
 
-        checkout_sale_rpc
+    get_default_warehouse_id,  
 
-    )
+    get_warehouses  
+
+)
 
 except Exception:
 
+def get_default_warehouse_id():  
 
-    def checkout_sale_rpc(*args, **kwargs):
-
-        return {
-
-            "success":False,
-
-            "message":"Checkout RPC unavailable"
-
-        }
+    return None  
 
 
+def get_warehouses():  
 
+    return []
 
+==============================================================================
+
+RECEIPT
+
+==============================================================================
 
 try:
 
-    from .rpc.purchase_rpc import (
+from .loaders.receipt_loader import (  
 
-        purchase_receive_rpc
+    get_receipt,  
 
-    )
+    get_sale_items,  
+
+    search_receipts  
+
+)
 
 except Exception:
 
+def get_receipt(*args, **kwargs):  
 
-    purchase_receive_rpc = None
+    return None  
 
 
 
+def get_sale_items(*args, **kwargs):  
 
+    return []  
+
+
+
+def search_receipts(*args, **kwargs):  
+
+    return []
+
+==============================================================================
+
+RPC
+
+==============================================================================
 
 try:
 
-    from .rpc.refund_rpc import (
+from .rpc.checkout_rpc import (  
 
-        refund_sale_rpc
+    checkout_sale_rpc  
 
-    )
+)
 
 except Exception:
 
+def checkout_sale_rpc(*args, **kwargs):  
 
-    refund_sale_rpc = None
+    return {  
 
+        "success":False,  
 
+        "message":"Checkout RPC unavailable"  
 
-
+    }
 
 try:
 
-    from .rpc.inventory_rpc import (
+from .rpc.purchase_rpc import (  
 
-        stock_adjustment_rpc
+    purchase_receive_rpc  
 
-    )
+)
 
 except Exception:
 
-
-    stock_adjustment_rpc = None
-
-
-
-
+purchase_receive_rpc = None
 
 try:
 
-    from .rpc.product_rpc import (
+from .rpc.refund_rpc import (  
 
-        update_product_rpc
+    refund_sale_rpc  
 
-    )
+)
 
 except Exception:
 
-
-    update_product_rpc = None
-
-
-
-
-
-
-# ==============================================================================
-# SERVICES
-# ==============================================================================
-
+refund_sale_rpc = None
 
 try:
 
-    from .services.sales_service import SalesService
+from .rpc.inventory_rpc import (  
+
+    stock_adjustment_rpc  
+
+)
 
 except Exception:
 
-    SalesService = None
-
-
+stock_adjustment_rpc = None
 
 try:
 
-    from .services.purchase_service import PurchaseService
+from .rpc.product_rpc import (  
+
+    update_product_rpc  
+
+)
 
 except Exception:
 
-    PurchaseService = None
+update_product_rpc = None
 
+==============================================================================
 
+SERVICES
+
+==============================================================================
 
 try:
 
-    from .services.inventory_service import InventoryService
+from .services.sales_service import SalesService
 
 except Exception:
 
-    InventoryService = None
-
-
+SalesService = None
 
 try:
 
-    from .services.refund_service import RefundService
+from .services.purchase_service import PurchaseService
 
 except Exception:
 
-    RefundService = None
-
-
+PurchaseService = None
 
 try:
 
-    from .services.receipt_service import ReceiptService
+from .services.inventory_service import InventoryService
 
 except Exception:
 
-    ReceiptService = None
-
-
-
-
-
-# ==============================================================================
-# HELPERS
-# ==============================================================================
-
+InventoryService = None
 
 try:
 
-    from .services.inventory_service import (
-
-        get_fifo_cogs
-
-    )
+from .services.refund_service import RefundService
 
 except Exception:
 
-
-    def get_fifo_cogs(*args, **kwargs):
-
-        return 0
-
-
-
-
+RefundService = None
 
 try:
 
-    from .services.audit_service import (
-
-        create_audit_log
-
-    )
+from .services.receipt_service import ReceiptService
 
 except Exception:
 
+ReceiptService = None
 
-    def create_audit_log(*args, **kwargs):
+==============================================================================
 
-        return None
+HELPERS
 
+==============================================================================
 
+try:
 
+from .services.inventory_service import (  
 
+    get_fifo_cogs  
 
-# ==============================================================================
-# EXPORT
-# ==============================================================================
+)
 
+except Exception:
 
-__all__ = [
+def get_fifo_cogs(*args, **kwargs):  
 
-    # Database
+    return 0
 
-    "db",
+try:
 
-    "get_supabase",
+from .services.audit_service import (  
 
-    "get_connection",
+    create_audit_log  
 
-    "DatabaseHealth",
+)
 
-    "database_health_check",
+except Exception:
 
+def create_audit_log(*args, **kwargs):  
 
-    # Config
+    return None
 
-    "Tables",
+==============================================================================
 
-    "CACHE_KEYS",
+EXPORT
 
-    "DEFAULT_PAGE_SIZE",
+==============================================================================
 
-    "ERP_VERSION",
+all = [
 
-    "log_error",
+# Database  
 
+"db",  
 
-    # Context
+"get_supabase",  
 
-    "CacheManager",
+"get_connection",  
 
+"DatabaseHealth",  
 
-    # Product
+"database_health_check",  
 
-    "get_products",
 
-    "get_pos_products",
+# Config  
 
-    "get_active_products",
+"Tables",  
 
-    "refresh_products_cache",
+"CACHE_KEYS",  
 
+"DEFAULT_PAGE_SIZE",  
 
-    # Settings
+"ERP_VERSION",  
 
-    "get_setting",
+"log_error",  
 
 
-    # Warehouse
+# Context  
 
-    "get_default_warehouse_id",
+"CacheManager",  
 
-    "get_warehouses",
 
+# Product  
 
-    # Receipt
+"get_products",  
 
-    "get_receipt",
+"get_pos_products",  
 
-    "get_sale_items",
+"get_active_products",  
 
-    "search_receipts",
+"refresh_products_cache",  
 
+"get_inventory_view",  
 
-    # RPC
 
-    "checkout_sale_rpc",
+# Settings  
 
-    "purchase_receive_rpc",
+"get_setting",  
 
-    "refund_sale_rpc",
 
-    "stock_adjustment_rpc",
+# Warehouse  
 
-    "update_product_rpc",
+"get_default_warehouse_id",  
 
+"get_warehouses",  
 
-    # Services
 
-    "SalesService",
+# Receipt  
 
-    "PurchaseService",
+"get_receipt",  
 
-    "InventoryService",
+"get_sale_items",  
 
-    "RefundService",
+"search_receipts",  
 
-    "ReceiptService",
 
+# RPC  
 
-    # Utils
+"checkout_sale_rpc",  
 
-    "money",
+"purchase_receive_rpc",  
 
-    "money_float",
+"refund_sale_rpc",  
 
-    "safe_float",
+"stock_adjustment_rpc",  
 
-    "validate_uuid",
+"update_product_rpc",  
 
-    "serialize_json",
 
-    "safe_execute",
+# Services  
 
+"SalesService",  
 
-    # Helpers
+"PurchaseService",  
 
-    "get_fifo_cogs",
+"InventoryService",  
 
-    "create_audit_log"
+"RefundService",  
+
+"ReceiptService",  
+
+
+# Utils  
+
+"money",  
+
+"money_float",  
+
+"safe_float",  
+
+"validate_uuid",  
+
+"serialize_json",  
+
+"safe_execute",  
+
+
+# Helpers  
+
+"get_fifo_cogs",  
+
+"create_audit_log"
 
 ]
 
-
 print(
-    "ERP CORE HUB v31.0 LOADED"
+"ERP CORE HUB v31.0 LOADED"
 )
