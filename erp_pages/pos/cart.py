@@ -270,6 +270,96 @@ def update_quantity(
 
 
     return cart
+    # ==============================================================================
+# INCREASE QUANTITY
+# ==============================================================================
+
+def increase_quantity(
+
+    cart,
+
+    index,
+
+    step=1
+
+):
+
+    try:
+
+        cart[index]["qty"] = int(
+            cart[index].get(
+                "qty",
+                0
+            )
+        ) + int(step)
+
+
+    except Exception:
+
+        pass
+
+
+    return cart
+
+
+
+
+
+# ==============================================================================
+# DECREASE QUANTITY
+# ==============================================================================
+
+def decrease_quantity(
+
+    cart,
+
+    index,
+
+    step=1
+
+):
+
+    try:
+
+
+        current_qty = int(
+
+            cart[index].get(
+
+                "qty",
+
+                0
+
+            )
+
+        )
+
+
+        new_qty = current_qty - int(step)
+
+
+
+        if new_qty <= 0:
+
+
+            cart.pop(index)
+
+
+        else:
+
+
+            cart[index]["qty"] = new_qty
+
+
+
+    except Exception:
+
+
+        pass
+
+
+
+    return cart
 
 
 
