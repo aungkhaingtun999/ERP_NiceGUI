@@ -2,7 +2,16 @@
 # erp_core/loaders/settings_loader.py
 # ERP ENTERPRISE SETTINGS LOADER v30
 # ==============================================================================
+import streamlit as st
 
+
+@st.cache_data(
+    ttl=300,
+    show_spinner=False
+)
+def get_setting_cached(key):
+
+    ...
 
 from ..base_repo import (
     db,
