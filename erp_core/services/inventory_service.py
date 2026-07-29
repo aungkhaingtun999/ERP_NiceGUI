@@ -31,6 +31,137 @@ class InventoryService:
         self.client = client
 
     # ==========================================================================
+    # SETTINGS
+    # ==========================================================================
+
+    def get_setting(
+        self,
+        key,
+        default=None
+    ):
+
+        try:
+
+            result = (
+
+                self.client
+                .table(
+                    Tables.SETTINGS
+                )
+                .select(
+                    "value"
+                )
+                .eq(
+                    "key",
+                    key
+                )
+                .limit(1)
+                .execute()
+
+            )
+
+
+            if result.data:
+
+                return result.data[0].get(
+                    "value"
+                )
+
+
+        except Exception as e:
+
+            log_error(
+                message="Inventory setting load failed",
+                exception=e
+            )
+
+
+        return default
+
+    # ==========================================================================
+    # LOW STOCK CHECK
+    # ==========================================================================
+
+    def get_low_stock_alerts(
+        self,
+        warehouse_id=None
+    ):
+
+        try:
+
+            minimum_stock = float(
+
+                self.get_setting(
+
+                    "MIN_STOCK_ALERT",
+
+                    10
+
+                )
+
+            )
+
+
+            query = (
+
+                self.client
+
+                .table(
+                    "warehouse_stock"
+                )
+
+                .select("*")
+
+            )
+
+
+            if warehouse_id:
+
+                query = query.eq(
+                    "warehouse_id",
+                    warehouse_id
+                )
+
+
+            result = query.execute()
+
+
+            rows = result.data or []
+
+
+            return [
+
+                item
+
+                for item in rows
+
+                if float(
+                    item.get(
+                        "qty",
+                        0
+                    )
+                )
+
+                <= minimum_stock
+
+            ]
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message="Low stock alert failed",
+
+                exception=e
+
+            )
+
+
+            return []
+
+    # ==========================================================================
     # Inventory KPI
     # ==========================================================================
 
