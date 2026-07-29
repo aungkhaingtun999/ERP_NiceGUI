@@ -773,3 +773,130 @@ __all__ = [
     "SettingsService"
 
 ]
+
+    # ==========================================================================
+    # HEALTH CHECK
+    # ==========================================================================
+
+
+    def health_check(self):
+
+
+        try:
+
+
+            result = (
+
+                self.client
+
+                .table(
+
+                    Tables.SETTINGS
+
+                )
+
+                .select(
+
+                    "id"
+
+                )
+
+                .limit(
+
+                    1
+
+                )
+
+                .execute()
+
+            )
+
+
+            return {
+
+
+                "service":
+
+                    "SettingsService",
+
+
+                "version":
+
+                    "2.0",
+
+
+                "status":
+
+                    "PASS",
+
+
+                "database":
+
+                    "CONNECTED",
+
+
+                "rows":
+
+                    len(
+
+                        result.data or []
+
+                    )
+
+            }
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message=
+
+                "Settings health check failed",
+
+                exception=e
+
+            )
+
+
+            return {
+
+
+                "service":
+
+                    "SettingsService",
+
+
+                "version":
+
+                    "2.0",
+
+
+                "status":
+
+                    "FAIL",
+
+
+                "message":
+
+                    str(e)
+
+            }
+
+
+
+
+
+
+# ==============================================================================
+# EXPORT
+# ==============================================================================
+
+
+__all__ = [
+
+    "SettingsService"
+
+]
