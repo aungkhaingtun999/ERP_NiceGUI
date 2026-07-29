@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_core/loaders/settings_loader.py
-# ERP ENTERPRISE SETTINGS LOADER v3.0 FINAL
+# ERP ENTERPRISE SETTINGS LOADER v4.0 FINAL
 #
 # Responsibility:
 #
@@ -40,7 +40,7 @@ from ..services.settings_service import (
 
 
 # ==============================================================================
-# SERVICE INSTANCE
+# SERVICE
 # ==============================================================================
 
 
@@ -58,8 +58,9 @@ def get_settings_service():
 
 
 
+
 # ==============================================================================
-# CACHE LOAD ALL SETTINGS
+# CACHE LOAD
 # ==============================================================================
 
 
@@ -88,7 +89,7 @@ def get_all_settings_cached():
 
         log_error(
 
-            message="Settings cache failed",
+            message="Load settings cache failed",
 
             exception=e
 
@@ -104,7 +105,7 @@ def get_all_settings_cached():
 
 
 # ==============================================================================
-# GET SETTING
+# GET SINGLE SETTING
 # ==============================================================================
 
 
@@ -127,6 +128,7 @@ def get_setting(
         default
 
     )
+
 
 
 
@@ -175,7 +177,7 @@ def save_setting(
 
         log_error(
 
-            message="Save setting loader failed",
+            message="Save setting failed",
 
             exception=e
 
@@ -183,7 +185,6 @@ def save_setting(
 
 
         return {
-
 
             "success":
 
@@ -204,7 +205,7 @@ def save_setting(
 
 
 # ==============================================================================
-# SAVE MULTIPLE SETTINGS
+# SAVE MULTIPLE
 # ==============================================================================
 
 
@@ -240,7 +241,7 @@ def save_settings(
 
         log_error(
 
-            message="Bulk save loader failed",
+            message="Save multiple settings failed",
 
             exception=e
 
@@ -248,7 +249,6 @@ def save_settings(
 
 
         return {
-
 
             "success":
 
@@ -270,14 +270,71 @@ def save_settings(
 
 # ==============================================================================
 # TYPE HELPERS
+#
+# Supports:
+#
+# New:
+# get_float(settings,"KEY",10)
+#
+# Old:
+# get_float("KEY",10)
+#
 # ==============================================================================
+
+
+def _normalize_args(
+
+    settings,
+
+    key,
+
+    default
+
+):
+
+
+    if isinstance(
+
+        settings,
+
+        str
+
+    ):
+
+
+        return (
+
+            get_all_settings_cached(),
+
+            settings,
+
+            key if key is not None else default
+
+        )
+
+
+
+    return (
+
+        settings,
+
+        key,
+
+        default
+
+    )
+
+
+
+
+
 
 
 def get_bool(
 
     settings,
 
-    key,
+    key=None,
 
     default=False
 
@@ -287,7 +344,9 @@ def get_bool(
     try:
 
 
-        value = settings.get(
+        settings,key,default = _normalize_args(
+
+            settings,
 
             key,
 
@@ -296,7 +355,32 @@ def get_bool(
         )
 
 
-        return str(value).lower() == "true"
+
+        value = str(
+
+            settings.get(
+
+                key,
+
+                default
+
+            )
+
+        ).lower()
+
+
+
+        return value in (
+
+            "true",
+
+            "1",
+
+            "yes",
+
+            "on"
+
+        )
 
 
 
@@ -315,7 +399,7 @@ def get_float(
 
     settings,
 
-    key,
+    key=None,
 
     default=0.0
 
@@ -325,7 +409,9 @@ def get_float(
     try:
 
 
-        value = settings.get(
+        settings,key,default = _normalize_args(
+
+            settings,
 
             key,
 
@@ -334,7 +420,18 @@ def get_float(
         )
 
 
-        return float(value)
+
+        return float(
+
+            settings.get(
+
+                key,
+
+                default
+
+            )
+
+        )
 
 
 
@@ -353,7 +450,7 @@ def get_int(
 
     settings,
 
-    key,
+    key=None,
 
     default=0
 
@@ -363,7 +460,9 @@ def get_int(
     try:
 
 
-        value = settings.get(
+        settings,key,default = _normalize_args(
+
+            settings,
 
             key,
 
@@ -372,7 +471,18 @@ def get_int(
         )
 
 
-        return int(value)
+
+        return int(
+
+            settings.get(
+
+                key,
+
+                default
+
+            )
+
+        )
 
 
 
@@ -391,7 +501,7 @@ def get_text(
 
     settings,
 
-    key,
+    key=None,
 
     default=""
 
@@ -399,6 +509,18 @@ def get_text(
 
 
     try:
+
+
+        settings,key,default = _normalize_args(
+
+            settings,
+
+            key,
+
+            default
+
+        )
+
 
 
         return str(
