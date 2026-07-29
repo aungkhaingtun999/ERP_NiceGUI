@@ -71,7 +71,17 @@ try:
 except Exception:
     def get_inventory_view(*args, **kwargs):  
         return []
-
+# ==============================================================================
+# CUSTOMER (Added to fix the import error)
+# ==============================================================================
+try:
+    from .loaders.customer_loader import (  
+        get_customers  
+    )
+except Exception:
+    def get_customers(*args, **kwargs):  
+        return []
+        
 # ==============================================================================
 # SUPPLIER (Added to fix the import error)
 # ==============================================================================
@@ -247,6 +257,9 @@ __all__ = [
 
     # Supplier  
     "get_suppliers",
+
+    # Customer  
+    "get_customers",
 
     # Settings  
     "get_setting",  
