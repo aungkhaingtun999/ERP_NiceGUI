@@ -399,6 +399,7 @@ def normalize_items(items):
 # ==============================================================================
 # RECEIPT DATA BUILDER
 # ERP STANDARD RECEIPT FORMAT
+# FIXED v5.2
 # ==============================================================================
 
 def build_receipt_data(
@@ -406,19 +407,9 @@ def build_receipt_data(
     items
 ):
 
-    """
-    Convert database sales + sale_items
-
-    Common format for:
-
-    - PDF Receipt
-    - Thermal Receipt
-    - Reprint
-
-    """
-
 
     try:
+
 
         sale = sale or {}
 
@@ -428,14 +419,22 @@ def build_receipt_data(
         clean_items = []
 
 
+
+        # ==========================================================
+        # NORMALIZE ITEMS
+        # ==========================================================
+
         for item in items:
+
 
             if not item:
 
                 continue
 
 
+
             quantity = num(
+
                 item.get(
                     "quantity",
                     item.get(
@@ -443,10 +442,13 @@ def build_receipt_data(
                         0
                     )
                 )
+
             )
 
 
+
             unit_price = num(
+
                 item.get(
                     "unit_price",
                     item.get(
@@ -454,10 +456,13 @@ def build_receipt_data(
                         0
                     )
                 )
+
             )
 
 
+
             total = num(
+
                 item.get(
                     "total",
                     item.get(
@@ -465,164 +470,318 @@ def build_receipt_data(
                         0
                     )
                 )
+
             )
 
 
-            # safety calculation
 
             if total == 0:
 
+
                 total = (
+
                     quantity
+
                     *
+
                     unit_price
+
                 )
 
 
-            # PRODUCT NAME RESOLUTION
-            product = item.get("products")
 
-            name = (
-                item.get("product_name")
-                or
-                item.get("name")
+            # -----------------------------
+            # PRODUCT NAME
+            # -----------------------------
+
+            product = item.get(
+                "products"
             )
 
+
+            name = (
+
+                item.get(
+                    "product_name"
+                )
+
+                or
+
+                item.get(
+                    "name"
+                )
+
+            )
+
+
             if not name and isinstance(product, dict):
-                name = product.get("name")
+
+                name = product.get(
+                    "name"
+                )
+
+
 
             if not name:
-                name = f"Product #{item.get('product_id','')}"
+
+                name = (
+
+                    f"Product #{item.get('product_id','')}"
+
+                )
+
 
 
             clean_items.append(
+
                 {
-                    "name": name,
-                    "product_name": name,
-                    "product_id": item.get("product_id"),
-                    "quantity": int(quantity),
-                    "unit_price": unit_price,
-                    "total": total
+
+                    "name":
+
+                        name,
+
+
+                    "product_name":
+
+                        name,
+
+
+                    "product_id":
+
+                        item.get(
+                            "product_id"
+                        ),
+
+
+                    "quantity":
+
+                        int(quantity),
+
+
+                    "unit_price":
+
+                        unit_price,
+
+
+                    "total":
+
+                        total
+
                 }
+
             )
 
 
-            receipt = {
+
+
+
+        # ==========================================================
+        # TAX RATE AUTO RECOVER
+        # ==========================================================
+
+        subtotal = num(
+
+            sale.get(
+                "subtotal",
+                0
+            )
+
+        )
+
+
+        tax_amount = num(
+
+            sale.get(
+                "tax",
+                sale.get(
+                    "tax_amount",
+                    0
+                )
+
+            )
+
+        )
+
+
+        tax_rate = num(
+
+            sale.get(
+                "tax_rate",
+                0
+            )
+
+        )
+
+
+
+        if tax_rate == 0 and subtotal > 0 and tax_amount > 0:
+
+
+            tax_rate = round(
+
+                (tax_amount / subtotal) * 100,
+
+                2
+
+            )
+
+
+
+
+
+        # ==========================================================
+        # FINAL RECEIPT OBJECT
+        # ==========================================================
+
+
+        receipt = {
+
 
             "invoice_no":
+
                 sale.get(
+
                     "invoice_no",
-                    sale.get(
-                        "receipt_no",
-                        "-"
-                    )
+
+                    "-"
+
                 ),
+
 
 
             "date":
+
                 sale.get(
+
                     "created_at",
+
                     "-"
+
                 ),
+
 
 
             "cashier":
+
                 sale.get(
+
                     "cashier",
+
                     "Admin"
+
                 ),
+
 
 
             "items":
+
                 clean_items,
 
 
+
             "subtotal":
-                num(
-                    sale.get(
-                        "subtotal",
-                        sale.get(
-                            "total",
-                            0
-                        )
-                    )
-                ),
+
+                subtotal,
+
 
 
             "discount":
+
                 num(
+
                     sale.get(
+
                         "discount",
+
                         0
+
                     )
+
                 ),
 
 
-            # =========================
-            # TAX
-            # =========================
 
             "tax_rate":
-                num(
-                    sale.get(
-                        "tax_rate",
-                        0
-                    )
-                ),
+
+                tax_rate,
+
 
 
             "tax_amount":
-                num(
-                    sale.get(
-                        "tax_amount",
-                        sale.get(
-                            "tax",
-                            0
-                        )
-                    )
-                ),
+
+                tax_amount,
+
 
 
             "grand_total":
+
                 num(
+
                     sale.get(
+
                         "total",
+
                         0
+
                     )
+
                 ),
+
 
 
             "paid":
+
                 num(
+
                     sale.get(
+
                         "paid_amount",
+
                         0
+
                     )
+
                 ),
 
 
+
             "change":
+
                 num(
+
                     sale.get(
+
                         "change_amount",
+
                         0
+
                     )
+
                 )
 
         }
 
+
+
         return receipt
+
+
+
 
 
     except Exception as e:
 
+
         print(
+
             "BUILD RECEIPT ERROR:",
+
             e
+
         )
 
-        return {}
 
+        return {}
 
 
 
