@@ -37,6 +37,11 @@ from erp_core.config import (
 )
 
 
+from .engine import (
+    get_default_tax_rate
+)
+
+
 
 
 
@@ -513,8 +518,6 @@ def process_checkout(
 
     payment_method="CASH",
 
-    tax_rate=0,
-
     discount=0
 
 ):
@@ -543,6 +546,12 @@ def process_checkout(
             }
 
 
+
+        # ==========================================================
+        # TAX FROM ERP SETTINGS
+        # ==========================================================
+
+        tax_rate = get_default_tax_rate()
 
 
 
