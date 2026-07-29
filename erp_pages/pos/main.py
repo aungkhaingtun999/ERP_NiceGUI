@@ -60,6 +60,12 @@ from .cart import (
 
 
 
+from .engine import (
+    get_default_tax_rate
+)
+
+
+
 from .payment import (
     render_payment
 )
@@ -446,6 +452,29 @@ ERP POS FINAL PRICE ENGINE ACTIVE
 
 
 
+    # --------------------------------------------------------------------------
+    # TAX FROM SETTINGS
+    # --------------------------------------------------------------------------
+
+    tax_rate = get_default_tax_rate()
+
+
+    tax_amount = (
+
+        subtotal
+
+        *
+
+        tax_rate
+
+        /
+
+        100
+
+    )
+
+
+
     st.success(
 
         f"""
@@ -465,6 +494,24 @@ Total Qty :
 Subtotal :
 
 {money(subtotal)}
+
+
+
+🧾 System Tax Rate :
+
+{tax_rate:.2f}%
+
+
+
+Tax Amount :
+
+{money(tax_amount)}
+
+
+
+Grand Total :
+
+{money(subtotal + tax_amount)}
 
 """
 
