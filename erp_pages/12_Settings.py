@@ -1057,16 +1057,11 @@ st.markdown(
             This rate is currently used by POS, Sales, Invoice, and Accounting modules.
         </div>
 
-    </div>
+        </div>
     """,
     unsafe_allow_html=True
 )
-    </div>
 
-    </div>
-    ",
-    unsafe_allow_html=True
-)
 
 # ---------------------------------------------------------------------
 # Change form
