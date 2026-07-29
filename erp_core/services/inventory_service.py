@@ -1,25 +1,14 @@
 # ==============================================================================
 # erp_core/services/inventory_service.py
-# ERP ENTERPRISE INVENTORY SERVICE
-# Version: V1.1 Production FIX
-#
-# FIFO
-# Inventory KPI
-# Valuation
-# Stock Card
-# Loss Analytics
-# Stock Adjustments
-#
-# Compatible:
-#   erp_core.base_repo.db()
-#   99_System_Test.py
-#
+# ERP ENTERPRISE INVENTORY SERVICE (Integration Layer Updated)
 # ==============================================================================
 
 from typing import Any, Dict, List
 
 from ..base_repo import db, log_error
 from ..config import Tables
+from .settings_service import SettingsService
+
 # ==============================================================================
 # Inventory Service
 # ==============================================================================
@@ -29,136 +18,43 @@ class InventoryService:
 
     def __init__(self, client):
         self.client = client
+        self.settings = SettingsService(client)
 
     # ==========================================================================
-    # SETTINGS
+    # LOW STOCK RULE
     # ==========================================================================
 
-    def get_setting(
-        self,
-        key,
-        default=None
-    ):
-
+    def get_min_stock_alert(self) -> int:
         try:
-
-            result = (
-
-                self.client
-                .table(
-                    Tables.SETTINGS
-                )
-                .select(
-                    "value"
-                )
-                .eq(
-                    "key",
-                    key
-                )
-                .limit(1)
-                .execute()
-
-            )
-
-
-            if result.data:
-
-                return result.data[0].get(
-                    "value"
-                )
-
-
+            return self.settings.get_int("MIN_STOCK_ALERT", 10)
         except Exception as e:
-
-            log_error(
-                message="Inventory setting load failed",
-                exception=e
-            )
-
-
-        return default
+            log_error(message="Minimum stock setting load failed", exception=e)
+            return 10
 
     # ==========================================================================
     # LOW STOCK CHECK
     # ==========================================================================
 
-    def get_low_stock_alerts(
-        self,
-        warehouse_id=None
-    ):
-
+    def get_low_stock_alerts(self, warehouse_id=None):
         try:
+            minimum_stock = float(self.get_min_stock_alert())
 
-            minimum_stock = float(
-
-                self.get_setting(
-
-                    "MIN_STOCK_ALERT",
-
-                    10
-
-                )
-
-            )
-
-
-            query = (
-
-                self.client
-
-                .table(
-                    "warehouse_stock"
-                )
-
-                .select("*")
-
-            )
-
+            query = self.client.table("warehouse_stock").select("*")
 
             if warehouse_id:
-
-                query = query.eq(
-                    "warehouse_id",
-                    warehouse_id
-                )
-
+                query = query.eq("warehouse_id", warehouse_id)
 
             result = query.execute()
-
-
             rows = result.data or []
 
-
             return [
-
                 item
-
                 for item in rows
-
-                if float(
-                    item.get(
-                        "qty",
-                        0
-                    )
-                )
-
-                <= minimum_stock
-
+                if float(item.get("qty", 0)) <= minimum_stock
             ]
 
-
         except Exception as e:
-
-
-            log_error(
-
-                message="Low stock alert failed",
-
-                exception=e
-
-            )
-
-
+            log_error(message="Low stock alert failed", exception=e)
             return []
 
     # ==========================================================================
@@ -262,7 +158,7 @@ class InventoryService:
             return []
 
     # ==========================================================================
-    # Stock Adjustment Operations (Fixed for UUID, Schema & Unit Cost Compatibility)
+    # Stock Adjustment Operations
     # ==========================================================================
 
     def adjust_stock(
@@ -275,7 +171,6 @@ class InventoryService:
         unit_cost: float = 0.0,
     ) -> Dict[str, Any]:
         try:
-            # Table Schema နှင့် ကိုက်ညီစေရန်နှင့် not-null constraint မတက်စေရန် payload တည်ဆောက်ခြင်း
             payload = {
                 "product_id": int(product_id),
                 "warehouse_id": int(warehouse_id),
@@ -286,7 +181,6 @@ class InventoryService:
                 "unit_cost": float(unit_cost),
             }
 
-            # created_by / requested_by သည် uuid ဖြစ်နိုင်သဖြင့် int() မပြောင်းဘဲ string အနေဖြင့် ထည့်သွင်းခြင်း
             if created_by:
                 payload["requested_by"] = str(created_by)
 
@@ -323,7 +217,7 @@ class InventoryService:
             return []
 
     # ==========================================================================
-    # Stock Adjustment Approval (Maker & Checker Workflow)
+    # Stock Adjustment Approval
     # ==========================================================================
 
     def approve_stock_adjustment(
