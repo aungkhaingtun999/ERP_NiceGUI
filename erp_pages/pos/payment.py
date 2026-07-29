@@ -1,23 +1,11 @@
 # ==============================================================================
 # erp_pages/pos/payment.py
-# ERP ENTERPRISE POS PAYMENT MODULE v13.0
-#
-# SETTINGS TAX ENGINE CONNECTED
-#
-# Tax Source:
-#
-# ERP Settings
-#      |
-# DEFAULT_TAX_RATE
-#      |
-# POS DISPLAY
-#      |
-# RECEIPT
-#
+# ERP ENTERPRISE POS PAYMENT MODULE v12.9 TAX SETTINGS CONTROLLED
 # ==============================================================================
 
 
 import streamlit as st
+
 
 
 from .session import (
@@ -36,11 +24,9 @@ from .cart import (
 )
 
 
-from erp_core.loaders.settings_loader import (
-    get_setting
+from .engine import (
+    get_default_tax_rate
 )
-
-
 
 
 
@@ -55,40 +41,10 @@ def money(value):
 
         return f"{float(value):,.0f} MMK"
 
-    except:
-
-        return "0 MMK"
-
-
-
-
-
-# ==============================================================================
-# TAX FROM ERP SETTINGS
-# ==============================================================================
-
-
-def get_default_tax_rate():
-
-
-    try:
-
-        return float(
-
-            get_setting(
-
-                "DEFAULT_TAX_RATE",
-
-                0
-
-            )
-
-        )
-
 
     except Exception:
 
-        return 0.0
+        return "0 MMK"
 
 
 
@@ -121,7 +77,6 @@ def render_payment(
 
 
 
-
     st.divider()
 
 
@@ -133,10 +88,9 @@ def render_payment(
 
 
 
-
-    # --------------------------------------------------
-    # SUBTOTAL
-    # --------------------------------------------------
+    # ==========================================================
+    # TAX FROM ERP SETTINGS
+    # ==========================================================
 
 
     subtotal = calculate_subtotal(
@@ -144,12 +98,6 @@ def render_payment(
         cart
 
     )
-
-
-
-    # --------------------------------------------------
-    # TAX FROM SETTINGS
-    # --------------------------------------------------
 
 
     tax_rate = get_default_tax_rate()
@@ -172,11 +120,12 @@ def render_payment(
 
 
 
+
     st.info(
 
-        f"""
+f"""
 
-🧾 Tax Rate (System Setting)
+🧾 ERP Tax Rate
 
 {tax_rate:.2f}%
 
@@ -193,80 +142,39 @@ Tax Amount
 
 
 
-
-
-    # --------------------------------------------------
+    # ==========================================================
     # DISCOUNT
-    # --------------------------------------------------
+    # ==========================================================
 
 
-    discount_policy = st.session_state.get(
+    discount = st.number_input(
 
-        "discount_policy",
+        "Discount Amount (MMK)",
 
-        "allowed"
+        min_value=0.0,
+
+        value=float(
+
+            st.session_state.get(
+
+                "discount",
+
+                0
+
+            )
+
+        ),
+
+        step=100.0
 
     )
 
 
-    discount = 0.0
+
+    st.session_state.discount = discount
 
 
 
-    if discount_policy == "allowed":
-
-
-        discount = st.number_input(
-
-
-            "Discount Amount (MMK)",
-
-
-            min_value=0.0,
-
-
-            value=float(
-
-                st.session_state.get(
-
-                    "discount",
-
-                    0
-
-                )
-
-            ),
-
-
-            step=100.0,
-
-
-            key="payment_discount"
-
-        )
-
-
-        st.session_state.discount = discount
-
-
-
-    else:
-
-
-        st.info(
-
-            "Discount is restricted by system policy."
-
-        )
-
-
-
-
-
-
-    # --------------------------------------------------
-    # TOTAL
-    # --------------------------------------------------
 
 
     grand_total = max(
@@ -289,27 +197,27 @@ Tax Amount
 
     st.success(
 
-        f"""
+f"""
 
-Subtotal:
+Subtotal :
 
 {money(subtotal)}
 
 
 
-Tax:
+Tax :
 
 {money(tax_amount)}
 
 
 
-Discount:
+Discount :
 
 {money(discount)}
 
 
 
-Grand Total:
+Total Payable :
 
 {money(grand_total)}
 
@@ -320,17 +228,14 @@ Grand Total:
 
 
 
-
-    # --------------------------------------------------
+    # ==========================================================
     # PAYMENT METHOD
-    # --------------------------------------------------
+    # ==========================================================
 
 
     payment_method = st.selectbox(
 
-
         "Payment Method",
-
 
         [
 
@@ -353,42 +258,20 @@ Grand Total:
 
 
 
-
-    # --------------------------------------------------
+    # ==========================================================
     # RECEIVED
-    # --------------------------------------------------
+    # ==========================================================
 
 
     received = st.number_input(
 
-
         "Received Amount",
 
-
         min_value=0.0,
-
-
-        value=float(
-
-            st.session_state.get(
-
-                "received_amount",
-
-                0
-
-            )
-
-        ),
-
 
         step=100.0
 
     )
-
-
-
-    st.session_state.received_amount = received
-
 
 
 
@@ -404,15 +287,15 @@ Grand Total:
 
     st.info(
 
-        f"""
+f"""
 
-Received:
+Received :
 
 {money(received)}
 
 
 
-Change:
+Change :
 
 {money(change)}
 
@@ -424,23 +307,18 @@ Change:
 
 
 
-
-    # --------------------------------------------------
+    # ==========================================================
     # CHECKOUT
-    # --------------------------------------------------
+    # ==========================================================
 
 
     if st.button(
 
-
         "✅ Complete Sale",
-
 
         use_container_width=True,
 
-
         type="primary"
-
 
     ):
 
@@ -451,33 +329,11 @@ Change:
 
             st.error(
 
-                "Insufficient payment amount."
+                "Insufficient payment."
 
             )
 
             return
-
-
-
-
-        if st.session_state.get(
-
-            "processing",
-
-            False
-
-        ):
-
-
-            st.warning(
-
-                "Processing..."
-
-            )
-
-            return
-
-
 
 
 
@@ -488,40 +344,33 @@ Change:
         try:
 
 
-
             result = process_checkout(
-
 
                 cart=cart,
 
-
                 paid_amount=received,
-
 
                 warehouse_id=warehouse_id,
 
+                cashier_id=
 
-                cashier_id=st.session_state.get(
+                    st.session_state.get(
 
-                    "user",
+                        "user",
 
-                    {}
+                        {}
 
-                ).get(
+                    ).get(
 
-                    "id"
+                        "id"
 
-                ),
-
+                    ),
 
                 payment_method=payment_method,
-
 
                 discount=discount
 
             )
-
-
 
 
 
@@ -534,7 +383,6 @@ Change:
             ):
 
 
-
                 st.session_state.sale_data = result.get(
 
                     "data"
@@ -542,18 +390,10 @@ Change:
                 )
 
 
-                st.session_state.show_receipt = True
-
-
-                st.success(
-
-                    "Sale completed successfully."
-
-                )
+                st.session_state.show_receipt=True
 
 
                 st.rerun()
-
 
 
 
@@ -571,8 +411,6 @@ Change:
                     )
 
                 )
-
-
 
 
 
