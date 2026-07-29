@@ -1,10 +1,29 @@
 # ==============================================================================
 # erp_core/loaders/settings_loader.py
-# ERP ENTERPRISE SETTINGS LOADER v31 FINAL
+# ERP ENTERPRISE SETTINGS LOADER v31.0 FINAL
+#
+# Responsibility:
+#
+# - Settings Read Layer
+# - Settings Cache
+# - Type Conversion
+# - Service Bridge
+#
+# Flow:
+#
+# Supabase
+#      ↓
+# SettingsService
+#      ↓
+# SettingsLoader
+#      ↓
+# ERP UI / Engine
+#
 # ==============================================================================
 
 
 import streamlit as st
+
 
 
 from ..base_repo import (
@@ -13,8 +32,8 @@ from ..base_repo import (
 )
 
 
-from ..config import (
-    Tables
+from ..services.settings_service import (
+    SettingsService
 )
 
 
@@ -22,7 +41,26 @@ from ..config import (
 
 
 # ==============================================================================
-# CACHE LOAD
+# SERVICE INSTANCE
+# ==============================================================================
+
+
+def get_settings_service():
+
+    return SettingsService(
+
+        db()
+
+    )
+
+
+
+
+
+
+
+# ==============================================================================
+# CACHE VERSION
 # ==============================================================================
 
 
@@ -30,53 +68,15 @@ from ..config import (
     ttl=300,
     show_spinner=False
 )
-def get_setting_cached(key):
-
+def get_all_settings_cached():
 
     try:
 
 
-        result = (
-
-            db()
-
-            .table(
-
-                Tables.SETTINGS
-
-            )
-
-            .select("*")
-
-            .eq(
-
-                "key",
-
-                key
-
-            )
-
-            .order(
-
-                "id",
-
-                desc=True
-
-            )
-
-            .limit(1)
-
-            .execute()
-
-        )
+        service = get_settings_service()
 
 
-        if result.data:
-
-
-            return result.data[0].get(
-                "value"
-            )
+        return service.get_all_settings()
 
 
 
@@ -85,15 +85,16 @@ def get_setting_cached(key):
 
         log_error(
 
-            message="Settings cache load failed",
+            message="Cached settings load failed",
 
             exception=e
 
         )
 
 
+        return {}
 
-    return None
+
 
 
 
@@ -106,37 +107,229 @@ def get_setting_cached(key):
 
 def get_setting(
 
-    key:str,
+    key: str,
 
     default=None
 
 ):
 
 
-    value = get_setting_cached(
-        key
-    )
+    try:
 
 
-    if value is None:
+        settings = get_all_settings_cached()
+
+
+        return settings.get(
+
+            key,
+
+            default
+
+        )
+
+
+
+    except Exception as e:
+
+
+        log_error(
+
+            message="get_setting loader failed",
+
+            exception=e
+
+        )
 
 
         return default
 
 
 
-    return value
+
+
+
+
+# ==============================================================================
+# SAVE SETTING
+# ==============================================================================
+
+
+def save_setting(
+
+    key: str,
+
+    value
+
+):
+
+
+    try:
+
+
+        service = get_settings_service()
+
+
+        result = service.save_setting(
+
+            key,
+
+            value
+
+        )
+
+
+        # Clear cache
+
+        get_all_settings_cached.clear()
+
+
+
+        return result
+
+
+
+    except Exception as e:
+
+
+        log_error(
+
+            message="save_setting loader failed",
+
+            exception=e
+
+        )
+
+
+        return {
+
+
+            "success":
+
+                False,
+
+
+            "message":
+
+                str(e)
+
+        }
+
+
+
 
 
 
 
 
 # ==============================================================================
-# NUMBER SETTING
+# SAVE MULTIPLE
 # ==============================================================================
 
 
-def get_float_setting(
+def save_settings(
+
+    settings: dict
+
+):
+
+
+    try:
+
+
+        service = get_settings_service()
+
+
+
+        result = service.save_settings(
+
+            settings
+
+        )
+
+
+        get_all_settings_cached.clear()
+
+
+
+        return result
+
+
+
+    except Exception as e:
+
+
+        log_error(
+
+            message="bulk settings save failed",
+
+            exception=e
+
+        )
+
+
+        return {
+
+
+            "success":
+
+                False,
+
+
+            "message":
+
+                str(e)
+
+        }
+
+
+
+
+
+
+
+# ==============================================================================
+# TYPE HELPERS
+# ==============================================================================
+
+
+def get_bool(
+
+    key,
+
+    default=False
+
+):
+
+
+    value = get_setting(
+
+        key,
+
+        default
+
+    )
+
+
+    return (
+
+        str(value)
+
+        .lower()
+
+        ==
+
+        "true"
+
+    )
+
+
+
+
+
+
+
+def get_float(
 
     key,
 
@@ -146,6 +339,7 @@ def get_float_setting(
 
 
     try:
+
 
         return float(
 
@@ -160,6 +354,7 @@ def get_float_setting(
         )
 
 
+
     except Exception:
 
 
@@ -169,21 +364,56 @@ def get_float_setting(
 
 
 
-# ==============================================================================
-# BOOLEAN SETTING
-# ==============================================================================
 
 
-def get_bool_setting(
+def get_int(
 
     key,
 
-    default=False
+    default=0
 
 ):
 
 
-    value = str(
+    try:
+
+
+        return int(
+
+            get_setting(
+
+                key,
+
+                default
+
+            )
+
+        )
+
+
+
+    except Exception:
+
+
+        return int(default)
+
+
+
+
+
+
+
+
+def get_text(
+
+    key,
+
+    default=""
+
+):
+
+
+    return str(
 
         get_setting(
 
@@ -193,24 +423,39 @@ def get_bool_setting(
 
         )
 
-    ).lower()
+    )
 
 
-
-    return value == "true"
 
 
 
 
 
 # ==============================================================================
-# CLEAR CACHE
+# CACHE CLEAR
 # ==============================================================================
 
 
 def clear_settings_cache():
 
-    get_setting_cached.clear()
+
+    try:
+
+
+        get_all_settings_cached.clear()
+
+
+        return True
+
+
+
+    except Exception:
+
+
+        return False
+
+
+
 
 
 
@@ -224,9 +469,17 @@ __all__ = [
 
     "get_setting",
 
-    "get_float_setting",
+    "save_setting",
 
-    "get_bool_setting",
+    "save_settings",
+
+    "get_bool",
+
+    "get_float",
+
+    "get_int",
+
+    "get_text",
 
     "clear_settings_cache"
 
