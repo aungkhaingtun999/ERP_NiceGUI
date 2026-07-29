@@ -170,7 +170,33 @@ def get_receipt(
             )
 
             .select(
-                "*"
+                """
+                id,
+                invoice_no,
+                customer_id,
+                cashier_id,
+
+                subtotal,
+                discount,
+
+                tax,
+                tax_rate,
+
+                total,
+
+                paid_amount,
+                change_amount,
+
+                payment_method,
+
+                sale_status,
+                status,
+
+                warehouse_id,
+                counter_id,
+
+                created_at
+                """
             )
 
             .eq(
@@ -185,7 +211,54 @@ def get_receipt(
         )
 
 
-        return response.data or {}
+        sale = response.data or {}
+
+
+
+        # ==========================================================
+        # TAX COMPATIBILITY
+        # ==========================================================
+
+
+        if not sale.get("tax_rate"):
+
+
+            subtotal = float(
+                sale.get(
+                    "subtotal",
+                    0
+                )
+            )
+
+
+            tax = float(
+                sale.get(
+                    "tax",
+                    0
+                )
+            )
+
+
+            if subtotal > 0 and tax > 0:
+
+
+                sale["tax_rate"] = round(
+
+                    (tax / subtotal) * 100,
+
+                    2
+
+                )
+
+
+            else:
+
+
+                sale["tax_rate"] = 0
+
+
+
+        return sale
 
 
 
@@ -194,18 +267,12 @@ def get_receipt(
 
 
         log_error(
-            f"get_receipt error : {e}"
+            message=f"get_receipt error : {e}",
+            exception=e
         )
 
 
         return {}
-
-
-
-
-
-
-
 # ==============================================================================
 # FULL RECEIPT
 # ==============================================================================
