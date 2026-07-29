@@ -4,25 +4,9 @@
 #
 # Responsibilities:
 # - Payment input
-# - Tax calculation
 # - Discount handling
 # - Checkout trigger
 # - Receipt preparation
-#
-# Flow:
-#
-# CART
-#   ↓
-# SUBTOTAL
-#   ↓
-# TAX + DISCOUNT
-#   ↓
-# PAYMENT
-#   ↓
-# CHECKOUT RPC
-#   ↓
-# RECEIPT
-#
 # ==============================================================================
 
 
@@ -45,6 +29,11 @@ from .cart import (
 )
 
 
+from .engine import (
+    get_default_tax_rate
+)
+
+
 
 
 
@@ -63,89 +52,6 @@ def money(value):
     except Exception:
 
         return "0 MMK"
-
-
-
-
-
-# ==============================================================================
-# TOTAL CALCULATION
-# ==============================================================================
-
-
-def calculate_total(
-
-    subtotal,
-
-    tax_rate,
-
-    discount
-
-):
-
-
-    tax_amount = (
-
-        float(subtotal)
-
-        *
-
-        float(tax_rate)
-
-        /
-
-        100
-
-    )
-
-
-    total = (
-
-        float(subtotal)
-
-        +
-
-        tax_amount
-
-        -
-
-        float(discount)
-
-    )
-
-
-    if total < 0:
-
-        total = 0
-
-
-
-    return {
-
-
-        "tax_amount":
-
-            round(
-
-                tax_amount,
-
-                2
-
-            ),
-
-
-
-        "grand_total":
-
-            round(
-
-                total,
-
-                2
-
-            )
-
-    }
 
 
 
@@ -195,7 +101,7 @@ def render_payment(
 
 
     # --------------------------------------------------
-    # SUBTOTAL
+    # SUBTOTAL & TAX FROM SETTINGS (AUTOMATIC)
     # --------------------------------------------------
 
 
@@ -207,52 +113,23 @@ def render_payment(
 
 
 
-    tax_rate = float(
-
-        st.session_state.get(
-
-            "tax_rate",
-
-            0
-
-        )
-
-    )
+    tax_rate = get_default_tax_rate()
 
 
 
+    tax_amount = (
 
+        subtotal
 
-    # --------------------------------------------------
-    # TAX
-    # --------------------------------------------------
+        *
 
+        tax_rate
 
-    tax_rate = st.number_input(
+        /
 
-
-        "Tax Rate (%)",
-
-
-        min_value=0.0,
-
-
-        max_value=100.0,
-
-
-        value=float(tax_rate),
-
-
-        step=0.5,
-
-
-        key="payment_tax_rate"
+        100
 
     )
-
-
-
-    st.session_state.tax_rate = tax_rate
 
 
 
@@ -329,75 +206,19 @@ def render_payment(
 
 
 
+    grand_total = max(
 
+        0,
 
-    totals = calculate_total(
+        subtotal
 
-        subtotal,
+        +
 
-        tax_rate,
+        tax_amount
 
-        discount
+        -
 
-    )
-
-
-
-
-
-    tax_amount = totals[
-
-        "tax_amount"
-
-    ]
-
-
-    grand_total = totals[
-
-        "grand_total"
-
-    ]
-
-
-
-
-
-    # --------------------------------------------------
-    # SUMMARY
-    # --------------------------------------------------
-
-
-    st.success(
-
-        f"""
-
-Subtotal:
-
-{money(subtotal)}
-
-
-
-Tax:
-
-{money(tax_amount)}
-
-
-
-Discount:
-
-{money(discount)}
-
-
-
-====================
-
-
-
-TOTAL:
-
-{money(grand_total)}
-
-"""
+        float(discount)
 
     )
 
@@ -475,8 +296,6 @@ TOTAL:
 
 
     st.session_state.received_amount = received
-
-
 
 
 
@@ -607,9 +426,6 @@ Change:
 
 
                 payment_method=payment_method,
-
-
-                tax_rate=tax_rate,
 
 
                 discount=discount
