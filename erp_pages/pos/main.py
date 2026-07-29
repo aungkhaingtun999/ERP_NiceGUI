@@ -565,72 +565,37 @@ Calculated in Payment Module
     # TAX FROM SETTINGS
     # --------------------------------------------------------------------------
 
-tax_rate = get_default_tax_rate()
-
+    tax_rate = get_default_tax_rate()
 
     tax_amount = (
-
         subtotal
-
         *
-
         tax_rate
-
         /
-
         100
-
     )
-
-
 
     st.success(
-
         f"""
-
 Items :
-
 {len(cart)}
 
-
-
 Total Qty :
-
 {total_qty}
 
-
-
 Subtotal :
-
 {money(subtotal)}
 
-
-
 🧾 System Tax Rate :
-
 {tax_rate:.2f}%
 
-
-
 Tax Amount :
-
 {money(tax_amount)}
 
-
-
 Grand Total :
-
 {money(subtotal + tax_amount)}
-
 """
-
     )
-
-
-
-
-
-
 
     # --------------------------------------------------------------------------
     # PAYMENT
