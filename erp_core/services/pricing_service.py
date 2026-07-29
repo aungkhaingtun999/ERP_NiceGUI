@@ -41,6 +41,9 @@ from ..base_repo import (
     log_error
 )
 from ..config import Tables
+from .settings_service import (
+    SettingsService
+)
 
 
 # ==============================================================================
@@ -61,6 +64,7 @@ class PricingService:
     ):
 
         self.client = client
+        self.settings = SettingsService( client )
 
 
 
@@ -151,28 +155,7 @@ class PricingService:
 
     ):
 
-
-        data = self.safe_query(
-
-            Tables.SETTINGS,
-
-            "value",
-
-         {
-            "key": key
-    }
-
-)
-
-        if data:
-
-
-            return data[0].get(
-                "value"
-            )
-
-
-        return default
+        return self.settings.get_setting( key, default )
 
 
 
