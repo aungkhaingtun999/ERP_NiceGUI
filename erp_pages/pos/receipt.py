@@ -205,7 +205,7 @@ with st.expander("DEBUG RECEIPT DATA"):
             "Receipt data missing"
         )
 
-        return
+    return
 
 
 
