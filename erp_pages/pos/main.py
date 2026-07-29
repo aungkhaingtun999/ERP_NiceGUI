@@ -1,15 +1,18 @@
 # ==============================================================================
 # erp_pages/pos/main.py
-# ERP ENTERPRISE POS MAIN CONTROLLER v12.4
-# CLEAN SINGLE RENDER VERSION
+# ERP ENTERPRISE POS MAIN CONTROLLER v12.6
+# CLEAN SINGLE RENDER + TAX ENGINE
 # ==============================================================================
 
 
 import streamlit as st
+import pandas as pd
 
 
-
-from erp_core import get_default_warehouse_id
+from erp_core import (
+    get_default_warehouse_id,
+    get_setting
+)
 
 
 from .session import init_pos_session
@@ -19,17 +22,16 @@ from .payment import render_payment
 from .receipt import render_receipt
 
 
-
 from auth import is_authenticated
-
 
 from language import language_selector
 
 
 
 
+
 # ==============================================================================
-# MONEY FORMAT
+# MONEY
 # ==============================================================================
 
 def money(value):
@@ -38,10 +40,35 @@ def money(value):
 
         return f"{float(value):,.0f} MMK"
 
-
     except Exception:
 
         return "0 MMK"
+
+
+
+
+
+
+# ==============================================================================
+# TAX LOAD
+# ==============================================================================
+
+def load_tax_setting():
+
+    try:
+
+        tax = get_setting(
+            "DEFAULT_TAX_RATE",
+            0
+        )
+
+        return float(tax or 0)
+
+
+    except Exception:
+
+        return 0
+
 
 
 
@@ -61,10 +88,10 @@ def run():
 
         language_selector()
 
-
     except Exception:
 
         pass
+
 
 
 
@@ -83,11 +110,39 @@ def run():
 
 
 
+
     # --------------------------------------------------------------------------
     # SESSION
     # --------------------------------------------------------------------------
 
     init_pos_session()
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # TAX INITIALIZE
+    # --------------------------------------------------------------------------
+
+    if (
+
+        "tax_loaded"
+
+        not
+
+        in
+
+        st.session_state
+
+    ):
+
+
+        st.session_state.tax_rate = load_tax_setting()
+
+        st.session_state.tax_loaded = True
+
+
 
 
 
@@ -110,6 +165,8 @@ def run():
 
 
 
+
+
     # --------------------------------------------------------------------------
     # HEADER
     # --------------------------------------------------------------------------
@@ -120,7 +177,7 @@ def run():
 
 
     st.caption(
-        """
+"""
 OWNER PRICE
 ↓
 PRODUCT MARKUP
@@ -132,6 +189,7 @@ SYSTEM PRICE
 POS uses FINAL SELLING PRICE
 """
     )
+
 
 
 
@@ -154,26 +212,34 @@ POS uses FINAL SELLING PRICE
 
 
 
+
     # --------------------------------------------------------------------------
     # PRODUCT
     # --------------------------------------------------------------------------
 
     render_products(
+
         warehouse_id
+
     )
 
 
 
 
 
-        # --------------------------------------------------------------------------
+
+    # --------------------------------------------------------------------------
     # CART
     # --------------------------------------------------------------------------
 
     cart = st.session_state.get(
+
         "cart",
+
         []
+
     )
+
 
 
     if not cart:
@@ -186,6 +252,9 @@ POS uses FINAL SELLING PRICE
 
 
 
+
+
+
     st.divider()
 
 
@@ -195,28 +264,33 @@ POS uses FINAL SELLING PRICE
 
 
 
+
+
     # ==========================================================================
-    # CART DETAIL TABLE
+    # CART TABLE
     # ==========================================================================
 
-    import pandas as pd
+    rows=[]
 
-
-    cart_rows = []
 
 
     for item in cart:
 
 
-        qty = int(
+        qty=int(
+
             item.get(
+
                 "qty",
+
                 0
+
             )
+
         )
 
 
-        price = float(
+        price=float(
 
             item.get(
 
@@ -235,23 +309,30 @@ POS uses FINAL SELLING PRICE
         )
 
 
-        cart_rows.append(
+
+        rows.append(
 
             {
 
                 "Product":
 
                     item.get(
+
                         "name",
+
                         ""
+
                     ),
 
 
                 "SKU":
 
                     item.get(
+
                         "sku",
+
                         ""
+
                     ),
 
 
@@ -263,8 +344,11 @@ POS uses FINAL SELLING PRICE
                 "Price Source":
 
                     item.get(
+
                         "price_source",
+
                         "SYSTEM"
+
                     ),
 
 
@@ -276,7 +360,9 @@ POS uses FINAL SELLING PRICE
                 "Amount":
 
                     money(
+
                         price * qty
+
                     )
 
             }
@@ -285,23 +371,21 @@ POS uses FINAL SELLING PRICE
 
 
 
-    if cart_rows:
 
 
-        cart_df = pd.DataFrame(
-            cart_rows
-        )
+    st.dataframe(
+
+        pd.DataFrame(rows),
+
+        use_container_width=True,
+
+        hide_index=True
+
+    )
 
 
-        st.dataframe(
 
-            cart_df,
 
-            use_container_width=True,
-
-            hide_index=True
-
-        )
 
 
 
@@ -311,11 +395,46 @@ POS uses FINAL SELLING PRICE
 
 
     subtotal = calculate_subtotal(
+
         cart
+
     )
 
 
-    total_qty = sum(
+    tax_rate = st.session_state.get(
+
+        "tax_rate",
+
+        0
+
+    )
+
+
+    tax_amount = round(
+
+        subtotal
+
+        *
+
+        float(tax_rate)
+
+        /
+
+        100,
+
+        2
+
+    )
+
+
+
+    total = subtotal + tax_amount
+
+
+
+
+
+    total_qty=sum(
 
         int(
 
@@ -335,17 +454,30 @@ POS uses FINAL SELLING PRICE
 
 
 
+
+
+
     st.info(
 
-        f"""
+f"""
 Items      : {len(cart)}
 
 Total Qty  : {total_qty}
 
 Subtotal   : {money(subtotal)}
-"""
 
+Tax Rate   : {tax_rate:.2f} %
+
+Tax Amount : {money(tax_amount)}
+
+---------------------
+
+Total      : {money(total)}
+
+"""
     )
+
+
 
 
 
@@ -356,11 +488,7 @@ Subtotal   : {money(subtotal)}
     # --------------------------------------------------------------------------
 
     render_payment(
+
         warehouse_id
+
     )
-
-
-
-# ==============================================================================
-# END
-# ==============================================================================
