@@ -1013,7 +1013,7 @@ f"""
 # ---------------------------------------------------------------------
 # Always show ACTIVE tax rate
 # ---------------------------------------------------------------------
-active_tax_rate = float(
+    active_tax_rate = float(
     get_float(
         settings,
         "DEFAULT_TAX_RATE",
@@ -1021,7 +1021,7 @@ active_tax_rate = float(
     )
 )
 
-st.markdown(
+     st.markdown(
     f"""
     <div style="
         padding:18px;
