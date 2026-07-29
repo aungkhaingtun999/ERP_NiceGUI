@@ -25,7 +25,7 @@ from .receipt import render_receipt
 from auth import is_authenticated
 
 from language import language_selector
-
+from .settings import load_pos_settings
 
 
 
@@ -117,7 +117,7 @@ def run():
 
     init_pos_session()
 
-
+    load_pos_settings()
 
 
 
