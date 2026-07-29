@@ -40,18 +40,26 @@ def money(value):
 
 
 # ==============================================================================
-# LOAD PRODUCTS
+# POS PRODUCT CACHE
 # ==============================================================================
 
-def load_pos_products(
-    warehouse_id=None
-) -> List[Dict[str, Any]]:
+
+@st.cache_data(
+    ttl=300,
+    show_spinner=False
+)
+def load_cached_products(
+    warehouse_id
+):
 
     try:
 
+        from erp_core import get_pos_products
+
+
         return get_pos_products(
-            warehouse_id=warehouse_id
-        ) or []
+            warehouse_id
+        )
 
 
     except Exception as e:
@@ -61,9 +69,6 @@ def load_pos_products(
         )
 
         return []
-
-
-
 # ==============================================================================
 # STOCK CHECK
 # ==============================================================================
@@ -136,9 +141,9 @@ def render_products(
 
 
 
-    products = load_pos_products(
-        warehouse_id
-    )
+    products = load_cached_products(
+    warehouse_id
+)
 
 
     if not products:
