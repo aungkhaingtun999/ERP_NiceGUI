@@ -1,7 +1,15 @@
 # ==============================================================================
 # erp_core/loaders/receipt_loader.py
-# ERP ENTERPRISE RECEIPT LOADER v2.0
-# PRODUCT NAME JOIN ENABLED
+# ERP ENTERPRISE RECEIPT LOADER v3.0 FINAL
+#
+# Features:
+#
+# - Receipt Header Loading
+# - Tax Rate Recovery
+# - Receipt Items Join
+# - Product Name Support
+# - Full Receipt Package
+#
 # ==============================================================================
 
 
@@ -27,7 +35,9 @@ from ..base_repo import (
 
 
 def get_sale_items(
+
     sale_id: int
+
 ) -> List[Dict[str, Any]]:
 
 
@@ -39,10 +49,13 @@ def get_sale_items(
             db()
 
             .table(
+
                 "sale_items"
+
             )
 
             .select(
+
                 """
                 id,
                 sale_id,
@@ -55,11 +68,15 @@ def get_sale_items(
                     name
                 )
                 """
+
             )
 
             .eq(
+
                 "sale_id",
+
                 sale_id
+
             )
 
             .execute()
@@ -75,29 +92,31 @@ def get_sale_items(
         for item in items:
 
 
-            # --------------------------------------------------
-            # Product Name From Join
-            # --------------------------------------------------
-
             product = item.get(
+
                 "products"
+
             ) or {}
 
 
 
-            product_name = product.get(
+            name = product.get(
+
                 "name"
+
             )
 
 
 
-            if not product_name:
+            if not name:
 
 
-                product_name = (
+                name = (
 
                     item.get(
+
                         "product_name"
+
                     )
 
                     or
@@ -108,21 +127,18 @@ def get_sale_items(
 
 
 
-            # --------------------------------------------------
-            # Compatibility Fields
-            # --------------------------------------------------
+            item["name"] = name
 
 
-            item["name"] = product_name
-
-
-            item["product_name"] = product_name
-
+            item["product_name"] = name
 
 
             item["qty"] = item.get(
+
                 "quantity",
+
                 0
+
             )
 
 
@@ -136,11 +152,16 @@ def get_sale_items(
 
 
         log_error(
-            f"get_sale_items error : {e}"
+
+            message="Load sale items failed",
+
+            exception=e
+
         )
 
 
         return []
+
 
 
 
@@ -154,7 +175,9 @@ def get_sale_items(
 
 
 def get_receipt(
+
     invoice_no: str
+
 ) -> Dict[str, Any]:
 
 
@@ -166,13 +189,17 @@ def get_receipt(
             db()
 
             .table(
+
                 "sales"
+
             )
 
             .select(
+
                 """
                 id,
                 invoice_no,
+
                 customer_id,
                 cashier_id,
 
@@ -183,6 +210,7 @@ def get_receipt(
                 tax_rate,
 
                 total,
+                total_amount,
 
                 paid_amount,
                 change_amount,
@@ -197,11 +225,15 @@ def get_receipt(
 
                 created_at
                 """
+
             )
 
             .eq(
+
                 "invoice_no",
+
                 invoice_no
+
             )
 
             .single()
@@ -211,32 +243,53 @@ def get_receipt(
         )
 
 
+
         sale = response.data or {}
 
 
 
-        # ==========================================================
-        # TAX COMPATIBILITY
-        # ==========================================================
+
+        # ==============================================================
+        # TAX RATE RECOVERY
+        # ==============================================================
 
 
-        if not sale.get("tax_rate"):
+        tax_rate = sale.get(
+
+            "tax_rate"
+
+        )
+
+
+
+        if tax_rate is None or tax_rate == 0:
 
 
             subtotal = float(
+
                 sale.get(
+
                     "subtotal",
+
                     0
+
                 )
+
             )
 
 
             tax = float(
+
                 sale.get(
+
                     "tax",
+
                     0
+
                 )
+
             )
+
 
 
             if subtotal > 0 and tax > 0:
@@ -244,7 +297,19 @@ def get_receipt(
 
                 sale["tax_rate"] = round(
 
-                    (tax / subtotal) * 100,
+                    (
+
+                        tax
+
+                        /
+
+                        subtotal
+
+                    )
+
+                    *
+
+                    100,
 
                     2
 
@@ -258,7 +323,10 @@ def get_receipt(
 
 
 
+
+
         return sale
+
 
 
 
@@ -267,19 +335,33 @@ def get_receipt(
 
 
         log_error(
-            message=f"get_receipt error : {e}",
+
+            message="Get receipt failed",
+
             exception=e
+
         )
 
 
         return {}
+
+
+
+
+
+
+
+
+
 # ==============================================================================
 # FULL RECEIPT
 # ==============================================================================
 
 
 def get_full_receipt(
+
     invoice_no: str
+
 ) -> Dict[str, Any]:
 
 
@@ -287,7 +369,9 @@ def get_full_receipt(
 
 
         sale = get_receipt(
+
             invoice_no
+
         )
 
 
@@ -297,13 +381,20 @@ def get_full_receipt(
 
             return {
 
-                "success": False,
+                "success":
 
-                "sale": None,
+                    False,
 
-                "items": []
+                "sale":
+
+                    {},
+
+                "items":
+
+                    []
 
             }
+
 
 
 
@@ -311,7 +402,9 @@ def get_full_receipt(
         items = get_sale_items(
 
             sale.get(
+
                 "id"
+
             )
 
         )
@@ -321,14 +414,22 @@ def get_full_receipt(
         return {
 
 
-            "success": True,
+            "success":
 
-            "sale": sale,
+                True,
 
-            "items": items
 
+            "sale":
+
+                sale,
+
+
+            "items":
+
+                items
 
         }
+
 
 
 
@@ -337,21 +438,33 @@ def get_full_receipt(
 
 
         log_error(
-            f"get_full_receipt error : {e}"
-        )
 
+            message="Full receipt load failed",
+
+            exception=e
+
+        )
 
 
         return {
 
 
-            "success": False,
+            "success":
 
-            "sale": None,
+                False,
 
-            "items": []
+
+            "sale":
+
+                {},
+
+
+            "items":
+
+                []
 
         }
+
 
 
 
@@ -365,8 +478,10 @@ def get_full_receipt(
 
 
 def search_receipts(
+
     keyword: str = ""
-) -> List[Dict[str, Any]]:
+
+) -> List[Dict]:
 
 
     try:
@@ -377,11 +492,15 @@ def search_receipts(
             db()
 
             .table(
+
                 "sales"
+
             )
 
             .select(
+
                 "*"
+
             )
 
         )
@@ -391,23 +510,17 @@ def search_receipts(
         if keyword:
 
 
-            query = (
+            query = query.ilike(
 
-                query
+                "invoice_no",
 
-                .ilike(
-
-                    "invoice_no",
-
-                    f"%{keyword}%"
-
-                )
+                f"%{keyword}%"
 
             )
 
 
 
-        response = (
+        result = (
 
             query
 
@@ -425,7 +538,8 @@ def search_receipts(
 
 
 
-        return response.data or []
+        return result.data or []
+
 
 
 
@@ -434,8 +548,36 @@ def search_receipts(
 
 
         log_error(
-            f"search_receipts error : {e}"
+
+            message="Search receipts failed",
+
+            exception=e
+
         )
 
 
         return []
+
+
+
+
+
+
+
+
+# ==============================================================================
+# EXPORT
+# ==============================================================================
+
+
+__all__ = [
+
+    "get_receipt",
+
+    "get_sale_items",
+
+    "get_full_receipt",
+
+    "search_receipts"
+
+]
