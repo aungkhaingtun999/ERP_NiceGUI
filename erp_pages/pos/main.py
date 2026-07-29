@@ -1,18 +1,35 @@
 # ==============================================================================
 # erp_pages/pos/main.py
-# ERP ENTERPRISE POS MAIN CONTROLLER v12.2 FINAL
+# ERP ENTERPRISE POS MAIN CONTROLLER v12.3 FINAL
+#
+# FLOW
+# AUTH
+#   ↓
+# SESSION
+#   ↓
+# WAREHOUSE
+#   ↓
+# PRODUCT
+#   ↓
+# CART
+#   ↓
+# PAYMENT
+#   ↓
+# RECEIPT
 # ==============================================================================
+
 import streamlit as st
 
-if "pos_render_count" not in st.session_state:
-    st.session_state.pos_render_count = 0
 
-st.session_state.pos_render_count += 1
+# ==============================================================================
+# DUPLICATE RENDER GUARD
+# ==============================================================================
 
-st.write(
-    "POS Render Count:",
-    st.session_state.pos_render_count
-)
+# Prevent Streamlit from rendering POS twice in the same request cycle.
+if st.session_state.get("_pos_rendering"):
+    st.stop()
+
+st.session_state["_pos_rendering"] = True
 
 
 # ==============================================================================
@@ -20,6 +37,7 @@ st.write(
 # ==============================================================================
 
 from erp_core import get_default_warehouse_id
+
 
 # ==============================================================================
 # POS MODULES
@@ -31,11 +49,13 @@ from .cart import calculate_subtotal
 from .payment import render_payment
 from .receipt import render_receipt
 
+
 # ==============================================================================
 # AUTH
 # ==============================================================================
 
 from auth import is_authenticated
+
 
 # ==============================================================================
 # LANGUAGE
@@ -63,42 +83,48 @@ def money(value):
 
 def run():
 
-    # --------------------------------------------------------------------------
-    # LANGUAGE
-    # --------------------------------------------------------------------------
     try:
-        language_selector()
-    except Exception:
-        pass
 
-    # --------------------------------------------------------------------------
-    # AUTH
-    # --------------------------------------------------------------------------
-    if not is_authenticated():
-        st.warning("Please login first.")
-        st.stop()
+        # ----------------------------------------------------------------------
+        # LANGUAGE
+        # ----------------------------------------------------------------------
+        try:
+            language_selector()
+        except Exception:
+            pass
 
-    # --------------------------------------------------------------------------
-    # SESSION
-    # --------------------------------------------------------------------------
-    init_pos_session()
 
-    # --------------------------------------------------------------------------
-    # WAREHOUSE
-    # --------------------------------------------------------------------------
-    warehouse_id = get_default_warehouse_id()
+        # ----------------------------------------------------------------------
+        # AUTH
+        # ----------------------------------------------------------------------
+        if not is_authenticated():
+            st.warning("Please login first.")
+            st.stop()
 
-    if not warehouse_id:
-        st.error("Default warehouse not configured.")
-        st.stop()
 
-    # --------------------------------------------------------------------------
-    # TITLE
-    # --------------------------------------------------------------------------
-    st.title("🛒 ERP Enterprise POS")
+        # ----------------------------------------------------------------------
+        # SESSION
+        # ----------------------------------------------------------------------
+        init_pos_session()
 
-    st.caption(
-        """
+
+        # ----------------------------------------------------------------------
+        # WAREHOUSE
+        # ----------------------------------------------------------------------
+        warehouse_id = get_default_warehouse_id()
+
+        if not warehouse_id:
+            st.error("Default warehouse not configured.")
+            st.stop()
+
+
+        # ----------------------------------------------------------------------
+        # HEADER
+        # ----------------------------------------------------------------------
+        st.title("🛒 ERP Enterprise POS")
+
+        st.caption(
+            """
 OWNER PRICE
 ↓
 PRODUCT MARKUP
@@ -108,49 +134,68 @@ CATEGORY MARKUP
 SYSTEM PRICE
 
 POS uses FINAL SELLING PRICE
-        """
-    )
+            """
+        )
 
-    # --------------------------------------------------------------------------
-    # RECEIPT MODE
-    # --------------------------------------------------------------------------
-    if st.session_state.get("show_receipt", False):
-        render_receipt()
-        return
 
-    # --------------------------------------------------------------------------
-    # PRODUCT SECTION (ONLY ONCE)
-    # --------------------------------------------------------------------------
-    render_products(warehouse_id)
+        # ----------------------------------------------------------------------
+        # RECEIPT MODE
+        # ----------------------------------------------------------------------
+        if st.session_state.get("show_receipt", False):
+            render_receipt()
+            return
 
-    # --------------------------------------------------------------------------
-    # CART SECTION
-    # --------------------------------------------------------------------------
-    cart = st.session_state.get("cart", [])
 
-    if not cart:
-        st.info("Cart is empty.")
-        return
+        # ----------------------------------------------------------------------
+        # PRODUCT AREA
+        # ----------------------------------------------------------------------
+        render_products(warehouse_id)
 
-    st.divider()
-    st.subheader("🛒 Cart Summary")
 
-    subtotal = calculate_subtotal(cart)
+        # ----------------------------------------------------------------------
+        # CART AREA
+        # ----------------------------------------------------------------------
+        cart = st.session_state.get("cart", [])
 
-    st.info(
-        f"""
-Items : {len(cart)}
+        if not cart:
+            st.info("Cart is empty.")
+            return
 
-Subtotal : {money(subtotal)}
-        """
-    )
 
-    # --------------------------------------------------------------------------
-    # PAYMENT
-    # --------------------------------------------------------------------------
-    render_payment(warehouse_id)
+        st.divider()
+        st.subheader("🛒 Cart Summary")
+
+        subtotal = calculate_subtotal(cart)
+
+        total_qty = sum(
+            int(item.get("qty", 0))
+            for item in cart
+        )
+
+        st.info(
+            f"""
+Items      : {len(cart)}
+Total Qty  : {total_qty}
+Subtotal   : {money(subtotal)}
+            """
+        )
+
+
+        # ----------------------------------------------------------------------
+        # PAYMENT
+        # ----------------------------------------------------------------------
+        render_payment(warehouse_id)
+
+
+    finally:
+
+        # Always release render guard after page finishes rendering.
+        st.session_state["_pos_rendering"] = False
 
 
 # ==============================================================================
-# END
+# DIRECT RUN
 # ==============================================================================
+
+if __name__ == "__main__":
+    run()
