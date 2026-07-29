@@ -1007,8 +1007,8 @@ f"""
 # ACCOUNTING & TAX SETTINGS
 # =============================================================================
 
-st.divider()
-st.subheader("🧾 Accounting & Tax")
+    st.divider()
+    st.subheader("🧾 Accounting & Tax")
 
 # ---------------------------------------------------------------------
 # Always show ACTIVE tax rate
@@ -1022,7 +1022,7 @@ active_tax_rate = float(
 )
 
 st.markdown(
-    f"
+    f"""
     <div style="
         padding:18px;
         border-radius:14px;
@@ -1055,6 +1055,12 @@ st.markdown(
             color:#33691E;
         ">
             This rate is currently used by POS, Sales, Invoice, and Accounting modules.
+        </div>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
         </div>
 
     </div>
