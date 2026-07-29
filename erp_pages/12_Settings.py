@@ -1021,7 +1021,7 @@ f"""
     )
 )
 
-     st.markdown(
+         st.markdown(
     f"""
     <div style="
         padding:18px;
