@@ -1,31 +1,26 @@
 # ==============================================================================
 # erp_core/services/settings_service.py
-# ERP ENTERPRISE SETTINGS SERVICE v1.0
+# ERP ENTERPRISE SETTINGS SERVICE v2.0 FINAL
 #
-# Responsibilities:
+# Central ERP Configuration Manager
 #
-# - ERP Settings Read
-# - ERP Settings Write
-# - Cache Control
-# - Default Value Handling
-# - Pricing / Tax / Inventory Config Support
+# Table:
 #
-# Flow:
+# erp_settings
 #
-# Supabase
-#      ↓
-# SettingsService
-#      ↓
-# Loader / UI / Engine
+# Columns:
+#
+# id
+# key
+# value
+# created_at
 #
 # ==============================================================================
 
 
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional
+    Dict
 )
 
 
@@ -40,8 +35,6 @@ from ..config import (
 
 
 
-
-
 # ==============================================================================
 # SETTINGS SERVICE
 # ==============================================================================
@@ -51,23 +44,16 @@ class SettingsService:
 
 
     """
-    ERP Central Settings Manager
+    Central ERP Settings Engine
 
-    Table:
+    Responsible:
 
-        erp_settings
-
-
-    Schema:
-
-        id
-        key
-        value
-        created_at
-        updated_at
+    - Read settings
+    - Save settings
+    - Bulk update
+    - Type conversion
 
     """
-
 
 
     # ==========================================================================
@@ -75,29 +61,25 @@ class SettingsService:
     # ==========================================================================
 
 
-    def __init__(self, client):
+    def __init__(
+        self,
+        client
+    ):
 
         self.client = client
 
 
 
-
-
     # ==========================================================================
-    # GET SINGLE SETTING
+    # GET SINGLE
     # ==========================================================================
 
 
     def get_setting(
-
         self,
-
-        key: str,
-
+        key,
         default=None
-
     ):
-
 
         try:
 
@@ -112,7 +94,11 @@ class SettingsService:
 
                 )
 
-                .select("*")
+                .select(
+
+                    "*"
+
+                )
 
                 .eq(
 
@@ -122,15 +108,11 @@ class SettingsService:
 
                 )
 
-                .order(
+                .limit(
 
-                    "id",
-
-                    desc=True
+                    1
 
                 )
-
-                .limit(1)
 
                 .execute()
 
@@ -140,11 +122,8 @@ class SettingsService:
 
             if result.data:
 
-
                 return result.data[0].get(
-
                     "value"
-
                 )
 
 
@@ -154,18 +133,14 @@ class SettingsService:
 
             log_error(
 
-                message="Settings get failed",
+                message="Get setting error",
 
                 exception=e
 
             )
 
 
-
         return default
-
-
-
 
 
 
@@ -176,10 +151,8 @@ class SettingsService:
 
 
     def get_all_settings(
-
         self
-
-    ) -> Dict[str, Any]:
+    ) -> Dict[str,Any]:
 
 
         try:
@@ -195,7 +168,11 @@ class SettingsService:
 
                 )
 
-                .select("*")
+                .select(
+
+                    "*"
+
+                )
 
                 .execute()
 
@@ -212,14 +189,13 @@ class SettingsService:
 
                 row["key"]:
 
-                    row.get(
-
-                        "value"
-
-                    )
+                row.get("value")
 
 
                 for row in rows
+
+
+                if row.get("key")
 
             }
 
@@ -230,7 +206,7 @@ class SettingsService:
 
             log_error(
 
-                message="Load all settings failed",
+                message="Load all settings error",
 
                 exception=e
 
@@ -243,11 +219,8 @@ class SettingsService:
 
 
 
-
-
-
     # ==========================================================================
-    # SAVE SETTING
+    # SAVE SINGLE
     # ==========================================================================
 
 
@@ -255,14 +228,28 @@ class SettingsService:
 
         self,
 
-        key: str,
+        key,
 
-        value: Any
+        value
 
     ):
 
 
         try:
+
+
+            if not key:
+
+
+                return {
+
+                    "success":False,
+
+                    "message":
+                    "Setting key required"
+
+                }
+
 
 
             result = (
@@ -281,7 +268,7 @@ class SettingsService:
 
                         "key":
 
-                            key,
+                            str(key),
 
 
                         "value":
@@ -321,7 +308,7 @@ class SettingsService:
 
             log_error(
 
-                message="Save setting failed",
+                message="Save setting error",
 
                 exception=e
 
@@ -346,10 +333,8 @@ class SettingsService:
 
 
 
-
-
     # ==========================================================================
-    # SAVE MULTIPLE SETTINGS
+    # SAVE MULTIPLE
     # ==========================================================================
 
 
@@ -357,7 +342,7 @@ class SettingsService:
 
         self,
 
-        settings: Dict[str, Any]
+        settings:dict
 
     ):
 
@@ -365,29 +350,48 @@ class SettingsService:
         try:
 
 
-            payload = [
+            if not settings:
 
 
-                {
+                return {
 
 
-                    "key":
+                    "success":
 
-                        key,
+                    False,
 
 
-                    "value":
+                    "message":
 
-                        str(value)
-
+                    "No settings supplied"
 
                 }
 
 
-                for key, value in settings.items()
 
 
-            ]
+            payload = []
+
+
+            for key,value in settings.items():
+
+
+                payload.append(
+
+                    {
+
+                        "key":
+
+                        str(key),
+
+
+                        "value":
+
+                        str(value)
+
+                    }
+
+                )
 
 
 
@@ -431,12 +435,13 @@ class SettingsService:
 
 
 
+
         except Exception as e:
 
 
             log_error(
 
-                message="Bulk settings save failed",
+                message="Bulk save settings error",
 
                 exception=e
 
@@ -461,10 +466,8 @@ class SettingsService:
 
 
 
-
-
     # ==========================================================================
-    # DELETE SETTING
+    # DELETE
     # ==========================================================================
 
 
@@ -472,7 +475,7 @@ class SettingsService:
 
         self,
 
-        key: str
+        key
 
     ):
 
@@ -522,12 +525,13 @@ class SettingsService:
 
 
 
+
         except Exception as e:
 
 
             log_error(
 
-                message="Delete setting failed",
+                message="Delete setting error",
 
                 exception=e
 
@@ -552,8 +556,6 @@ class SettingsService:
 
 
 
-
-
     # ==========================================================================
     # TYPE HELPERS
     # ==========================================================================
@@ -563,18 +565,14 @@ class SettingsService:
 
         self,
 
-        key,
-
-        default=False
+        key
 
     ):
 
 
         value = self.get_setting(
 
-            key,
-
-            default
+            key
 
         )
 
@@ -599,9 +597,7 @@ class SettingsService:
 
         self,
 
-        key,
-
-        default=0.0
+        key
 
     ):
 
@@ -609,24 +605,27 @@ class SettingsService:
         try:
 
 
-            return float(
+            value = self.get_setting(
 
-                self.get_setting(
-
-                    key,
-
-                    default
-
-                )
+                key
 
             )
+
+
+            if value is None:
+
+                return None
+
+
+
+            return float(value)
+
 
 
         except Exception:
 
 
-            return float(default)
-
+            return None
 
 
 
@@ -636,9 +635,7 @@ class SettingsService:
 
         self,
 
-        key,
-
-        default=0
+        key
 
     ):
 
@@ -646,25 +643,49 @@ class SettingsService:
         try:
 
 
-            return int(
+            value = self.get_setting(
 
-                self.get_setting(
-
-                    key,
-
-                    default
-
-                )
+                key
 
             )
+
+
+            if value is None:
+
+                return None
+
+
+
+            return int(value)
+
 
 
         except Exception:
 
 
-            return int(default)
+            return None
 
 
+
+
+
+    def get_text(
+
+        self,
+
+        key
+
+    ):
+
+
+        value = self.get_setting(
+
+            key
+
+        )
+
+
+        return value
 
 
 
@@ -675,111 +696,11 @@ class SettingsService:
     # ==========================================================================
 
 
-    def health_check(self):
+    def health_check(
 
+        self
 
-        try:
-
-
-            result = (
-
-                self.client
-
-                .table(
-
-                    Tables.SETTINGS
-
-                )
-
-                .select(
-
-                    "id"
-
-                )
-
-                .limit(1)
-
-                .execute()
-
-            )
-
-
-
-            return {
-
-
-                "service":
-
-                    "SettingsService",
-
-
-                "status":
-
-                    "PASS",
-
-
-                "database":
-
-                    "CONNECTED",
-
-
-                "rows":
-
-                    len(
-
-                        result.data or []
-
-                    )
-
-            }
-
-
-
-        except Exception as e:
-
-
-            return {
-
-
-                "service":
-
-                    "SettingsService",
-
-
-                "status":
-
-                    "FAIL",
-
-
-                "message":
-
-                    str(e)
-
-            }
-
-
-
-
-
-
-
-# ==============================================================================
-# EXPORT
-# ==============================================================================
-
-
-__all__ = [
-
-    "SettingsService"
-
-]
-
-    # ==========================================================================
-    # HEALTH CHECK
-    # ==========================================================================
-
-
-    def health_check(self):
+    ):
 
 
         try:
@@ -812,36 +733,27 @@ __all__ = [
             )
 
 
+
             return {
 
 
                 "service":
 
-                    "SettingsService",
-
-
-                "version":
-
-                    "2.0",
+                "SettingsService",
 
 
                 "status":
 
-                    "PASS",
-
-
-                "database":
-
-                    "CONNECTED",
+                "PASS",
 
 
                 "rows":
 
-                    len(
+                len(
 
-                        result.data or []
+                    result.data or []
 
-                    )
+                )
 
             }
 
@@ -850,42 +762,24 @@ __all__ = [
         except Exception as e:
 
 
-            log_error(
-
-                message=
-
-                "Settings health check failed",
-
-                exception=e
-
-            )
-
-
             return {
 
 
                 "service":
 
-                    "SettingsService",
-
-
-                "version":
-
-                    "2.0",
+                "SettingsService",
 
 
                 "status":
 
-                    "FAIL",
+                "FAIL",
 
 
                 "message":
 
-                    str(e)
+                str(e)
 
             }
-
-
 
 
 
