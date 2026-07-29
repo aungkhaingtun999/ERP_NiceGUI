@@ -1003,121 +1003,117 @@ f"""
 """
 
     )
-# =============================================================================
-# ACCOUNTING & TAX SETTINGS
-# =============================================================================
+    # ==========================================================================
+    # ACCOUNTING & TAX SETTINGS
+    # ==========================================================================
 
     st.divider()
     st.subheader("🧾 Accounting & Tax")
 
-# ---------------------------------------------------------------------
-# Always show ACTIVE tax rate
-# ---------------------------------------------------------------------
+    # Active tax rate from settings
     active_tax_rate = float(
-    get_float(
-        settings,
-        "DEFAULT_TAX_RATE",
-        7.0
-    )
-)
-st.markdown(
-    f"""
-    <div style="
-        padding:18px;
-        border-radius:14px;
-        background:linear-gradient(135deg,#E8F5E9 0%,#F1F8E9 100%);
-        border:1px solid #4CAF50;
-        margin-bottom:18px;
-    ">
-
-        <div style="
-            font-size:14px;
-            color:#2E7D32;
-            margin-bottom:6px;
-            font-weight:600;
-        ">
-            📌 Current Active Tax Rate
-        </div>
-
-        <div style="
-            font-size:34px;
-            font-weight:700;
-            color:#1B5E20;
-            line-height:1.2;
-        ">
-            {active_tax_rate:.2f}%
-        </div>
-
-        <div style="
-            margin-top:6px;
-            font-size:13px;
-            color:#33691E;
-        ">
-            This rate is currently used by POS, Sales, Invoice, and Accounting modules.
-        </div>
-
-        </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# ---------------------------------------------------------------------
-# Change form
-# ---------------------------------------------------------------------
-tax_rate = st.number_input(
-    "Change Tax Rate (%)",
-    min_value=float(0),
-    max_value=float(100),
-    value=active_tax_rate,
-    step=float(0.5)
-)
-
-discount_policy = st.selectbox(
-    "Discount Policy",
-    ["allowed", "restricted"],
-    index=(
-        0
-        if settings.get(
-            "DISCOUNT_POLICY",
-            "allowed"
-        ) == "allowed"
-        else 1
-    )
-)
-
-# ---------------------------------------------------------------------
-# Save
-# ---------------------------------------------------------------------
-if st.button(
-    "💾 Save Accounting Settings",
-    use_container_width=True
-):
-
-    try:
-
-        save_erp_setting(
+        get_float(
+            settings,
             "DEFAULT_TAX_RATE",
-            tax_rate
+            7.0
         )
+    )
 
-        save_erp_setting(
-            "DISCOUNT_POLICY",
-            discount_policy
+    # Show current active rate permanently
+    st.markdown(
+        f"""
+        <div style="
+            padding:18px;
+            border-radius:14px;
+            background:linear-gradient(135deg,#E8F5E9 0%,#F1F8E9 100%);
+            border:1px solid #4CAF50;
+            margin-bottom:18px;
+        ">
+
+            <div style="
+                font-size:14px;
+                color:#2E7D32;
+                margin-bottom:6px;
+                font-weight:600;
+            ">
+                📌 Current Active Tax Rate
+            </div>
+
+            <div style="
+                font-size:34px;
+                font-weight:700;
+                color:#1B5E20;
+                line-height:1.2;
+            ">
+                {active_tax_rate:.2f}%
+            </div>
+
+            <div style="
+                margin-top:6px;
+                font-size:13px;
+                color:#33691E;
+            ">
+                This rate is currently used by POS, Sales, Invoice, and Accounting modules.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Change form
+    tax_rate = st.number_input(
+        "Change Tax Rate (%)",
+        min_value=float(0),
+        max_value=float(100),
+        value=active_tax_rate,
+        step=float(0.5)
+    )
+
+    discount_policy = st.selectbox(
+        "Discount Policy",
+        ["allowed", "restricted"],
+        index=(
+            0
+            if settings.get(
+                "DISCOUNT_POLICY",
+                "allowed"
+            ) == "allowed"
+            else 1
         )
+    )
 
-        # refresh cache
-        clear_settings_cache()
+    # Save
+    if st.button(
+        "💾 Save Accounting Settings",
+        use_container_width=True
+    ):
 
-        notify_success(
-            f"🧾 Accounting settings saved. Active tax rate = {tax_rate:.2f}%"
-        )
+        try:
 
-        st.rerun()
+            save_erp_setting(
+                "DEFAULT_TAX_RATE",
+                tax_rate
+            )
 
-    except Exception as e:
+            save_erp_setting(
+                "DISCOUNT_POLICY",
+                discount_policy
+            )
 
-        notify_error(str(e))
+            clear_settings_cache()
+
+            notify_success(
+                f"🧾 Accounting settings saved. Active tax rate = {tax_rate:.2f}%"
+            )
+
+            st.rerun()
+
+        except Exception as e:
+
+            notify_error(str(e))
+
+        
 
 
 
