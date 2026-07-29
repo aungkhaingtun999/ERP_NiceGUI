@@ -126,18 +126,31 @@ try:
     from .loaders.receipt_loader import (  
         get_receipt,  
         get_sale_items,  
+        get_full_receipt,
         search_receipts  
     )
+
 except Exception:
+
+
     def get_receipt(*args, **kwargs):  
         return None  
+
 
     def get_sale_items(*args, **kwargs):  
         return []  
 
+
+    def get_full_receipt(*args, **kwargs):
+        return {
+            "success": False,
+            "sale": {},
+            "items": []
+        }
+
+
     def search_receipts(*args, **kwargs):  
         return []
-
 # ==============================================================================
 # RPC
 # ==============================================================================
@@ -270,9 +283,9 @@ __all__ = [
 
     # Receipt  
     "get_receipt",  
-    "get_sale_items",  
-    "search_receipts",  
-
+    "get_sale_items",
+    "get_full_receipt",
+    "search_receipts",
     # RPC  
     "checkout_sale_rpc",  
     "purchase_receive_rpc",  
