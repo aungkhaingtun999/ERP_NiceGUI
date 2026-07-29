@@ -400,6 +400,7 @@ Change:
 
 
 
+            # process_checkout ခေါ်သည့်အခါ tax_rate ကို ဖြုတ်ပြီးသားဖြစ်ပါသည် (Settings ကနေ အလိုအလျောက် ယူပါမည်)
             result = process_checkout(
 
 
