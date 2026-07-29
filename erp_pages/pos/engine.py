@@ -651,3 +651,29 @@ def get_final_price(
             PRICE_SOURCE_SYSTEM
 
     }
+    
+# ==============================================================================
+# DEFAULT TAX RATE FROM ERP SETTINGS
+# ==============================================================================
+
+
+def get_default_tax_rate():
+
+    try:
+
+        return safe_float(
+
+            get_setting(
+
+                "DEFAULT_TAX_RATE",
+
+                0
+
+            )
+
+        )
+
+
+    except Exception:
+
+        return 0.0
