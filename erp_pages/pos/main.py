@@ -55,7 +55,10 @@ from .product import (
 from .cart import (
     calculate_subtotal,
     calculate_total_qty,
-    get_cart_rows
+    get_cart_rows,
+    remove_from_cart,
+    increase_quantity,
+    decrease_quantity
 )
 
 
@@ -421,6 +424,85 @@ ERP POS FINAL PRICE ENGINE ACTIVE
             hide_index=True
 
         )
+# ==========================================================================
+# CART ITEM CONTROL
+# ==========================================================================
+
+st.subheader(
+    "🛠 Cart Control"
+)
+
+
+for index, item in enumerate(cart):
+
+
+    col1, col2, col3, col4 = st.columns(
+        [5,1,1,1]
+    )
+
+
+    with col1:
+
+        st.write(
+
+            f"{item.get('name','')}  "
+            f"x {item.get('qty',0)}"
+
+        )
+
+
+
+    with col2:
+
+        if st.button(
+            "➕",
+            key=f"add_{index}"
+        ):
+
+            increase_quantity(
+                cart,
+                index
+            )
+
+            st.session_state.cart = cart
+
+            st.rerun()
+
+
+
+    with col3:
+
+        if st.button(
+            "➖",
+            key=f"minus_{index}"
+        ):
+
+            decrease_quantity(
+                cart,
+                index
+            )
+
+            st.session_state.cart = cart
+
+            st.rerun()
+
+
+
+    with col4:
+
+        if st.button(
+            "🗑",
+            key=f"remove_{index}"
+        ):
+
+            remove_from_cart(
+                cart,
+                index
+            )
+
+            st.session_state.cart = cart
+
+            st.rerun()        
 
 
 
