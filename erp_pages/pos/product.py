@@ -1,6 +1,15 @@
 # ==============================================================================
 # erp_pages/pos/product.py
-# ERP ENTERPRISE POS PRODUCT MODULE v12.4 FINAL
+# ERP ENTERPRISE POS PRODUCT MODULE v12.5 FINAL
+#
+# RESPONSIBILITY
+# - Product loading
+# - Search
+# - Barcode / SKU lookup
+# - Product selection
+# - Stock validation
+# - Add to cart
+# - Duplicate-safe Streamlit widgets
 # ==============================================================================
 
 from typing import List, Dict, Any
@@ -123,13 +132,13 @@ def product_label(product):
 
     price = get_final_price(product)
 
-    return (
+    sku = product.get("sku") or "NO-SKU"
 
-        f"{product.get('sku','')} | "
+    return (
+        f"{sku} | "
         f"{product.get('name','')} | "
         f"Stock:{product.get('available_qty',0)} | "
         f"{money(price['price'])}"
-
     )
 
 
@@ -149,10 +158,13 @@ def render_products(warehouse_id):
 
 
     # --------------------------------------------------------------------------
-    # UNIQUE PREFIX
+    # UNIQUE KEY PREFIX
     # --------------------------------------------------------------------------
 
-    prefix = f"pos_{warehouse_id}_"
+    # Use warehouse + page identity + session hash to avoid duplicate key
+    session_suffix = str(id(st.session_state))
+
+    prefix = f"pos_{warehouse_id}_{session_suffix}_"
 
 
     # --------------------------------------------------------------------------
@@ -166,7 +178,9 @@ def render_products(warehouse_id):
         key=prefix + "search"
     )
 
+
     filtered = search_products(products, keyword)
+
 
     if not filtered:
 
