@@ -200,7 +200,7 @@ def run():
     # --------------------------------------------------------------------------
 
     receipt = st.session_state.receipt_data
-
+    st.write("DEBUG RECEIPT:", receipt)
 
 
     if not receipt:
