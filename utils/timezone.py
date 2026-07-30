@@ -45,7 +45,6 @@ def to_myanmar_datetime(value):
                 "+00:00"
             )
 
-
             dt = datetime.fromisoformat(
                 value
             )
@@ -54,19 +53,23 @@ def to_myanmar_datetime(value):
 
             dt = value
 
+
+        # No timezone means already Myanmar local time
         if dt.tzinfo is None:
 
-    dt = dt.replace(
-        tzinfo=MYANMAR_TZ
-    )
+            dt = dt.replace(
+                tzinfo=MYANMAR_TZ
+            )
+
+
+        return dt.astimezone(
+            MYANMAR_TZ
+        )
+
 
     except Exception:
 
         return None
-
-
-
-
 # --------------------------------------------------
 # Database Date Format
 # --------------------------------------------------
