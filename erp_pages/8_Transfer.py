@@ -32,9 +32,9 @@ def run():
 
 
     warehouse_options = {
-        int(w["id"]): w["name"]
-        for w in warehouses
-    }
+    int(w["id"]): w["name"]
+    for w in warehouses
+}
 
 
 
