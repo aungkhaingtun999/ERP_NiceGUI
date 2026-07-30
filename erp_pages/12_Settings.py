@@ -49,7 +49,9 @@ from erp_ui.settings.finance_settings import (
 from erp_ui.settings.system_status import (
     render_system_status,
 )
-
+from erp_core.repositories.settings_repository import (
+    approve_setting_change
+)
 
 
 # ==============================================================================
