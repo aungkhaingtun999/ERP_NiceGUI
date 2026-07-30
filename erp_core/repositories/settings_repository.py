@@ -1,12 +1,16 @@
 # ==============================================================================
 # ERP SETTINGS REPOSITORY
-# Database Access Layer
+# Supabase Version
 # ==============================================================================
 
 
 from erp_core.base_repo import get_connection
 
 
+
+# --------------------------------------------------------------------------
+# CREATE REQUEST
+# --------------------------------------------------------------------------
 
 def create_setting_request(
     setting_key,
@@ -16,152 +20,71 @@ def create_setting_request(
     requested_by
 ):
 
-    conn = get_connection()
-
-    cur = conn.cursor()
+    db = get_connection()
 
 
-    cur.execute(
-        """
-        INSERT INTO settings_change_requests
-        (
-            setting_key,
-            old_value,
-            new_value,
-            reason,
-            requested_by
-        )
-
-        VALUES
-        (
-            %s,%s,%s,%s,%s
-        )
-
-        RETURNING id
-        """,
-
-        (
-            setting_key,
-            old_value,
-            new_value,
-            reason,
-            requested_by
-        )
-    )
+    result = db.table(
+        "settings_change_requests"
+    ).insert({
+        "setting_key": setting_key,
+        "old_value": str(old_value),
+        "new_value": str(new_value),
+        "reason": reason,
+        "requested_by": requested_by,
+    }).execute()
 
 
-    request_id = cur.fetchone()[0]
-
-
-    conn.commit()
-
-    conn.close()
-
-
-    return request_id
+    return result.data[0]["id"]
 
 
 
 
+# --------------------------------------------------------------------------
+# PENDING LIST
+# --------------------------------------------------------------------------
 
 def get_pending_setting_requests():
 
-
-    conn = get_connection()
-
-    cur = conn.cursor()
+    db = get_connection()
 
 
-    cur.execute(
-        """
-        SELECT
-            id,
-            setting_key,
-            old_value,
-            new_value,
-            reason,
-            status,
-            requested_by,
-            created_at
-
-        FROM settings_change_requests
-
-        WHERE status='PENDING'
-
-        ORDER BY created_at DESC
-        """
-    )
+    result = db.table(
+        "settings_change_requests"
+    ).select(
+        "*"
+    ).eq(
+        "status",
+        "PENDING"
+    ).order(
+        "created_at",
+        desc=True
+    ).execute()
 
 
-    rows = cur.fetchall()
+    return result.data
 
 
-    conn.close()
 
 
-    return rows
-
-
-# ==============================================================================
-# APPROVE SETTING CHANGE
-# ==============================================================================
-
-
-from erp_core.base_repo import get_db
-
-
+# --------------------------------------------------------------------------
+# APPROVE REQUEST
+# --------------------------------------------------------------------------
 
 def approve_setting_change(
     request_id,
     checker_id
 ):
 
-
-    conn = get_connection()
-
-    cur = conn.cursor()
+    db = get_connection()
 
 
-    try:
+    result = db.rpc(
+        "approve_setting_change_rpc",
+        {
+            "p_request_id": request_id,
+            "p_checker_id": checker_id,
+        }
+    ).execute()
 
 
-        cur.execute(
-
-            """
-            SELECT approve_setting_change_rpc(
-                %s,
-                %s
-            )
-            """,
-
-            (
-                request_id,
-                checker_id
-            )
-
-        )
-
-
-        result = cur.fetchone()[0]
-
-
-        conn.commit()
-
-
-        return result
-
-
-
-    except Exception as e:
-
-
-        conn.rollback()
-
-        raise e
-
-
-
-    finally:
-
-
-        conn.close()
+    return result.data
