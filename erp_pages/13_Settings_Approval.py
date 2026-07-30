@@ -13,9 +13,10 @@ import streamlit as st
 import pandas as pd
 
 
-from database import get_connection
 
-
+from erp_core.services.settings_service import (
+    SettingsService
+)
 from utils.notification import (
     notify_success,
     notify_error,
@@ -293,13 +294,13 @@ Requested By:
                     try:
 
 
-                        result = approve_setting_change(
+                        result = SettingsService.approve_request(
 
-                            row["id"],
+                        row["id"],
 
-                            user["id"]
+                        user["id"]
 
-                        )
+)
 
 
                         if result.get(
