@@ -9,7 +9,7 @@ import json
 import os
 import tempfile
 import streamlit as st
-
+from utils.timezone import format_db_datetime
 
 # ==============================================================================
 # OPTIONAL PRINTER IMPORT
@@ -649,15 +649,9 @@ def build_receipt_data(
 
 
 
-            "date":
-
-                sale.get(
-
-                    "created_at",
-
-                    "-"
-
-                ),
+            "date": format_db_datetime(
+             receipt.get("created_at")
+            )
 
 
 
