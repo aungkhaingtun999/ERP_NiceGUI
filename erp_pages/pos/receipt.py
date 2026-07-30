@@ -412,66 +412,51 @@ def render_receipt():
 
 
 
-    
-grand_total = safe_float(
+    grand_total = safe_float(
 
-    data.get("grand_total")
+        data.get(
 
-    or
+            "grand_total",
 
-    data.get("total")
+            data.get(
 
-    or
+                "total",
 
-    data.get("final_total")
+                0
 
-    or
+            )
 
-    (
-        subtotal
-        -
-        discount
-        +
-        tax_amount
+        )
+
     )
 
-)
 
 
+    paid = safe_float(
 
-paid = safe_float(
+        data.get(
 
-    data.get("paid")
+            "paid",
 
-    or
+            0
 
-    data.get("paid_amount")
+        )
 
-    or
-
-    data.get("received_amount")
-
-)
-
-
-
-change = safe_float(
-
-    data.get("change")
-
-    or
-
-    data.get("change_amount")
-
-    or
-
-    (
-        paid
-        -
-        grand_total
     )
 
-)
+
+
+    change = safe_float(
+
+        data.get(
+
+            "change",
+
+            0
+
+        )
+
+    )
 
 
 
@@ -483,7 +468,7 @@ change = safe_float(
     # ==========================================================================
 
 
-st.info(
+    st.info(
 
         f"""
 
@@ -545,7 +530,6 @@ Cashier:
             "No items found."
 
         )
-
 
     # ==========================================================================
     # TOTAL SUMMARY
