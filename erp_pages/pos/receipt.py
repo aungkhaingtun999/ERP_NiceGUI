@@ -352,7 +352,12 @@ def render_receipt():
 
     )
 
-        # --------------------------------------------------------------------------
+
+
+
+
+    subtotal = safe_float(
+    # --------------------------------------------------------------------------
     # TOTAL DATA MAPPING FIX
     # --------------------------------------------------------------------------
 
@@ -490,5 +495,375 @@ def render_receipt():
 
 
 
+    # ==========================================================================
+    # HEADER
+    # ==========================================================================
 
-                
+
+    st.info(
+
+        f"""
+
+Invoice No:
+
+{invoice_no}
+
+
+
+Date:
+
+{sale_date}
+
+
+
+Cashier:
+
+{cashier}
+
+"""
+
+    )
+
+
+
+
+
+    # ==========================================================================
+    # ITEMS TABLE
+    # ==========================================================================
+
+
+    rows = build_receipt_rows(
+
+        items
+
+    )
+
+
+    if rows:
+
+
+        st.dataframe(
+
+            pd.DataFrame(rows),
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+
+    else:
+
+
+        st.warning(
+
+            "No items found."
+
+        )
+
+    # ==========================================================================
+    # TOTAL SUMMARY
+    # ==========================================================================
+
+
+    st.divider()
+
+
+    st.success(
+
+        f"""
+
+Subtotal :
+
+{money(subtotal)}
+
+
+
+Tax Rate :
+
+{tax_rate:.2f}%
+
+
+
+Tax Amount :
+
+{money(tax_amount)}
+
+
+
+Discount :
+
+{money(discount)}
+
+
+
+====================
+
+
+
+GRAND TOTAL :
+
+{money(grand_total)}
+
+
+
+====================
+
+
+
+Paid :
+
+{money(paid)}
+
+
+
+Change :
+
+{money(change)}
+
+"""
+
+    )
+
+
+
+
+
+
+    # ==========================================================================
+    # ACTION BUTTONS
+    # ==========================================================================
+
+
+    c1, c2, c3 = st.columns(3)
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # THERMAL PRINT
+    # --------------------------------------------------------------------------
+
+    with c1:
+
+
+        if st.button(
+
+            "🖨 Print Receipt",
+
+            use_container_width=True
+
+        ):
+
+
+            try:
+
+
+                receipt_print_data = build_receipt_data(
+
+                    data,
+
+                    items
+
+                )
+
+
+                result = print_thermal(
+
+                    receipt_print_data
+
+                )
+
+
+                if result:
+
+
+                    st.success(
+
+                        "✅ Receipt printed"
+
+                    )
+
+                else:
+
+                    st.warning(
+
+                        "Printer returned no result"
+
+                    )
+
+
+
+            except Exception as e:
+
+
+                st.error(
+
+                    f"Printer Error : {e}"
+
+                )
+
+
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # PDF GENERATE
+    # --------------------------------------------------------------------------
+
+    with c2:
+
+
+        if st.button(
+
+            "📄 Generate PDF",
+
+            use_container_width=True
+
+        ):
+
+
+            try:
+
+
+                receipt_pdf_data = build_receipt_data(
+
+                    data,
+
+                    items
+
+                )
+
+
+
+                result = generate_pdf(
+
+                    receipt_pdf_data
+
+                )
+
+
+
+                if result:
+
+
+                    pdf_bytes, filename = result
+
+
+
+                    st.download_button(
+
+                        label=
+
+                            "⬇ Download PDF",
+
+
+                        data=
+
+                            pdf_bytes,
+
+
+                        file_name=
+
+                            f"{filename}.pdf",
+
+
+                        mime=
+
+                            "application/pdf",
+
+
+                        use_container_width=True
+
+                    )
+
+
+                else:
+
+
+                    st.warning(
+
+                        "PDF generation failed"
+
+                    )
+
+
+
+            except Exception as e:
+
+
+                st.error(
+
+                    f"PDF Error : {e}"
+
+                )
+
+
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # NEW SALE
+    # --------------------------------------------------------------------------
+
+    with c3:
+
+
+        if st.button(
+
+            "🆕 New Sale",
+
+            use_container_width=True
+
+        ):
+
+
+            reset_pos()
+
+
+
+
+
+
+
+# ==============================================================================
+# RESET POS
+# ==============================================================================
+
+
+def reset_pos():
+
+
+    st.session_state.cart = []
+
+
+    st.session_state.sale_data = None
+
+
+    st.session_state.show_receipt = False
+
+
+    st.session_state.processing = False
+
+
+    st.session_state.received_amount = 0
+
+
+    st.session_state.discount = 0
+
+
+    st.success(
+
+        "✅ New Sale Ready"
+
+    )
+
+
+    st.rerun()
