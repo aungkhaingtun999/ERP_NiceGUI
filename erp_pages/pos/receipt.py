@@ -361,13 +361,46 @@ def render_receipt():
     # TOTAL DATA MAPPING FIX
     # --------------------------------------------------------------------------
 
-    subtotal = float(
+    subtotal = safe_float(
+
         data.get(
+
             "subtotal",
+
             0
+
         )
-        or 0
+
     )
+
+
+
+    tax_rate = safe_float(
+
+        data.get(
+
+            "tax_rate",
+
+            0
+
+        )
+
+    )
+
+
+
+    tax_amount = safe_float(
+
+        data.get(
+
+            "tax_amount",
+
+            0
+
+        )
+
+    )
+
 
 
     discount = safe_float(
