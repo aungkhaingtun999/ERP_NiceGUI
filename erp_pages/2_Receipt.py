@@ -320,13 +320,13 @@ def run():
 
     raw_time = (
         receipt.get("created_at")
-      or
+     or
         receipt.get("date")
     )
 
 if raw_time:
 
-      st.write(
+     st.write(
 
             "📅 Date:",
 
@@ -340,7 +340,7 @@ if raw_time:
 
 else:
 
-        st.write(
+    st.write(
 
             "📅 Date:",
 
