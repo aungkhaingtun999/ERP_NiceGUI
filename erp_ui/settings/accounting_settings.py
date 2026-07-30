@@ -1,15 +1,19 @@
 # ==============================================================================
 # erp_ui/settings/accounting_settings.py
-# ERP ACCOUNTING & TAX SETTINGS COMPONENT
+# ERP ACCOUNTING & TAX SETTINGS COMPONENT v2.0
+#
+# Approval Workflow Enabled
+#
+# Request -> Approval -> Apply
+#
 # ==============================================================================
 
 
 import streamlit as st
 
 
-from erp_core.loaders.settings_loader import (
-    clear_settings_cache,
-    save_setting as save_erp_setting,
+from erp_core.services.settings_service import (
+    SettingsService,
 )
 
 
@@ -21,44 +25,14 @@ from utils.notification import (
 
 
 # ==============================================================================
-# SAVE WRAPPER
+# ACCOUNTING SETTINGS UI
 # ==============================================================================
 
 
-def save_setting(key, value):
-
-    result = save_erp_setting(
-        key,
-        value
-    )
-
-
-    if not result.get(
-        "success",
-        False
-    ):
-
-        raise Exception(
-
-            result.get(
-
-                "message",
-
-                "Save failed"
-
-            )
-
-        )
-
-
-
-# ==============================================================================
-# ACCOUNTING & TAX UI
-# ==============================================================================
-
-
-def render_accounting_settings(settings,
-    user):
+def render_accounting_settings(
+    settings,
+    user
+):
 
 
     st.subheader(
@@ -70,26 +44,16 @@ def render_accounting_settings(settings,
     # TAX RATE
     # --------------------------------------------------------------------------
 
-
     tax_value = settings.get(
-
-        "DEFAULT_TAX_RATE"
-
+        "DEFAULT_TAX_RATE",
+        0
     )
-
-
-    if tax_value is None:
-
-        tax_value = 0
-
 
 
     try:
 
         active_tax_rate = float(
-
             tax_value
-
         )
 
     except Exception:
@@ -99,7 +63,6 @@ def render_accounting_settings(settings,
 
 
     st.markdown(
-
 f"""
 <div style="
 padding:18px;
@@ -116,15 +79,13 @@ border:1px solid #999;
 </h2>
 
 <div>
-Controlled by ERP Settings Database
+Approval Controlled Setting
 </div>
 
 </div>
 """,
-
 unsafe_allow_html=True
-
-    )
+)
 
 
 
@@ -148,17 +109,10 @@ unsafe_allow_html=True
     # DISCOUNT POLICY
     # --------------------------------------------------------------------------
 
-
     discount_policy = settings.get(
-
-        "DISCOUNT_POLICY"
-
+        "DISCOUNT_POLICY",
+        "allowed"
     )
-
-
-    if discount_policy is None:
-
-        discount_policy = "allowed"
 
 
 
@@ -167,21 +121,14 @@ unsafe_allow_html=True
         "Discount Policy",
 
         [
-
             "allowed",
-
             "restricted"
-
         ],
 
         index=(
-
             0
-
             if discount_policy == "allowed"
-
             else 1
-
         )
 
     )
@@ -189,13 +136,12 @@ unsafe_allow_html=True
 
 
     # --------------------------------------------------------------------------
-    # SAVE
+    # REQUEST CHANGE
     # --------------------------------------------------------------------------
-
 
     if st.button(
 
-        "💾 Save Accounting Settings",
+        "📤 Submit Accounting Change Request",
 
         use_container_width=True
 
@@ -205,35 +151,38 @@ unsafe_allow_html=True
         try:
 
 
-            save_setting(
+            SettingsService.request_change(
 
                 "DEFAULT_TAX_RATE",
 
-                tax_rate
+                str(tax_rate),
+
+                "Accounting Tax Rate Change",
+
+                user["id"]
 
             )
 
 
-            save_setting(
+            SettingsService.request_change(
 
                 "DISCOUNT_POLICY",
 
-                discount_policy
+                discount_policy,
+
+                "Discount Policy Change",
+
+                user["id"]
 
             )
-
-
-
-            clear_settings_cache()
 
 
 
             notify_success(
 
-                f"🧾 Tax Settings Saved : {tax_rate:.2f}%"
+                "🧾 Accounting Change Request Submitted. Waiting Approval."
 
             )
-
 
 
             st.rerun()
@@ -245,6 +194,6 @@ unsafe_allow_html=True
 
             notify_error(
 
-                f"Tax Save Failed : {e}"
+                f"Accounting Request Failed : {e}"
 
             )
