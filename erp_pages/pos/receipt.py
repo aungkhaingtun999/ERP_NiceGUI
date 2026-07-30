@@ -1,15 +1,16 @@
 # ==============================================================================
 # erp_pages/pos/receipt.py
-# ERP ENTERPRISE POS RECEIPT MODULE v12.9 FINAL
+# ERP ENTERPRISE POS RECEIPT MODULE v13.0 FINAL
 #
 # Responsibilities:
 # - Receipt display
 # - Safe receipt mapping
+# - Myanmar Time
 # - PDF generation
 # - Thermal printing
 # - New sale reset
 #
-# Flow:
+# FLOW:
 #
 # CHECKOUT
 #    ↓
@@ -17,7 +18,7 @@
 #    ↓
 # RECEIPT DISPLAY
 #    ↓
-# PDF / PRINT
+# PDF / THERMAL PRINT
 #
 # ==============================================================================
 
@@ -27,13 +28,19 @@ import streamlit as st
 
 
 
+# ==============================================================================
+# RECEIPT ENGINE
+# ==============================================================================
+
+
 from utils.receipt_pdf import (
     generate_pdf
 )
 
 
 from utils.thermal_receipt import (
-    print_thermal
+    print_thermal,
+    build_receipt_data
 )
 
 
@@ -65,6 +72,29 @@ def money(value):
 
 
 
+
+
+# ==============================================================================
+# SAFE FLOAT
+# ==============================================================================
+
+
+def safe_float(value):
+
+    try:
+
+        return float(value or 0)
+
+    except Exception:
+
+        return 0.0
+
+
+
+
+
+
+
 # ==============================================================================
 # RECEIPT ITEM NORMALIZER
 # ==============================================================================
@@ -76,26 +106,16 @@ def build_receipt_rows(items):
     rows = []
 
 
-
     for item in items or []:
-
 
 
         name = (
 
-            item.get(
-
-                "name"
-
-            )
+            item.get("name")
 
             or
 
-            item.get(
-
-                "product_name"
-
-            )
+            item.get("product_name")
 
             or
 
@@ -105,7 +125,7 @@ def build_receipt_rows(items):
 
 
 
-        qty = int(
+        qty = safe_float(
 
             item.get(
 
@@ -125,7 +145,7 @@ def build_receipt_rows(items):
 
 
 
-        price = float(
+        price = safe_float(
 
             item.get(
 
@@ -145,13 +165,13 @@ def build_receipt_rows(items):
 
 
 
-        amount = float(
+        amount = safe_float(
 
             item.get(
 
                 "total",
 
-                price * qty
+                qty * price
 
             )
 
@@ -159,23 +179,18 @@ def build_receipt_rows(items):
 
 
 
-
-
         rows.append(
 
             {
-
 
                 "Product":
 
                     name,
 
 
-
                 "Qty":
 
                     qty,
-
 
 
                 "Price Source":
@@ -189,11 +204,9 @@ def build_receipt_rows(items):
                     ),
 
 
-
                 "Unit Price":
 
                     money(price),
-
 
 
                 "Amount":
@@ -212,13 +225,14 @@ def build_receipt_rows(items):
 
 
 
+
+
 # ==============================================================================
 # RECEIPT RENDER
 # ==============================================================================
 
 
 def render_receipt():
-
 
 
     data = st.session_state.get(
@@ -230,9 +244,7 @@ def render_receipt():
     )
 
 
-
     if not data:
-
 
 
         st.error(
@@ -241,9 +253,7 @@ def render_receipt():
 
         )
 
-
         return
-
 
 
 
@@ -261,18 +271,16 @@ def render_receipt():
 
 
 
-
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # DEBUG
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     with st.expander(
 
-        "DEBUG RECEIPT DATA"
+        "🔎 DEBUG RECEIPT DATA"
 
     ):
-
 
         st.json(data)
 
@@ -280,9 +288,9 @@ def render_receipt():
 
 
 
-    # --------------------------------------------------------------------------
-    # SAFE DATA
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # SAFE DATA MAPPING
+    # ==========================================================================
 
 
     invoice_no = data.get(
@@ -295,35 +303,37 @@ def render_receipt():
 
 
 
-    # --------------------------------------------------------------------------
-    # SAFE DATA
-    # --------------------------------------------------------------------------
+    raw_date = (
 
-    invoice_no = data.get(
-        "invoice_no",
-        "-"
-    )
+        data.get("date")
 
+        or
 
-    # --------------------------------------------------------------------------
-# DATE
-# --------------------------------------------------------------------------
-
-sale_date = (
-
-    data.get("date")
-
-    or
-
-    format_datetime(
         data.get("created_at")
+
     )
 
-    or
 
-    "-"
 
-)
+    if raw_date:
+
+
+        sale_date = format_datetime(
+
+            raw_date
+
+        )
+
+
+    else:
+
+
+        sale_date = "-"
+
+
+
+
+
     cashier = data.get(
 
         "cashier",
@@ -344,7 +354,9 @@ sale_date = (
 
 
 
-    subtotal = float(
+
+
+    subtotal = safe_float(
 
         data.get(
 
@@ -358,7 +370,7 @@ sale_date = (
 
 
 
-    tax_rate = float(
+    tax_rate = safe_float(
 
         data.get(
 
@@ -372,7 +384,7 @@ sale_date = (
 
 
 
-    tax_amount = float(
+    tax_amount = safe_float(
 
         data.get(
 
@@ -386,7 +398,7 @@ sale_date = (
 
 
 
-    discount = float(
+    discount = safe_float(
 
         data.get(
 
@@ -400,13 +412,19 @@ sale_date = (
 
 
 
-    grand_total = float(
+    grand_total = safe_float(
 
         data.get(
 
             "grand_total",
 
-            0
+            data.get(
+
+                "total",
+
+                0
+
+            )
 
         )
 
@@ -414,7 +432,7 @@ sale_date = (
 
 
 
-    paid = float(
+    paid = safe_float(
 
         data.get(
 
@@ -428,7 +446,7 @@ sale_date = (
 
 
 
-    change = float(
+    change = safe_float(
 
         data.get(
 
@@ -445,10 +463,9 @@ sale_date = (
 
 
 
-
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # HEADER
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     st.info(
@@ -479,11 +496,9 @@ Cashier:
 
 
 
-
-
-    # --------------------------------------------------------------------------
-    # ITEMS
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # ITEMS TABLE
+    # ==========================================================================
 
 
     rows = build_receipt_rows(
@@ -493,9 +508,7 @@ Cashier:
     )
 
 
-
     if rows:
-
 
 
         st.dataframe(
@@ -519,14 +532,12 @@ Cashier:
         )
 
 
+    # ==========================================================================
+    # TOTAL SUMMARY
+    # ==========================================================================
 
 
-
-
-
-    # --------------------------------------------------------------------------
-    # TOTAL
-    # --------------------------------------------------------------------------
+    st.divider()
 
 
     st.success(
@@ -590,10 +601,9 @@ Change :
 
 
 
-
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # ACTION BUTTONS
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     c1, c2, c3 = st.columns(3)
@@ -602,9 +612,11 @@ Change :
 
 
 
-    # PRINT
-    with c1:
+    # --------------------------------------------------------------------------
+    # THERMAL PRINT
+    # --------------------------------------------------------------------------
 
+    with c1:
 
 
         if st.button(
@@ -616,29 +628,45 @@ Change :
         ):
 
 
-
             try:
 
 
+                receipt_print_data = build_receipt_data(
 
-                print_thermal(
+                    data,
 
-                    data
+                    items
+
+                )
+
+
+                result = print_thermal(
+
+                    receipt_print_data
 
                 )
 
 
+                if result:
 
-                st.success(
 
-                    "Receipt printed."
+                    st.success(
 
-                )
+                        "✅ Receipt printed"
+
+                    )
+
+                else:
+
+                    st.warning(
+
+                        "Printer returned no result"
+
+                    )
 
 
 
             except Exception as e:
-
 
 
                 st.error(
@@ -653,9 +681,11 @@ Change :
 
 
 
-    # PDF
-    with c2:
+    # --------------------------------------------------------------------------
+    # PDF GENERATE
+    # --------------------------------------------------------------------------
 
+    with c2:
 
 
         if st.button(
@@ -667,14 +697,22 @@ Change :
         ):
 
 
-
             try:
+
+
+                receipt_pdf_data = build_receipt_data(
+
+                    data,
+
+                    items
+
+                )
 
 
 
                 result = generate_pdf(
 
-                    data
+                    receipt_pdf_data
 
                 )
 
@@ -683,13 +721,11 @@ Change :
                 if result:
 
 
-
                     pdf_bytes, filename = result
 
 
 
                     st.download_button(
-
 
                         label=
 
@@ -716,9 +752,18 @@ Change :
                     )
 
 
+                else:
+
+
+                    st.warning(
+
+                        "PDF generation failed"
+
+                    )
+
+
 
             except Exception as e:
-
 
 
                 st.error(
@@ -733,9 +778,11 @@ Change :
 
 
 
+    # --------------------------------------------------------------------------
     # NEW SALE
-    with c3:
+    # --------------------------------------------------------------------------
 
+    with c3:
 
 
         if st.button(
@@ -745,7 +792,6 @@ Change :
             use_container_width=True
 
         ):
-
 
 
             reset_pos()
@@ -764,37 +810,29 @@ Change :
 def reset_pos():
 
 
-
     st.session_state.cart = []
-
 
 
     st.session_state.sale_data = None
 
 
-
     st.session_state.show_receipt = False
-
 
 
     st.session_state.processing = False
 
 
-
     st.session_state.received_amount = 0
-
 
 
     st.session_state.discount = 0
 
 
-
     st.success(
 
-        "New Sale Ready"
+        "✅ New Sale Ready"
 
     )
-
 
 
     st.rerun()
