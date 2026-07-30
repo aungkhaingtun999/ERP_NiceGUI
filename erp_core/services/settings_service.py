@@ -1,419 +1,131 @@
 # ==============================================================================
-# erp_core/services/settings_service.py
-# ERP ENTERPRISE SETTINGS SERVICE v3.0 FINAL
-#
-# Central Settings Engine
-#
-# Support:
-#
-# - Read Setting
-# - Read All Settings
-# - Save Setting
-# - Delete Setting
-# - Type Conversion
-#
-# Database:
-#
-# erp_settings
-#
-# Columns:
-#
-# id
-# key
-# value
-# created_at
-#
+# ERP SETTINGS SERVICE
+# Maker - Checker Workflow
 # ==============================================================================
 
 
-from typing import (
-    Any,
-    Dict
+from erp_core.repositories.settings_repository import (
+    create_setting_request,
+    get_pending_setting_requests,
 )
 
 
-from ..base_repo import (
-    log_error
+from erp_core.loaders.settings_loader import (
+    get_all_settings_cached,
 )
 
 
-from ..config import (
-    Tables
-)
-
-
-
-
-
-# ==============================================================================
-# SETTINGS SERVICE
-# ==============================================================================
 
 
 class SettingsService:
 
 
 
-    def __init__(
+    # --------------------------------------------------------------------------
+    # CREATE CHANGE REQUEST
+    # --------------------------------------------------------------------------
 
-        self,
-
-        client
-
-    ):
-
-        self.client = client
-
-
-
-
-
-
-
-    # ==========================================================================
-    # GET ONE
-    # ==========================================================================
-
-
-    def get_setting(
-
-        self,
-
-        key,
-
-        default=None
-
+    @staticmethod
+    def request_change(
+        setting_key,
+        new_value,
+        reason,
+        requested_by
     ):
 
 
-        try:
-
-
-            result = (
-
-                self.client
-
-                .table(
-
-                    Tables.SETTINGS
-
-                )
-
-                .select("*")
-
-                .eq(
-
-                    "key",
-
-                    key
-
-                )
-
-                .limit(1)
-
-                .execute()
-
-            )
+        settings = get_all_settings_cached()
 
 
 
-            if result.data:
-
-                return result.data[0].get(
-                    "value"
-                )
-
-
-        except Exception as e:
-
-
-            log_error(
-
-                message="get_setting failed",
-
-                exception=e
-
-            )
-
-
-        return default
+        old_value = settings.get(
+            setting_key
+        )
 
 
 
+        if old_value is None:
+
+            old_value = ""
 
 
 
-
-    # ==========================================================================
-    # GET ALL
-    # ==========================================================================
-
-
-    def get_all_settings(self):
-
-
-        try:
-
-
-            result = (
-
-                self.client
-
-                .table(
-
-                    Tables.SETTINGS
-
-                )
-
-                .select("*")
-
-                .execute()
-
-            )
+        old_value = str(
+            old_value
+        )
 
 
 
-            rows = result.data or []
+        new_value = str(
+            new_value
+        )
 
+
+
+        # No Change
+
+        if old_value == new_value:
 
 
             return {
 
-                row["key"]:
-
-                row.get("value")
-
-
-                for row in rows
-
-                if row.get("key")
-
-            }
-
-
-
-        except Exception as e:
-
-
-            log_error(
-
-                message="get_all_settings failed",
-
-                exception=e
-
-            )
-
-
-            return {}
-
-
-
-
-
-
-
-    # ==========================================================================
-    # SAVE
-    # ==========================================================================
-
-
-    def save_setting(
-
-        self,
-
-        key,
-
-        value
-
-    ):
-
-
-        try:
-
-
-            result = (
-
-                self.client
-
-                .table(
-
-                    Tables.SETTINGS
-
-                )
-
-                .upsert(
-
-                    {
-
-                        "key":
-
-                            key,
-
-
-                        "value":
-
-                            str(value)
-
-                    },
-
-                    on_conflict="key"
-
-                )
-
-                .execute()
-
-            )
-
-
-            return {
-
-                "success":
-
-                    True,
-
-
-                "data":
-
-                    result.data
-
-            }
-
-
-
-
-        except Exception as e:
-
-
-            log_error(
-
-                message="save_setting failed",
-
-                exception=e
-
-            )
-
-
-            return {
-
-                "success":
-
-                    False,
-
+                "success": False,
 
                 "message":
-
-                    str(e)
-
-            }
-
-
-
-
-
-
-
-    # ==========================================================================
-    # SAVE MULTIPLE
-    # ==========================================================================
-
-
-    def save_settings(
-
-        self,
-
-        settings: Dict[str,Any]
-
-    ):
-
-
-        try:
-
-
-            payload = []
-
-
-            for key,value in settings.items():
-
-
-                payload.append(
-
-                    {
-
-                        "key":
-
-                            key,
-
-
-                        "value":
-
-                            str(value)
-
-                    }
-
-                )
-
-
-
-            result = (
-
-                self.client
-
-                .table(
-
-                    Tables.SETTINGS
-
-                )
-
-                .upsert(
-
-                    payload,
-
-                    on_conflict="key"
-
-                )
-
-                .execute()
-
-            )
-
-
-
-            return {
-
-                "success":
-
-                    True,
-
-
-                "data":
-
-                    result.data
+                "No change detected"
 
             }
 
 
 
-        except Exception as e:
+        # Create request
 
 
-            log_error(
+        request_id = create_setting_request(
 
-                message="save_settings failed",
+            setting_key,
 
-                exception=e
+            old_value,
 
-            )
+            new_value,
+
+            reason,
+
+            requested_by
+
+        )
 
 
-            return {
 
-                "success":
-
-                    False,
+        return {
 
 
-                "message":
+            "success": True,
 
-                    str(e)
 
-            }
+            "message":
+            "Setting change request created",
+
+
+            "request_id":
+            request_id
+
+
+        }
+
+
+
+
+    # --------------------------------------------------------------------------
+    # PENDING LIST
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def get_pending_requests():
+
+
+        rows = get_pending_setting_requests()
+
+
+
+        return rows
