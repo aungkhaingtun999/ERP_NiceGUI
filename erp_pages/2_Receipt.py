@@ -324,7 +324,7 @@ def run():
         receipt.get("date")
     )
 
-    if raw_time:
+if raw_time:
 
     st.write(
 
