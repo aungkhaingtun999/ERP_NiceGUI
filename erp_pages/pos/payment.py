@@ -372,13 +372,11 @@ Change :
 
             )
 
+    if result.get(
 
+      "success",
 
-            if result.get(
-
-    "success",
-
-    False
+       False
 
 ):
 
