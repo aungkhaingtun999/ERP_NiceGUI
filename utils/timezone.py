@@ -2,69 +2,26 @@
 # utils/timezone.py
 # ERP ENTERPRISE GLOBAL TIMEZONE ENGINE v4.0
 #
-# UTC <-> Country Timezone
-# Myanmar Standard Time Support
+# UTC ↔ Country Timezone
+# Default Myanmar Time (+06:30)
 # ==============================================================================
 
 
 from datetime import datetime, timezone, timedelta
 
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
+
+
 # ==============================================================================
-# TIMEZONE DATABASE
+# DEFAULT TIMEZONE
 # ==============================================================================
 
-TIMEZONES = {
-
-    "Myanmar": timezone(
-        timedelta(hours=6, minutes=30),
-        name="MMT"
-    ),
-
-    "Thailand": timezone(
-        timedelta(hours=7),
-        name="ICT"
-    ),
-
-    "Japan": timezone(
-        timedelta(hours=9),
-        name="JST"
-    ),
-
-    "Korea": timezone(
-        timedelta(hours=9),
-        name="KST"
-    ),
-
-    "China": timezone(
-        timedelta(hours=8),
-        name="CST"
-    ),
-
-    "Singapore": timezone(
-        timedelta(hours=8),
-        name="SGT"
-    ),
-
-    "India": timezone(
-        timedelta(hours=5, minutes=30),
-        name="IST"
-    ),
-
-    "Mongolia": timezone(
-        timedelta(hours=8),
-        name="ULAT"
-    ),
-
-    "UTC": timezone.utc
-
-}
-
-
-
-# Default ERP Timezone
-
-DEFAULT_TIMEZONE = "Myanmar"
+DEFAULT_TIMEZONE = "Asia/Yangon"
 
 
 
@@ -72,24 +29,27 @@ DEFAULT_TIMEZONE = "Myanmar"
 # GET TIMEZONE
 # ==============================================================================
 
+def get_timezone(name=None):
 
-def get_timezone(country=None):
-
-
-    if not country:
-
-        country = DEFAULT_TIMEZONE
+    tz_name = name or DEFAULT_TIMEZONE
 
 
-    return TIMEZONES.get(
+    try:
 
-        country,
+        if ZoneInfo:
 
-        TIMEZONES[DEFAULT_TIMEZONE]
+            return ZoneInfo(tz_name)
 
+
+    except Exception:
+
+        pass
+
+
+    return timezone(
+        timedelta(hours=6, minutes=30),
+        name="MMT"
     )
-
-
 
 
 
@@ -97,46 +57,26 @@ def get_timezone(country=None):
 # CURRENT TIME
 # ==============================================================================
 
-
 def now_myanmar():
 
     return datetime.now(
-
-        TIMEZONES["Myanmar"]
-
-    )
-
-
-
-
-
-def now_erp():
-
-    return datetime.now(
-
         get_timezone()
-
     )
 
 
 
-
-
 # ==============================================================================
-# CONVERT UTC TO LOCAL
+# CONVERT UTC / DB TIME
 # ==============================================================================
-
 
 def to_local_datetime(
     value,
-    country=None
+    timezone_name=None
 ):
-
 
     if value is None:
 
         return None
-
 
 
     try:
@@ -145,17 +85,13 @@ def to_local_datetime(
         if isinstance(value, str):
 
             value = value.replace(
-
                 "Z",
-
                 "+00:00"
-
             )
 
             dt = datetime.fromisoformat(
                 value
             )
-
 
         else:
 
@@ -163,43 +99,39 @@ def to_local_datetime(
 
 
 
-
         if dt.tzinfo is None:
 
             dt = dt.replace(
-
                 tzinfo=timezone.utc
-
             )
 
 
-
         return dt.astimezone(
-
-            get_timezone(country)
-
+            get_timezone(timezone_name)
         )
 
 
-
     except Exception:
-
 
         return None
 
 
 
-
-
 # ==============================================================================
-# DATABASE DATETIME FORMAT
+# FORMAT MAIN FUNCTION
 # ==============================================================================
 
-
-def format_db_datetime(
-    value,
+def format_datetime(
+    value=None,
     fmt="%d-%m-%Y %I:%M:%S %p"
 ):
+
+
+    if value is None:
+
+        value = datetime.now(
+            timezone.utc
+        )
 
 
     dt = to_local_datetime(
@@ -212,106 +144,61 @@ def format_db_datetime(
         return "-"
 
 
-
-    return dt.strftime(fmt)
-
-
+    return dt.strftime(
+        fmt
+    )
 
 
 
 # ==============================================================================
-# UNIVERSAL FORMAT FUNCTION
-# Used by POS Receipt
+# BACKWARD COMPATIBILITY
+# Old ERP pages use this
 # ==============================================================================
 
-
-def format_datetime(
-    value=None
+def format_db_datetime(
+    value
 ):
 
-
-    if value is None:
-
-        return format_db_datetime(
-
-            now_erp()
-
-        )
-
-
-    return format_db_datetime(
-
+    return format_datetime(
         value
-
     )
 
 
 
+def format_db_date(
+    value
+):
 
-
-# ==============================================================================
-# DATE ONLY
-# ==============================================================================
-
-
-def format_db_date(value):
-
-
-    return format_db_datetime(
-
+    return format_datetime(
         value,
-
         "%d-%m-%Y"
-
     )
 
 
 
+def format_db_time(
+    value
+):
 
-
-# ==============================================================================
-# TIME ONLY
-# ==============================================================================
-
-
-def format_db_time(value):
-
-
-    return format_db_datetime(
-
+    return format_datetime(
         value,
-
         "%I:%M:%S %p"
-
     )
 
-
-
-
-
-# ==============================================================================
-# EXPORT
-# ==============================================================================
 
 
 __all__ = [
 
-    "TIMEZONES",
-
-    "get_timezone",
-
     "now_myanmar",
-
-    "now_erp",
-
-    "to_local_datetime",
-
-    "format_db_datetime",
 
     "format_datetime",
 
+    "format_db_datetime",
+
     "format_db_date",
 
-    "format_db_time"
+    "format_db_time",
+
+    "to_local_datetime"
 
 ]
