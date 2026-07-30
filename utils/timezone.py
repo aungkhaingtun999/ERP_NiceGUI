@@ -56,15 +56,9 @@ def to_myanmar_datetime(value):
 
         if dt.tzinfo is None:
 
-            dt = dt.replace(
-                tzinfo=timezone.utc
-            )
-
-
-        return dt.astimezone(
-            MYANMAR_TZ
-        )
-
+    dt = dt.replace(
+        tzinfo=MYANMAR_TZ
+    )
 
     except Exception:
 
