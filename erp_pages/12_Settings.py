@@ -163,8 +163,9 @@ def run():
 
 
     render_pricing_settings(
-        settings
-    )
+    settings,
+    user
+)
 
 
     st.divider()
