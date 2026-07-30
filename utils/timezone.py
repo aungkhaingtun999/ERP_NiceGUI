@@ -8,10 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 
 # Myanmar Standard Time
-MYANMAR_TZ = timezone(
-    timedelta(hours=6, minutes=30),
-    name="MMT"
-)
+
 
 
 # --------------------------------------------------
