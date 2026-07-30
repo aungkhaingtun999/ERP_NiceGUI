@@ -24,6 +24,13 @@ from erp_ui.settings.pricing_settings import (
 from erp_ui.settings.accounting_settings import (
     render_accounting_settings
 )
+from erp_ui.settings.inventory_settings import (
+    render_inventory_settings
+)
+
+
+
+
 from erp_core.loaders.settings_loader import (
 
     get_all_settings_cached,
@@ -395,142 +402,7 @@ def run():
     # ==========================================================================
     # INVENTORY SETTINGS
     # ==========================================================================
-
-
-    st.subheader(
-
-        "📦 Inventory Rules"
-
-    )
-
-
-
-    minimum_stock_value = settings.get(
-
-        "MIN_STOCK_ALERT"
-
-    )
-
-
-
-    if minimum_stock_value is None:
-
-
-        minimum_stock_value = 0
-
-
-
-    try:
-
-        minimum_stock_value = float(
-
-            minimum_stock_value
-
-        )
-
-    except Exception:
-
-        minimum_stock_value = 0
-
-
-
-
-
-
-    minimum_stock = st.number_input(
-
-        "Minimum Stock Alert",
-
-        min_value=0.0,
-
-        value=minimum_stock_value,
-
-        step=1.0
-
-    )
-
-
-
-
-    auto_reorder = st.toggle(
-
-        "🔄 Enable Auto Reorder",
-
-        value=get_bool(
-
-            settings,
-
-            "AUTO_REORDER",
-
-            False
-
-        )
-
-    )
-
-
-
-
-
-    if st.button(
-
-        "💾 Save Inventory Settings",
-
-        use_container_width=True
-
-    ):
-
-
-        try:
-
-
-            save_setting(
-
-                "MIN_STOCK_ALERT",
-
-                minimum_stock
-
-            )
-
-
-            save_setting(
-
-                "AUTO_REORDER",
-
-                auto_reorder
-
-            )
-
-
-            clear_settings_cache()
-
-
-
-            notify_success(
-
-                "📦 Inventory Settings Saved"
-
-            )
-
-
-            st.rerun()
-
-
-
-        except Exception as e:
-
-
-            notify_error(
-
-                f"Inventory Save Failed : {e}"
-
-            )
-
-
-
-    st.divider()
-
-
+    render_inventory_settings(settings)
 
 
 
