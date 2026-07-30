@@ -315,36 +315,35 @@ def run():
 
 
     # --------------------------------------------------------------------------
-    # DATE
-    # --------------------------------------------------------------------------
+# DATE
+# --------------------------------------------------------------------------
 
-    if receipt.get(
-
-        "created_at"
-
-    ):
-
-        st.write(
-    "RAW TIME:",
+raw_time = (
     receipt.get("created_at")
+    or
+    receipt.get("date")
+)
+
+
+st.write(
+    "RAW TIME:",
+    raw_time
+)
+
+
+if raw_time:
+
+    st.write(
+
+        "📅 Myanmar Time:",
+
+        format_db_datetime(
+
+            raw_time
+
         )
-        st.write(
 
-            "📅 Date:",
-
-            format_db_datetime(
-
-                receipt.get(
-
-                    "created_at"
-
-                )
-
-            )
-
-        )
-
-
+    )
 
 
 
