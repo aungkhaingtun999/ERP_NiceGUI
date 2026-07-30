@@ -370,41 +370,21 @@ def render_receipt():
     )
 
 
-    discount = float(
+    discount = safe_float(
+
         data.get(
+
             "discount",
+
             0
+
         )
-        or 0
+
     )
 
 
-    tax_rate = float(
-        data.get(
-            "tax_rate",
-            0
-        )
-        or 0
-    )
 
-
-    tax_amount = float(
-        data.get(
-            "tax_amount",
-            data.get(
-                "tax",
-                0
-            )
-        )
-        or 0
-    )
-
-
-    # ===============================
-    # GRAND TOTAL FIX
-    # ===============================
-
-    grand_total = float(
+    grand_total = safe_float(
 
         data.get("grand_total")
 
@@ -418,29 +398,19 @@ def render_receipt():
 
         or
 
-        data.get("amount")
-
-        or
-
-        (
-            subtotal
-            -
-            discount
-            +
-            tax_amount
-        )
-
-        or 0
-
+    (
+        subtotal
+        -
+        discount
+        +
+        tax_amount
     )
 
+)
 
 
-    # ===============================
-    # PAYMENT FIX
-    # ===============================
 
-    paid = float(
+    paid = safe_float(
 
         data.get("paid")
 
@@ -452,21 +422,11 @@ def render_receipt():
 
         data.get("received_amount")
 
-        or
-
-        data.get("payment")
-
-        or 0
-
-    )
+)
 
 
 
-    # ===============================
-    # CHANGE FIX
-    # ===============================
-
-    change = float(
+    change = safe_float(
 
         data.get("change")
 
@@ -476,19 +436,14 @@ def render_receipt():
 
         or
 
-        data.get("balance")
-
-        or
-
-        (
-            paid
-            -
-            grand_total
-        )
-
-        or 0
-
+    (
+        paid
+        -
+        grand_total
     )
+
+)
+
 
 
 
