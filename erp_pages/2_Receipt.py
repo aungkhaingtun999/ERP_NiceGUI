@@ -315,30 +315,30 @@ def run():
 
 
     # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # DATE
 # --------------------------------------------------------------------------
 
-raw_time = (
-    receipt.get("created_at")
-    or
-    receipt.get("date")
-)
-from datetime import datetime
+from datetime import datetime, timezone
 
+raw_time = receipt.get("created_at") or receipt.get("date")
+
+# datetime.utcnow() is deprecated; use datetime.now(timezone.utc) instead
 st.write(
     "PYTHON NOW UTC:",
-    datetime.utcnow()
+    datetime.now(timezone.utc),
 )
 
 st.write(
     "PYTHON NOW LOCAL:",
-    datetime.now()
+    datetime.now(),
 )
 
 st.write(
     "RAW TIME:",
-    raw_time
+    raw_time,
 )
+
 
 
 if raw_time:
