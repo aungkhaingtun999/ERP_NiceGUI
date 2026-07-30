@@ -173,7 +173,8 @@ def run():
 
 
     render_accounting_settings(
-        settings
+        settings,
+    user
     )
 
 
@@ -182,7 +183,8 @@ def run():
 
 
     render_inventory_settings(
-        settings
+        settings,
+    user
     )
 
 
@@ -191,7 +193,8 @@ def run():
 
 
     render_finance_settings(
-        settings
+        settings,
+    user
     )
 
 
