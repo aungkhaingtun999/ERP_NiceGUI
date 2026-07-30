@@ -376,25 +376,53 @@ Change :
 
             if result.get(
 
-                "success",
+    "success",
 
-                False
+    False
 
-            ):
-
-
-                st.session_state.sale_data = result.get(
-
-                    "data"
-
-                )
+):
 
 
-                st.session_state.show_receipt=True
+    sale_data = result.get(
+        "data",
+        {}
+    )
 
 
-                st.rerun()
+    # ==================================================
+    # RECEIPT DATA COMPLETE MAPPING
+    # ==================================================
 
+    sale_data.update({
+
+        "subtotal": subtotal,
+
+        "discount": discount,
+
+        "tax": tax_amount,
+
+        "tax_rate": tax_rate,
+
+        "total": grand_total,
+
+        "paid_amount": received,
+
+        "change_amount": change,
+
+        "payment_method": payment_method,
+
+        "items": cart
+
+    })
+
+
+    st.session_state.sale_data = sale_data
+
+
+    st.session_state.show_receipt = True
+
+
+    st.rerun()
 
 
             else:
