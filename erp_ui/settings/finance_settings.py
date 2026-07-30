@@ -57,7 +57,8 @@ def save_setting(key, value):
 # ==============================================================================
 
 
-def render_finance_settings(settings):
+def render_finance_settings(settings,
+    user):
 
 
     st.subheader(
