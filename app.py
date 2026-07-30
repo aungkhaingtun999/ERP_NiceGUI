@@ -13,10 +13,6 @@ from erp_core import (
     get_default_warehouse_id
 )
 
-st.write(
-    "TEST WAREHOUSE ID:",
-    get_default_warehouse_id()
-)
 
 # ==============================================================================
 # PAGE CONFIG
