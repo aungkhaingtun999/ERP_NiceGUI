@@ -27,7 +27,9 @@ from erp_ui.settings.accounting_settings import (
 from erp_ui.settings.inventory_settings import (
     render_inventory_settings
 )
-
+from erp_ui.settings.finance_settings import (
+    render_finance_settings
+)
 
 
 
@@ -410,172 +412,8 @@ def run():
     # ==========================================================================
     # FINANCE SETTINGS
     # ==========================================================================
+    render_finance_settings(settings)
 
-
-    st.subheader(
-
-        "💱 Finance Settings"
-
-    )
-
-
-
-    currency_list = [
-
-        "MMK",
-
-        "USD",
-
-        "THB",
-
-        "SGD"
-
-    ]
-
-
-
-    current_currency = settings.get(
-
-        "CURRENCY"
-
-    )
-
-
-
-    if current_currency not in currency_list:
-
-
-        current_currency = "MMK"
-
-
-
-
-
-
-    currency = st.selectbox(
-
-        "Base Currency",
-
-        currency_list,
-
-        index=currency_list.index(
-
-            current_currency
-
-        )
-
-    )
-
-
-
-
-
-
-
-    payment_default = settings.get(
-
-        "PAYMENT_METHODS"
-
-    )
-
-
-
-    if not payment_default:
-
-
-        payment_default = "Cash"
-
-
-
-
-    payment_methods = st.multiselect(
-
-        "Payment Methods",
-
-        [
-
-            "Cash",
-
-            "Bank Transfer",
-
-            "Mobile Pay",
-
-            "Credit"
-
-        ],
-
-        default=payment_default.split(",")
-
-    )
-
-
-
-
-
-
-
-    if st.button(
-
-        "💾 Save Finance Settings",
-
-        use_container_width=True
-
-    ):
-
-
-        try:
-
-
-            save_setting(
-
-                "CURRENCY",
-
-                currency
-
-            )
-
-
-            save_setting(
-
-                "PAYMENT_METHODS",
-
-                ",".join(
-
-                    payment_methods
-
-                )
-
-            )
-
-
-
-            clear_settings_cache()
-
-
-
-            notify_success(
-
-                "💱 Finance Settings Saved"
-
-            )
-
-
-            st.rerun()
-
-
-
-        except Exception as e:
-
-
-            notify_error(
-
-                f"Finance Save Failed : {e}"
-
-            )
-
-
-
-    st.divider()
 
 
 
