@@ -357,123 +357,51 @@ def render_receipt():
 
 
     
-    # --------------------------------------------------------------------------
-    # TOTAL DATA MAPPING FIX
-    # --------------------------------------------------------------------------
+# ===============================
+# TOTAL DATA MAPPING
+# ===============================
 
-    subtotal = safe_float(
-
-        data.get(
-
-            "subtotal",
-
-            0
-
-        )
-
-    )
+subtotal = safe_float(
+    data.get("subtotal")
+)
 
 
-
-    tax_rate = safe_float(
-
-        data.get(
-
-            "tax_rate",
-
-            0
-
-        )
-
-    )
+discount = safe_float(
+    data.get("discount")
+)
 
 
-
-    tax_amount = safe_float(
-
-        data.get(
-
-            "tax_amount",
-
-            0
-
-        )
-
-    )
+tax_rate = safe_float(
+    data.get("tax_rate")
+)
 
 
-
-    discount = safe_float(
-
-        data.get(
-
-            "discount",
-
-            0
-
-        )
-
-    )
+tax_amount = safe_float(
+    data.get("tax")
+)
 
 
+grand_total = safe_float(
 
-    grand_total = safe_float(
+    data.get("total")
 
-        data.get("grand_total")
+    or
 
-        or
-
-        data.get("total")
-
-        or
-
-        data.get("final_total")
-
-        or
-
-    (
-        subtotal
-        -
-        discount
-        +
-        tax_amount
-    )
+    data.get("total_amount")
 
 )
 
 
+paid = safe_float(
 
-    paid = safe_float(
-
-        data.get("paid")
-
-        or
-
-        data.get("paid_amount")
-
-        or
-
-        data.get("received_amount")
+    data.get("paid_amount")
 
 )
 
 
+change = safe_float(
 
-    change = safe_float(
-
-        data.get("change")
-
-        or
-
-        data.get("change_amount")
-
-        or
-
-    (
-        paid
-        -
-        grand_total
-    )
+    data.get("change_amount")
 
 )
 
