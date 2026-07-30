@@ -31,10 +31,18 @@ def run():
 
 
 
-    warehouse_options = {
-    int(w["id"]): w["name"]
-    for w in warehouses
-}
+    warehouse_options = {}
+
+    for w in warehouses:
+
+        wid = int(w.get("id", 0))
+
+        code = w.get("code", "N/A")
+
+        name = w.get("name", "Unknown")
+
+        warehouse_options[wid] = f"[{wid}] {code} - {name}"
+
 
 
 
