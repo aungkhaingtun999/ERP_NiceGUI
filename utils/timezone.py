@@ -218,45 +218,21 @@ def to_local_datetime(
 
 
 # ==============================================================================
-# FORMAT
+# LEGACY COMPATIBILITY FORMAT
 # ==============================================================================
 
-
-def format_db_datetime(
-
-    value,
-
-    timezone_name=None,
-
+def format_datetime(
+    value=None,
     fmt="%d-%m-%Y %I:%M:%S %p"
-
 ):
 
-
-    dt=to_local_datetime(
-
-        value,
-
-        timezone_name
-
-    )
-
-
-    if not dt:
-
+    if value is None:
         return "-"
 
-
-
-    return dt.strftime(
-
-        fmt
-
+    return format_db_datetime(
+        value,
+        fmt=fmt
     )
-
-
-
-
 
 # ==============================================================================
 # EXPORT
