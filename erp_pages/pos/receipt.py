@@ -344,66 +344,55 @@ def render_receipt():
 
 
 
-    items = data.get(
-
+        items = data.get(
         "items",
-
         []
+    )
+
+
+    # ===============================
+    # TOTAL DATA MAPPING
+    # ===============================
+
+    subtotal = safe_float(
+        data.get("subtotal")
+    )
+
+
+    discount = safe_float(
+        data.get("discount")
+    )
+
+
+    tax_rate = safe_float(
+        data.get("tax_rate")
+    )
+
+
+    tax_amount = safe_float(
+        data.get("tax")
+    )
+
+
+    grand_total = safe_float(
+
+        data.get("total")
+
+        or
+
+        data.get("total_amount")
 
     )
 
 
+    paid = safe_float(
+        data.get("paid_amount")
+    )
 
 
-
-    
-# ===============================
-# TOTAL DATA MAPPING
-# ===============================
-
-subtotal = safe_float(
-    data.get("subtotal")
-)
-
-
-discount = safe_float(
-    data.get("discount")
-)
-
-
-tax_rate = safe_float(
-    data.get("tax_rate")
-)
-
-
-tax_amount = safe_float(
-    data.get("tax")
-)
-
-
-grand_total = safe_float(
-
-    data.get("total")
-
-    or
-
-    data.get("total_amount")
-
-)
-
-
-paid = safe_float(
-
-    data.get("paid_amount")
-
-)
-
-
-change = safe_float(
-
-    data.get("change_amount")
-
-)
+    change = safe_float(
+        data.get("change_amount")
+    )
 
 
 
