@@ -280,127 +280,14 @@ def run():
     # ==========================================================================
 
     render_accounting_settings(settings)
-    st.subheader(
+    
 
 
 
 
 
     # --------------------------------------------------------------------------
-    # DISCOUNT POLICY
-    # --------------------------------------------------------------------------
-
-
-    discount_policy = settings.get(
-
-        "DISCOUNT_POLICY"
-
-    )
-
-
-
-    if discount_policy is None:
-
-
-        discount_policy = "allowed"
-
-
-
-
-    discount_policy = st.selectbox(
-
-        "Discount Policy",
-
-        [
-
-            "allowed",
-
-            "restricted"
-
-        ],
-
-
-        index=(
-
-            0
-
-            if discount_policy == "allowed"
-
-            else 1
-
-        )
-
-    )
-
-
-
-
-
-
-    # --------------------------------------------------------------------------
-    # SAVE TAX
-    # --------------------------------------------------------------------------
-
-
-    if st.button(
-
-        "💾 Save Accounting Settings",
-
-        use_container_width=True
-
-    ):
-
-
-        try:
-
-
-            save_setting(
-
-                "DEFAULT_TAX_RATE",
-
-                tax_rate
-
-            )
-
-
-            save_setting(
-
-                "DISCOUNT_POLICY",
-
-                discount_policy
-
-            )
-
-
-
-            clear_settings_cache()
-
-
-
-            notify_success(
-
-                f"🧾 Tax Settings Saved : {tax_rate:.2f}%"
-
-            )
-
-
-
-            st.rerun()
-
-
-
-        except Exception as e:
-
-
-            notify_error(
-
-                f"Tax Save Failed : {e}"
-
-            )
-
-
-
-    st.divider()
+    #             
     # ==========================================================================
     # INVENTORY SETTINGS
     # ==========================================================================
