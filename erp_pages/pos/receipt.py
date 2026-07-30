@@ -344,7 +344,7 @@ def render_receipt():
 
 
 
-        items = data.get(
+   items = data.get(
         "items",
         []
     )
