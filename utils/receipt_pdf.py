@@ -8,7 +8,7 @@ import os
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-
+from utils.timezone import format_db_datetime
 
 # ==========================================
 # SAFE NUMBER
