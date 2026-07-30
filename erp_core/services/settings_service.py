@@ -13,8 +13,59 @@ from erp_core.repositories.settings_repository import (
 
 
 
-
 class SettingsService:
+
+
+    def __init__(self, db):
+
+        self.db = db
+
+
+
+    # --------------------------------------------------------------------------
+    # LOAD ALL SETTINGS
+    # --------------------------------------------------------------------------
+
+    def get_all_settings(self):
+
+
+        try:
+
+
+            result = (
+                self.db
+                .table("settings")
+                .select("*")
+                .execute()
+            )
+
+
+            settings = {}
+
+
+            for row in result.data:
+
+
+                settings[
+                    row["key"]
+                ] = row["value"]
+
+
+
+            return settings
+
+
+
+        except Exception as e:
+
+
+            print(
+                "GET SETTINGS ERROR:",
+                e
+            )
+
+
+            return {}
 
 
 
@@ -31,58 +82,27 @@ class SettingsService:
     ):
 
 
-        # Local import to avoid circular import
-
         from erp_core.loaders.settings_loader import (
             get_all_settings_cached
         )
 
 
-
         settings = get_all_settings_cached()
 
 
-
         old_value = settings.get(
-            setting_key
+            setting_key,
+            ""
         )
-
-
-
-        if old_value is None:
-
-            old_value = ""
-
-
-
-        old_value = str(old_value)
-
-        new_value = str(new_value)
-
-
-
-        # No change
-
-        if old_value == new_value:
-
-            return {
-
-                "success": False,
-
-                "message":
-                "No change detected"
-
-            }
-
 
 
         request_id = create_setting_request(
 
             setting_key,
 
-            old_value,
+            str(old_value),
 
-            new_value,
+            str(new_value),
 
             reason,
 
@@ -91,19 +111,13 @@ class SettingsService:
         )
 
 
-
         return {
 
             "success": True,
 
-            "message":
-            "Setting change request created",
-
-            "request_id":
-            request_id
+            "request_id": request_id
 
         }
-
 
 
 
@@ -115,7 +129,6 @@ class SettingsService:
     def get_pending_requests():
 
         return get_pending_setting_requests()
-
 
 
 
@@ -131,6 +144,9 @@ class SettingsService:
 
 
         return approve_setting_change(
+
             request_id,
+
             checker_id
+
         )
