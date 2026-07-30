@@ -9,9 +9,8 @@ import sys
 import importlib.util
 
 import streamlit as st
-from erp_core import (
-    get_default_warehouse_id
-)
+# ERP CORE INITIALIZE
+import erp_core
 
 
 # ==============================================================================
