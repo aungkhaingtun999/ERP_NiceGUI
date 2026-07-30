@@ -650,9 +650,10 @@ def build_receipt_data(
 
 
             "date": format_db_datetime(
-             receipt.get("created_at")
-            ),
-
+             sale.get("created_at")
+             or
+             sale.get("date")
+),
 
 
             "cashier":
