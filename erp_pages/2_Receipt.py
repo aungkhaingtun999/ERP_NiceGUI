@@ -314,39 +314,39 @@ def run():
 
 
 
-# --------------------------------------------------------------------------
-# DATE
-# --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    # DATE
+    # --------------------------------------------------------------------------
 
-raw_time = (
-    receipt.get("created_at")
-    or
-    receipt.get("date")
-)
+    raw_time = (
+        receipt.get("created_at")
+        or
+        receipt.get("date")
+    )
 
-if raw_time:
+    if raw_time:
 
-    st.write(
+        st.write(
 
-        "📅 Date:",
+            "📅 Date:",
 
-        format_db_datetime(
+            format_db_datetime(
 
-            raw_time
+                raw_time
+
+            )
 
         )
 
-    )
+    else:
 
-else:
+        st.write(
 
-    st.write(
+            "📅 Date:",
 
-        "📅 Date:",
+            "-"
 
-        "-"
-
-    )
+        )
 
 
 
@@ -355,6 +355,13 @@ else:
     # --------------------------------------------------------------------------
 
     st.divider()
+
+    st.subheader(
+
+        "🛒 Sale Items"
+
+    )
+
 
 
     st.subheader(
