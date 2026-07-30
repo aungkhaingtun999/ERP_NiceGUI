@@ -6,58 +6,31 @@
 # Myanmar Time Supported
 # ==============================================================================
 
-
-import streamlit as st
 import pandas as pd
-
-
+import streamlit as st
 
 # ==============================================================================
 # ERP DATABASE BRIDGE
 # ==============================================================================
 
 from database import (
-
-    search_receipts,
-
     get_receipt,
-
     get_sale_items,
-
+    search_receipts,
 )
-
-
 
 # ==============================================================================
 # TIME ENGINE
 # ==============================================================================
 
-from utils.timezone import (
-
-    format_db_datetime
-
-)
-
-
+from utils.timezone import format_db_datetime
 
 # ==============================================================================
 # RECEIPT ENGINE
 # ==============================================================================
 
-from utils.receipt_pdf import (
-
-    generate_pdf
-
-)
-
-
-from utils.thermal_receipt import (
-
-    build_receipt_data,
-
-    print_thermal
-
-)
+from utils.receipt_pdf import generate_pdf
+from utils.thermal_receipt import build_receipt_data, print_thermal
 
 # ==============================================================================
 # PAGE
@@ -66,26 +39,17 @@ from utils.thermal_receipt import (
 
 def run():
 
-
     # --------------------------------------------------------------------------
     # AUTH
     # --------------------------------------------------------------------------
 
     if not st.session_state.get("user"):
 
-        st.warning(
-            "⛔ Please login first"
-        )
+        st.warning("⛔ Please login first")
 
         st.stop()
 
-
-
-    st.title(
-        "🧾 ERP Enterprise Receipt Viewer v5.0"
-    )
-
-
+    st.title("🧾 ERP Enterprise Receipt Viewer v5.0")
 
     # --------------------------------------------------------------------------
     # SESSION
@@ -95,103 +59,45 @@ def run():
 
         st.session_state.selected_receipt = None
 
-
-
     if "receipt_data" not in st.session_state:
 
         st.session_state.receipt_data = None
-
 
     if "pdf_result" not in st.session_state:
 
         st.session_state.pdf_result = None
 
-
-
     # --------------------------------------------------------------------------
     # SEARCH RECEIPT
     # --------------------------------------------------------------------------
 
-    keyword = st.text_input(
-        "🔍 Search Invoice No"
-    )
-
-
+    keyword = st.text_input("🔍 Search Invoice No")
 
     if keyword:
 
-
-        results = search_receipts(
-
-            keyword
-
-        )
-
+        results = search_receipts(keyword)
 
         if not results:
 
-
-            st.error(
-                "❌ No receipt found"
-            )
+            st.error("❌ No receipt found")
 
             st.stop()
 
-
-
         options = {
-
-
-            f"{r.get('invoice_no')} | "
-            f"{float(r.get('total',0)):,.0f} MMK":
-
-            r
-
-
+            f"{r.get('invoice_no')} | {float(r.get('total',0)):,.0f} MMK": r
             for r in results
-
-
         }
 
-
-
-        selected = st.selectbox(
-
-            "Select Receipt",
-
-            list(options.keys())
-
-        )
-
-
+        selected = st.selectbox("Select Receipt", list(options.keys()))
 
         receipt_short = options[selected]
 
+        if st.button("📥 Load Receipt"):
 
-
-        if st.button(
-
-            "📥 Load Receipt"
-
-        ):
-
-
-
-            receipt = get_receipt(
-
-                receipt_short.get(
-                    "invoice_no"
-                )
-
-            )
-
-
+            receipt = get_receipt(receipt_short.get("invoice_no"))
 
             st.session_state.receipt_data = receipt
-
             st.session_state.pdf_result = None
-
-
 
             st.rerun()
 
@@ -200,47 +106,24 @@ def run():
     # --------------------------------------------------------------------------
 
     receipt = st.session_state.receipt_data
-    
-
 
     if not receipt:
 
-
-        st.info(
-
-            "Search and load receipt"
-
-        )
+        st.info("Search and load receipt")
 
         st.stop()
-
-
 
     # --------------------------------------------------------------------------
     # LOAD ITEMS
     # --------------------------------------------------------------------------
 
-    sale_id = receipt.get(
-
-        "id"
-
-    )
-
+    sale_id = receipt.get("id")
 
     items = []
 
-
-
     if sale_id:
 
-
-        items = get_sale_items(
-
-            str(sale_id)
-
-        )
-
-
+        items = get_sale_items(str(sale_id))
 
     # --------------------------------------------------------------------------
     # RECEIPT SUMMARY
@@ -248,107 +131,35 @@ def run():
 
     st.divider()
 
-
-    st.subheader(
-
-        "🧾 Receipt Summary"
-
-    )
-
-
+    st.subheader("🧾 Receipt Summary")
 
     c1, c2, c3 = st.columns(3)
 
-
-
     with c1:
 
-
-        st.metric(
-
-            "Invoice No",
-
-            receipt.get(
-
-                "invoice_no",
-
-                "-"
-
-            )
-
-        )
-
-
+        st.metric("Invoice No", receipt.get("invoice_no", "-"))
 
     with c2:
 
-
-        st.metric(
-
-            "Total",
-
-            f"{float(receipt.get('total',0)):,.0f} MMK"
-
-        )
-
-
+        st.metric("Total", f"{float(receipt.get('total',0)):,.0f} MMK")
 
     with c3:
 
-
-        st.metric(
-
-            "Status",
-
-            receipt.get(
-
-                "status",
-
-                "-"
-
-            )
-
-        )
-
-
-
-
+        st.metric("Status", receipt.get("status", "-"))
 
     # --------------------------------------------------------------------------
     # DATE
     # --------------------------------------------------------------------------
 
-        raw_time = (
-        receipt.get("created_at")
-        or
-        receipt.get("date")
-    )
+    raw_time = receipt.get("created_at") or receipt.get("date")
 
     if raw_time:
 
-        st.write(
-
-            "📅 Date:",
-
-            format_db_datetime(
-
-                raw_time
-
-            )
-
-        )
+        st.write("📅 Date:", format_db_datetime(raw_time))
 
     else:
 
-        st.write(
-
-            "📅 Date:",
-
-            "-"
-
-        )
-
-
+        st.write("📅 Date:", "-")
 
     # --------------------------------------------------------------------------
     # ITEMS TABLE
@@ -356,140 +167,36 @@ def run():
 
     st.divider()
 
-    st.subheader(
-
-        "🛒 Sale Items"
-
-    )
-
-
-
-    st.subheader(
-
-        "🛒 Sale Items"
-
-    )
-
-
+    st.subheader("🛒 Sale Items")
 
     rows = []
 
-
-
     for item in items:
 
+        qty = float(item.get("quantity", 0))
 
+        price = float(item.get("unit_price", 0))
 
-        qty = float(
-
-            item.get(
-
-                "quantity",
-
-                0
-
-            )
-
-        )
-
-
-
-        price = float(
-
-            item.get(
-
-                "unit_price",
-
-                0
-
-            )
-
-        )
-
-
-
-        total = float(
-
-            item.get(
-
-                "total",
-
-                qty * price
-
-            )
-
-        )
-
-
+        total = float(item.get("total", qty * price))
 
         rows.append(
-
             {
-
-                "Product":
-
-                    item.get(
-
-                        "name",
-
-                        item.get(
-
-                            "product_id",
-
-                            "-"
-
-                        )
-
-                    ),
-
-
-                "Quantity":
-
-                    qty,
-
-
-                "Unit Price":
-
-                    f"{price:,.0f}",
-
-
-                "Amount":
-
-                    f"{total:,.0f}"
-
+                "Product": item.get("name", item.get("product_id", "-")),
+                "Quantity": qty,
+                "Unit Price": f"{price:,.0f}",
+                "Amount": f"{total:,.0f}",
             }
-
         )
-
-
-
 
     if rows:
 
-
         st.dataframe(
-
-            pd.DataFrame(rows),
-
-            use_container_width=True,
-
-            hide_index=True
-
+            pd.DataFrame(rows), use_container_width=True, hide_index=True
         )
-
 
     else:
 
-
-        st.warning(
-
-            "No items found"
-
-        )
-
-
-
-
+        st.warning("No items found")
 
     # --------------------------------------------------------------------------
     # PAYMENT DETAILS
@@ -497,68 +204,25 @@ def run():
 
     st.divider()
 
-
-    st.subheader(
-
-        "💰 Payment Details"
-
-    )
-
-
+    st.subheader("💰 Payment Details")
 
     col1, col2, col3, col4 = st.columns(4)
 
-
-
     with col1:
 
-
-        st.write(
-
-            "Subtotal",
-
-            f"{float(receipt.get('subtotal',0)):,.0f} MMK"
-
-        )
-
-
+        st.write("Subtotal", f"{float(receipt.get('subtotal',0)):,.0f} MMK")
 
     with col2:
 
-
-        st.write(
-
-            "Tax",
-
-            f"{float(receipt.get('tax',0)):,.0f} MMK"
-
-        )
-
-
+        st.write("Tax", f"{float(receipt.get('tax',0)):,.0f} MMK")
 
     with col3:
 
-
-        st.write(
-
-            "Tax Rate",
-
-            f"{float(receipt.get('tax_rate',0)):,.2f}%"
-
-        )
-
-
+        st.write("Tax Rate", f"{float(receipt.get('tax_rate',0)):,.2f}%")
 
     with col4:
 
-
-        st.write(
-
-            "Grand Total",
-
-            f"{float(receipt.get('total',0)):,.0f} MMK"
-
-        )
+        st.write("Grand Total", f"{float(receipt.get('total',0)):,.0f} MMK")
 
     # --------------------------------------------------------------------------
     # PDF GENERATE
@@ -566,72 +230,32 @@ def run():
 
     st.divider()
 
+    if st.button("📄 Generate PDF"):
 
-    if st.button(
+        data = build_receipt_data(receipt, items)
 
-        "📄 Generate PDF"
-
-    ):
-
-
-        data = build_receipt_data(
-
-            receipt,
-
-            items
-
-        )
-
-
-
-        result = generate_pdf(
-
-            data
-
-        )
-
-
+        result = generate_pdf(data)
 
         if result:
 
-
             st.session_state.pdf_result = result
-
 
         else:
 
-
             st.session_state.pdf_result = None
 
-            st.error(
-
-                "❌ PDF generation failed"
-
-            )
-
+            st.error("❌ PDF generation failed")
 
     if st.session_state.pdf_result:
 
-
         pdf_bytes, filename = st.session_state.pdf_result
 
-
-
         st.download_button(
-
             "⬇ Download Receipt",
-
             pdf_bytes,
-
             file_name=f"{filename}.pdf",
-
-            mime="application/pdf"
-
+            mime="application/pdf",
         )
-
-
-
-
 
     # --------------------------------------------------------------------------
     # THERMAL PRINT
@@ -639,84 +263,29 @@ def run():
 
     st.divider()
 
+    if st.button("🖨 Print Receipt"):
 
-    if st.button(
+        data = build_receipt_data(receipt, items)
 
-        "🖨 Print Receipt"
-
-    ):
-
-
-        data = build_receipt_data(
-
-            receipt,
-
-            items
-
-        )
-
-
-
-        result = print_thermal(
-
-            data
-
-        )
-
-
+        result = print_thermal(data)
 
         if result:
 
-
-            st.success(
-
-                "✅ Receipt printed successfully"
-
-            )
-
+            st.success("✅ Receipt printed successfully")
 
         else:
 
-
-            st.error(
-
-                "❌ Print failed"
-
-            )
-
-
-
-
+            st.error("❌ Print failed")
 
     # --------------------------------------------------------------------------
     # REPRINT DATA CHECK
     # --------------------------------------------------------------------------
 
-    with st.expander(
+    with st.expander("🔎 Debug Receipt Data"):
 
-        "🔎 Debug Receipt Data"
+        data = build_receipt_data(receipt, items)
 
-    ):
-
-
-        data = build_receipt_data(
-
-            receipt,
-
-            items
-
-        )
-
-
-        st.json(
-
-            data
-
-        )
-
-
-
-
+        st.json(data)
 
     # --------------------------------------------------------------------------
     # CLEAR
@@ -724,32 +293,19 @@ def run():
 
     st.divider()
 
-
-    if st.button(
-
-        "🆕 Clear Receipt"
-
-    ):
-
+    if st.button("🆕 Clear Receipt"):
 
         st.session_state.receipt_data = None
-
         st.session_state.selected_receipt = None
-
         st.session_state.pdf_result = None
 
         st.rerun()
-
-
-
 
 
 # ==============================================================================
 # MAIN
 # ==============================================================================
 
-
 if __name__ == "__main__":
-
 
     run()
