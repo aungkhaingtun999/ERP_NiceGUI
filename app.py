@@ -24,17 +24,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-from erp_core.loaders.settings_loader import get_setting
 
-tax = get_setting(
-    "DEFAULT_TAX_RATE",
-    0
-)
-
-st.write(
-    "TEST TAX RATE:",
-    tax
-)
 # ==============================================================================
 # PATH
 # ==============================================================================
