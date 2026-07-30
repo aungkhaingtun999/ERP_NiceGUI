@@ -1,6 +1,9 @@
 # ==============================================================================
 # erp_ui/settings/inventory_settings.py
 # ERP INVENTORY SETTINGS COMPONENT
+#
+# Approval Workflow:
+# Maker -> settings_change_requests -> Checker Approval
 # ==============================================================================
 
 
@@ -9,8 +12,11 @@ import streamlit as st
 
 from erp_core.loaders.settings_loader import (
     get_bool,
-    clear_settings_cache,
-    save_setting as save_erp_setting,
+)
+
+
+from erp_core.services.settings_service import (
+    SettingsService,
 )
 
 
@@ -22,50 +28,18 @@ from utils.notification import (
 
 
 # ==============================================================================
-# SAVE WRAPPER
-# ==============================================================================
-
-
-def save_setting(key, value):
-
-    result = save_erp_setting(
-        key,
-        value
-    )
-
-
-    if not result.get(
-        "success",
-        False
-    ):
-
-        raise Exception(
-
-            result.get(
-
-                "message",
-
-                "Save failed"
-
-            )
-
-        )
-
-
-
-# ==============================================================================
 # INVENTORY SETTINGS UI
 # ==============================================================================
 
 
-def render_inventory_settings(settings,
-    user):
+def render_inventory_settings(
+    settings,
+    user
+):
 
 
     st.subheader(
-
         "📦 Inventory Rules"
-
     )
 
 
@@ -74,32 +48,22 @@ def render_inventory_settings(settings,
     # MINIMUM STOCK ALERT
     # --------------------------------------------------------------------------
 
-
     minimum_stock_value = settings.get(
-
-        "MIN_STOCK_ALERT"
-
+        "MIN_STOCK_ALERT",
+        0
     )
-
-
-    if minimum_stock_value is None:
-
-        minimum_stock_value = 0
-
 
 
     try:
 
         minimum_stock_value = float(
-
             minimum_stock_value
-
         )
-
 
     except Exception:
 
         minimum_stock_value = 0
+
 
 
 
@@ -141,14 +105,18 @@ def render_inventory_settings(settings,
 
 
 
+    st.divider()
+
+
+
     # --------------------------------------------------------------------------
-    # SAVE
+    # SUBMIT CHANGE REQUEST
     # --------------------------------------------------------------------------
 
 
     if st.button(
 
-        "💾 Save Inventory Settings",
+        "📨 Submit Inventory Change Request",
 
         use_container_width=True
 
@@ -158,38 +126,39 @@ def render_inventory_settings(settings,
         try:
 
 
-            save_setting(
+            SettingsService.request_change(
 
                 "MIN_STOCK_ALERT",
 
-                minimum_stock
+                str(minimum_stock),
+
+                "Change minimum stock alert level",
+
+                user["id"]
 
             )
 
 
-            save_setting(
+
+            SettingsService.request_change(
 
                 "AUTO_REORDER",
 
-                auto_reorder
+                str(auto_reorder),
+
+                "Change auto reorder setting",
+
+                user["id"]
 
             )
-
-
-
-            clear_settings_cache()
 
 
 
             notify_success(
 
-                "📦 Inventory Settings Saved"
+                "📦 Inventory change request submitted for approval"
 
             )
-
-
-
-            st.rerun()
 
 
 
@@ -198,6 +167,6 @@ def render_inventory_settings(settings,
 
             notify_error(
 
-                f"Inventory Save Failed : {e}"
+                f"Inventory Request Failed : {e}"
 
             )
