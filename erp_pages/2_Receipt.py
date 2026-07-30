@@ -324,7 +324,10 @@ def run():
 
     ):
 
-
+        st.write(
+    "RAW TIME:",
+    receipt.get("created_at")
+        )
         st.write(
 
             "📅 Date:",
