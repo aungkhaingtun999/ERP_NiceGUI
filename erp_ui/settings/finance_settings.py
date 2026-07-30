@@ -1,15 +1,19 @@
 # ==============================================================================
 # erp_ui/settings/finance_settings.py
-# ERP FINANCE SETTINGS COMPONENT
+# ERP FINANCE SETTINGS COMPONENT v2.0
+#
+# Approval Workflow Enabled
+#
+# Request -> Approval -> Apply
+#
 # ==============================================================================
 
 
 import streamlit as st
 
 
-from erp_core.loaders.settings_loader import (
-    clear_settings_cache,
-    save_setting as save_erp_setting,
+from erp_core.services.settings_service import (
+    SettingsService,
 )
 
 
@@ -21,50 +25,18 @@ from utils.notification import (
 
 
 # ==============================================================================
-# SAVE WRAPPER
-# ==============================================================================
-
-
-def save_setting(key, value):
-
-    result = save_erp_setting(
-        key,
-        value
-    )
-
-
-    if not result.get(
-        "success",
-        False
-    ):
-
-        raise Exception(
-
-            result.get(
-
-                "message",
-
-                "Save failed"
-
-            )
-
-        )
-
-
-
-# ==============================================================================
 # FINANCE SETTINGS UI
 # ==============================================================================
 
 
-def render_finance_settings(settings,
-    user):
+def render_finance_settings(
+    settings,
+    user
+):
 
 
     st.subheader(
-
         "💱 Finance Settings"
-
     )
 
 
@@ -73,25 +45,19 @@ def render_finance_settings(settings,
     # CURRENCY
     # --------------------------------------------------------------------------
 
-
     currency_list = [
 
         "MMK",
-
         "USD",
-
         "THB",
-
         "SGD"
 
     ]
 
 
-
     current_currency = settings.get(
-
-        "CURRENCY"
-
+        "CURRENCY",
+        "MMK"
     )
 
 
@@ -108,9 +74,7 @@ def render_finance_settings(settings,
         currency_list,
 
         index=currency_list.index(
-
             current_currency
-
         )
 
     )
@@ -121,18 +85,13 @@ def render_finance_settings(settings,
     # PAYMENT METHODS
     # --------------------------------------------------------------------------
 
-
     payment_default = settings.get(
 
-        "PAYMENT_METHODS"
+        "PAYMENT_METHODS",
+
+        "Cash"
 
     )
-
-
-    if not payment_default:
-
-        payment_default = "Cash"
-
 
 
     payment_methods = st.multiselect(
@@ -158,13 +117,12 @@ def render_finance_settings(settings,
 
 
     # --------------------------------------------------------------------------
-    # SAVE
+    # SUBMIT REQUEST
     # --------------------------------------------------------------------------
-
 
     if st.button(
 
-        "💾 Save Finance Settings",
+        "📤 Submit Finance Change Request",
 
         use_container_width=True
 
@@ -174,39 +132,39 @@ def render_finance_settings(settings,
         try:
 
 
-            save_setting(
+            SettingsService.request_change(
 
                 "CURRENCY",
 
-                currency
+                currency,
+
+                "Finance Currency Change",
+
+                user["id"]
 
             )
 
 
-            save_setting(
+
+            SettingsService.request_change(
 
                 "PAYMENT_METHODS",
 
-                ",".join(
+                ",".join(payment_methods),
 
-                    payment_methods
+                "Payment Methods Change",
 
-                )
+                user["id"]
 
             )
-
-
-
-            clear_settings_cache()
 
 
 
             notify_success(
 
-                "💱 Finance Settings Saved"
+                "💱 Finance Change Request Submitted. Waiting Approval."
 
             )
-
 
 
             st.rerun()
@@ -218,6 +176,6 @@ def render_finance_settings(settings,
 
             notify_error(
 
-                f"Finance Save Failed : {e}"
+                f"Finance Request Failed : {e}"
 
             )
