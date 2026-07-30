@@ -100,3 +100,68 @@ def get_pending_setting_requests():
 
 
     return rows
+
+
+# ==============================================================================
+# APPROVE SETTING CHANGE
+# ==============================================================================
+
+
+from erp_core.base_repo import get_db
+
+
+
+def approve_setting_change(
+    request_id,
+    checker_id
+):
+
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+
+    try:
+
+
+        cur.execute(
+
+            """
+            SELECT approve_setting_change_rpc(
+                %s,
+                %s
+            )
+            """,
+
+            (
+                request_id,
+                checker_id
+            )
+
+        )
+
+
+        result = cur.fetchone()[0]
+
+
+        conn.commit()
+
+
+        return result
+
+
+
+    except Exception as e:
+
+
+        conn.rollback()
+
+        raise e
+
+
+
+    finally:
+
+
+        conn.close()
