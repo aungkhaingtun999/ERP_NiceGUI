@@ -4,7 +4,7 @@
 # ==============================================================================
 
 
-from erp_core.base_repo import get_db
+from erp_core.base_repo import get_connection
 
 
 
@@ -16,7 +16,7 @@ def create_setting_request(
     requested_by
 ):
 
-    conn = get_db()
+    conn = get_connection()
 
     cur = conn.cursor()
 
@@ -67,7 +67,7 @@ def create_setting_request(
 def get_pending_setting_requests():
 
 
-    conn = get_db()
+    conn = get_connection()
 
     cur = conn.cursor()
 
@@ -117,7 +117,7 @@ def approve_setting_change(
 ):
 
 
-    conn = get_db()
+    conn = get_connection()
 
     cur = conn.cursor()
 
