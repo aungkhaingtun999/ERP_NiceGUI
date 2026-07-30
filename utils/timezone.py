@@ -38,10 +38,13 @@ def to_myanmar_datetime(value):
 
         if isinstance(value, str):
 
+            value = value.strip()
+
             value = value.replace(
                 "Z",
                 "+00:00"
             )
+
 
             dt = datetime.fromisoformat(
                 value
@@ -50,8 +53,6 @@ def to_myanmar_datetime(value):
         else:
 
             dt = value
-
-
 
         if dt.tzinfo is None:
 
