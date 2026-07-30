@@ -295,14 +295,28 @@ def render_receipt():
 
 
 
-    sale_date = data.get(
+    # --------------------------------------------------------------------------
+# DATE
+# --------------------------------------------------------------------------
 
-        "date",
+raw_date = data.get(
+    "date"
+)
 
-        format_datetime()
 
+if raw_date:
+
+    sale_date = format_datetime(
+        raw_date
     )
 
+else:
+
+    sale_date = format_datetime(
+        data.get(
+            "created_at"
+        )
+    )
 
 
     cashier = data.get(
