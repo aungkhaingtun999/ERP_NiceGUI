@@ -30,7 +30,9 @@ from erp_ui.settings.inventory_settings import (
 from erp_ui.settings.finance_settings import (
     render_finance_settings
 )
-
+from erp_ui.settings.system_status import (
+    render_system_status
+)
 
 
 from erp_core.loaders.settings_loader import (
@@ -312,48 +314,7 @@ def run():
     # ==========================================================================
     # SYSTEM STATUS
     # ==========================================================================
-
-
-    st.subheader(
-
-        "🖥 System Status"
-
-    )
-
-
-
-    st.success(
-"""
-✔ ERP Core Active
-
-✔ Database Connected
-
-✔ Settings Service Connected
-
-✔ Settings Cache Active
-
-✔ Pricing Engine Connected
-
-✔ Tax Engine Connected
-
-✔ Inventory Engine Connected
-
-✔ POS Ready
-
-✔ Product / Category / Global Rule Ready
-"""
-    )
-
-
-
-    st.success(
-
-        "🚀 ERP Control Center Fully Operational"
-
-    )
-
-
-
+    render_system_status()
 
 
 # ==============================================================================
