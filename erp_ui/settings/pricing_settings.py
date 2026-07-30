@@ -219,6 +219,88 @@ Pricing Priority
             )
         )
 
+    # --------------------------------------------------------------------------
+    # SUBMIT CHANGE REQUEST
+    # --------------------------------------------------------------------------
 
+    if st.button(
+        "📨 Submit Pricing Change Request",
+        use_container_width=True
+    ):
+
+        try:
+
+            changes = [
+
+                (
+                    "DEFAULT_MARKUP_PERCENT",
+                    default_markup,
+                    "Change global markup percent"
+                ),
+
+                (
+                    "PRICING_PRIORITY",
+                    pricing_priority,
+                    "Change pricing priority"
+                ),
+
+                (
+                    "ENABLE_PRODUCT_MARKUP",
+                    enable_product_markup,
+                    "Change product markup rule"
+                ),
+
+                (
+                    "ENABLE_CATEGORY_MARKUP",
+                    enable_category_markup,
+                    "Change category markup rule"
+                ),
+
+                (
+                    "PRICING_METHOD",
+                    pricing_method,
+                    "Change pricing calculation method"
+                ),
+
+                (
+                    "AUTO_UPDATE_SELLING_PRICE",
+                    auto_update_price,
+                    "Change auto update price rule"
+                ),
+
+                (
+                    "ALLOW_MANUAL_PRICE_OVERRIDE",
+                    allow_manual_override,
+                    "Change manual override permission"
+                ),
+
+            ]
+
+
+            for key, value, reason in changes:
+
+                SettingsService.request_change(
+
+                    key,
+
+                    str(value),
+
+                    reason,
+
+                    user["id"]
+
+                )
+
+
+            notify_success(
+                "✅ Pricing change request submitted for approval"
+            )
+
+
+        except Exception as e:
+
+            notify_error(
+                f"Pricing Request Failed : {e}"
+        )
 
    
