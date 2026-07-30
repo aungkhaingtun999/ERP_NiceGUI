@@ -44,7 +44,7 @@ MENU = {
 
         ("🧾", "Receipt", "2_Receipt"),
 
-        ("🧾", "Receipt Viewer", "6_Receipt_Viewer"),
+        
 
         ("🛍", "Purchase", "7_Purchase"),
 
@@ -105,8 +105,7 @@ MENU = {
 
         ("📱", "Mobile Inventory", "2_Mobile_Inventory"),
 
-        ("🧾", "Receipt Viewer", "6_Receipt_Viewer"),
-
+        
         ("🛍", "Purchase", "7_Purchase"),
 
         ("🔁", "Transfer", "8_Transfer"),
@@ -137,7 +136,7 @@ MENU = {
 
         ("🛒", "POS", "1_POS"),
 
-        ("🧾", "Receipt Viewer", "6_Receipt_Viewer"),
+        
 
         ("↩️", "Refund", "5_Refund"),
 
