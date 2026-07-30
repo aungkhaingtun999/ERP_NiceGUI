@@ -323,7 +323,17 @@ raw_time = (
     or
     receipt.get("date")
 )
+from datetime import datetime
 
+st.write(
+    "PYTHON NOW UTC:",
+    datetime.utcnow()
+)
+
+st.write(
+    "PYTHON NOW LOCAL:",
+    datetime.now()
+)
 
 st.write(
     "RAW TIME:",
