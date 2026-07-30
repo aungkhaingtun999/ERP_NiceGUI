@@ -314,45 +314,21 @@ def run():
 
 
 
-    # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 # DATE
 # --------------------------------------------------------------------------
 
-from datetime import datetime, timezone
-
-raw_time = receipt.get("created_at") or receipt.get("date")
-
-# datetime.utcnow() is deprecated; use datetime.now(timezone.utc) instead
-st.write(
-    "PYTHON NOW UTC:",
-    datetime.now(timezone.utc),
+raw_time = (
+    receipt.get("created_at")
+    or
+    receipt.get("date")
 )
-
-st.write(
-    "PYTHON NOW LOCAL:",
-    datetime.now(),
-)
-
-st.write(
-    "RAW TIME:",
-    raw_time,
-)
-
-
 
 if raw_time:
 
     st.write(
-
-        "📅 Myanmar Time:",
-
-        format_db_datetime(
-
-            raw_time
-
-        )
-
+        "📅 Date:",
+        format_db_datetime(raw_time)
     )
 
 
