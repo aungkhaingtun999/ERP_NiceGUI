@@ -296,27 +296,40 @@ def render_receipt():
 
 
     # --------------------------------------------------------------------------
-# DATE
-# --------------------------------------------------------------------------
+    # SAFE DATA
+    # --------------------------------------------------------------------------
 
-raw_date = data.get(
-    "date"
-)
-
-
-if raw_date:
-
-    sale_date = format_datetime(
-        raw_date
+    invoice_no = data.get(
+        "invoice_no",
+        "-"
     )
 
-else:
 
-    sale_date = format_datetime(
-        data.get(
-            "created_at"
+    # --------------------------------------------------------------------------
+    # DATE
+    # --------------------------------------------------------------------------
+
+    raw_date = (
+
+        data.get("date")
+
+        or
+
+        data.get("created_at")
+
+    )
+
+
+    if raw_date:
+
+        sale_date = format_datetime(
+            raw_date
         )
-    )
+
+    else:
+
+        sale_date = "-"
+
 
 
     cashier = data.get(
