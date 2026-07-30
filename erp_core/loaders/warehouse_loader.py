@@ -13,6 +13,11 @@ from ..base_repo import (
 )
 
 
+from ..config import (
+    Tables
+)
+
+
 from ..context import (
     CacheManager
 )
@@ -68,6 +73,52 @@ def get_warehouses():
 
 def get_default_warehouse_id():
 
+
+    try:
+
+
+        result = (
+
+            db()
+
+            .table(
+                Tables.SETTINGS
+            )
+
+            .select(
+                "value"
+            )
+
+            .eq(
+                "key",
+                "DEFAULT_WAREHOUSE_ID"
+            )
+
+            .limit(1)
+
+            .execute()
+
+        )
+
+
+        if result.data:
+
+
+            return int(
+                result.data[0]["value"]
+            )
+
+
+    except Exception as e:
+
+
+        log_error(
+            f"default warehouse setting error: {e}"
+        )
+
+
+
+    # fallback
     warehouses = get_warehouses()
 
 
@@ -79,4 +130,4 @@ def get_default_warehouse_id():
         )
 
 
-    return 1
+    return None
