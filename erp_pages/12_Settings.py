@@ -21,7 +21,9 @@ import streamlit as st
 from erp_ui.settings.pricing_settings import (
     render_pricing_settings
 )
-
+from erp_ui.settings.accounting_settings import (
+    render_accounting_settings
+)
 from erp_core.loaders.settings_loader import (
 
     get_all_settings_cached,
@@ -268,109 +270,8 @@ def run():
     # ACCOUNTING & TAX SETTINGS
     # ==========================================================================
 
-
+    render_accounting_settings(settings)
     st.subheader(
-
-        "🧾 Accounting & Tax"
-
-    )
-
-
-
-    # --------------------------------------------------------------------------
-    # TAX RATE FROM DATABASE ONLY
-    # --------------------------------------------------------------------------
-
-
-    tax_value = settings.get(
-
-        "DEFAULT_TAX_RATE"
-
-    )
-
-
-
-    if tax_value is None:
-
-
-        st.warning(
-
-            "⚠ DEFAULT_TAX_RATE is not configured in ERP Settings Database."
-
-        )
-
-
-        tax_value = 0
-
-
-
-    try:
-
-
-        active_tax_rate = float(
-
-            tax_value
-
-        )
-
-
-    except Exception:
-
-
-        active_tax_rate = 0
-
-
-
-
-
-
-    st.markdown(
-
-f"""
-<div style="
-padding:18px;
-border-radius:12px;
-border:1px solid #999;
-">
-
-<div>
-📌 Current Tax Rate
-</div>
-
-<h2>
-{active_tax_rate:.2f} %
-</h2>
-
-
-<div>
-Controlled by ERP Settings Database
-</div>
-
-</div>
-""",
-
-unsafe_allow_html=True
-
-    )
-
-
-
-
-
-    tax_rate = st.number_input(
-
-        "Change Tax Rate (%)",
-
-        min_value=0.0,
-
-        max_value=100.0,
-
-        value=active_tax_rate,
-
-        step=0.1
-
-    )
-
 
 
 
