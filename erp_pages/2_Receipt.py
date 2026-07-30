@@ -326,7 +326,7 @@ def run():
 
     if raw_time:
 
-        st.write(
+    st.write(
 
             "📅 Date:",
 
@@ -340,7 +340,7 @@ def run():
 
     else:
 
-        st.write(
+    st.write(
 
             "📅 Date:",
 
