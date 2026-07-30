@@ -18,7 +18,9 @@ from utils.notification import (
     notify_success,
     notify_error,
 )
-
+from erp_core.services.settings_service import (
+    SettingsService
+)
 
 
 # ==============================================================================
