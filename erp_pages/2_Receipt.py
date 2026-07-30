@@ -327,8 +327,25 @@ raw_time = (
 if raw_time:
 
     st.write(
+
         "📅 Date:",
-        format_db_datetime(raw_time)
+
+        format_db_datetime(
+
+            raw_time
+
+        )
+
+    )
+
+else:
+
+    st.write(
+
+        "📅 Date:",
+
+        "-"
+
     )
 
 
