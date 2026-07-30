@@ -9,15 +9,17 @@ import streamlit as st
 
 from erp_core.loaders.settings_loader import (
     get_bool,
-    
+)
+
+
+from erp_core.services.settings_service import (
+    SettingsService,
+)
 
 
 from utils.notification import (
     notify_success,
     notify_error,
-)
-from erp_core.services.settings_service import (
-    SettingsService
 )
 
 priority_labels = {
