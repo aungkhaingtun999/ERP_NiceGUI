@@ -20,32 +20,21 @@ from erp_core.services.settings_service import (
     SettingsService
 )
 
+priority_labels = {
 
-# ==============================================================================
-# SAVE WRAPPER
-# ==============================================================================
+    "OWNER_FIRST":
+        "Owner Price → Product → Category → Global",
 
+    "PRODUCT_FIRST":
+        "Product → Category → Global",
 
-def save_setting(key, value):
+    "CATEGORY_FIRST":
+        "Category → Product → Global",
 
-    result = save_erp_setting(
-        key,
-        value
-    )
+    "GLOBAL_FIRST":
+        "Global Only"
 
-
-    if not result.get(
-        "success",
-        False
-    ):
-
-        raise Exception(
-            result.get(
-                "message",
-                "Save failed"
-            )
-        )
-
+}
 
 
 # ==============================================================================
