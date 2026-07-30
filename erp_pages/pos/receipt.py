@@ -420,22 +420,22 @@ change = safe_float(
 
         f"""
 
-Invoice No:
+    Invoice No:
 
-{invoice_no}
-
-
-
-Date:
-
-{sale_date}
+    {invoice_no}
 
 
 
-Cashier:
+    Date:
 
-{cashier}
+    {sale_date}
 
+
+
+    Cashier:
+
+    {cashier}
+ 
 """
 
     )
