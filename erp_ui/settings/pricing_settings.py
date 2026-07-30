@@ -9,9 +9,7 @@ import streamlit as st
 
 from erp_core.loaders.settings_loader import (
     get_bool,
-    clear_settings_cache,
-    save_setting as save_erp_setting,
-)
+    
 
 
 from utils.notification import (
@@ -55,8 +53,7 @@ def save_setting(key, value):
 # ==============================================================================
 
 
-def render_pricing_settings(settings):
-
+def render_pricing_settings(settings, user):
 
     st.subheader(
         "💰 Pricing Engine"
@@ -133,27 +130,31 @@ All values are controlled by ERP Settings Database.
 
     priority_options = [
 
+        "OWNER_FIRST",
+
         "PRODUCT_FIRST",
 
         "CATEGORY_FIRST",
 
         "GLOBAL_FIRST"
 
-    ]
+]
 
+priority_labels = {
 
-    priority_labels = {
+    "OWNER_FIRST":
+        "Owner Price → Product → Category → Global",
 
-        "PRODUCT_FIRST":
-            "Product → Category → Global",
+    "PRODUCT_FIRST":
+        "Product → Category → Global",
 
-        "CATEGORY_FIRST":
-            "Category → Product → Global",
+    "CATEGORY_FIRST":
+        "Category → Product → Global",
 
-        "GLOBAL_FIRST":
-            "Global Only"
+    "GLOBAL_FIRST":
+        "Global Only"
 
-    }
+}
 
 
 
@@ -333,60 +334,97 @@ All values are controlled by ERP Settings Database.
     # --------------------------------------------------------------------------
     # SAVE
     # --------------------------------------------------------------------------
+# SAVE REQUEST
+# --------------------------------------------------------------------------
 
 
-    if st.button(
+if st.button(
 
-        "💾 Save Pricing Settings",
+    "📨 Submit Pricing Change Request",
 
-        use_container_width=True
+    use_container_width=True
 
-    ):
-
-
-        try:
+):
 
 
-            save_setting(
-                "DEFAULT_MARKUP_PERCENT",
-                default_markup
+    try:
+
+
+        changes = [
+
+
+            ("DEFAULT_MARKUP_PERCENT", default_markup),
+
+            ("PRICING_PRIORITY", pricing_priority),
+
+            ("ENABLE_PRODUCT_MARKUP", enable_product_markup),
+
+            ("ENABLE_CATEGORY_MARKUP", enable_category_markup),
+
+            ("PRICING_METHOD", pricing_method),
+
+            ("AUTO_UPDATE_SELLING_PRICE", auto_update_price),
+
+            ("ALLOW_MANUAL_PRICE_OVERRIDE", allow_manual_override),
+
+        ]
+
+
+
+        created = 0
+
+
+
+        for key, value in changes:
+
+
+            result = SettingsService.request_change(
+
+                setting_key=key,
+
+                new_value=value,
+
+                reason="Pricing settings updated from ERP Control Center",
+
+                requested_by=user["id"]
+
             )
 
 
-            save_setting(
-                "PRICING_PRIORITY",
-                pricing_priority
+            if result.get("success"):
+
+                created += 1
+
+
+
+        if created > 0:
+
+
+            notify_success(
+
+                f"📨 {created} pricing change request(s) submitted for approval."
+
             )
 
 
-            save_setting(
-                "ENABLE_PRODUCT_MARKUP",
-                enable_product_markup
-            )
+            st.rerun()
 
 
-            save_setting(
-                "ENABLE_CATEGORY_MARKUP",
-                enable_category_markup
-            )
+        else:
 
 
-            save_setting(
-                "PRICING_METHOD",
-                pricing_method
-            )
+            st.info("No pricing changes detected.")
 
 
-            save_setting(
-                "AUTO_UPDATE_SELLING_PRICE",
-                auto_update_price
-            )
+
+    except Exception as e:
 
 
-            save_setting(
-                "ALLOW_MANUAL_PRICE_OVERRIDE",
-                allow_manual_override
-            )
+        notify_error(
+
+            f"Pricing Request Failed : {e}"
+
+        )
 
 
             clear_settings_cache()
