@@ -58,7 +58,8 @@ def save_setting(key, value):
 # ==============================================================================
 
 
-def render_inventory_settings(settings):
+def render_inventory_settings(settings,
+    user):
 
 
     st.subheader(
