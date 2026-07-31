@@ -303,92 +303,62 @@ def main():
 
 
     else:
-        for row in queue:
-
-
+    for row in queue:
         st.write(
-        f"""
-        ### {row.get('name')}
+            f"""
+            ### {row.get('name')}
 
-        Old:
-        {money(row.get('old_selling_price'))}
+            Old:
+            {money(row.get('old_selling_price'))}
 
+            New:
+            {money(row.get('new_selling_price'))}
+            """
+        )
 
-        New:
-        {money(row.get('new_selling_price'))}
+        col1, col2 = st.columns(2)
 
-        """
-    )
-
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
-
-        if st.button(
-            "✅ Approve",
-            key=f"approve_{row.get('id')}"
-        ):
-
-
-            user = st.session_state.get(
-                "user",
-                {}
-            )
-
-
-            result = approve_and_apply_price(
-
-                row,
-
-                user.get("id")
-
-            )
-
-
-            if result.get("success"):
-
-                st.success(
-                    "Price Approved"
+        with col1:
+            if st.button(
+                "✅ Approve",
+                key=f"approve_{row.get('id')}"
+            ):
+                user = st.session_state.get(
+                    "user",
+                    {}
+                )
+                
+                result = approve_and_apply_price(
+                    row,
+                    user.get("id")
                 )
 
+                if result.get("success"):
+                    st.success(
+                        "Price Approved"
+                    )
+                    st.rerun()
+
+        with col2:
+            if st.button(
+                "❌ Reject",
+                key=f"reject_{row.get('id')}"
+            ):
+                user = st.session_state.get(
+                    "user",
+                    {}
+                )
+                
+                reject_import(
+                    row.get("id"),
+                    user.get("id"),
+                    "Rejected by admin"
+                )
+
+                st.warning(
+                    "Rejected"
+                )
                 st.rerun()
-
-
-
-    with col2:
-
-
-        if st.button(
-            "❌ Reject",
-            key=f"reject_{row.get('id')}"
-        ):
-
-
-            user = st.session_state.get(
-                "user",
-                {}
-            )
-
-
-            reject_import(
-
-                row.get("id"),
-
-                user.get("id"),
-
-                "Rejected by admin"
-
-            )
-
-
-            st.warning(
-                "Rejected"
-            )
-
-
-            st.rerun()
 
 
         
