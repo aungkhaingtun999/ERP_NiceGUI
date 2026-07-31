@@ -1,7 +1,7 @@
 # ==============================================================================
 # erp_core/services/settings_service.py
 # ERP SETTINGS SERVICE
-# Maker - Checker Workflow
+# Maker - Checker Workflow v2.0
 # ==============================================================================
 
 
@@ -19,38 +19,7 @@ class SettingsService:
     def __init__(self, db):
 
         self.db = db
-@staticmethod
-def reject_request(
-    request_id,
-    checker_id,
-    reason
-):
 
-    from erp_core.repositories.settings_repository import (
-        reject_setting_change
-    )
-
-    return reject_setting_change(
-        request_id,
-        checker_id,
-        reason
-    )
-
-
-@staticmethod
-def cancel_request(
-    request_id,
-    user_id
-):
-
-    from erp_core.repositories.settings_repository import (
-        cancel_setting_change
-    )
-
-    return cancel_setting_change(
-        request_id,
-        user_id
-    )
 
 
     # --------------------------------------------------------------------------
@@ -59,9 +28,7 @@ def cancel_request(
 
     def get_all_settings(self):
 
-
         try:
-
 
             result = (
                 self.db
@@ -74,27 +41,20 @@ def cancel_request(
             settings = {}
 
 
-            for row in result.data:
+            for row in result.data or []:
 
-
-                settings[
-                    row["key"]
-                ] = row["value"]
-
+                settings[row["key"]] = row["value"]
 
 
             return settings
 
 
-
         except Exception as e:
-
 
             print(
                 "GET SETTINGS ERROR:",
                 e
             )
-
 
             return {}
 
@@ -102,6 +62,7 @@ def cancel_request(
 
     # --------------------------------------------------------------------------
     # CREATE CHANGE REQUEST
+    # Maker
     # --------------------------------------------------------------------------
 
     @staticmethod
@@ -121,19 +82,73 @@ def cancel_request(
         settings = get_all_settings_cached()
 
 
+
         old_value = settings.get(
             setting_key,
             ""
         )
 
 
+
+        old_value = str(old_value)
+
+        new_value = str(new_value)
+
+
+
+        # --------------------------------------------------
+        # DUPLICATE PENDING CHECK
+        # --------------------------------------------------
+
+        pending_requests = (
+            get_pending_setting_requests()
+        )
+
+
+
+        for req in pending_requests:
+
+
+            if req["setting_key"] == setting_key:
+
+
+                return {
+
+                    "success": False,
+
+                    "message":
+                    "A pending request already exists for this setting"
+
+                }
+
+
+
+
+        # --------------------------------------------------
+        # NO CHANGE CHECK
+        # --------------------------------------------------
+
+        if old_value == new_value:
+
+
+            return {
+
+                "success": False,
+
+                "message":
+                "No change detected"
+
+            }
+
+
+
         request_id = create_setting_request(
 
             setting_key,
 
-            str(old_value),
+            old_value,
 
-            str(new_value),
+            new_value,
 
             reason,
 
@@ -142,18 +157,25 @@ def cancel_request(
         )
 
 
+
         return {
 
             "success": True,
 
-            "request_id": request_id
+            "message":
+            "Setting change request created",
+
+            "request_id":
+            request_id
 
         }
 
 
 
+
+
     # --------------------------------------------------------------------------
-    # PENDING LIST
+    # PENDING REQUESTS
     # --------------------------------------------------------------------------
 
     @staticmethod
@@ -163,8 +185,10 @@ def cancel_request(
 
 
 
+
     # --------------------------------------------------------------------------
     # APPROVE REQUEST
+    # Checker Only
     # --------------------------------------------------------------------------
 
     @staticmethod
@@ -174,7 +198,7 @@ def cancel_request(
     ):
 
 
-        return approve_setting_change(
+        result = approve_setting_change(
 
             request_id,
 
@@ -182,8 +206,16 @@ def cancel_request(
 
         )
 
+
+        return result
+
+
+
+
+
     # --------------------------------------------------------------------------
     # REJECT REQUEST
+    # Checker Only
     # --------------------------------------------------------------------------
 
     @staticmethod
@@ -193,28 +225,37 @@ def cancel_request(
         reason
     ):
 
+
         from erp_core.repositories.settings_repository import (
             reject_setting_change
         )
 
 
         return reject_setting_change(
+
             request_id,
+
             checker_id,
+
             reason
+
         )
+
+
 
 
 
     # --------------------------------------------------------------------------
     # CANCEL REQUEST
+    # Maker Only
     # --------------------------------------------------------------------------
 
     @staticmethod
     def cancel_request(
         request_id,
-        maker_id
+        user_id
     ):
+
 
         from erp_core.repositories.settings_repository import (
             cancel_setting_change
@@ -222,6 +263,9 @@ def cancel_request(
 
 
         return cancel_setting_change(
+
             request_id,
-            maker_id
+
+            user_id
+
         )
