@@ -1,19 +1,36 @@
 # ==============================================================================
 # erp_core/services/settings_service.py
-# ERP SETTINGS SERVICE
-# Maker - Checker Workflow v2.0
+# ERP SETTINGS SERVICE v4.0
+#
+# Maker - Checker Approval Workflow
+#
+# Features:
+# - Create Setting Request
+# - Duplicate Pending Block
+# - Approve
+# - Reject
+# - Cancel
 # ==============================================================================
 
 
 from erp_core.repositories.settings_repository import (
+
     create_setting_request,
+
     get_pending_setting_requests,
+
     approve_setting_change,
+
+    reject_setting_change,
+
+    cancel_setting_change,
+
 )
 
 
 
 class SettingsService:
+
 
 
     def __init__(self, db):
@@ -22,19 +39,24 @@ class SettingsService:
 
 
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # LOAD ALL SETTINGS
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
     def get_all_settings(self):
 
         try:
 
             result = (
+
                 self.db
+
                 .table("settings")
+
                 .select("*")
+
                 .execute()
+
             )
 
 
@@ -49,56 +71,76 @@ class SettingsService:
             return settings
 
 
+
         except Exception as e:
 
+
             print(
-                "GET SETTINGS ERROR:",
+                "SETTINGS LOAD ERROR:",
                 e
             )
+
 
             return {}
 
 
 
-    # --------------------------------------------------------------------------
-    # CREATE CHANGE REQUEST
-    # Maker
-    # --------------------------------------------------------------------------
+
+    # ==========================================================================
+    # CREATE REQUEST
+    # MAKER
+    # ==========================================================================
+
 
     @staticmethod
     def request_change(
+
         setting_key,
+
         new_value,
+
         reason,
+
         requested_by
+
     ):
+
+
         # --------------------------------------------------
-        # BLOCK DUPLICATE PENDING REQUEST
+        # DUPLICATE PENDING CHECK
         # --------------------------------------------------
 
-        from erp_core.repositories.settings_repository import (
-            get_pending_setting_requests
-        )
+        pending = get_pending_setting_requests()
 
 
-        pending_requests = get_pending_setting_requests()
+
+        for req in pending:
 
 
-        for req in pending_requests:
+            if req.get("setting_key") == setting_key:
 
-            if req["setting_key"] == setting_key:
 
                 return {
 
                     "success": False,
 
                     "message":
-                    f"⏳ {setting_key} already has a pending approval request."
+                    f"⏳ {setting_key} already waiting approval"
 
                 }
 
+
+
+
+        # --------------------------------------------------
+        # CURRENT VALUE
+        # --------------------------------------------------
+
+
         from erp_core.loaders.settings_loader import (
+
             get_all_settings_cached
+
         )
 
 
@@ -106,27 +148,28 @@ class SettingsService:
 
 
 
-        old_value = settings.get(
-            setting_key,
-            ""
+        old_value = str(
+
+            settings.get(
+
+                setting_key,
+
+                ""
+
+            )
+
         )
 
 
-
-        old_value = str(old_value)
 
         new_value = str(new_value)
 
 
 
-
-
-
-
-
         # --------------------------------------------------
-        # NO CHANGE CHECK
+        # NO CHANGE
         # --------------------------------------------------
+
 
         if old_value == new_value:
 
@@ -140,6 +183,12 @@ class SettingsService:
 
             }
 
+
+
+
+        # --------------------------------------------------
+        # CREATE REQUEST
+        # --------------------------------------------------
 
 
         request_id = create_setting_request(
@@ -163,7 +212,7 @@ class SettingsService:
             "success": True,
 
             "message":
-            "Setting change request created",
+            "Change request created. Waiting approval.",
 
             "request_id":
             request_id
@@ -173,10 +222,10 @@ class SettingsService:
 
 
 
+    # ==========================================================================
+    # PENDING
+    # ==========================================================================
 
-    # --------------------------------------------------------------------------
-    # PENDING REQUESTS
-    # --------------------------------------------------------------------------
 
     @staticmethod
     def get_pending_requests():
@@ -186,19 +235,23 @@ class SettingsService:
 
 
 
-    # --------------------------------------------------------------------------
-    # APPROVE REQUEST
-    # Checker Only
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # APPROVE
+    # CHECKER ONLY
+    # ==========================================================================
+
 
     @staticmethod
     def approve_request(
+
         request_id,
+
         checker_id
+
     ):
 
 
-        result = approve_setting_change(
+        return approve_setting_change(
 
             request_id,
 
@@ -207,28 +260,24 @@ class SettingsService:
         )
 
 
-        return result
 
 
+    # ==========================================================================
+    # REJECT
+    # CHECKER ONLY
+    # ==========================================================================
 
-
-
-    # --------------------------------------------------------------------------
-    # REJECT REQUEST
-    # Checker Only
-    # --------------------------------------------------------------------------
 
     @staticmethod
     def reject_request(
+
         request_id,
+
         checker_id,
+
         reason
+
     ):
-
-
-        from erp_core.repositories.settings_repository import (
-            reject_setting_change
-        )
 
 
         return reject_setting_change(
@@ -244,22 +293,20 @@ class SettingsService:
 
 
 
+    # ==========================================================================
+    # CANCEL
+    # MAKER ONLY
+    # ==========================================================================
 
-    # --------------------------------------------------------------------------
-    # CANCEL REQUEST
-    # Maker Only
-    # --------------------------------------------------------------------------
 
     @staticmethod
     def cancel_request(
+
         request_id,
+
         user_id
+
     ):
-
-
-        from erp_core.repositories.settings_repository import (
-            cancel_setting_change
-        )
 
 
         return cancel_setting_change(
