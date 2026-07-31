@@ -159,7 +159,7 @@ def run():
     "Enterprise Configuration Center (Database Driven)"
     )
 
-    render_settings_summary(settings)
+    render_settings_summary(settings, user)
 
     st.divider()
 
