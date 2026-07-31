@@ -1,24 +1,16 @@
 # ==============================================================================
 # erp_pages/pos/main.py
-# ERP ENTERPRISE POS MAIN CONTROLLER v13.0 COMPACT EDITION
+# ERP ENTERPRISE POS MAIN CONTROLLER v13.1 FINAL COMPACT
 #
-# Responsibilities:
-# - POS Controller
-# - Compact Layout
-# - Product / Cart Side By Side
-# - Payment Integration
+# UI:
+# - Compact POS Layout
+# - Product + Cart Side Layout
+# - Minimal Vertical Space
 #
-# Flow:
-#
-# LOGIN
-#   ↓
-# SESSION
-#   ↓
-# PRODUCT + CART
-#   ↓
-# PAYMENT
-#   ↓
-# RECEIPT
+# Logic:
+# - Existing Checkout
+# - Existing Payment Engine
+# - Existing Pricing Engine
 #
 # ==============================================================================
 
@@ -84,6 +76,91 @@ from language import (
 
 
 # ==============================================================================
+# COMPACT CSS
+# ==============================================================================
+
+
+def compact_css():
+
+    st.markdown(
+        """
+        <style>
+
+        .block-container {
+
+            padding-top: 0.8rem;
+
+            padding-bottom: 0.8rem;
+
+        }
+
+
+        div[data-testid="stVerticalBlock"] {
+
+            gap: 0.25rem;
+
+        }
+
+
+        div[data-testid="stHorizontalBlock"] {
+
+            gap: 0.4rem;
+
+        }
+
+
+        h1 {
+
+            margin-bottom:0.2rem;
+
+            font-size:1.8rem;
+
+        }
+
+
+        h2 {
+
+            margin-bottom:0.1rem;
+
+            font-size:1.3rem;
+
+        }
+
+
+        h3 {
+
+            margin-bottom:0.1rem;
+
+            font-size:1.1rem;
+
+        }
+
+
+        .stButton button {
+
+            min-height:2rem;
+
+            padding-top:0.1rem;
+
+            padding-bottom:0.1rem;
+
+        }
+
+
+        </style>
+        """,
+
+        unsafe_allow_html=True
+
+    )
+
+
+
+
+
+
+
+# ==============================================================================
 # MONEY
 # ==============================================================================
 
@@ -106,11 +183,21 @@ def money(value):
 
 
 # ==============================================================================
-# RUN POS
+# MAIN RUN
 # ==============================================================================
 
 
 def run():
+
+
+    # --------------------------------------------------------------------------
+    # UI COMPACT MODE
+    # --------------------------------------------------------------------------
+
+    compact_css()
+
+
+
 
 
     # --------------------------------------------------------------------------
@@ -135,9 +222,11 @@ def run():
 
     if not is_authenticated():
 
+
         st.warning(
             "Please login first."
         )
+
 
         st.stop()
 
@@ -170,6 +259,7 @@ def run():
             "Default warehouse not configured."
         )
 
+
         st.stop()
 
 
@@ -177,12 +267,15 @@ def run():
 
 
     # --------------------------------------------------------------------------
-    # RECEIPT MODE
+    # RECEIPT
     # --------------------------------------------------------------------------
 
     if st.session_state.get(
+
         "show_receipt",
+
         False
+
     ):
 
 
@@ -198,36 +291,33 @@ def run():
     # HEADER
     # --------------------------------------------------------------------------
 
-    st.title(
-        "🛒 ERP Enterprise POS"
+    st.markdown(
+
+        "### 🛒 ERP Enterprise POS"
+
     )
 
 
     st.caption(
-        "Fast Compact Sales System v13"
+
+        "Fast Compact Sales System v13.1"
+
     )
 
 
-    st.divider()
-
 
 
 
 
     # ==========================================================================
-    # MAIN COMPACT AREA
-    #
-    # LEFT 60%
-    # PRODUCT
-    #
-    # RIGHT 40%
-    # CART
-    #
+    # PRODUCT + CART AREA
     # ==========================================================================
 
 
-    product_col, cart_col = st.columns(
+    product_area, cart_area = st.columns(
+
         [6,4]
+
     )
 
 
@@ -235,50 +325,57 @@ def run():
 
 
     # ==========================================================================
-    # PRODUCT PANEL
+    # PRODUCT
     # ==========================================================================
 
 
-    with product_col:
+    with product_area:
 
 
-        st.subheader(
-            "📦 Products"
+        st.markdown(
+
+            "**📦 Products**"
+
         )
 
 
         render_products(
+
             warehouse_id
         )
 
-
-
-
-
     # ==========================================================================
-    # CART PANEL START
+    # CART PANEL
     # ==========================================================================
 
 
-    with cart_col:
+    with cart_area:
 
 
-        st.subheader(
-            "🛒 Cart"
+        st.markdown(
+
+            "**🛒 Cart**"
+
         )
 
 
         cart = st.session_state.get(
+
             "cart",
+
             []
+
         )
+
 
 
         if not cart:
 
 
             st.info(
-                "Cart is empty."
+
+                "Cart empty"
+
             )
 
 
@@ -286,39 +383,58 @@ def run():
 
 
             rows = get_cart_rows(
+
                 cart
+
             )
+
 
 
             if rows:
 
 
                 cart_df = pd.DataFrame(
+
                     rows
+
                 )
+
 
 
                 cart_df["Unit Price"] = (
+
                     cart_df["Unit Price"]
+
                     .apply(
+
                         money
+
                     )
+
                 )
+
 
 
                 cart_df["Amount"] = (
+
                     cart_df["Amount"]
+
                     .apply(
+
                         money
+
                     )
+
                 )
+
+
 
 
                 st.dataframe(
 
                     cart_df,
 
-                    height=250,
+                    height=220,
 
                     use_container_width=True,
 
@@ -327,19 +443,18 @@ def run():
                 )
 
 
-# ==============================================================================
-# CART ITEM CONTROL (COMPACT)
-# ==============================================================================
 
 
-        if cart:
 
-
-            st.divider()
+            # ------------------------------------------------------------------
+            # QUICK CART CONTROL
+            # ------------------------------------------------------------------
 
 
             st.caption(
-                "Quantity Control"
+
+                "Qty Control"
+
             )
 
 
@@ -348,18 +463,20 @@ def run():
 
 
                 c1, c2, c3, c4 = st.columns(
+
                     [5,1,1,1]
+
                 )
 
 
 
                 with c1:
 
-
                     st.write(
 
                         f"{item.get('name','')} "
-                        f"x {item.get('qty',0)}"
+
+                        f"x{item.get('qty',0)}"
 
                     )
 
@@ -370,9 +487,9 @@ def run():
 
                     if st.button(
 
-                        "➕",
+                        "+",
 
-                        key=f"compact_add_{index}"
+                        key=f"plus_{index}"
 
                     ):
 
@@ -400,9 +517,9 @@ def run():
 
                     if st.button(
 
-                        "➖",
+                        "-",
 
-                        key=f"compact_minus_{index}"
+                        key=f"minus_{index}"
 
                     ):
 
@@ -430,9 +547,9 @@ def run():
 
                     if st.button(
 
-                        "🗑",
+                        "X",
 
-                        key=f"compact_remove_{index}"
+                        key=f"del_{index}"
 
                     ):
 
@@ -455,12 +572,14 @@ def run():
 
 
 
+    # ==========================================================================
+    # PAYMENT
+    #
+    # IMPORTANT:
+    # Do not add st.subheader here.
+    # payment.py already owns Payment UI.
+    # ==========================================================================
 
-
-
-# ==============================================================================
-# PAYMENT AREA
-# ==============================================================================
 
 
     cart = st.session_state.get(
@@ -473,30 +592,11 @@ def run():
 
 
 
-    if not cart:
+    if cart:
 
 
-        return
+        render_payment(
 
+            warehouse_id
 
-
-
-
-
-    st.divider()
-
-
-
-    st.subheader(
-
-        "💳 Payment"
-
-    )
-
-
-
-    render_payment(
-
-        warehouse_id
-
-    )
+        )
