@@ -95,6 +95,7 @@ from erp_core import (
     RefundService,
 
     ReceiptService,
+    PaymentService,
 
 
     # ------------------------------------------------------------------
@@ -162,6 +163,54 @@ def get_refund_service():
     return RefundService(
         db()
     )
+    # ==============================================================================
+# PAYMENT HELPERS
+# ==============================================================================
+
+def create_mobile_payment(
+    sale_id,
+    provider,
+    transaction_id,
+    amount,
+    cashier_id=None
+):
+
+    return PaymentService.create_mobile_payment(
+        sale_id=sale_id,
+        provider=provider,
+        transaction_id=transaction_id,
+        amount=amount,
+        cashier_id=cashier_id
+    )
+
+
+def verify_payment(
+    payment_id,
+    verified_by
+):
+
+    return PaymentService.verify_payment(
+        payment_id,
+        verified_by
+    )
+
+
+def reject_payment(
+    payment_id,
+    verified_by,
+    reason
+):
+
+    return PaymentService.reject_payment(
+        payment_id,
+        verified_by,
+        reason
+    )
+
+
+def get_pending_payments():
+
+    return PaymentService.pending_payments()
 
 
 
@@ -250,7 +299,7 @@ __all__ = [
     "RefundService",
 
     "ReceiptService",
-
+    "PaymentService",
 
 
     # ------------------------------------------------------------------
@@ -265,7 +314,10 @@ __all__ = [
 
     "get_refund_service",
 
-
+    "create_mobile_payment",
+    "verify_payment",
+    "reject_payment",
+    "get_pending_payments",
 
     # ------------------------------------------------------------------
     # HELPERS
