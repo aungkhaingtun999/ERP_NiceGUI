@@ -46,7 +46,9 @@ from erp_core.repositories.price_import_repo import (
     get_price_import_history,
     update_price_import_status
 )
-
+from erp_core.repositories.product_price_repo import (
+    update_product_price
+)
 
 
 
