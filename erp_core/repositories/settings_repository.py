@@ -5,7 +5,41 @@
 
 
 from erp_core.base_repo import get_connection
+from erp_core.base_repo import db
 
+
+def reject_setting_change(
+    request_id,
+    checker_id,
+    reason
+):
+
+    result = db().rpc(
+        "reject_setting_change_rpc",
+        {
+            "p_request_id": request_id,
+            "p_checker_id": checker_id,
+            "p_reason": reason
+        }
+    ).execute()
+
+    return result.data
+
+
+def cancel_setting_change(
+    request_id,
+    user_id
+):
+
+    result = db().rpc(
+        "cancel_setting_change_rpc",
+        {
+            "p_request_id": request_id,
+            "p_user_id": user_id
+        }
+    ).execute()
+
+    return result.data
 
 
 # --------------------------------------------------------------------------
