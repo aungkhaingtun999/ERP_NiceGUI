@@ -74,10 +74,11 @@ MENU = {
 
         # Administration
 
-        ("👤", "Users", "4_Users"),
+       ("👤", "Users", "4_Users"),
 
-        ("⚙️", "Settings", "12_Settings"),
+       ("⚙️", "Settings", "12_Settings"),
 
+       ("✅", "Settings Approval", "13_Settings_Approval"),
 
 
         # Profile
