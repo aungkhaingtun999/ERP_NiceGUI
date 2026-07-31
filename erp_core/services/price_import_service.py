@@ -588,3 +588,128 @@ __all__ = [
     "reject_import"
 
 ]
+
+# ==============================================================================
+# APPROVE AND APPLY PRICE
+# ==============================================================================
+
+
+def approve_and_apply_price(
+
+    import_row,
+
+    user_id=None
+
+):
+
+
+    try:
+
+
+        product_id = import_row.get(
+            "product_id"
+        )
+
+
+        new_price = import_row.get(
+            "new_selling_price"
+        )
+
+
+
+        if not product_id:
+
+
+            return {
+
+                "success": False,
+
+                "message":
+                    "Product ID missing"
+
+            }
+
+
+
+
+        # --------------------------------------------------
+        # UPDATE PRODUCTS TABLE
+        # --------------------------------------------------
+
+
+        update_result = update_product_price(
+
+            product_id,
+
+            new_price,
+
+            "IMPORT"
+
+        )
+
+
+
+        if update_result is None:
+
+
+            return {
+
+                "success":False,
+
+                "message":
+                    "Product price update failed"
+
+            }
+
+
+
+        # --------------------------------------------------
+        # UPDATE QUEUE STATUS
+        # --------------------------------------------------
+
+
+        queue_result = approve_import(
+
+            import_row.get(
+                "id"
+            ),
+
+            user_id
+
+        )
+
+
+
+        return {
+
+
+            "success": True,
+
+
+            "product":
+                update_result,
+
+
+            "queue":
+                queue_result
+
+
+        }
+
+
+
+
+    except Exception as e:
+
+
+        return {
+
+
+            "success":False,
+
+
+            "message":
+                str(e)
+
+
+        }
