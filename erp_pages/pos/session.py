@@ -29,7 +29,7 @@ import streamlit as st
 
 
 from erp_core.loaders.settings_loader import (
-    get_setting
+    clear_settings_cache,
 )
 
 
@@ -223,7 +223,11 @@ def load_pos_settings():
 # ==============================================================================
 # INIT SESSION
 # ==============================================================================
+def init_pos_session():
 
+    clear_settings_cache()
+
+    ...
 
 def init_pos_session():
 
