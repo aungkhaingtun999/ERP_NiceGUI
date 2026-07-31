@@ -181,3 +181,47 @@ def cancel_request(
             checker_id
 
         )
+
+    # --------------------------------------------------------------------------
+    # REJECT REQUEST
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def reject_request(
+        request_id,
+        checker_id,
+        reason
+    ):
+
+        from erp_core.repositories.settings_repository import (
+            reject_setting_change
+        )
+
+
+        return reject_setting_change(
+            request_id,
+            checker_id,
+            reason
+        )
+
+
+
+    # --------------------------------------------------------------------------
+    # CANCEL REQUEST
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def cancel_request(
+        request_id,
+        maker_id
+    ):
+
+        from erp_core.repositories.settings_repository import (
+            cancel_setting_change
+        )
+
+
+        return cancel_setting_change(
+            request_id,
+            maker_id
+        )
