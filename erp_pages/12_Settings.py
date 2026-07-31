@@ -22,6 +22,7 @@ import streamlit as st
 
 from erp_core.loaders.settings_loader import (
     get_all_settings_cached,
+    clear_settings_cache,
 )
 
 
@@ -122,7 +123,13 @@ def load_settings():
 # ==============================================================================
 # PAGE
 # ==============================================================================
+def run():
 
+    clear_settings_cache()
+
+    user = require_admin()
+
+    settings = load_settings()
 
 def run():
 
