@@ -299,88 +299,99 @@ def main():
     # ==========================================================================
 
 
-    st.divider()
-
-
-
-    st.subheader(
-
-        "⏳ Pending Approval"
-
-    )
-
-
-
-    queue = pending_imports()
-
-
-
-    if not queue:
-
-
-        st.info(
-
-            "No pending price imports"
-
-        )
-
+    
 
 
     else:
+            for row in queue:
 
 
+    st.write(
+        f"""
+        ### {row.get('name')}
 
-        queue_df = pd.DataFrame(
-
-            queue
-
-        )
-
-
-
-        if "old_selling_price" in queue_df.columns:
+        Old:
+        {money(row.get('old_selling_price'))}
 
 
-            queue_df["old_selling_price"] = (
+        New:
+        {money(row.get('new_selling_price'))}
 
-                queue_df["old_selling_price"]
+        """
+    )
 
-                .apply(money)
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        if st.button(
+            "✅ Approve",
+            key=f"approve_{row.get('id')}"
+        ):
+
+
+            user = st.session_state.get(
+                "user",
+                {}
+            )
+
+
+            result = approve_and_apply_price(
+
+                row,
+
+                user.get("id")
 
             )
 
 
+            if result.get("success"):
 
-        if "new_selling_price" in queue_df.columns:
+                st.success(
+                    "Price Approved"
+                )
+
+                st.rerun()
 
 
-            queue_df["new_selling_price"] = (
 
-                queue_df["new_selling_price"]
+    with col2:
 
-                .apply(money)
+
+        if st.button(
+            "❌ Reject",
+            key=f"reject_{row.get('id')}"
+        ):
+
+
+            user = st.session_state.get(
+                "user",
+                {}
+            )
+
+
+            reject_import(
+
+                row.get("id"),
+
+                user.get("id"),
+
+                "Rejected by admin"
 
             )
 
 
+            st.warning(
+                "Rejected"
+            )
 
 
-        st.dataframe(
-
-            queue_df,
-
-            use_container_width=True,
-
-            hide_index=True
-
-        )
+            st.rerun()
 
 
-
-
-
-
-
+        
 # ==============================================================================
 # STREAMLIT ENTRY
 # ==============================================================================
