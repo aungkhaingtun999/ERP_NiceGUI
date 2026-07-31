@@ -17,6 +17,11 @@ import pandas as pd
 from erp_core.services.settings_service import (
     SettingsService
 )
+
+from erp_core.loaders.settings_loader import (
+    clear_settings_cache,
+)
+
 from utils.notification import (
     notify_success,
     notify_error,
@@ -278,44 +283,76 @@ Requested By:
 
             with col1:
 
+    if st.button(
 
-                if st.button(
+        "✅ Approve",
 
-                    "✅ Approve",
+        key=f"approve_{row['id']}",
 
-                    key=f"approve_{row['id']}",
+        use_container_width=True
 
-                    use_container_width=True
-
-                ):
-
+    ):
 
 
-                    try:
+        try:
 
 
-                        result = SettingsService.approve_request(
+            result = SettingsService.approve_request(
 
-                        row["id"],
+                row["id"],
 
-                        user["id"]
+                user["id"]
 
-)
-
-
-                        if result.get(
-
-                            "success",
-
-                            False
-
-                        ):
+            )
 
 
-                            notify_success(
+            if result.get(
 
-                                "Setting Approved Successfully"
+                "success",
 
+                False
+
+            ):
+
+
+                # 🔥 IMPORTANT
+                clear_settings_cache()
+
+
+                notify_success(
+
+                    "Setting Approved Successfully"
+
+                )
+
+
+                st.rerun()
+
+
+            else:
+
+
+                notify_error(
+
+                    result.get(
+
+                        "message",
+
+                        "Approval Failed"
+
+                    )
+
+                )
+
+
+        except Exception as e:
+
+
+            notify_error(
+
+                str(e)
+
+            )
                             )
 
 
