@@ -118,11 +118,13 @@ def main():
 
     uploaded_file = st.file_uploader(
 
-        "Upload CSV File",
+    "Upload CSV File",
 
-        type=[
-            "csv"
-        ]
+    type=[
+        "csv"
+    ],
+
+    key="price_import_csv_upload"
 
     )
 
