@@ -87,7 +87,9 @@ from .styles import (
 # ==============================================================================
 
 
-def load_pos_style()
+def run():
+
+    load_pos_style()
 
     st.markdown(
         """
