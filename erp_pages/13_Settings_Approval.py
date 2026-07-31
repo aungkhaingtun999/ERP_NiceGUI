@@ -10,9 +10,11 @@
 # Debug Ready
 #
 # ==============================================================================
-
-
 import streamlit as st
+
+st.write("PAGE LOADED")
+
+
 import pandas as pd
 
 
@@ -204,8 +206,12 @@ def rpc_message(result):
 # PAGE
 # ==============================================================================
 def run():
+def run():
 
     user = st.session_state.get("user")
+
+
+    # ================= DEBUG =================
 
     st.write("===== SESSION DEBUG =====")
 
@@ -213,26 +219,20 @@ def run():
 
     st.write("=========================")
 
-    user = require_admin()
-
-def run():
 
     user = require_admin()
 
-
-    # ==========================================================
-    # SAFE CURRENT USER ID
-    # ==========================================================
 
     current_user_id = user.get("id")
 
+
     if not current_user_id:
+
         current_user_id = user.get("user_id")
+
 
     current_user_id = str(current_user_id)
 
-
-    # DEBUG
 
     st.info(
         f"👤 Login User: {user.get('username')} | ID: {current_user_id}"
