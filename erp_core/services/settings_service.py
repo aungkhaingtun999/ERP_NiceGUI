@@ -19,7 +19,38 @@ class SettingsService:
     def __init__(self, db):
 
         self.db = db
+@staticmethod
+def reject_request(
+    request_id,
+    checker_id,
+    reason
+):
 
+    from erp_core.repositories.settings_repository import (
+        reject_setting_change
+    )
+
+    return reject_setting_change(
+        request_id,
+        checker_id,
+        reason
+    )
+
+
+@staticmethod
+def cancel_request(
+    request_id,
+    user_id
+):
+
+    from erp_core.repositories.settings_repository import (
+        cancel_setting_change
+    )
+
+    return cancel_setting_change(
+        request_id,
+        user_id
+    )
 
 
     # --------------------------------------------------------------------------
