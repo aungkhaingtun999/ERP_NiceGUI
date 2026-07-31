@@ -91,77 +91,10 @@ def run():
 
     load_pos_style()
 
-    st.markdown(
-        """
-        <style>
-
-        .block-container {
-
-            padding-top: 0.8rem;
-
-            padding-bottom: 0.8rem;
-
-        }
-
-
-        div[data-testid="stVerticalBlock"] {
-
-            gap: 0.25rem;
-
-        }
-
-
-        div[data-testid="stHorizontalBlock"] {
-
-            gap: 0.4rem;
-
-        }
-
-
-        h1 {
-
-            margin-bottom:0.2rem;
-
-            font-size:1.8rem;
-
-        }
-
-
-        h2 {
-
-            margin-bottom:0.1rem;
-
-            font-size:1.3rem;
-
-        }
-
-
-        h3 {
-
-            margin-bottom:0.1rem;
-
-            font-size:1.1rem;
-
-        }
-
-
-        .stButton button {
-
-            min-height:2rem;
-
-            padding-top:0.1rem;
-
-            padding-bottom:0.1rem;
-
-        }
-
-
-        </style>
-        """,
-
-        unsafe_allow_html=True
-
-    )
+    try:
+        language_selector()
+    except Exception:
+        pass
 
 
 
@@ -196,14 +129,14 @@ def money(value):
 # ==============================================================================
 
 
-def run():
+
 
 
     # --------------------------------------------------------------------------
     # UI COMPACT MODE
     # --------------------------------------------------------------------------
 
-    compact_css()
+    
 
 
 
