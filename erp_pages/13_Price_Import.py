@@ -302,8 +302,8 @@ def main():
     
 
 
-else:
-    for row in queue:
+    else:
+        for row in queue:
 
 
     st.write(
