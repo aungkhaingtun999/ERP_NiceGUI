@@ -39,6 +39,17 @@ from utils.notification import (
 
 
 def require_admin():
+    
+st.write("===== DEBUG SESSION USER =====")
+st.write(user)
+
+st.write("USER ID:")
+st.write(user.get("id"))
+
+st.write("USER USER_ID:")
+st.write(user.get("user_id"))
+
+st.write("==============================")
 
 
     user = st.session_state.get(
