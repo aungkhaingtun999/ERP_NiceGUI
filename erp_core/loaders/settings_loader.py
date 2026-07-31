@@ -51,10 +51,7 @@ def get_settings_service():
 # ==============================================================================
 
 
-@st.cache_data(
-    ttl=300,
-    show_spinner=False
-)
+@st.cache_data(show_spinner=False)
 def get_all_settings_cached():
 
 
