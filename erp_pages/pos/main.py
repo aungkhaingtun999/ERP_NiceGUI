@@ -70,7 +70,14 @@ from auth import (
 from language import (
     language_selector
 )
+from .cart_ui import (
+    render_cart_control
+)
 
+
+from .styles import (
+    load_pos_style
+)
 
 
 
@@ -80,7 +87,7 @@ from language import (
 # ==============================================================================
 
 
-def compact_css():
+def load_pos_style()
 
     st.markdown(
         """
@@ -459,114 +466,7 @@ def run():
 
 
 
-            for index, item in enumerate(cart):
-
-
-                c1, c2, c3, c4 = st.columns(
-
-                    [5,1,1,1]
-
-                )
-
-
-
-                with c1:
-
-                    st.write(
-
-                        f"{item.get('name','')} "
-
-                        f"x{item.get('qty',0)}"
-
-                    )
-
-
-
-                with c2:
-
-
-                    if st.button(
-
-                        "+",
-
-                        key=f"plus_{index}"
-
-                    ):
-
-
-                        increase_quantity(
-
-                            cart,
-
-                            index
-
-                        )
-
-
-                        st.session_state.cart = cart
-
-
-                        st.rerun()
-
-
-
-
-
-                with c3:
-
-
-                    if st.button(
-
-                        "-",
-
-                        key=f"minus_{index}"
-
-                    ):
-
-
-                        decrease_quantity(
-
-                            cart,
-
-                            index
-
-                        )
-
-
-                        st.session_state.cart = cart
-
-
-                        st.rerun()
-
-
-
-
-
-                with c4:
-
-
-                    if st.button(
-
-                        "X",
-
-                        key=f"del_{index}"
-
-                    ):
-
-
-                        remove_from_cart(
-
-                            cart,
-
-                            index
-
-                        )
-
-
-                        st.session_state.cart = cart
-
-
-                        st.rerun()
+            render_cart_control(cart)
 
 
 
