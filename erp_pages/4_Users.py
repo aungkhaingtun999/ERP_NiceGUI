@@ -102,140 +102,146 @@ def run():
   st.divider()
 
   # ==============================================================================
-  # USER LIST - ENTERPRISE COMPACT VIEW
-  # ==============================================================================
+# USER LIST - TABLE VIEW
+# ==============================================================================
 
-  st.subheader("📋 Users")
+st.subheader("📋 Users")
 
-  if not users:
+if not users:
     st.info("No users found")
-  else:
+
+else:
+
+    # --------------------------------------------------
+    # TABLE DATA
+    # --------------------------------------------------
+
+    table_rows = []
+
     for u in users:
-      role_name = next(
-          (r["name"] for r in roles if r["id"] == u["role_id"]), "Unknown"
-      )
 
-      is_active = u.get("is_active", False)
-      status = "🟢 Active" if is_active else "🔴 Disabled"
+        role_name = next(
+            (r["name"] for r in roles if r["id"] == u["role_id"]),
+            "Unknown"
+        )
 
-      with st.container():
-        c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+        table_rows.append({
+            "ID": u.get("id"),
+            "Username": u.get("username"),
+            "Full Name": u.get("full_name"),
+            "Role": role_name,
+            "Status": "🟢 Active" if u.get("is_active") else "🔴 Disabled"
+        })
 
-        # USER INFO
-        with c1:
-          st.markdown(
-              f"""
-                    👤 **{u.get('full_name','-')}**
+    df_users = pd.DataFrame(table_rows)
 
-                    `{u.get('username','-')}`
-                    """
-          )
+    st.dataframe(
+        df_users,
+        use_container_width=True,
+        hide_index=True
+    )
 
-        # ROLE
-        with c2:
-          st.write(f"🛡 {role_name}")
+    st.divider()
 
-        # STATUS
-        with c3:
-          st.write(status)
+    # --------------------------------------------------
+    # EDIT USER PANEL
+    # --------------------------------------------------
 
-        # ACTION
-        with c4:
-          if u.get("username") == "admin":
-            st.write("🔒")
-          else:
-            if st.button("⚙", key=f"manage_{u['id']}"):
-              st.session_state[f"manage_user_{u['id']}"] = True
+    st.subheader("✏ Edit User")
 
-        # MANAGEMENT PANEL
-        if st.session_state.get(f"manage_user_{u['id']}", False):
-          with st.expander(f"Manage {u['username']}", expanded=True):
-            col1, col2 = st.columns(2)
+    user_options = {
+        str(u["id"]): f"{u['username']} - {u['full_name']}"
+        for u in users
+    }
 
-            with col1:
-              new_role = st.selectbox(
-                  "Role",
-                  role_names,
-                  index=(
-                      role_names.index(role_name)
-                      if role_name in role_names
-                      else 0
-                  ),
-                  key=f"role_{u['id']}",
-              )
+    selected_user_id = st.selectbox(
+        "Select User",
+        options=list(user_options.keys()),
+        format_func=lambda x: user_options[x]
+    )
 
-              if new_role != role_name:
-                (
-                    supabase.table("users")
-                    .update({"role_id": role_map[new_role]})
-                    .eq("id", u["id"])
-                    .execute()
-                )
+    selected_user = next(
+        (u for u in users if str(u["id"]) == selected_user_id),
+        None
+    )
 
-                notify_success("Role updated")
-                st.rerun()
+    if selected_user:
 
-            with col2:
-              if st.button("🔐 Reset Password", key=f"reset_{u['id']}"):
-                st.session_state[f"reset_user_{u['id']}"] = True
+        role_name = next(
+            (r["name"] for r in roles if r["id"] == selected_user["role_id"]),
+            role_names[0]
+        )
 
-            if u.get("is_active"):
-              if st.button("🚫 Disable User", key=f"disable_{u['id']}"):
-                (
-                    supabase.table("users")
-                    .update({"is_active": False})
-                    .eq("id", u["id"])
-                    .execute()
-                )
+        new_full_name = st.text_input(
+            "Full Name",
+            value=selected_user.get("full_name", "")
+        )
 
-                notify_success(f"{u['username']} disabled")
-                st.rerun()
-            else:
-              if st.button("🔄 Enable User", key=f"enable_{u['id']}"):
-                (
-                    supabase.table("users")
-                    .update({"is_active": True})
-                    .eq("id", u["id"])
-                    .execute()
-                )
+        new_role = st.selectbox(
+            "Role",
+            role_names,
+            index=role_names.index(role_name)
+        )
 
-                notify_success(f"{u['username']} enabled")
-                st.rerun()
+        new_active = st.toggle(
+            "Active",
+            value=selected_user.get("is_active", True)
+        )
 
-          st.divider()
+        col1, col2 = st.columns(2)
 
-        # Reset Password Input Dialog
-        if st.session_state.get(f"reset_user_{u['id']}", False):
-          with st.expander(
-              f"🔐 Reset Password : {u['username']}", expanded=True
-          ):
-            new_password = st.text_input(
-                "New Password", type="password", key=f"newpass_{u['id']}"
-            )
-            if st.button("💾 Save Password", key=f"savepass_{u['id']}"):
-              if not new_password:
-                st.error("Password required")
-              else:
+        with col1:
+
+            if st.button(
+                "💾 Update User",
+                use_container_width=True
+            ):
+
                 try:
-                  (
-                      supabase.table("users")
-                      .update({"password_hash": hash_password(new_password)})
-                      .eq("id", u["id"])
-                      .execute()
-                  )
 
-                  # Log Activity
-                  create_activity_log(
-                      st.session_state.get("user_id"),
-                      "RESET_PASSWORD",
-                      f"Reset password for {u['username']}",
-                  )
+                    supabase.table("users").update({
+                        "full_name": new_full_name,
+                        "role_id": role_map[new_role],
+                        "is_active": new_active
+                    }).eq("id", selected_user_id).execute()
 
-                  notify_success("Password reset successfully")
-                  st.session_state[f"reset_user_{u['id']}"] = False
-                  st.rerun()
+                    notify_success("User updated successfully")
+
+                    st.rerun()
+
                 except Exception as e:
-                  st.error(f"Reset password failed: {e}")
+
+                    notify_error(f"Update failed: {e}")
+
+        with col2:
+
+            if selected_user.get("username") != "admin":
+
+                if st.button(
+                    "🗑 Delete User",
+                    use_container_width=True
+                ):
+
+                    try:
+
+                        supabase.table("users").delete().eq(
+                            "id",
+                            selected_user_id
+                        ).execute()
+
+                        notify_success("User deleted successfully")
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        notify_error(f"Delete failed: {e}")
+
+            else:
+
+                st.info("System admin cannot be deleted")
+
+    st.divider()
 
   # Summary Calculation
   total = len(users)
