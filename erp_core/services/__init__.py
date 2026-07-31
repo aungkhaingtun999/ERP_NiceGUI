@@ -5,7 +5,7 @@
 # ==============================================================================
 
 
-
+from .payment_service import PaymentService
 
 from .settings_service import SettingsService
 
