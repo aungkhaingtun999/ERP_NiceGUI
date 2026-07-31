@@ -203,7 +203,17 @@ def rpc_message(result):
 # ==============================================================================
 # PAGE
 # ==============================================================================
+def run():
 
+    user = st.session_state.get("user")
+
+    st.write("===== SESSION DEBUG =====")
+
+    st.json(user)
+
+    st.write("=========================")
+
+    user = require_admin()
 
 def run():
 
