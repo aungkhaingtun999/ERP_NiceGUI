@@ -53,7 +53,9 @@ from erp_ui.settings.system_status import (
 from erp_core.repositories.settings_repository import (
     approve_setting_change
 )
-
+from erp_ui.settings.settings_summary import (
+    render_settings_summary,
+)
 
 # ==============================================================================
 # SECURITY
@@ -154,14 +156,12 @@ def run():
 
 
     st.caption(
-
-        "Enterprise Configuration Center (Database Driven)"
-
+    "Enterprise Configuration Center (Database Driven)"
     )
 
+    render_settings_summary(settings)
 
     st.divider()
-
 
 
     # ==========================================================================
