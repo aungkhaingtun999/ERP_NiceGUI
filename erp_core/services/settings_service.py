@@ -119,30 +119,7 @@ class SettingsService:
 
 
 
-        # --------------------------------------------------
-        # DUPLICATE PENDING CHECK
-        # --------------------------------------------------
 
-        pending_requests = (
-            get_pending_setting_requests()
-        )
-
-
-
-        for req in pending_requests:
-
-
-            if req["setting_key"] == setting_key:
-
-
-                return {
-
-                    "success": False,
-
-                    "message":
-                    "A pending request already exists for this setting"
-
-                }
 
 
 
