@@ -392,23 +392,38 @@ Requested By:
 
             with col2:
 
+    reject_reason = st.text_input(
+        "Reject Reason",
+        key=f"reason_{row['id']}"
+    )
 
-                if st.button(
+    if st.button(
+        "❌ Reject",
+        key=f"reject_{row['id']}",
+        use_container_width=True
+    ):
 
-                    "❌ Reject",
+        result = SettingsService.reject_request(
+            row["id"],
+            user["id"],
+            reject_reason
+        )
 
-                    key=f"reject_{row['id']}",
+        if result.get("success"):
 
-                    use_container_width=True
+            clear_settings_cache()
 
-                ):
+            notify_success(
+                "Request Rejected"
+            )
 
+            st.rerun()
 
-                    st.warning(
+        else:
 
-                        "Reject RPC will be added next."
-
-                    )
+            notify_error(
+                result.get("message")
+            )
 
 
 
