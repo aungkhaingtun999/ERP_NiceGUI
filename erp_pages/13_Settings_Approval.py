@@ -32,7 +32,6 @@ from utils.notification import (
 )
 
 
-
 # ==============================================================================
 # SECURITY
 # ==============================================================================
@@ -40,23 +39,35 @@ from utils.notification import (
 
 def require_admin():
 
-
     user = st.session_state.get(
         "user"
     )
 
 
+    # ================= DEBUG =================
+
     st.write("===== DEBUG SESSION USER =====")
+
     st.write(user)
 
     if user:
+
         st.write("USER ID:")
         st.write(user.get("id"))
 
         st.write("USER USER_ID:")
         st.write(user.get("user_id"))
 
+        st.write("USERNAME:")
+        st.write(user.get("username"))
+
+        st.write("ROLE ID:")
+        st.write(user.get("role_id"))
+
     st.write("==============================")
+
+
+    # ================= SECURITY =================
 
 
     if not user:
@@ -80,7 +91,6 @@ def require_admin():
 
 
     return user
-
 
 
 # ==============================================================================
