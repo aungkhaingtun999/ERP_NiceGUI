@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/13_Settings_Approval.py
-# ERP ENTERPRISE SETTINGS APPROVAL CENTER v3.0
+# ERP ENTERPRISE SETTINGS APPROVAL CENTER v4.0
 #
 # Maker - Checker Workflow
 #
@@ -49,15 +49,14 @@ def require_admin():
     if not user:
 
         st.error(
-            "⛔ Please login first"
+            "⛔ Login Required"
         )
 
         st.stop()
 
 
 
-    if user.get("role_id") != 1:
-
+    if int(user.get("role_id",0)) != 1:
 
         st.error(
             "⛔ Admin Access Required"
@@ -98,9 +97,9 @@ def get_pending_requests():
                 old_value,
                 new_value,
                 reason,
-                status,
                 requested_by,
-                created_at
+                created_at,
+                status
                 """
             )
 
@@ -124,6 +123,7 @@ def get_pending_requests():
         )
 
 
+
     except Exception as e:
 
 
@@ -142,25 +142,15 @@ def get_pending_requests():
 # ==============================================================================
 
 
-def is_success(result):
+def rpc_success(result):
 
 
-    if isinstance(result, dict):
+    if isinstance(result,dict):
 
         return result.get(
             "success",
             False
         )
-
-
-    if isinstance(result, list) and result:
-
-        if isinstance(result[0], dict):
-
-            return result[0].get(
-                "success",
-                False
-            )
 
 
     return False
@@ -177,6 +167,11 @@ def run():
 
 
     user = require_admin()
+
+
+    current_user_id = str(
+        user["id"]
+    )
 
 
 
@@ -202,7 +197,7 @@ def run():
 
 
         st.success(
-            "✔ No Pending Setting Requests"
+            "✔ No Pending Requests"
         )
 
         return
@@ -225,16 +220,12 @@ def run():
     for _, row in pending_df.iterrows():
 
 
+
         request_id = row["id"]
 
 
         maker_id = str(
             row["requested_by"]
-        )
-
-
-        current_user = str(
-            user["id"]
         )
 
 
@@ -250,284 +241,5 @@ def run():
             )
 
 
-            st.markdown(
-f"""
-**Current Value**
 
-`{row['old_value']}`
-
-
-**Pending Value**
-
-`{row['new_value']}`
-
-
-**Reason**
-
-{row.get('reason','')}
-
-
-**Requested By**
-
-`{maker_id}`
-
-
-**Requested At**
-
-{row['created_at']}
-"""
-            )
-
-
-
-            st.divider()
-
-
-
-            # ==============================================================
-            # MAKER
-            # ==============================================================
-
-
-            if maker_id == current_user:
-
-
-                st.warning(
-                    "⚠ You created this request. Waiting for another Admin approval."
-                )
-
-
-
-                if st.button(
-
-                    "🗑 Cancel Request",
-
-                    key=f"cancel_{request_id}",
-
-                    use_container_width=True
-
-                ):
-
-
-                    try:
-
-
-                        result = SettingsService.cancel_request(
-
-                            request_id,
-
-                            user["id"]
-
-                        )
-
-
-                        if is_success(result):
-
-
-                            clear_settings_cache()
-
-
-                            notify_success(
-                                "Request Cancelled"
-                            )
-
-
-                            st.rerun()
-
-
-                        else:
-
-
-                            notify_error(
-                                str(result)
-                            )
-
-
-                    except Exception as e:
-
-
-                        notify_error(
-                            str(e)
-                        )
-
-
-
-            # ==============================================================
-            # CHECKER
-            # ==============================================================
-
-
-            else:
-
-
-                col1, col2 = st.columns(2)
-
-
-
-                with col1:
-
-
-                    if st.button(
-
-                        "✅ Approve",
-
-                        key=f"approve_{request_id}",
-
-                        use_container_width=True
-
-                    ):
-
-
-                        try:
-
-
-                            result = SettingsService.approve_request(
-
-                                request_id,
-
-                                user["id"]
-
-                            )
-
-
-
-                            if is_success(result):
-
-
-                                clear_settings_cache()
-
-
-                                notify_success(
-                                    "Setting Approved"
-                                )
-
-
-                                st.rerun()
-
-
-
-                            else:
-
-
-                                notify_error(
-                                    str(result)
-                                )
-
-
-                        except Exception as e:
-
-
-                            notify_error(
-                                str(e)
-                            )
-
-
-
-
-
-                with col2:
-
-
-                    reject_reason = st.text_input(
-
-                        "Reject Reason",
-
-                        key=f"reject_reason_{request_id}"
-
-                    )
-
-
-
-                    if st.button(
-
-                        "❌ Reject",
-
-                        key=f"reject_{request_id}",
-
-                        use_container_width=True
-
-                    ):
-
-
-                        if not reject_reason:
-
-
-                            notify_error(
-                                "Please enter reject reason"
-                            )
-
-                            st.stop()
-
-
-
-                        try:
-
-
-                            result = SettingsService.reject_request(
-
-                                request_id,
-
-                                user["id"],
-
-                                reject_reason
-
-                            )
-
-
-                            if is_success(result):
-
-
-                                clear_settings_cache()
-
-
-                                notify_success(
-                                    "Request Rejected"
-                                )
-
-
-                                st.rerun()
-
-
-
-                            else:
-
-
-                                notify_error(
-                                    str(result)
-                                )
-
-
-                        except Exception as e:
-
-
-                            notify_error(
-                                str(e)
-                            )
-
-
-
-            st.divider()
-
-
-
-
-# ==============================================================================
-# ENTRY
-# ==============================================================================
-
-
-if __name__ == "__main__":
-
-
-    st.set_page_config(
-
-        page_title="Settings Approval",
-
-        page_icon="✅",
-
-        layout="wide"
-
-    )
-
-
-    run()
+           
