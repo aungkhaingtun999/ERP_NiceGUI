@@ -207,14 +207,26 @@ def rpc_message(result):
 
 def run():
 
-
     user = require_admin()
 
 
-    current_user_id = str(
-        user.get("id")
-    )
+    # ==========================================================
+    # SAFE CURRENT USER ID
+    # ==========================================================
 
+    current_user_id = user.get("id")
+
+    if not current_user_id:
+        current_user_id = user.get("user_id")
+
+    current_user_id = str(current_user_id)
+
+
+    # DEBUG
+
+    st.info(
+        f"👤 Login User: {user.get('username')} | ID: {current_user_id}"
+    )
 
     # ================= DEBUG =================
 
@@ -335,7 +347,7 @@ f"""
             # ==============================================================
 
 
-            if maker_id == current_user_id:
+            if str(maker_id).strip() == str(current_user_id).strip():
 
 
                 st.warning(
