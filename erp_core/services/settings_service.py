@@ -72,7 +72,30 @@ class SettingsService:
         reason,
         requested_by
     ):
+        # --------------------------------------------------
+        # BLOCK DUPLICATE PENDING REQUEST
+        # --------------------------------------------------
 
+        from erp_core.repositories.settings_repository import (
+            get_pending_setting_requests
+        )
+
+
+        pending_requests = get_pending_setting_requests()
+
+
+        for req in pending_requests:
+
+            if req["setting_key"] == setting_key:
+
+                return {
+
+                    "success": False,
+
+                    "message":
+                    f"⏳ {setting_key} already has a pending approval request."
+
+                }
 
         from erp_core.loaders.settings_loader import (
             get_all_settings_cached
