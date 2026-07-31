@@ -1,7 +1,8 @@
 # ==============================================================================
 # erp_core/repositories/settings_repository.py
-# ERP SETTINGS REPOSITORY
-# Supabase Version
+# ERP SETTINGS REPOSITORY v4.0
+#
+# Supabase Repository Layer
 #
 # Maker - Checker Workflow
 # ==============================================================================
@@ -12,16 +13,22 @@ from erp_core.base_repo import db
 
 
 # ==============================================================================
-# CREATE REQUEST
+# CREATE CHANGE REQUEST
 # ==============================================================================
 
 
 def create_setting_request(
+
     setting_key,
+
     old_value,
+
     new_value,
+
     reason,
+
     requested_by
+
 ):
 
 
@@ -43,7 +50,9 @@ def create_setting_request(
 
             "reason": reason,
 
-            "requested_by": requested_by
+            "requested_by": requested_by,
+
+            "status": "PENDING"
 
         })
 
@@ -52,13 +61,23 @@ def create_setting_request(
     )
 
 
+
+    if not result.data:
+
+
+        raise Exception(
+            "Cannot create setting request"
+        )
+
+
+
     return result.data[0]["id"]
 
 
 
 
 # ==============================================================================
-# PENDING REQUESTS
+# GET PENDING REQUESTS
 # ==============================================================================
 
 
@@ -73,9 +92,7 @@ def get_pending_setting_requests():
             "settings_change_requests"
         )
 
-        .select(
-            "*"
-        )
+        .select("*")
 
         .eq(
             "status",
@@ -92,19 +109,25 @@ def get_pending_setting_requests():
     )
 
 
+
     return result.data or []
+
 
 
 
 
 # ==============================================================================
 # APPROVE
+# CHECKER
 # ==============================================================================
 
 
 def approve_setting_change(
+
     request_id,
+
     checker_id
+
 ):
 
 
@@ -118,9 +141,12 @@ def approve_setting_change(
 
             {
 
-                "p_request_id": request_id,
+                "p_request_id":
+                request_id,
 
-                "p_checker_id": checker_id
+
+                "p_checker_id":
+                checker_id
 
             }
 
@@ -131,23 +157,29 @@ def approve_setting_change(
     )
 
 
-    return result.data[0] if result.data else {
-        "success": False,
-        "message": "No response"
-    }
+
+    return _normalize_rpc_result(
+        result.data
+    )
+
 
 
 
 
 # ==============================================================================
 # REJECT
+# CHECKER
 # ==============================================================================
 
 
 def reject_setting_change(
+
     request_id,
+
     checker_id,
+
     reason
+
 ):
 
 
@@ -161,11 +193,16 @@ def reject_setting_change(
 
             {
 
-                "p_request_id": request_id,
+                "p_request_id":
+                request_id,
 
-                "p_checker_id": checker_id,
 
-                "p_reason": reason
+                "p_checker_id":
+                checker_id,
+
+
+                "p_reason":
+                reason
 
             }
 
@@ -176,22 +213,28 @@ def reject_setting_change(
     )
 
 
-    return result.data[0] if result.data else {
-        "success": False,
-        "message": "No response"
-    }
+
+    return _normalize_rpc_result(
+        result.data
+    )
+
+
 
 
 
 
 # ==============================================================================
 # CANCEL
+# MAKER
 # ==============================================================================
 
 
 def cancel_setting_change(
+
     request_id,
+
     user_id
+
 ):
 
 
@@ -205,9 +248,12 @@ def cancel_setting_change(
 
             {
 
-                "p_request_id": request_id,
+                "p_request_id":
+                request_id,
 
-                "p_user_id": user_id
+
+                "p_user_id":
+                user_id
 
             }
 
@@ -218,7 +264,43 @@ def cancel_setting_change(
     )
 
 
-    return result.data[0] if result.data else {
+
+    return _normalize_rpc_result(
+        result.data
+    )
+
+
+
+
+
+# ==============================================================================
+# RPC RESULT FORMAT
+# ==============================================================================
+
+
+def _normalize_rpc_result(data):
+
+
+    if isinstance(data, dict):
+
+        return data
+
+
+
+    if isinstance(data, list) and data:
+
+
+        if isinstance(data[0], dict):
+
+            return data[0]
+
+
+
+    return {
+
         "success": False,
-        "message": "No response"
+
+        "message":
+        "Unknown RPC response"
+
     }
