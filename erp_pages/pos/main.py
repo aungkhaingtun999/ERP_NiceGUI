@@ -1,16 +1,12 @@
 # ==============================================================================
 # erp_pages/pos/main.py
-# ERP ENTERPRISE POS MAIN CONTROLLER v12.9 FINAL
+# ERP ENTERPRISE POS MAIN CONTROLLER v13.0 COMPACT EDITION
 #
 # Responsibilities:
-# - POS page controller
-# - Authentication
-# - Session initialization
-# - Warehouse loading
-# - Product rendering
-# - Cart summary
-# - Payment rendering
-# - Receipt rendering
+# - POS Controller
+# - Compact Layout
+# - Product / Cart Side By Side
+# - Payment Integration
 #
 # Flow:
 #
@@ -18,9 +14,7 @@
 #   ↓
 # SESSION
 #   ↓
-# PRODUCT
-#   ↓
-# CART
+# PRODUCT + CART
 #   ↓
 # PAYMENT
 #   ↓
@@ -63,10 +57,6 @@ from .cart import (
 
 
 
-
-
-
-
 from .payment import (
     render_payment
 )
@@ -94,21 +84,18 @@ from language import (
 
 
 # ==============================================================================
-# MONEY FORMAT
+# MONEY
 # ==============================================================================
 
 
 def money(value):
 
-
     try:
-
 
         return f"{float(value):,.0f} MMK"
 
 
     except Exception:
-
 
         return "0 MMK"
 
@@ -116,32 +103,27 @@ def money(value):
 
 
 
+
+
 # ==============================================================================
-# POS MAIN RUN
+# RUN POS
 # ==============================================================================
 
 
 def run():
 
 
-
     # --------------------------------------------------------------------------
     # LANGUAGE
     # --------------------------------------------------------------------------
 
-
     try:
-
 
         language_selector()
 
-
     except Exception:
 
-
         pass
-
-
 
 
 
@@ -151,21 +133,13 @@ def run():
     # AUTH
     # --------------------------------------------------------------------------
 
-
     if not is_authenticated():
 
-
-
         st.warning(
-
             "Please login first."
-
         )
 
-
         st.stop()
-
-
 
 
 
@@ -175,10 +149,7 @@ def run():
     # SESSION
     # --------------------------------------------------------------------------
 
-
     init_pos_session()
-
-
 
 
 
@@ -188,7 +159,6 @@ def run():
     # WAREHOUSE
     # --------------------------------------------------------------------------
 
-
     warehouse_id = get_default_warehouse_id()
 
 
@@ -196,17 +166,11 @@ def run():
     if not warehouse_id:
 
 
-
         st.error(
-
             "Default warehouse not configured."
-
         )
 
-
         st.stop()
-
-
 
 
 
@@ -216,23 +180,15 @@ def run():
     # RECEIPT MODE
     # --------------------------------------------------------------------------
 
-
     if st.session_state.get(
-
         "show_receipt",
-
         False
-
     ):
-
 
 
         render_receipt()
 
-
         return
-
-
 
 
 
@@ -242,47 +198,269 @@ def run():
     # HEADER
     # --------------------------------------------------------------------------
 
-
     st.title(
-
         "🛒 ERP Enterprise POS"
-
     )
+
+
     st.caption(
-    "Fast & Simple Sales System"
-)
+        "Fast Compact Sales System v13"
+    )
 
 
-    
     st.divider()
 
 
 
 
 
+    # ==========================================================================
+    # MAIN COMPACT AREA
+    #
+    # LEFT 60%
+    # PRODUCT
+    #
+    # RIGHT 40%
+    # CART
+    #
+    # ==========================================================================
 
 
-    # --------------------------------------------------------------------------
-    # PRODUCT MODULE
-    # --------------------------------------------------------------------------
-
-
-    render_products(
-
-        warehouse_id
-
+    product_col, cart_col = st.columns(
+        [6,4]
     )
 
 
 
 
 
+    # ==========================================================================
+    # PRODUCT PANEL
+    # ==========================================================================
+
+
+    with product_col:
+
+
+        st.subheader(
+            "📦 Products"
+        )
+
+
+        render_products(
+            warehouse_id
+        )
 
 
 
-    # --------------------------------------------------------------------------
-    # CART
-    # --------------------------------------------------------------------------
+
+
+    # ==========================================================================
+    # CART PANEL START
+    # ==========================================================================
+
+
+    with cart_col:
+
+
+        st.subheader(
+            "🛒 Cart"
+        )
+
+
+        cart = st.session_state.get(
+            "cart",
+            []
+        )
+
+
+        if not cart:
+
+
+            st.info(
+                "Cart is empty."
+            )
+
+
+        else:
+
+
+            rows = get_cart_rows(
+                cart
+            )
+
+
+            if rows:
+
+
+                cart_df = pd.DataFrame(
+                    rows
+                )
+
+
+                cart_df["Unit Price"] = (
+                    cart_df["Unit Price"]
+                    .apply(
+                        money
+                    )
+                )
+
+
+                cart_df["Amount"] = (
+                    cart_df["Amount"]
+                    .apply(
+                        money
+                    )
+                )
+
+
+                st.dataframe(
+
+                    cart_df,
+
+                    height=250,
+
+                    use_container_width=True,
+
+                    hide_index=True
+
+                )
+
+
+# ==============================================================================
+# CART ITEM CONTROL (COMPACT)
+# ==============================================================================
+
+
+        if cart:
+
+
+            st.divider()
+
+
+            st.caption(
+                "Quantity Control"
+            )
+
+
+
+            for index, item in enumerate(cart):
+
+
+                c1, c2, c3, c4 = st.columns(
+                    [5,1,1,1]
+                )
+
+
+
+                with c1:
+
+
+                    st.write(
+
+                        f"{item.get('name','')} "
+                        f"x {item.get('qty',0)}"
+
+                    )
+
+
+
+                with c2:
+
+
+                    if st.button(
+
+                        "➕",
+
+                        key=f"compact_add_{index}"
+
+                    ):
+
+
+                        increase_quantity(
+
+                            cart,
+
+                            index
+
+                        )
+
+
+                        st.session_state.cart = cart
+
+
+                        st.rerun()
+
+
+
+
+
+                with c3:
+
+
+                    if st.button(
+
+                        "➖",
+
+                        key=f"compact_minus_{index}"
+
+                    ):
+
+
+                        decrease_quantity(
+
+                            cart,
+
+                            index
+
+                        )
+
+
+                        st.session_state.cart = cart
+
+
+                        st.rerun()
+
+
+
+
+
+                with c4:
+
+
+                    if st.button(
+
+                        "🗑",
+
+                        key=f"compact_remove_{index}"
+
+                    ):
+
+
+                        remove_from_cart(
+
+                            cart,
+
+                            index
+
+                        )
+
+
+                        st.session_state.cart = cart
+
+
+                        st.rerun()
+
+
+
+
+
+
+
+
+# ==============================================================================
+# PAYMENT AREA
+# ==============================================================================
 
 
     cart = st.session_state.get(
@@ -295,21 +473,10 @@ def run():
 
 
 
-
-
     if not cart:
 
 
-
-        st.info(
-
-            "🛒 Cart is empty."
-
-        )
-
-
         return
-
 
 
 
@@ -322,219 +489,14 @@ def run():
 
     st.subheader(
 
-        "🛒 Cart Summary"
+        "💳 Payment"
 
     )
 
 
-
-
-
-
-
-    # --------------------------------------------------------------------------
-    # CART TABLE
-    # --------------------------------------------------------------------------
-
-
-    rows = get_cart_rows(
-
-        cart
-
-    )
-
-
-
-    if rows:
-
-
-
-        cart_df = pd.DataFrame(
-
-            rows
-
-        )
-
-
-
-        cart_df["Unit Price"] = (
-
-            cart_df["Unit Price"]
-
-            .apply(
-
-                money
-
-            )
-
-        )
-
-
-
-        cart_df["Amount"] = (
-
-            cart_df["Amount"]
-
-            .apply(
-
-                money
-
-            )
-
-        )
-
-
-
-        st.dataframe(
-
-            cart_df,
-
-            use_container_width=True,
-
-            hide_index=True
-
-        )
-    # --------------------------------------------------------------------------
-    # CART ITEM CONTROL
-    # --------------------------------------------------------------------------
-
-    st.subheader(
-        "🛠 Cart Control"
-    )
-
-
-    for index, item in enumerate(cart):
-
-
-        col1, col2, col3, col4 = st.columns(
-            [5,1,1,1]
-        )
-
-
-        with col1:
-
-            st.write(
-
-                f"{item.get('name','')} "
-                f"x {item.get('qty',0)}"
-
-            )
-
-
-        with col2:
-
-            if st.button(
-                "➕",
-                key=f"add_{index}"
-            ):
-
-                increase_quantity(
-                    cart,
-                    index
-                )
-
-                st.session_state.cart = cart
-
-                st.rerun()
-
-
-
-        with col3:
-
-            if st.button(
-                "➖",
-                key=f"minus_{index}"
-            ):
-
-                decrease_quantity(
-                    cart,
-                    index
-                )
-
-                st.session_state.cart = cart
-
-                st.rerun()
-
-
-
-        with col4:
-
-            if st.button(
-                "🗑",
-                key=f"remove_{index}"
-            ):
-
-                remove_from_cart(
-                    cart,
-                    index
-                )
-
-                st.session_state.cart = cart
-
-                st.rerun()
-
-
-
-    # --------------------------------------------------------------------------
-    # CART TOTAL
-    # --------------------------------------------------------------------------
-
-    subtotal = calculate_subtotal(
-        cart
-    )
-
-
-    total_qty = calculate_total_qty(
-        cart
-    )
-
-
-    st.success(
-
-f"""
-
-Items :
-
-{len(cart)}
-
-
-
-Total Qty :
-
-{total_qty}
-
-
-
-Subtotal :
-
-{money(subtotal)}
-
-
-
-🧾 Tax :
-
-Controlled by ERP Settings
-
-
-
-💳 Final Total :
-
-Calculated in Payment Module
-
-"""
-
-    )
-
-
-
-    # --------------------------------------------------------------------------
-    # PAYMENT
-    # --------------------------------------------------------------------------
 
     render_payment(
 
         warehouse_id
 
-    )            
-
-
+    )
