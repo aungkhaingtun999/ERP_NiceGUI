@@ -1,18 +1,37 @@
 # ==============================================================================
 # erp_core/services/price_import_service.py
 #
-# ERP ENTERPRISE PRICE IMPORT SERVICE v1.0
+# ERP ENTERPRISE PRICE IMPORT SERVICE v2.0
 #
 # Responsibilities:
-# - Bulk price import validation
-# - Pricing calculation
-# - Owner price lock protection
-# - Import queue creation
+# - Bulk Price Import Logic
+# - Pricing Validation
+# - Markup Calculation
+# - Owner Price Protection
+# - Import Queue Management
+#
+# Flow:
+#
+# Excel / API
+#       |
+#       ↓
+# Price Import Service
+#       |
+#       ↓
+# Price Import Repository
+#       |
+#       ↓
+# price_import_queue
 #
 # ==============================================================================
 
 
-from decimal import Decimal
+from typing import (
+    Dict,
+    Any,
+    List
+)
+
 
 
 from erp_core.loaders.settings_loader import (
@@ -20,9 +39,15 @@ from erp_core.loaders.settings_loader import (
 )
 
 
-from erp_core.base_repo import (
-    execute_insert
+
+from erp_core.repositories.price_import_repo import (
+    create_price_import,
+    get_pending_price_imports,
+    get_price_import_history,
+    update_price_import_status
 )
+
+
 
 
 
@@ -31,26 +56,36 @@ from erp_core.base_repo import (
 # ==============================================================================
 
 
-def safe_float(value, default=0):
+def safe_float(
+    value,
+    default=0
+):
 
     try:
+
         return float(value)
 
     except Exception:
+
         return float(default)
 
 
 
 
 
+
+
 # ==============================================================================
-# PRICE CALCULATION
+# MARKUP CALCULATION
 # ==============================================================================
 
 
-def calculate_import_price(
+def calculate_selling_price(
+
     purchase_price,
+
     markup_percent
+
 ):
 
 
@@ -65,28 +100,73 @@ def calculate_import_price(
 
 
     return round(
+
         purchase_price
+
         +
+
         (
+
             purchase_price
+
             *
+
             markup_percent
+
             /
+
             100
+
         ),
+
         2
+
     )
 
 
 
 
 
+
+
+
 # ==============================================================================
-# VALIDATE PRODUCT PRICE
+# GET DEFAULT MARKUP
 # ==============================================================================
 
 
-def validate_product_price(product):
+def get_default_markup():
+
+
+    return safe_float(
+
+        get_setting(
+
+            "DEFAULT_MARKUP_PERCENT",
+
+            20
+
+        )
+
+    )
+
+
+
+
+
+
+
+
+# ==============================================================================
+# VALIDATE PRODUCT
+# ==============================================================================
+
+
+def validate_product(
+
+    product: Dict[str, Any]
+
+):
 
 
     errors = []
@@ -94,21 +174,37 @@ def validate_product_price(product):
 
     if not product:
 
+
         errors.append(
+
             "Product not found"
+
         )
 
 
-    else:
+        return errors
 
 
-        if product.get(
-            "owner_price_locked"
-        ):
 
-            errors.append(
-                "OWNER PRICE LOCKED"
-            )
+
+
+    # OWNER LOCK CHECK
+
+    if product.get(
+
+        "owner_price_locked",
+
+        False
+
+    ):
+
+
+        errors.append(
+
+            "Owner price locked"
+
+        )
+
 
 
 
@@ -118,27 +214,28 @@ def validate_product_price(product):
 
 
 
+
+
 # ==============================================================================
-# CREATE IMPORT ROW
+# CREATE IMPORT QUEUE
 # ==============================================================================
 
 
-def create_price_import_row(
+def import_product_price(
 
-    product,
+    product: Dict[str,Any],
 
-    new_price,
-
-    markup_percent,
+    markup_percent=None,
 
     created_by=None
 
 ):
 
 
-    errors = validate_product_price(
+    errors = validate_product(
         product
     )
+
 
 
     if errors:
@@ -146,81 +243,165 @@ def create_price_import_row(
 
         return {
 
+
             "success": False,
 
-            "message": ", ".join(errors)
+
+            "message":
+
+                ", ".join(errors)
+
 
         }
 
 
 
-    data = {
+
+    if markup_percent is None:
+
+
+        markup_percent = get_default_markup()
+
+
+
+
+
+    new_price = calculate_selling_price(
+
+        product.get(
+
+            "purchase_price",
+
+            0
+
+        ),
+
+        markup_percent
+
+    )
+
+
+
+
+
+
+    payload = {
 
 
         "product_id":
-            product.get("id"),
+
+            product.get(
+
+                "id"
+
+            ),
+
 
 
         "barcode":
-            product.get("barcode"),
+
+            product.get(
+
+                "barcode"
+
+            ),
+
 
 
         "sku":
-            product.get("sku"),
+
+            product.get(
+
+                "sku"
+
+            ),
+
 
 
         "name":
-            product.get("name"),
+
+            product.get(
+
+                "name"
+
+            ),
+
 
 
         "old_selling_price":
+
             safe_float(
+
                 product.get(
+
                     "selling_price",
+
                     0
+
                 )
+
             ),
+
 
 
         "purchase_price":
+
             safe_float(
+
                 product.get(
+
                     "purchase_price",
+
                     0
+
                 )
+
             ),
+
 
 
         "markup_percent":
-            safe_float(
-                markup_percent
-            ),
+
+            markup_percent,
+
 
 
         "new_selling_price":
-            safe_float(
-                new_price
-            ),
+
+            new_price,
+
 
 
         "price_source":
+
             "IMPORT",
 
 
+
         "status":
+
             "PENDING",
 
 
+
         "created_by":
+
             created_by
+
 
     }
 
 
-    result = execute_insert(
-        "price_import_queue",
-        data
+
+
+
+
+    result = create_price_import(
+
+        payload
+
     )
+
 
 
     return {
@@ -228,6 +409,180 @@ def create_price_import_row(
 
         "success": True,
 
+
         "data": result
 
+
     }
+
+
+
+
+
+
+
+
+# ==============================================================================
+# BULK IMPORT
+# ==============================================================================
+
+
+def bulk_import_prices(
+
+    products: List[Dict],
+
+    created_by=None
+
+):
+
+
+    results = []
+
+
+    for product in products:
+
+
+        result = import_product_price(
+
+            product,
+
+            created_by=created_by
+
+        )
+
+
+        results.append(
+
+            result
+
+        )
+
+
+
+    return results
+
+
+
+
+
+
+
+# ==============================================================================
+# QUEUE
+# ==============================================================================
+
+
+def pending_imports():
+
+
+    return get_pending_price_imports()
+
+
+
+
+
+
+
+# ==============================================================================
+# HISTORY
+# ==============================================================================
+
+
+def import_history(
+
+    limit=100
+
+):
+
+
+    return get_price_import_history(
+
+        limit
+
+    )
+
+
+
+
+
+
+
+
+# ==============================================================================
+# APPROVE / REJECT
+# ==============================================================================
+
+
+def approve_import(
+
+    import_id,
+
+    user_id
+
+):
+
+
+    return update_price_import_status(
+
+        import_id,
+
+        "APPROVED",
+
+        user_id
+
+    )
+
+
+
+
+
+def reject_import(
+
+    import_id,
+
+    user_id,
+
+    reason=None
+
+):
+
+
+    return update_price_import_status(
+
+        import_id,
+
+        "REJECTED",
+
+        user_id,
+
+        reason
+
+    )
+
+
+
+
+
+
+# ==============================================================================
+# EXPORT
+# ==============================================================================
+
+
+__all__ = [
+
+    "calculate_selling_price",
+
+    "import_product_price",
+
+    "bulk_import_prices",
+
+    "pending_imports",
+
+    "import_history",
+
+    "approve_import",
+
+    "reject_import"
+
+]
