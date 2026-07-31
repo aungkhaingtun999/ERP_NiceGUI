@@ -1,10 +1,13 @@
 # ==============================================================================
 # erp_pages/13_Settings_Approval.py
-# ERP ENTERPRISE SETTINGS APPROVAL CENTER v4.0
+# ERP ENTERPRISE SETTINGS APPROVAL CENTER v5.0
 #
 # Maker - Checker Workflow
-#
 # Admin Only
+#
+# Approve / Reject / Cancel
+# Cache Refresh
+# Debug Ready
 #
 # ==============================================================================
 
@@ -32,6 +35,7 @@ from utils.notification import (
 )
 
 
+
 # ==============================================================================
 # SECURITY
 # ==============================================================================
@@ -39,35 +43,10 @@ from utils.notification import (
 
 def require_admin():
 
+
     user = st.session_state.get(
         "user"
     )
-
-
-    # ================= DEBUG =================
-
-    st.write("===== DEBUG SESSION USER =====")
-
-    st.write(user)
-
-    if user:
-
-        st.write("USER ID:")
-        st.write(user.get("id"))
-
-        st.write("USER USER_ID:")
-        st.write(user.get("user_id"))
-
-        st.write("USERNAME:")
-        st.write(user.get("username"))
-
-        st.write("ROLE ID:")
-        st.write(user.get("role_id"))
-
-    st.write("==============================")
-
-
-    # ================= SECURITY =================
 
 
     if not user:
@@ -80,7 +59,7 @@ def require_admin():
 
 
 
-    if int(user.get("role_id",0)) != 1:
+    if int(user.get("role_id", 0)) != 1:
 
         st.error(
             "⛔ Admin Access Required"
@@ -93,8 +72,11 @@ def require_admin():
     return user
 
 
+
+
+
 # ==============================================================================
-# LOAD PENDING
+# LOAD PENDING REQUESTS
 # ==============================================================================
 
 
@@ -120,8 +102,8 @@ def get_pending_requests():
                 new_value,
                 reason,
                 requested_by,
-                created_at,
-                status
+                status,
+                created_at
                 """
             )
 
@@ -145,7 +127,6 @@ def get_pending_requests():
         )
 
 
-
     except Exception as e:
 
 
@@ -159,15 +140,16 @@ def get_pending_requests():
 
 
 
+
 # ==============================================================================
-# RESULT CHECK
+# RPC RESULT CHECK
 # ==============================================================================
 
 
 def rpc_success(result):
 
 
-    if isinstance(result,dict):
+    if isinstance(result, dict):
 
         return result.get(
             "success",
@@ -175,7 +157,45 @@ def rpc_success(result):
         )
 
 
+    if isinstance(result, list) and result:
+
+
+        if isinstance(result[0], dict):
+
+            return result[0].get(
+                "success",
+                False
+            )
+
+
     return False
+
+
+
+
+def rpc_message(result):
+
+
+    if isinstance(result, dict):
+
+        return result.get(
+            "message",
+            ""
+        )
+
+
+    if isinstance(result, list) and result:
+
+
+        if isinstance(result[0], dict):
+
+            return result[0].get(
+                "message",
+                ""
+            )
+
+
+    return str(result)
 
 
 
@@ -192,8 +212,27 @@ def run():
 
 
     current_user_id = str(
-        user["id"]
+        user.get("id")
     )
+
+
+    # ================= DEBUG =================
+
+    with st.expander(
+        "🔍 Debug Session User"
+    ):
+
+        st.write(user)
+
+        st.write(
+            "Current ID:",
+            current_user_id
+        )
+
+        st.write(
+            "Role:",
+            user.get("role_id")
+        )
 
 
 
@@ -219,7 +258,7 @@ def run():
 
 
         st.success(
-            "✔ No Pending Requests"
+            "✔ No Pending Setting Requests"
         )
 
         return
@@ -242,7 +281,6 @@ def run():
     for _, row in pending_df.iterrows():
 
 
-
         request_id = row["id"]
 
 
@@ -257,25 +295,280 @@ def run():
 
 
             st.subheader(
-
                 f"⚙ {row['setting_key']}"
-
             )
 
+
+
+            st.markdown(
+f"""
+**Current Value**
+
+`{row['old_value']}`
+
+
+**Pending Value**
+
+`{row['new_value']}`
+
+
+**Reason**
+
+{row.get('reason','')}
+
+
+**Requested By**
+
+`{maker_id}`
+
+
+**Created**
+
+{row['created_at']}
+"""
+            )
+
+
+
+            # ==============================================================
+            # MAKER
+            # ==============================================================
+
+
+            if maker_id == current_user_id:
+
+
+                st.warning(
+                    "⚠ Your request. Waiting for another Admin approval."
+                )
+
+
+                if st.button(
+
+                    "🗑 Cancel Request",
+
+                    key=f"cancel_{request_id}",
+
+                    use_container_width=True
+
+                ):
+
+
+                    try:
+
+
+                        result = SettingsService.cancel_request(
+
+                            request_id,
+
+                            current_user_id
+
+                        )
+
+
+                        if rpc_success(result):
+
+
+                            clear_settings_cache()
+
+
+                            notify_success(
+                                "Request Cancelled"
+                            )
+
+
+                            st.rerun()
+
+
+                        else:
+
+
+                            notify_error(
+                                rpc_message(result)
+                            )
+
+
+                    except Exception as e:
+
+
+                        notify_error(
+                            str(e)
+                        )
+
+
+
+
+            # ==============================================================
+            # CHECKER
+            # ==============================================================
+
+
+            else:
+
+
+                col1, col2 = st.columns(2)
+
+
+
+                with col1:
+
+
+                    if st.button(
+
+                        "✅ Approve",
+
+                        key=f"approve_{request_id}",
+
+                        use_container_width=True
+
+                    ):
+
+
+                        try:
+
+
+                            result = SettingsService.approve_request(
+
+                                request_id,
+
+                                current_user_id
+
+                            )
+
+
+                            if rpc_success(result):
+
+
+                                clear_settings_cache()
+
+
+                                notify_success(
+                                    "Setting Approved"
+                                )
+
+
+                                st.rerun()
+
+
+
+                            else:
+
+
+                                notify_error(
+                                    rpc_message(result)
+                                )
+
+
+
+                        except Exception as e:
+
+
+                            notify_error(
+                                str(e)
+                            )
+
+
+
+                with col2:
+
+
+                    reject_reason = st.text_input(
+
+                        "Reject Reason",
+
+                        key=f"reject_reason_{request_id}"
+
+                    )
+
+
+
+                    if st.button(
+
+                        "❌ Reject",
+
+                        key=f"reject_{request_id}",
+
+                        use_container_width=True
+
+                    ):
+
+
+                        if not reject_reason:
+
+
+                            notify_error(
+                                "Please enter reject reason"
+                            )
+
+                            st.stop()
+
+
+
+                        try:
+
+
+                            result = SettingsService.reject_request(
+
+                                request_id,
+
+                                current_user_id,
+
+                                reject_reason
+
+                            )
+
+
+                            if rpc_success(result):
+
+
+                                clear_settings_cache()
+
+
+                                notify_success(
+                                    "Request Rejected"
+                                )
+
+
+                                st.rerun()
+
+
+
+                            else:
+
+
+                                notify_error(
+                                    rpc_message(result)
+                                )
+
+
+                        except Exception as e:
+
+
+                            notify_error(
+                                str(e)
+                            )
+
+
+
+            st.divider()
+
+
+
+
 # ==============================================================================
-# ENTRY POINT
+# STREAMLIT PAGE ENTRY
 # ==============================================================================
 
-if __name__ == "__main__":
 
-    st.set_page_config(
-        page_title="Settings Approval",
-        page_icon="✅",
-        layout="wide"
-    )
+st.set_page_config(
 
-    run()
+    page_title="Settings Approval",
+
+    page_icon="✅",
+
+    layout="wide"
+
+)
 
 
-
-           
+run()
