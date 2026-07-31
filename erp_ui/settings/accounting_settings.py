@@ -62,31 +62,9 @@ def render_accounting_settings(
 
 
 
-    st.markdown(
-f"""
-<div style="
-padding:18px;
-border-radius:12px;
-border:1px solid #999;
-">
-
-<div>
-📌 Current Tax Rate
-</div>
-
-<h2>
-{active_tax_rate:.2f} %
-</h2>
-
-<div>
-Approval Controlled Setting
-</div>
-
-</div>
-""",
-unsafe_allow_html=True
+    st.caption(
+    f"Current Tax Rate : {active_tax_rate:.2f}%"
 )
-
 
 
     tax_rate = st.number_input(
