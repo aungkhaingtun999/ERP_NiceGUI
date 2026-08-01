@@ -16,7 +16,7 @@ class KBZQRAnalyzer:
     @staticmethod
     def extract_account(hex_data):
 
-        try:
+    try:
 
         # known KBZ phone pattern
         for number in [
