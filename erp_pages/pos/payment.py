@@ -367,15 +367,25 @@ Discount : {money(discount)}
     # ==========================================================================
 
 
-    received = st.number_input(
+        if payment_method == "MOBILE":
 
-        "Received Amount",
+        received = grand_total
 
-        min_value=0.0,
+        st.success(
+            f"Mobile payment expected: {money(received)}"
+        )
 
-        step=100.0
+        else:
 
-    )
+        received = st.number_input(
+
+            "Received Amount",
+
+            min_value=0.0,
+
+            step=100.0
+
+        )
 
 
 
