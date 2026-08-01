@@ -41,6 +41,5 @@ if st.button('Analyze CRC Samples', key='crc_btn'):
 
 
     st.write(result)
-    if __name__ == "__main__":
-
-        run()
+if __name__ == "__main__":
+    run()
