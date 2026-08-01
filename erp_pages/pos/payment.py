@@ -33,8 +33,9 @@ from .engine import (
 )
 from erp_core.payments import KBZPayQRService
 from database import generate_payment_qr
-from erp_core.services.settings_service import SettingsService
-from database import db
+from erp_core.repositories.payment_account_repository import (
+    get_payment_account
+)
 # ==============================================================================
 # MONEY FORMAT
 # ==============================================================================
@@ -313,53 +314,134 @@ Discount : {money(discount)}
         if provider == "KBZ Pay":
 
 
-            account_name = settings.get_setting(
+            account = get_payment_account(
 
-                "PAYMENT_KBZ_NAME",
+            provider,
 
-                "ERP SHOP"
+            branch_id=1
 
-            )
+)
 
 
-            account_no = settings.get_setting(
+if not account:
 
-                "PAYMENT_KBZ_ACCOUNT",
+    st.error(
+        f"{provider} account not configured"
+    )
 
-                ""
+    return
 
-            )
 
+
+account = get_payment_account(
+
+    provider,
+
+    branch_id=1
+
+)
+
+
+if not account:
+
+    st.error(
+        f"{provider} account not configured"
+    )
+
+    return
+
+
+
+account_name = account.get(
+    "account_name"
+)
+
+
+account_no = account.get(
+    "account_no"
+)
 
         elif provider == "Wave Pay":
 
 
-            account_name = "ERP SHOP"
+            account = get_payment_account(
+
+            provider,
+
+            branch_id=1
+
+)
 
 
-            account_no = settings.get_setting(
+if not account:
 
-                "PAYMENT_WAVE_ACCOUNT",
+    st.error(
+        f"{provider} account not configured"
+    )
 
-                ""
+    return
 
-            )
+
+
+account = get_payment_account(
+
+    provider,
+
+    branch_id=1
+
+)
+
+
+if not account:
+
+    st.error(
+        f"{provider} account not configured"
+    )
+
+    return
+
+
+
+account_name = account.get(
+    "account_name"
+)
+
+
+account_no = account.get(
+    "account_no"
+)
 
 
         else:
 
 
-            account_name = "ERP SHOP"
+            account = get_payment_account(
+
+    provider,
+
+    branch_id=1
+
+)
 
 
-            account_no = settings.get_setting(
+if not account:
 
-                "PAYMENT_AYA_ACCOUNT",
+    st.error(
+        f"{provider} account not configured"
+    )
 
-                ""
+    return
 
-            )
 
+
+account_name = account.get(
+    "account_name"
+)
+
+
+account_no = account.get(
+    "account_no"
+)
 
 
         # --------------------------------------------------------------
