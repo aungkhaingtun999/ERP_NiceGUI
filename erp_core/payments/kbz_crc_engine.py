@@ -196,3 +196,83 @@ class KBZCRCEngine:
                 )
 
         }
+
+    # =====================================================
+    # CRC RANGE SCANNER
+    # =====================================================
+
+    @staticmethod
+    def scan_hex_ranges(hex_data):
+
+
+        results = {}
+
+
+        ranges = {
+
+
+            "FULL":
+
+                hex_data,
+
+
+            "REMOVE_FIRST_BYTE":
+
+                hex_data[2:],
+
+
+            "REMOVE_FIRST_4":
+
+                hex_data[8:],
+
+
+            "BEFORE_AMOUNT_TAG":
+
+                hex_data.split(
+                    "9f24"
+                )[0],
+
+
+        }
+
+
+
+        for name, value in ranges.items():
+
+
+            try:
+
+                results[name] = {
+
+                    "HEX_LENGTH":
+                        len(value),
+
+
+                    "CRC16_CCITT_FALSE":
+                        KBZCRCEngine.crc16_ccitt_false(
+                            bytes.fromhex(value)
+                        ),
+
+
+                    "CRC16_XMODEM":
+                        KBZCRCEngine.crc16_xmodem(
+                            bytes.fromhex(value)
+                        ),
+
+
+                    "CRC32":
+                        KBZCRCEngine.crc32(
+                            bytes.fromhex(value)
+                        )
+
+                }
+
+
+            except Exception as e:
+
+
+                results[name] = str(e)
+
+
+
+        return results
