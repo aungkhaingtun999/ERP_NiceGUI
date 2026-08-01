@@ -5,8 +5,8 @@
 
 import streamlit as st
 
-from erp_core.payments.kbz_crc_tool import KBZCRCTool, KBZCRCEngine
-
+from erp_core.payments.kbz_crc_tool import KBZCRCTool
+from erp_core.payments.kbz_crc_engine import KBZCRCEngine
 
 def run():
     st.title("🧪 KBZ QR CRC Analyzer")
