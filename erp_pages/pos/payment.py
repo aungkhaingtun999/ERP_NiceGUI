@@ -34,6 +34,7 @@ from .engine import (
 from erp_core.payments import KBZPayQRService
 from database import generate_payment_qr
 from erp_core.services.settings_service import SettingsService
+from database import db
 # ==============================================================================
 # MONEY FORMAT
 # ==============================================================================
@@ -285,7 +286,9 @@ Discount : {money(discount)}
     if payment_method == "MOBILE":
 
 
-        settings = SettingsService()
+        settings = SettingsService(
+                   db()
+)
 
 
 
