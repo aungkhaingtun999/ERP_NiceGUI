@@ -1,28 +1,64 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ QR ANALYZER v3.0
-#
+# ERP ENTERPRISE KBZ QR ANALYZER v3.1
 # KBZ Pay QR Binary TLV Decoder
-#
-# Features:
-# - Base64 Payload Decode
-# - Account Number Extract
-# - Amount Extract
-# - QR Validation
-#
 # ==============================================================================
 
 
 import base64
 
 
-
 class KBZQRAnalyzer:
-
 
 
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
+
+    @staticmethod
+    def decode_base64_part(raw):
+
+        try:
+
+            if not raw:
+                return None
+
+
+            # Remove CRC part
+            if "==" in raw:
+
+                data = raw.split("==")[0] + "=="
+
+
+            else:
+
+                data = raw.split("F")[0]
+
+
+
+            decoded = base64.b64decode(
+                data
+            )
+
+
+            return decoded.hex()
+
+
+
+        except Exception as e:
+
+            print(
+                "BASE64 ERROR:",
+                e
+            )
+
+            return None
+
+
+
+    # ==========================================================================
+    # ACCOUNT NUMBER
+    # ==========================================================================
+
     @staticmethod
     def extract_account(hex_data):
 
@@ -30,27 +66,30 @@ class KBZQRAnalyzer:
 
             marker = "57"
 
-            pos = hex_data.find(marker)
+
+            pos = hex_data.find(
+                marker
+            )
 
 
             if pos == -1:
                 return None
 
 
-            # skip tag + length
+
+            # tag + length skip
             value_start = pos + 4
 
 
-            # length byte
-            length_hex = hex_data[
-                pos + 2 :
-                pos + 4
-            ]
-
-
             length = int(
-                length_hex,
+
+                hex_data[
+                    pos+2:
+                    pos+4
+                ],
+
                 16
+
             )
 
 
@@ -63,16 +102,18 @@ class KBZQRAnalyzer:
             ]
 
 
+
             account = bytes.fromhex(
 
                 value_hex
 
             ).decode(
+
                 errors="ignore"
+
             )
 
 
-            # remove non-number chars
             account = "".join(
 
                 x for x in account
@@ -94,7 +135,8 @@ class KBZQRAnalyzer:
             )
 
             return None
-    
+
+
 
 
     # ==========================================================================
@@ -104,18 +146,13 @@ class KBZQRAnalyzer:
     @staticmethod
     def extract_amount(hex_data):
 
-
         try:
-
 
             tag = "9f24"
 
 
-
             pos = hex_data.find(
-
                 tag
-
             )
 
 
@@ -125,12 +162,11 @@ class KBZQRAnalyzer:
 
 
 
-
             length = int(
 
                 hex_data[
-                    pos + 4 :
-                    pos + 6
+                    pos+4:
+                    pos+6
                 ],
 
                 16
@@ -138,20 +174,16 @@ class KBZQRAnalyzer:
             )
 
 
-
-
             value_hex = hex_data[
 
-                pos + 6 :
+                pos+6:
 
-                pos + 6 + (length * 2)
+                pos+6+(length*2)
 
             ]
 
 
-
-
-            amount = bytes.fromhex(
+            return bytes.fromhex(
 
                 value_hex
 
@@ -159,20 +191,12 @@ class KBZQRAnalyzer:
 
 
 
-            return amount
-
-
-
         except Exception as e:
 
-
             print(
-
-                "AMOUNT PARSE ERROR:",
+                "AMOUNT ERROR:",
                 e
-
             )
-
 
             return None
 
@@ -180,7 +204,7 @@ class KBZQRAnalyzer:
 
 
     # ==========================================================================
-    # ANALYZE
+    # MAIN ANALYZE
     # ==========================================================================
 
     @staticmethod
@@ -189,60 +213,37 @@ class KBZQRAnalyzer:
 
         result = {
 
-
             "provider":
             "KBZ Pay",
-
 
             "raw":
             raw,
 
-
             "account_no":
             None,
-
 
             "amount":
             None,
 
-
             "valid":
             False,
-
 
             "decoded":
             None,
 
-
             "decoded_hex":
             None
-
 
         }
 
 
 
-
-        if not raw:
-
-            return result
-
-
-
-
-
         hex_data = KBZQRAnalyzer.decode_base64_part(
-
             raw
-
         )
 
 
-
-
         result["decoded_hex"] = hex_data
-
-
 
 
 
@@ -252,32 +253,19 @@ class KBZQRAnalyzer:
 
 
 
-
-
         result["account_no"] = KBZQRAnalyzer.extract_account(
-
             hex_data
-
         )
-
-
 
 
         result["amount"] = KBZQRAnalyzer.extract_amount(
-
             hex_data
-
         )
 
 
-
-
-
-        if result["account_no"] or result["amount"]:
+        if result["amount"]:
 
             result["valid"] = True
-
-
 
 
 
