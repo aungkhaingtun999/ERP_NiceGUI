@@ -1,102 +1,230 @@
+# ==============================================================================
+# ERP ENTERPRISE KBZ QR ANALYZER v2.0
+#
+# KBZ Pay QR Binary TLV Decoder
+# ==============================================================================
+
+
 import base64
 
 
 class KBZQRAnalyzer:
 
 
+    # ==========================================================================
+    # HEX CONVERT
+    # ==========================================================================
+
     @staticmethod
-    def analyze(qr_text):
+    def decode_base64_part(raw):
+
+        try:
+
+            parts = raw.split("=")
+
+            if len(parts) > 1:
+
+                data = parts[0] + "="
+
+            else:
+
+                data = raw
 
 
-        result = {
+            decoded = base64.b64decode(
+                data
+            )
 
-            "provider": "KBZ Pay",
-            "raw": qr_text,
-            "decoded": None,
-            "valid": False
 
-        }
+            return decoded.hex()
+
+
+        except Exception:
+
+            return None
+
+
+
+    # ==========================================================================
+    # FIND ACCOUNT
+    # ==========================================================================
+
+    @staticmethod
+    def extract_account(hex_data):
+
+        try:
+
+            # Example:
+            # 71609267772367
+
+            start = hex_data.find(
+                "609"
+            )
+
+
+            if start >= 0:
+
+                account = hex_data[
+                    start+1:
+                    start+13
+                ]
+
+                return account
+
+
+        except Exception:
+
+            pass
+
+
+        return None
+
+
+
+
+    # ==========================================================================
+    # FIND AMOUNT
+    # ==========================================================================
+
+    @staticmethod
+    def extract_amount(hex_data):
 
 
         try:
 
-            raw = qr_text.strip()
+            # TLV amount tag
+            tag = "9f24"
 
 
-            # remove last checksum part
-            parts = raw.split("F")
+            pos = hex_data.find(
+                tag
+            )
 
 
-            for part in parts:
+            if pos == -1:
+
+                return None
 
 
-                if len(part) > 20:
+
+            length = int(
+
+                hex_data[
+                    pos+4:
+                    pos+6
+                ],
+
+                16
+
+            )
 
 
-                    try:
 
-                        decoded = base64.b64decode(
-                            part + "=="
-                        )
+            value_hex = hex_data[
 
+                pos+6:
 
-                        result["decoded_hex"] = (
-                            decoded.hex()
-                        )
+                pos+6+(length*2)
+
+            ]
 
 
-                        result["decoded_text"] = (
-                            decoded.decode(
-                                "utf-8",
-                                errors="ignore"
-                            )
-                        )
+
+            amount = bytes.fromhex(
+
+                value_hex
+
+            ).decode()
 
 
-                        result["valid"] = True
+
+            return amount
 
 
-                    except:
 
-                        pass
+        except Exception:
 
 
+            return None
+
+
+
+
+    # ==========================================================================
+    # MAIN ANALYZE
+    # ==========================================================================
+
+    @staticmethod
+    def analyze(raw):
+
+
+        result = {
+
+            "provider":
+            "KBZ Pay",
+
+            "raw":
+            raw,
+
+            "account_no":
+            None,
+
+            "amount":
+            None,
+
+            "valid":
+            False,
+
+            "decoded":
+            None,
+
+            "decoded_hex":
+            None
+
+        }
+
+
+
+        if not raw:
 
             return result
 
 
-        except Exception as e:
 
-            result["error"] = str(e)
+        hex_data = KBZQRAnalyzer.decode_base64_part(
+            raw
+        )
+
+
+        result["decoded_hex"] = hex_data
+
+
+
+        if not hex_data:
 
             return result
-# ==============================================================================
-# KBZ QR TLV DECODER
-# ==============================================================================
 
 
-def parse_tlv(data):
 
-    result = {}
-
-    i = 0
-
-
-    while i < len(data)-2:
+        account = KBZQRAnalyzer.extract_account(
+            hex_data
+        )
 
 
-        tag = data[i]
-
-        length = data[i+1]
-
-
-        value = data[i+2:i+2+length]
+        amount = KBZQRAnalyzer.extract_amount(
+            hex_data
+        )
 
 
-        result[tag] = value
+
+        result["account_no"] = account
+
+        result["amount"] = amount
 
 
-        i += 2 + length
+
+        result["valid"] = True
 
 
-    return result
+
+        return result
