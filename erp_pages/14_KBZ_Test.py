@@ -266,6 +266,32 @@ def run():
 
             st.json(result)
     st.divider()
+        
+
+    # ==========================================================================
+    # SECTION 7
+    # CRC BODY BYTES TEST
+    # ==========================================================================
+
+    st.subheader(
+        "🧱 CRC Body Bytes Test"
+    )
+
+    crc_bytes = st.text_input(
+        "CRC For Bytes Test",
+        key="crc_bytes_test"
+    )
+
+    if st.button(
+        "Convert CRC Bytes",
+        key="crc_bytes_btn"
+    ):
+
+        result = KBZCRCEngine.crc_body_bytes(
+            crc_bytes
+        )
+
+        st.json(result)
 
     # ==========================================================================
     # SECTION 6
