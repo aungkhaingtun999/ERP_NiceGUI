@@ -303,17 +303,17 @@ Discount : {money(discount)}
 
         if provider == "KBZ Pay":
 
-            account_name = "Aung Khaing Tun"
+            account_name = "U AUNG KHAING TUN"
             account_no = "09267772367"
 
         elif provider == "Wave Pay":
 
-            account_name = "Aung Khaing Tun"
+            account_name = "U AUNG KHAING TUN"
             account_no = "09267772367"
 
         else:
 
-            account_name = "Aung Khaing Tun"
+            account_name = "U AUNG KHAING TUN"
             account_no = "09267772367"
 
 
