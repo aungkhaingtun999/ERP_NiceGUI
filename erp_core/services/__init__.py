@@ -8,7 +8,7 @@
 from .payment_service import PaymentService
 
 from .settings_service import SettingsService
-
+from .payment_qr_service import PaymentQRService
 # ==============================================================================
 # RECEIPT
 # ==============================================================================
