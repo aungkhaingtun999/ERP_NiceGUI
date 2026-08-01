@@ -1,26 +1,97 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ CRC ENGINE v1.0
+# ERP ENTERPRISE KBZ CRC ENGINE v2.0
 #
-# CRC verification helper
+# KBZ QR CRC Research Engine
 # ==============================================================================
+
+
+import binascii
 
 
 class KBZCRCEngine:
 
 
-    @staticmethod
-    def build_test_payload(
-        payload,
-        crc
-    ):
+    # ==========================================================================
+    # CRC CANDIDATES
+    # ==========================================================================
 
-        return (
-            payload
-            +
-            crc
+    @staticmethod
+    def crc16_ccitt(data):
+
+        crc = 0xFFFF
+
+        for byte in data:
+
+            crc ^= byte << 8
+
+            for _ in range(8):
+
+                if crc & 0x8000:
+
+                    crc = (
+                        crc << 1
+                    ) ^ 0x1021
+
+                else:
+
+                    crc <<= 1
+
+
+                crc &= 0xFFFF
+
+
+        return format(
+            crc,
+            "04X"
         )
 
 
+
+    @staticmethod
+    def crc32(data):
+
+        return format(
+            binascii.crc32(data) & 0xffffffff,
+            "08X"
+        )
+
+
+
+    # ==========================================================================
+    # TEST GENERATOR
+    # ==========================================================================
+
+    @staticmethod
+    def calculate_candidates(payload):
+
+
+        data = payload.encode(
+            "utf-8"
+        )
+
+
+        return {
+
+            "CRC16_CCITT":
+
+                KBZCRCEngine.crc16_ccitt(
+                    data
+                ),
+
+
+            "CRC32":
+
+                KBZCRCEngine.crc32(
+                    data
+                )
+
+        }
+
+
+
+    # ==========================================================================
+    # COMPARE
+    # ==========================================================================
 
     @staticmethod
     def compare(
@@ -28,22 +99,39 @@ class KBZCRCEngine:
         expected_crc
     ):
 
-        """
-        Placeholder verification layer.
 
-        Real CRC algorithm must be
-        confirmed from official KBZ QR specification.
-        """
+        candidates = (
+            KBZCRCEngine.calculate_candidates(
+                payload
+            )
+        )
+
+
+        matched = []
+
+
+        for name, value in candidates.items():
+
+            if value in expected_crc:
+
+                matched.append(
+                    name
+                )
+
+
 
         return {
 
-            "payload": payload,
+            "payload":
+                payload,
 
-            "expected_crc": expected_crc,
+            "expected_crc":
+                expected_crc,
 
-            "matched": False,
+            "candidates":
+                candidates,
 
-            "message":
-            "CRC algorithm pending verification"
+            "matched":
+                matched
 
         }
