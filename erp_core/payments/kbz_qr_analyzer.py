@@ -14,57 +14,53 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # HEX CONVERT
     # ==========================================================================
-    @staticmethod
+@staticmethod
 def extract_account(hex_data):
 
     try:
 
-        marker = "60"
+        marker = "57"
 
-
-        pos = hex_data.find(
-            marker
-        )
+        pos = hex_data.find(marker)
 
 
         if pos == -1:
             return None
 
 
-        data = hex_data[pos:]
+        # after 57
+        data = hex_data[pos + 2:]
 
 
-        # 60 92xxxxxxxxxx d2
-        start = data.find(
-            "92"
+        # remove next tag d2
+        end = data.find("d2")
+
+
+        if end == -1:
+            return None
+
+
+        account_hex = data[:end]
+
+
+        # hex to text
+        account = bytes.fromhex(
+            account_hex
+        ).decode()
+
+
+        return account
+
+
+
+    except Exception as e:
+
+        print(
+            "ACCOUNT PARSE ERROR:",
+            e
         )
 
-
-        end = data.find(
-            "d2",
-            start
-        )
-
-
-        if start >= 0 and end > start:
-
-            account_hex = data[
-                start+2:
-                end
-            ]
-
-
-            return "0" + account_hex
-
-
-
-    except Exception:
-
-        pass
-
-
-    return None
-
+        return None
 
 
     # ==========================================================================
