@@ -1,21 +1,8 @@
-# ==============================================================================
-# ERP ENTERPRISE KBZ QR ANALYZER v1.0
-#
-# Decode KBZ Pay QR Payload
-#
-# ==============================================================================
-
-
 import base64
-import re
 
 
 class KBZQRAnalyzer:
 
-
-    # ==========================================================================
-    # MAIN ANALYZE
-    # ==========================================================================
 
     @staticmethod
     def analyze(qr_text):
@@ -24,123 +11,62 @@ class KBZQRAnalyzer:
         result = {
 
             "provider": "KBZ Pay",
-
             "raw": qr_text,
-
-            "account_no": None,
-
-            "amount": None,
-
+            "decoded": None,
             "valid": False
 
         }
 
 
-
         try:
 
-
-            # ----------------------------------------------------------
-            # Remove spaces
-            # ----------------------------------------------------------
-
-            qr_text = qr_text.strip()
+            raw = qr_text.strip()
 
 
-
-            # ----------------------------------------------------------
-            # Decode Base64 Part
-            # ----------------------------------------------------------
-
-            decoded = ""
+            # remove last checksum part
+            parts = raw.split("F")
 
 
-            try:
-
-                decoded_bytes = base64.b64decode(
-                    qr_text
-                )
-
-                decoded = decoded_bytes.decode(
-                    "utf-8",
-                    errors="ignore"
-                )
+            for part in parts:
 
 
-            except Exception:
-
-                decoded = qr_text
+                if len(part) > 20:
 
 
+                    try:
 
-            result["decoded"] = decoded
-
-
-
-            # ----------------------------------------------------------
-            # Find Account
-            # ----------------------------------------------------------
-
-            account_match = re.search(
-
-                r'(09\d{8,10})',
-
-                decoded
-
-            )
+                        decoded = base64.b64decode(
+                            part + "=="
+                        )
 
 
-            if account_match:
-
-                result["account_no"] = (
-                    account_match.group(1)
-                )
+                        result["decoded_hex"] = (
+                            decoded.hex()
+                        )
 
 
-
-            # ----------------------------------------------------------
-            # Find Amount
-            # ----------------------------------------------------------
-
-            amount_match = re.search(
-
-                r'(\d+\.\d+)',
-
-                decoded
-
-            )
+                        result["decoded_text"] = (
+                            decoded.decode(
+                                "utf-8",
+                                errors="ignore"
+                            )
+                        )
 
 
-            if amount_match:
-
-                result["amount"] = (
-                    amount_match.group(1)
-                )
+                        result["valid"] = True
 
 
+                    except:
 
-            # ----------------------------------------------------------
-            # Validation
-            # ----------------------------------------------------------
-
-            if (
-                result["account_no"]
-                or
-                result["amount"]
-            ):
-
-                result["valid"] = True
+                        pass
 
 
 
             return result
 
 
-
         except Exception as e:
 
-
             result["error"] = str(e)
-
 
             return result
