@@ -229,15 +229,42 @@ def run():
                 st.error(
                     str(e)
                 )
+    st.divider()
 
-# ==============================================================================
-# DIRECT RUN
-# ==============================================================================
+    # ==========================================================================
+    # SECTION 5
+    # CRC RANGE SCANNER
+    # ==========================================================================
 
-if __name__ == "__main__":
+    st.subheader(
+        "🔎 CRC Range Scanner"
+    )
 
-    run()
+    range_hex = st.text_area(
+        "HEX For Range Scan",
+        height=120,
+        key="range_hex_input"
+    )
 
+    if st.button(
+        "Scan CRC Range",
+        key="scan_range_btn"
+    ):
+
+        if not range_hex:
+
+            st.warning(
+                "Enter HEX value"
+            )
+
+        else:
+
+            result = KBZCRCEngine.scan_hex_ranges(
+                range_hex
+            )
+
+            st.json(result)
+            
 # ==============================================================================
 # DIRECT RUN
 # ==============================================================================
