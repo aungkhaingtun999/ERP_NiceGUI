@@ -46,27 +46,51 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # ACCOUNT NUMBER
     # ==========================================================================
-    @staticmethod
-    def extract_account(hex_data):
+@staticmethod
+def extract_account(hex_data):
 
-        try:
+    try:
 
-            text = bytes.fromhex(hex_data).decode(
-                errors='ignore'
-            )
+        marker = '5716'
 
-            match = re.search(r'09\d{9}', text)
+        pos = hex_data.find(marker)
 
-            if match:
-                return match.group(0)
-
+        if pos == -1:
             return None
 
-        except Exception as e:
+        # start after 57 16
+        start = pos + 4
 
-            print('ACCOUNT ERROR:', e)
+        # read first 8 bytes (16 hex chars)
+        account_hex = hex_data[start:start+16]
 
-            return None
+        digits = ''
+
+        for i in range(0, len(account_hex), 2):
+
+            byte = account_hex[i:i+2]
+
+            high = byte[0]
+            low = byte[1]
+
+            digits += high
+
+            if low.lower() != 'f':
+                digits += low
+
+        # remove trailing non-digits
+        digits = ''.join(ch for ch in digits if ch.isdigit())
+
+        if digits.startswith('09'):
+            return digits[:11]
+
+        return digits
+
+    except Exception as e:
+
+        print('ACCOUNT ERROR:', e)
+
+        return None
 
 
 
