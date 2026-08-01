@@ -70,3 +70,33 @@ class KBZQRAnalyzer:
             result["error"] = str(e)
 
             return result
+# ==============================================================================
+# KBZ QR TLV DECODER
+# ==============================================================================
+
+
+def parse_tlv(data):
+
+    result = {}
+
+    i = 0
+
+
+    while i < len(data)-2:
+
+
+        tag = data[i]
+
+        length = data[i+1]
+
+
+        value = data[i+2:i+2+length]
+
+
+        result[tag] = value
+
+
+        i += 2 + length
+
+
+    return result
