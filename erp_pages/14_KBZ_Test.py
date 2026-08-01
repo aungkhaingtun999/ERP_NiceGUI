@@ -1,290 +1,198 @@
 # ==============================================================================
-# erp_pages/14_KBZ_Test.py
-# ERP ENTERPRISE KBZ QR TEST PAGE
+# ERP ENTERPRISE KBZ CRC ENGINE v3.0
 # ==============================================================================
 
 
-import streamlit as st
+import binascii
 
 
-from erp_core.payments.kbz_crc_tool import KBZCRCTool
 
-from erp_core.payments.kbz_crc_engine import KBZCRCEngine
+class KBZCRCEngine:
 
-from erp_core.payments.kbz_qr_analyzer import KBZQRAnalyzer
 
 
+    @staticmethod
+    def crc16_ccitt_false(data):
 
-# ==============================================================================
-# PAGE RUN
-# ==============================================================================
 
+        crc = 0xFFFF
 
-def run():
 
+        for byte in data:
 
-    st.title(
-        "🧪 KBZ QR CRC Analyzer"
-    )
 
+            crc ^= byte << 8
 
-    st.divider()
 
+            for _ in range(8):
 
 
-    # ==========================================================================
-    # SECTION 1
-    # QR SAMPLE SPLIT TEST
-    # ==========================================================================
+                if crc & 0x8000:
 
+                    crc = (
+                        crc << 1
+                    ) ^ 0x1021
 
-    st.subheader(
-        "📌 QR Payload / CRC Split Test"
-    )
 
+                else:
 
-    sample_text = st.text_area(
+                    crc <<= 1
 
-        "Paste KBZ QR samples (one per line)",
 
-        height=250,
 
-        key="kbz_sample_text"
+                crc &= 0xFFFF
 
-    )
 
 
+        return format(
+            crc,
+            "04X"
+        )
 
-    if st.button(
 
-        "Analyze CRC Samples",
 
-        key="kbz_sample_analyze_btn"
 
-    ):
+    @staticmethod
+    def crc16_xmodem(data):
 
 
-        samples = [
+        crc = 0x0000
 
-            x.strip()
 
-            for x in sample_text.splitlines()
+        for byte in data:
 
-            if x.strip()
 
-        ]
+            crc ^= byte << 8
 
 
+            for _ in range(8):
 
-        if not samples:
 
-            st.warning(
-                "Please paste KBZ QR samples"
-            )
+                if crc & 0x8000:
 
-        else:
+                    crc = (
+                        crc << 1
+                    ) ^ 0x1021
 
 
-            result = KBZCRCTool.analyze_samples(
+                else:
 
-                samples
+                    crc <<= 1
 
-            )
 
 
-            st.json(result)
+                crc &= 0xFFFF
 
 
 
-    st.divider()
+        return format(
+            crc,
+            "04X"
+        )
 
 
 
-    # ==========================================================================
-    # SECTION 2
-    # PAYLOAD CRC VERIFY
-    # ==========================================================================
 
+    @staticmethod
+    def crc32(data):
 
-    st.subheader(
-        "🔐 CRC Candidate Test"
-    )
 
+        return format(
 
+            binascii.crc32(data)
+            &
+            0xffffffff,
 
-    payload = st.text_input(
-
-        "KBZ Payload",
-
-        key="kbz_payload_test"
-
-    )
-
-
-    crc = st.text_input(
-
-        "Expected CRC",
-
-        key="kbz_crc_test"
-
-    )
-
-
-
-    if st.button(
-
-        "Run CRC Test",
-
-        key="kbz_crc_run_btn"
-
-    ):
-
-
-        if not payload or not crc:
-
-            st.warning(
-                "Enter Payload and CRC"
-            )
-
-
-        else:
-
-
-            result = KBZCRCEngine.compare(
-
-                payload,
-
-                crc
-
-            )
-
-
-            st.json(result)
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # SECTION 3
-    # DECODED HEX CRC TEST
-    # ==========================================================================
-
-
-    st.subheader(
-        "🧬 Decoded Hex CRC Test"
-    )
-
-
-
-    decoded_hex = st.text_area(
-
-        "Decoded HEX",
-
-        height=150,
-
-        key="kbz_decoded_hex"
-
-    )
-
-
-
-    if st.button(
-
-        "Analyze Decoded HEX",
-
-        key="kbz_hex_analyze_btn"
-
-    ):
-
-
-        if not decoded_hex:
-
-
-            st.warning(
-                "Enter decoded hex"
-            )
-
-
-        else:
-
-
-            try:
-
-
-                result = KBZCRCEngine.crc16_variants(
-
-                    decoded_hex
-
-                )
-
-
-                st.json(result)
-
-
-
-            except Exception as e:
-
-
-                st.error(
-                    str(e)
-                )
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # SECTION 4
-    # FULL QR ANALYZER
-    # ==========================================================================
-
-
-    st.subheader(
-        "📲 Full KBZ QR Analyzer"
-    )
-
-
-    raw_qr = st.text_input(
-
-        "Paste Raw KBZ QR",
-
-        key="kbz_raw_qr"
-
-    )
-
-
-
-    if st.button(
-
-        "Analyze QR",
-
-        key="kbz_full_analyze_btn"
-
-    ):
-
-
-        result = KBZQRAnalyzer.analyze(
-
-            raw_qr
+            "08X"
 
         )
 
 
-        st.json(result)
+
+
+    # =====================================================
+    # DECODED HEX CRC TEST
+    # =====================================================
+
+    @staticmethod
+    def crc16_variants(hex_data):
+
+
+        data = bytes.fromhex(
+            hex_data
+        )
+
+
+        return {
+
+
+            "CRC16_CCITT_FALSE":
+
+                KBZCRCEngine.crc16_ccitt_false(
+                    data
+                ),
+
+
+            "CRC16_XMODEM":
+
+                KBZCRCEngine.crc16_xmodem(
+                    data
+                ),
+
+
+            "CRC32":
+
+                KBZCRCEngine.crc32(
+                    data
+                )
+
+        }
 
 
 
 
-# ==============================================================================
-# DIRECT RUN
-# ==============================================================================
+    # =====================================================
+    # PAYLOAD TEST
+    # =====================================================
+
+    @staticmethod
+    def compare(
+        payload,
+        expected_crc
+    ):
 
 
-if __name__ == "__main__":
+        data = payload.encode(
+            "utf-8"
+        )
 
-    run()
+
+        return {
+
+
+            "expected_crc":
+
+                expected_crc,
+
+
+            "CRC16_CCITT_FALSE":
+
+                KBZCRCEngine.crc16_ccitt_false(
+                    data
+                ),
+
+
+            "CRC16_XMODEM":
+
+                KBZCRCEngine.crc16_xmodem(
+                    data
+                ),
+
+
+            "CRC32":
+
+                KBZCRCEngine.crc32(
+                    data
+                )
+
+        }
