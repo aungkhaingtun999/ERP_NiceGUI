@@ -1,93 +1,146 @@
-import io
-import qrcode
+# ==============================================================================
+# ERP ENTERPRISE KBZ QR ANALYZER v1.0
+#
+# Decode KBZ Pay QR Payload
+#
+# ==============================================================================
+
+
 import base64
+import re
 
 
-class KBZPayQRService:
+class KBZQRAnalyzer:
 
 
-    @staticmethod
-    def encode_amount(amount):
-
-        text = f"{float(amount):.1f}"
-
-        raw = text.encode()
-
-        encoded = base64.b64encode(
-            raw
-        ).decode()
-
-
-        return encoded
-
-
+    # ==========================================================================
+    # MAIN ANALYZE
+    # ==========================================================================
 
     @staticmethod
-    def build_payload(
-        template,
-        amount
-    ):
-
-        amount_code = (
-            KBZPayQRService
-            .encode_amount(amount)
-        )
+    def analyze(qr_text):
 
 
-        payload = template.replace(
-            "{AMOUNT}",
-            amount_code
-        )
+        result = {
 
+            "provider": "KBZ Pay",
 
-        return payload
+            "raw": qr_text,
+
+            "account_no": None,
+
+            "amount": None,
+
+            "valid": False
+
+        }
 
 
 
-    @staticmethod
-    def generate_qr(
-        template,
-        amount
-    ):
+        try:
 
 
-        payload = (
-            KBZPayQRService
-            .build_payload(
-                template,
-                amount
+            # ----------------------------------------------------------
+            # Remove spaces
+            # ----------------------------------------------------------
+
+            qr_text = qr_text.strip()
+
+
+
+            # ----------------------------------------------------------
+            # Decode Base64 Part
+            # ----------------------------------------------------------
+
+            decoded = ""
+
+
+            try:
+
+                decoded_bytes = base64.b64decode(
+                    qr_text
+                )
+
+                decoded = decoded_bytes.decode(
+                    "utf-8",
+                    errors="ignore"
+                )
+
+
+            except Exception:
+
+                decoded = qr_text
+
+
+
+            result["decoded"] = decoded
+
+
+
+            # ----------------------------------------------------------
+            # Find Account
+            # ----------------------------------------------------------
+
+            account_match = re.search(
+
+                r'(09\d{8,10})',
+
+                decoded
+
             )
-        )
 
 
-        qr = qrcode.QRCode(
-            version=None,
-            box_size=10,
-            border=4
-        )
+            if account_match:
+
+                result["account_no"] = (
+                    account_match.group(1)
+                )
 
 
-        qr.add_data(
-            payload
-        )
+
+            # ----------------------------------------------------------
+            # Find Amount
+            # ----------------------------------------------------------
+
+            amount_match = re.search(
+
+                r'(\d+\.\d+)',
+
+                decoded
+
+            )
 
 
-        qr.make(
-            fit=True
-        )
+            if amount_match:
+
+                result["amount"] = (
+                    amount_match.group(1)
+                )
 
 
-        image = qr.make_image()
+
+            # ----------------------------------------------------------
+            # Validation
+            # ----------------------------------------------------------
+
+            if (
+                result["account_no"]
+                or
+                result["amount"]
+            ):
+
+                result["valid"] = True
 
 
-        buffer = io.BytesIO()
 
-        image.save(
-            buffer,
-            format="PNG"
-        )
+            return result
 
 
-        buffer.seek(0)
 
-        return buffer
+        except Exception as e:
+
+
+            result["error"] = str(e)
+
+
+            return result
