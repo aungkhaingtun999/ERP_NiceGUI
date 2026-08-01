@@ -225,7 +225,10 @@ try:
     from .services.payment_service import PaymentService
 except Exception:
     PaymentService = None
-
+try:
+    from .services.payment_qr_service import PaymentQRService
+except Exception:
+    PaymentQRService = None
 # ==============================================================================
 # HELPERS
 # ==============================================================================
@@ -305,7 +308,7 @@ __all__ = [
     "RefundService",  
     "ReceiptService",
     "PaymentService",  
-
+    "PaymentQRService",
     # Utils  
     "money",  
     "money_float",  
