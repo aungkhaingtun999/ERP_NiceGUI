@@ -23,109 +23,63 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-
-    @staticmethod
-    def decode_base64_part(raw):
-
-        try:
-
-            if not raw:
-                return None
-
-
-
-            # Remove CRC suffix
-            if "==" in raw:
-
-                data = raw.split("==")[0] + "=="
-
-
-            else:
-
-                data = raw.split("F")[0]
-
-
-
-            decoded = base64.b64decode(
-                data
-            )
-
-
-            return decoded.hex()
-
-
-
-        except Exception as e:
-
-
-            print(
-                "BASE64 ERROR:",
-                e
-            )
-
-
-            return None
-
-
-
-
-    # ==========================================================================
-    # ACCOUNT NUMBER
-    # ==========================================================================
-
-    @staticmethod
+        @staticmethod
     def extract_account(hex_data):
 
-
         try:
 
-
-            # Account field marker
             marker = "57"
 
-
-            pos = hex_data.find(
-                marker
-            )
+            pos = hex_data.find(marker)
 
 
             if pos == -1:
-
                 return None
 
 
+            # skip tag + length
+            value_start = pos + 4
 
-            data = hex_data[
-                pos + 2:
+
+            # length byte
+            length_hex = hex_data[
+                pos + 2 :
+                pos + 4
             ]
 
 
-
-            # next TLV tag
-            end = data.find(
-                "d2"
+            length = int(
+                length_hex,
+                16
             )
 
 
+            value_hex = hex_data[
 
-            if end == -1:
+                value_start:
 
-                return None
+                value_start + (length * 2)
 
-
-
-            account_hex = data[
-                :end
             ]
-
 
 
             account = bytes.fromhex(
 
-                account_hex
+                value_hex
 
-            ).decode()
+            ).decode(
+                errors="ignore"
+            )
 
+
+            # remove non-number chars
+            account = "".join(
+
+                x for x in account
+
+                if x.isdigit()
+
+            )
 
 
             return account
@@ -134,16 +88,13 @@ class KBZQRAnalyzer:
 
         except Exception as e:
 
-
             print(
-                "ACCOUNT PARSE ERROR:",
+                "ACCOUNT ERROR:",
                 e
             )
 
-
             return None
-
-
+    
 
 
     # ==========================================================================
