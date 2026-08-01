@@ -280,9 +280,9 @@ def run():
 
    st.subheader(
     "🔎 CRC Range Scanner"
-)
+   )
 
-range_hex = st.text_area(
+   range_hex = st.text_area(
     "HEX For Range Scan",
     height=120,
     key="range_hex_input"
