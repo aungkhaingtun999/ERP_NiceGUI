@@ -3,100 +3,288 @@
 # ERP ENTERPRISE KBZ QR TEST PAGE
 # ==============================================================================
 
+
 import streamlit as st
 
+
 from erp_core.payments.kbz_crc_tool import KBZCRCTool
+
 from erp_core.payments.kbz_crc_engine import KBZCRCEngine
 
+from erp_core.payments.kbz_qr_analyzer import KBZQRAnalyzer
+
+
+
+# ==============================================================================
+# PAGE RUN
+# ==============================================================================
+
+
 def run():
-    st.title("🧪 KBZ QR CRC Analyzer")
+
+
+    st.title(
+        "🧪 KBZ QR CRC Analyzer"
+    )
+
 
     st.divider()
 
-    # --- Section 1: QR Samples Analyzer ---
-    sample_text = st.text_area(
-        "Paste KBZ QR samples (one per line)",
-        height=250,
-        key="kbz_crc_input"
+
+
+    # ==========================================================================
+    # SECTION 1
+    # QR SAMPLE SPLIT TEST
+    # ==========================================================================
+
+
+    st.subheader(
+        "📌 QR Payload / CRC Split Test"
     )
 
+
+    sample_text = st.text_area(
+
+        "Paste KBZ QR samples (one per line)",
+
+        height=250,
+
+        key="kbz_sample_text"
+
+    )
+
+
+
     if st.button(
+
         "Analyze CRC Samples",
-        key="kbz_crc_analyze_button"
+
+        key="kbz_sample_analyze_btn"
+
     ):
+
+
         samples = [
+
             x.strip()
+
             for x in sample_text.splitlines()
+
             if x.strip()
+
         ]
 
-        if not samples:
-            st.warning("Please paste QR samples")
-            return
 
-        result = KBZCRCTool.analyze_samples(samples)
-        st.json(result)
+
+        if not samples:
+
+            st.warning(
+                "Please paste KBZ QR samples"
+            )
+
+        else:
+
+
+            result = KBZCRCTool.analyze_samples(
+
+                samples
+
+            )
+
+
+            st.json(result)
+
+
 
     st.divider()
 
-    # --- Section 2: CRC Verification Test ---
-    st.subheader("🔐 CRC Verification Test")
+
+
+    # ==========================================================================
+    # SECTION 2
+    # PAYLOAD CRC VERIFY
+    # ==========================================================================
+
+
+    st.subheader(
+        "🔐 CRC Candidate Test"
+    )
+
+
 
     payload = st.text_input(
-        "Payload",
-        key="kbz_payload_input"
+
+        "KBZ Payload",
+
+        key="kbz_payload_test"
+
     )
+
 
     crc = st.text_input(
-        "CRC",
-        key="kbz_crc_input_field"
+
+        "Expected CRC",
+
+        key="kbz_crc_test"
+
     )
+
+
 
     if st.button(
-        "Verify CRC",
-        key="verify_crc"
+
+        "Run CRC Test",
+
+        key="kbz_crc_run_btn"
+
     ):
+
+
         if not payload or not crc:
-            st.warning("Please enter both Payload and CRC")
-            return
 
-        result = KBZCRCEngine.compare(
-            payload,
-            crc
-        )
-
-        st.json(result)
-st.divider()
-
-st.subheader(
-    "🔐 CRC Candidate Test"
-)
+            st.warning(
+                "Enter Payload and CRC"
+            )
 
 
-payload = st.text_input(
-    "KBZ Payload",
-    key="crc_payload"
-)
+        else:
 
 
-crc = st.text_input(
-    "Expected CRC",
-    key="crc_expected"
-)
+            result = KBZCRCEngine.compare(
+
+                payload,
+
+                crc
+
+            )
 
 
-if st.button(
-    "Run CRC Test",
-    key="run_crc_test"
-):
+            st.json(result)
 
-    result = KBZCRCEngine.compare(
-        payload,
-        crc
+
+
+    st.divider()
+
+
+
+    # ==========================================================================
+    # SECTION 3
+    # DECODED HEX CRC TEST
+    # ==========================================================================
+
+
+    st.subheader(
+        "🧬 Decoded Hex CRC Test"
     )
 
-    st.json(result)
 
-# direct run support
+
+    decoded_hex = st.text_area(
+
+        "Decoded HEX",
+
+        height=150,
+
+        key="kbz_decoded_hex"
+
+    )
+
+
+
+    if st.button(
+
+        "Analyze Decoded HEX",
+
+        key="kbz_hex_analyze_btn"
+
+    ):
+
+
+        if not decoded_hex:
+
+
+            st.warning(
+                "Enter decoded hex"
+            )
+
+
+        else:
+
+
+            try:
+
+
+                result = KBZCRCEngine.crc16_variants(
+
+                    decoded_hex
+
+                )
+
+
+                st.json(result)
+
+
+
+            except Exception as e:
+
+
+                st.error(
+                    str(e)
+                )
+
+
+
+    st.divider()
+
+
+
+    # ==========================================================================
+    # SECTION 4
+    # FULL QR ANALYZER
+    # ==========================================================================
+
+
+    st.subheader(
+        "📲 Full KBZ QR Analyzer"
+    )
+
+
+    raw_qr = st.text_input(
+
+        "Paste Raw KBZ QR",
+
+        key="kbz_raw_qr"
+
+    )
+
+
+
+    if st.button(
+
+        "Analyze QR",
+
+        key="kbz_full_analyze_btn"
+
+    ):
+
+
+        result = KBZQRAnalyzer.analyze(
+
+            raw_qr
+
+        )
+
+
+        st.json(result)
+
+
+
+
+# ==============================================================================
+# DIRECT RUN
+# ==============================================================================
+
+
 if __name__ == "__main__":
+
     run()
