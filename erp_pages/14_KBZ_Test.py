@@ -264,7 +264,33 @@ def run():
             )
 
             st.json(result)
-            
+     st.divider()
+
+    # ==========================================================================
+    # SECTION 6
+    # CRC STRING ANALYZER
+    # ==========================================================================
+
+    st.subheader(
+        "🧩 CRC String Analyzer"
+    )
+
+    crc_text = st.text_input(
+        "CRC String",
+        key="crc_string_input"
+    )
+
+    if st.button(
+        "Analyze CRC String",
+        key="crc_string_btn"
+    ):
+
+        result = KBZCRCEngine.analyze_crc_string(
+            crc_text
+        )
+
+        st.json(result)
+        
 # ==============================================================================
 # DIRECT RUN
 # ==============================================================================
