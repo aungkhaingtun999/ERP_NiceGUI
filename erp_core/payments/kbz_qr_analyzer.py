@@ -36,25 +36,25 @@ class KBZQRAnalyzer:
    
                       pos = hex_data.find(marker)
 
-                   if pos == -1:
-                       return None
+                  if pos == -1:
+                      return None
 
 
-                        part = hex_data[
-                        pos+4:
-                        pos+40
+                       part = hex_data[
+                       pos+4:
+                       pos+40
         ]
 
 
                         text = bytes.fromhex(
-                         part
+                        part
                          ).decode(
                         errors="ignore"
         )
 
 
-                    digits = "".join(
-                    x for x in text
+                        digits = "".join(
+                        x for x in text
                         if x.isdigit()
       )
 
