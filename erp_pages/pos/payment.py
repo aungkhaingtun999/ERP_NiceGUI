@@ -34,7 +34,6 @@ from .engine import (
 from erp_core.payments import KBZPayQRService
 from database import generate_payment_qr
 
-
 # ==============================================================================
 # MONEY FORMAT
 # ==============================================================================
@@ -303,7 +302,6 @@ Discount : {money(discount)}
 
 
         if provider == "KBZ Pay":
-        if provider == "KBZ Pay":
 
             qr_buffer = KBZPayQRService.generate_qr(
 
@@ -330,6 +328,39 @@ Discount : {money(discount)}
 
                 sale_id="TEMP"
 
+            )
+
+
+        st.image(
+
+            qr_buffer,
+
+            caption=f"Scan to pay with {provider}",
+
+            width=250
+
+        )
+
+
+        st.info(
+
+            f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
+
+        )
+
+
+        mobile_txn = st.text_input(
+
+            "Transaction ID",
+
+            placeholder="Enter mobile banking transaction number"
+
+        )
+
+
+        st.session_state.mobile_provider = provider
+
+        st.session_state.mobile_txn = mobile_txn
             )
 
         st.image(
