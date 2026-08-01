@@ -33,7 +33,7 @@ from .engine import (
 )
 from erp_core.payments import KBZPayQRService
 from database import generate_payment_qr
-
+from erp_core.services.settings_service import SettingsService
 # ==============================================================================
 # MONEY FORMAT
 # ==============================================================================
@@ -284,10 +284,38 @@ st.session_state.payment_method = payment_method
         # --------------------------------------------------------------
         # PAYMENT ACCOUNT
         # --------------------------------------------------------------
+        if provider == "KBZ Pay":
 
-        account_name = "U AUNG KHAING TUN"
+    account_name = settings.get_setting(
+        "PAYMENT_KBZ_NAME",
+        "ERP SHOP"
+    )
 
-        account_no = "09267772367"
+    account_no = settings.get_setting(
+        "PAYMENT_KBZ_ACCOUNT",
+        ""
+    )
+
+
+elif provider == "Wave Pay":
+
+    account_name = "ERP SHOP"
+
+    account_no = settings.get_setting(
+        "PAYMENT_WAVE_ACCOUNT",
+        ""
+    )
+
+
+else:
+
+    account_name = "ERP SHOP"
+
+    account_no = settings.get_setting(
+        "PAYMENT_AYA_ACCOUNT",
+        ""
+    )
+        
 
 
 
