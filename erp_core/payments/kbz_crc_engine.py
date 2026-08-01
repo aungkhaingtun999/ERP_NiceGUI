@@ -54,7 +54,21 @@ class KBZCRCEngine:
             binascii.crc32(data) & 0xffffffff,
             "08X"
         )
-
+    
+    @staticmethod
+    def crc16_variants(hex_data):
+    
+        data = bytes.fromhex(hex_data)
+    
+        return {
+    
+            "CRC16_CCITT_FALSE":
+                KBZCRCEngine.crc16_ccitt_false(data),
+    
+            "CRC16_XMODEM":
+                KBZCRCEngine.crc16_xmodem(data)
+    
+        }
 
 
     # ==========================================================================
