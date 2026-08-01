@@ -19,7 +19,8 @@ class KBZQRAnalyzer:
         try:
 
         # known KBZ phone pattern
-            for number in [
+            
+        for number in [
             "09267772367"
         ]:
 
