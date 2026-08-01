@@ -1,121 +1,91 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ QR ANALYZER v2.0
+# ERP ENTERPRISE KBZ QR ANALYZER v3.0
 #
 # KBZ Pay QR Binary TLV Decoder
+#
+# Features:
+# - Base64 Payload Decode
+# - Account Number Extract
+# - Amount Extract
+# - QR Validation
+#
 # ==============================================================================
 
 
 import base64
 
 
+
 class KBZQRAnalyzer:
 
 
+
     # ==========================================================================
-    # HEX CONVERT
+    # BASE64 DECODE
     # ==========================================================================
-@staticmethod
-def extract_account(hex_data):
 
-    try:
+    @staticmethod
+    def decode_base64_part(raw):
 
-        marker = "57"
+        try:
 
-        pos = hex_data.find(marker)
+            if not raw:
+                return None
 
 
-        if pos == -1:
+
+            # Remove CRC suffix
+            if "==" in raw:
+
+                data = raw.split("==")[0] + "=="
+
+
+            else:
+
+                data = raw.split("F")[0]
+
+
+
+            decoded = base64.b64decode(
+                data
+            )
+
+
+            return decoded.hex()
+
+
+
+        except Exception as e:
+
+
+            print(
+                "BASE64 ERROR:",
+                e
+            )
+
+
             return None
 
 
-        # after 57
-        data = hex_data[pos + 2:]
-
-
-        # remove next tag d2
-        end = data.find("d2")
-
-
-        if end == -1:
-            return None
-
-
-        account_hex = data[:end]
-
-
-        # hex to text
-        account = bytes.fromhex(
-            account_hex
-        ).decode()
-
-
-        return account
-
-
-
-    except Exception as e:
-
-        print(
-            "ACCOUNT PARSE ERROR:",
-            e
-        )
-
-        return None
 
 
     # ==========================================================================
-    # FIND ACCOUNT
+    # ACCOUNT NUMBER
     # ==========================================================================
 
     @staticmethod
     def extract_account(hex_data):
 
-        try:
-
-            # Example:
-            # 71609267772367
-
-            start = hex_data.find(
-                "609"
-            )
-
-
-            if start >= 0:
-
-                account = hex_data[
-                    start+1:
-                    start+13
-                ]
-
-                return account
-
-
-        except Exception:
-
-            pass
-
-
-        return None
-
-
-
-
-    # ==========================================================================
-    # FIND AMOUNT
-    # ==========================================================================
-
-    @staticmethod
-    def extract_amount(hex_data):
-
 
         try:
 
-            # TLV amount tag
-            tag = "9f24"
+
+            # Account field marker
+            marker = "57"
 
 
             pos = hex_data.find(
-                tag
+                marker
             )
 
 
@@ -125,11 +95,91 @@ def extract_account(hex_data):
 
 
 
+            data = hex_data[
+                pos + 2:
+            ]
+
+
+
+            # next TLV tag
+            end = data.find(
+                "d2"
+            )
+
+
+
+            if end == -1:
+
+                return None
+
+
+
+            account_hex = data[
+                :end
+            ]
+
+
+
+            account = bytes.fromhex(
+
+                account_hex
+
+            ).decode()
+
+
+
+            return account
+
+
+
+        except Exception as e:
+
+
+            print(
+                "ACCOUNT PARSE ERROR:",
+                e
+            )
+
+
+            return None
+
+
+
+
+    # ==========================================================================
+    # AMOUNT
+    # ==========================================================================
+
+    @staticmethod
+    def extract_amount(hex_data):
+
+
+        try:
+
+
+            tag = "9f24"
+
+
+
+            pos = hex_data.find(
+
+                tag
+
+            )
+
+
+            if pos == -1:
+
+                return None
+
+
+
+
             length = int(
 
                 hex_data[
-                    pos+4:
-                    pos+6
+                    pos + 4 :
+                    pos + 6
                 ],
 
                 16
@@ -138,13 +188,15 @@ def extract_account(hex_data):
 
 
 
+
             value_hex = hex_data[
 
-                pos+6:
+                pos + 6 :
 
-                pos+6+(length*2)
+                pos + 6 + (length * 2)
 
             ]
+
 
 
 
@@ -160,7 +212,15 @@ def extract_account(hex_data):
 
 
 
-        except Exception:
+        except Exception as e:
+
+
+            print(
+
+                "AMOUNT PARSE ERROR:",
+                e
+
+            )
 
 
             return None
@@ -169,7 +229,7 @@ def extract_account(hex_data):
 
 
     # ==========================================================================
-    # MAIN ANALYZE
+    # ANALYZE
     # ==========================================================================
 
     @staticmethod
@@ -178,28 +238,37 @@ def extract_account(hex_data):
 
         result = {
 
+
             "provider":
             "KBZ Pay",
+
 
             "raw":
             raw,
 
+
             "account_no":
             None,
+
 
             "amount":
             None,
 
+
             "valid":
             False,
+
 
             "decoded":
             None,
 
+
             "decoded_hex":
             None
 
+
         }
+
 
 
 
@@ -209,12 +278,20 @@ def extract_account(hex_data):
 
 
 
+
+
         hex_data = KBZQRAnalyzer.decode_base64_part(
+
             raw
+
         )
 
 
+
+
         result["decoded_hex"] = hex_data
+
+
 
 
 
@@ -224,24 +301,32 @@ def extract_account(hex_data):
 
 
 
-        account = KBZQRAnalyzer.extract_account(
+
+
+        result["account_no"] = KBZQRAnalyzer.extract_account(
+
             hex_data
+
         )
 
 
-        amount = KBZQRAnalyzer.extract_amount(
+
+
+        result["amount"] = KBZQRAnalyzer.extract_amount(
+
             hex_data
+
         )
 
 
 
-        result["account_no"] = account
-
-        result["amount"] = amount
 
 
+        if result["account_no"] or result["amount"]:
 
-        result["valid"] = True
+            result["valid"] = True
+
+
 
 
 
