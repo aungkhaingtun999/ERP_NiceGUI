@@ -3,7 +3,9 @@
 # MOBILE BANKING PAYMENT
 # ==============================================================================
 
-from database import supabase
+from erp_core import get_supabase
+
+supabase = get_supabase()
 
 
 
