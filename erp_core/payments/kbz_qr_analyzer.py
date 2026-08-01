@@ -34,7 +34,7 @@ class KBZQRAnalyzer:
                       # TLV search
                       marker = "5716"
    
-                       pos = hex_data.find(marker)
+                      pos = hex_data.find(marker)
 
                    if pos == -1:
                        return None
