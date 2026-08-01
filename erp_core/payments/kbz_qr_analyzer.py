@@ -19,26 +19,26 @@ class KBZQRAnalyzer:
         try:
 
         # known KBZ phone pattern
-            
-        for number in [
+               
+            for number in [
             "09267772367"
         ]:
 
             encoded = number.encode().hex()
 
-            if encoded in hex_data:
+                if encoded in hex_data:
 
-                return number
+                    return number
 
 
 
-        # TLV search
-        marker = "5716"
+                    # TLV search
+                    marker = "5716"
 
         pos = hex_data.find(marker)
 
-            if pos == -1:
-                return None
+              if pos == -1:
+                  return None
 
 
         part = hex_data[
@@ -60,13 +60,13 @@ class KBZQRAnalyzer:
         )
 
 
-        return digits or None
+            return digits or None
 
 
 
-    except Exception:
+        except Exception:
 
-        return None
+            return None
 
     # ==========================================================================
     # ACCOUNT NUMBER
