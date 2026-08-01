@@ -1,117 +1,89 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ QR ANALYZER v4.0
+# ERP ENTERPRISE KBZ QR ANALYZER v5.0
 # KBZ Pay QR Binary TLV Decoder
 # ==============================================================================
 
 import base64
-import re
+
 
 class KBZQRAnalyzer:
-
 
 
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-
     @staticmethod
-    def extract_account(hex_data):
-    
-        try:
-    
-            # KBZ account marker sequence
-            marker = '105716'
-    
-            pos = hex_data.find(marker)
-    
-            if pos == -1:
-                return None
-    
-            # skip 10 57 16
-            start = pos + len(marker)
-    
-            # account packed BCD bytes
-            account_hex = hex_data[start:start+14]
-    
-            digits = ''
-    
-            for i in range(0, len(account_hex), 2):
-    
-                byte = account_hex[i:i+2]
-    
-                high = byte[0]
-                low = byte[1]
-    
-                digits += high
-    
-                if low.lower() != 'f':
-                    digits += low
-    
-            digits = ''.join(ch for ch in digits if ch.isdigit())
-    
-            if digits.startswith('09'):
-                return digits[:11]
-    
-            return digits
-    
-        except Exception as e:
-    
-            print('ACCOUNT ERROR:', e)
-    
-            return None
-            
+    def decode_base64_part(raw):
 
+        try:
+
+            if not raw:
+                return None
+
+            # remove checksum suffix after ==
+            if '==' in raw:
+                data = raw.split('==')[0] + '=='
+
+            else:
+                data = raw.split('F')[0]
+
+            decoded = base64.b64decode(data)
+
+            return decoded.hex()
+
+        except Exception as e:
+
+            print('BASE64 ERROR:', e)
+
+            return None
 
 
 
     # ==========================================================================
     # ACCOUNT NUMBER
     # ==========================================================================
-@staticmethod
-def extract_account(hex_data):
+    @staticmethod
+    def extract_account(hex_data):
 
-    try:
+        try:
 
-        marker = '5716'
+            marker = '105716'
 
-        pos = hex_data.find(marker)
+            pos = hex_data.find(marker)
 
-        if pos == -1:
+            if pos == -1:
+                return None
+
+            start = pos + len(marker)
+
+            account_hex = hex_data[start:start+14]
+
+            digits = ''
+
+            for i in range(0, len(account_hex), 2):
+
+                byte = account_hex[i:i+2]
+
+                digits += byte[0]
+
+                if byte[1].lower() != 'f':
+                    digits += byte[1]
+
+            digits = ''.join(
+                ch for ch in digits
+                if ch.isdigit()
+            )
+
+            if digits.startswith('09'):
+                return digits[:11]
+
+            return digits
+
+        except Exception as e:
+
+            print('ACCOUNT ERROR:', e)
+
             return None
-
-        # start after 57 16
-        start = pos + 4
-
-        # read first 8 bytes (16 hex chars)
-        account_hex = hex_data[start:start+16]
-
-        digits = ''
-
-        for i in range(0, len(account_hex), 2):
-
-            byte = account_hex[i:i+2]
-
-            high = byte[0]
-            low = byte[1]
-
-            digits += high
-
-            if low.lower() != 'f':
-                digits += low
-
-        # remove trailing non-digits
-        digits = ''.join(ch for ch in digits if ch.isdigit())
-
-        if digits.startswith('09'):
-            return digits[:11]
-
-        return digits
-
-    except Exception as e:
-
-        print('ACCOUNT ERROR:', e)
-
-        return None
 
 
 
@@ -140,7 +112,9 @@ def extract_account(hex_data):
                 pos+6+(length*2)
             ]
 
-            return bytes.fromhex(value_hex).decode()
+            return bytes.fromhex(
+                value_hex
+            ).decode()
 
         except Exception as e:
 
