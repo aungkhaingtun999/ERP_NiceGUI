@@ -14,34 +14,44 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # HEX CONVERT
     # ==========================================================================
-
     @staticmethod
-    def decode_base64_part(raw):
+def decode_base64_part(raw):
 
-        try:
+    try:
 
-            parts = raw.split("=")
+        # Remove CRC suffix
+        if "==" in raw:
 
-            if len(parts) > 1:
-
-                data = parts[0] + "="
-
-            else:
-
-                data = raw
+            data = raw.split("==")[0] + "=="
 
 
-            decoded = base64.b64decode(
-                data
-            )
+        elif "=" in raw:
+
+            data = raw.split("=")[0] + "="
 
 
-            return decoded.hex()
+        else:
+
+            data = raw
 
 
-        except Exception:
 
-            return None
+        decoded = base64.b64decode(
+            data
+        )
+
+
+        return decoded.hex()
+
+
+    except Exception as e:
+
+        print(
+            "BASE64 ERROR:",
+            e
+        )
+
+        return None
 
 
 
