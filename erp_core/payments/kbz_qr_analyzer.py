@@ -46,16 +46,16 @@ class KBZQRAnalyzer:
         ]
 
 
-                       text = bytes.fromhex(
-                       part
-                       ).decode(
-                       errors="ignore"
+                      text = bytes.fromhex(
+                      part
+                      ).decode(
+                      errors="ignore"
         )
 
 
-                        digits = "".join(
-                        x for x in text
-                        if x.isdigit()
+                      digits = "".join(
+                      x for x in text
+                      if x.isdigit()
       )
 
                   return digits or None
