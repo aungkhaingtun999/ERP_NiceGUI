@@ -14,46 +14,56 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # HEX CONVERT
     # ==========================================================================
-
     @staticmethod
-    def decode_base64_part(raw):
+def extract_account(hex_data):
 
-        try:
+    try:
 
-            # Remove CRC suffix
-            if "==" in raw:
-
-                data = raw.split("==")[0] + "=="
+        marker = "60"
 
 
-            elif "=" in raw:
-
-                data = raw.split("=")[0] + "="
-
-
-            else:
-
-                data = raw
+        pos = hex_data.find(
+            marker
+        )
 
 
-
-            decoded = base64.b64decode(
-                data
-            )
-
-
-            return decoded.hex()
-
-
-
-        except Exception as e:
-
-            print(
-                "BASE64 ERROR:",
-                e
-            )
-
+        if pos == -1:
             return None
+
+
+        data = hex_data[pos:]
+
+
+        # 60 92xxxxxxxxxx d2
+        start = data.find(
+            "92"
+        )
+
+
+        end = data.find(
+            "d2",
+            start
+        )
+
+
+        if start >= 0 and end > start:
+
+            account_hex = data[
+                start+2:
+                end
+            ]
+
+
+            return "0" + account_hex
+
+
+
+    except Exception:
+
+        pass
+
+
+    return None
 
 
 
