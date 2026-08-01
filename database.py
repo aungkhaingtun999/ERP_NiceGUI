@@ -96,7 +96,7 @@ from erp_core import (
 
     ReceiptService,
     PaymentService,
-
+    PaymentQRService,
 
     # ------------------------------------------------------------------
     # HELPERS
@@ -211,7 +211,21 @@ def reject_payment(
 def get_pending_payments():
 
     return PaymentService.pending_payments()
+def generate_payment_qr(
+    provider,
+    account_name,
+    account_no,
+    amount,
+    sale_id
+):
 
+    return PaymentQRService.generate_qr(
+        provider=provider,
+        account_name=account_name,
+        account_no=account_no,
+        amount=amount,
+        sale_id=sale_id
+    )
 
 
 # ==============================================================================
@@ -300,7 +314,7 @@ __all__ = [
 
     "ReceiptService",
     "PaymentService",
-
+    "generate_payment_qr",
 
     # ------------------------------------------------------------------
     # SERVICE FACTORIES
