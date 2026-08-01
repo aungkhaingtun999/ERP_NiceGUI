@@ -83,7 +83,68 @@ class SettingsService:
 
             return {}
 
+    # ==========================================================================
+    # GET SINGLE SETTING
+    # ==========================================================================
 
+    def get_setting(
+
+        self,
+
+        key,
+
+        default=None
+
+    ):
+
+        try:
+
+
+            result = (
+
+                self.db
+
+                .table("settings")
+
+                .select("value")
+
+                .eq(
+                    "key",
+                    key
+                )
+
+                .single()
+
+                .execute()
+
+            )
+
+
+            if result.data:
+
+                return result.data.get(
+                    "value",
+                    default
+                )
+
+
+            return default
+
+
+
+        except Exception as e:
+
+
+            print(
+
+                "SETTING READ ERROR:",
+
+                e
+
+            )
+
+
+            return default
 
 
     # ==========================================================================
