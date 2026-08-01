@@ -7,57 +7,59 @@ import base64
 import re
 
 
-class KBZQRAnalyzer:
+
 
 
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-@staticmethod
-def extract_account(hex_data):
-
-    try:
-
-        # KBZ account marker sequence
-        marker = '105716'
-
-        pos = hex_data.find(marker)
-
-        if pos == -1:
+class KBZQRAnalyzer:
+    @staticmethod
+    def extract_account(hex_data):
+    
+        try:
+    
+            # KBZ account marker sequence
+            marker = '105716'
+    
+            pos = hex_data.find(marker)
+    
+            if pos == -1:
+                return None
+    
+            # skip 10 57 16
+            start = pos + len(marker)
+    
+            # account packed BCD bytes
+            account_hex = hex_data[start:start+14]
+    
+            digits = ''
+    
+            for i in range(0, len(account_hex), 2):
+    
+                byte = account_hex[i:i+2]
+    
+                high = byte[0]
+                low = byte[1]
+    
+                digits += high
+    
+                if low.lower() != 'f':
+                    digits += low
+    
+            digits = ''.join(ch for ch in digits if ch.isdigit())
+    
+            if digits.startswith('09'):
+                return digits[:11]
+    
+            return digits
+    
+        except Exception as e:
+    
+            print('ACCOUNT ERROR:', e)
+    
             return None
-
-        # skip 10 57 16
-        start = pos + len(marker)
-
-        # account packed BCD bytes
-        account_hex = hex_data[start:start+14]
-
-        digits = ''
-
-        for i in range(0, len(account_hex), 2):
-
-            byte = account_hex[i:i+2]
-
-            high = byte[0]
-            low = byte[1]
-
-            digits += high
-
-            if low.lower() != 'f':
-                digits += low
-
-        digits = ''.join(ch for ch in digits if ch.isdigit())
-
-        if digits.startswith('09'):
-            return digits[:11]
-
-        return digits
-
-    except Exception as e:
-
-        print('ACCOUNT ERROR:', e)
-
-        return None
+            
 
 
 
