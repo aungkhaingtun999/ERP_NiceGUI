@@ -6,14 +6,14 @@
 import base64
 import re
 
-
+class KBZQRAnalyzer:
 
 
 
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-class KBZQRAnalyzer:
+
     @staticmethod
     def extract_account(hex_data):
     
