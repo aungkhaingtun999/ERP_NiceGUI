@@ -1,91 +1,82 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ CRC TOOL v3.0
+# erp_pages/14_KBZ_Test.py
+# ERP ENTERPRISE KBZ QR TEST PAGE
 # ==============================================================================
 
 
-import re
+import streamlit as st
 
-
-class KBZCRCTool:
-
-
-    @staticmethod
-    def split_crc(raw):
-
-
-        result = {
-            "payload": raw,
-            "crc": ""
-        }
-
-
-        if not raw:
-            return result
+from erp_core.payments.kbz_crc_tool import KBZCRCTool
 
 
 
-        # KBZ CRC pattern
-        # F + 12 chars
-        match = re.search(
-            r"(F[A-Za-z0-9+]{12})$",
-            raw
+def run():
+
+
+    st.title(
+        "🧪 KBZ QR CRC Analyzer"
+    )
+
+
+    st.divider()
+
+
+    sample_text = st.text_area(
+
+        "Paste KBZ QR samples (one per line)",
+
+        height=250,
+
+        key="kbz_crc_input"
+
+    )
+
+
+
+    if st.button(
+
+        "Analyze CRC Samples",
+
+        key="kbz_crc_analyze_button"
+
+    ):
+
+
+        samples = [
+
+            x.strip()
+
+            for x in sample_text.splitlines()
+
+            if x.strip()
+
+        ]
+
+
+        if not samples:
+
+            st.warning(
+                "Please paste QR samples"
+            )
+
+            return
+
+
+
+        result = KBZCRCTool.analyze_samples(
+
+            samples
+
         )
 
 
-        if match:
-
-
-            crc = match.group(1)
-
-
-            index = match.start()
-
-
-            payload = raw[:index]
-
-
-            result["payload"] = payload
-
-            result["crc"] = crc
+        st.json(result)
 
 
 
-        return result
 
+# direct run support
 
+if __name__ == "__main__":
 
-    @staticmethod
-    def analyze_samples(samples):
-
-
-        output = []
-
-
-        for raw in samples:
-
-
-            data = KBZCRCTool.split_crc(
-                raw.strip()
-            )
-
-
-            output.append({
-
-                "raw": raw,
-
-                "payload":
-                    data["payload"],
-
-                "crc":
-                    data["crc"],
-
-                "payload_length":
-                    len(data["payload"]),
-
-                "crc_length":
-                    len(data["crc"])
-
-            })
-
-
-        return output
+    run()
