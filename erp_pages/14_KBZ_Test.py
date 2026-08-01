@@ -170,9 +170,7 @@ def run():
     # ==========================================================================
     # SECTION 3
     # DECODED HEX CRC TEST
-    # ==========================================================================
-
-
+    # ========================================================================
     st.subheader(
         "🧬 Decoded Hex CRC Test"
     )
@@ -232,74 +230,14 @@ def run():
                     str(e)
                 )
 
+# ==============================================================================
+# DIRECT RUN
+# ==============================================================================
 
+if __name__ == "__main__":
 
-    st.divider()
+    run()
 
-
-
-    # ==========================================================================
-    # SECTION 4
-    # FULL QR ANALYZER
-    # ==========================================================================
-
-
-    st.subheader(
-        "📲 Full KBZ QR Analyzer"
-    )
-
-
-    raw_qr = st.text_input(
-
-        "Paste Raw KBZ QR",
-
-        key="kbz_raw_qr"
-
-    )
-
-
-
-    if st.button(
-
-        "Analyze QR",
-
-        key="kbz_full_analyze_btn"
-
-    ):
-
-
-        result = KBZQRAnalyzer.analyze(
-
-            raw_qr
-
-        )
-
-
-        st.json(result)
-
-
-   st.subheader(
-    "🔎 CRC Range Scanner"
-   )
-
-   range_hex = st.text_area(
-    "HEX For Range Scan",
-    height=120,
-    key="range_hex_input"
-)
-
-
-if st.button(
-    "Scan CRC Range",
-    key="scan_range_btn"
-):
-
-    result = KBZCRCEngine.scan_hex_ranges(
-        range_hex
-    )
-
-    st.json(result)
-    
 # ==============================================================================
 # DIRECT RUN
 # ==============================================================================
