@@ -1,7 +1,5 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ CRC TOOL v1.0
-#
-# Analyze KBZ QR checksum suffix
+# ERP ENTERPRISE KBZ CRC TOOL v2.0
 # ==============================================================================
 
 
@@ -9,65 +7,89 @@ class KBZCRCTool:
 
 
     @staticmethod
-    def split_qr(raw):
-
-        result = {
-            'payload': None,
-            'crc': None
-        }
-
+    def split_crc(raw):
 
         if not raw:
-            return result
+            return {
+                "payload": "",
+                "crc": ""
+            }
 
 
-        if '==' in raw:
+        # KBZ CRC starts after base64 payload padding
+        # find last '=' padding
 
-            pos = raw.find('==') + 2
-
-            result['payload'] = raw[:pos]
-
-            result['crc'] = raw[pos:]
-
-            return result
+        pos = raw.rfind("=")
 
 
-        if '=' in raw:
+        if pos >= 0:
 
-            pos = raw.find('=') + 1
+            payload = raw[:pos+1]
 
-            result['payload'] = raw[:pos]
-
-            result['crc'] = raw[pos:]
-
-            return result
+            crc = raw[pos+1:]
 
 
-        result['payload'] = raw
+        else:
 
-        result['crc'] = ''
+            # no padding
+            # CRC normally starts at last F marker
 
-        return result
+            marker = raw.rfind("F")
+
+
+            if marker > 0:
+
+                payload = raw[:marker]
+
+                crc = raw[marker:]
+
+
+            else:
+
+                payload = raw
+
+                crc = ""
+
+
+
+        return {
+
+            "payload": payload,
+
+            "crc": crc
+
+        }
 
 
 
     @staticmethod
     def analyze_samples(samples):
 
-        rows = []
+
+        result = []
 
 
         for raw in samples:
 
-            parts = KBZCRCTool.split_qr(raw)
 
-            rows.append({
-                'raw': raw,
-                'payload': parts['payload'],
-                'crc': parts['crc'],
-                'payload_length': len(parts['payload'] or ''),
-                'crc_length': len(parts['crc'] or '')
+            data = KBZCRCTool.split_crc(
+                raw.strip()
+            )
+
+
+            result.append({
+
+                "raw": raw,
+
+                "payload": data["payload"],
+
+                "crc": data["crc"],
+
+                "payload_length": len(data["payload"]),
+
+                "crc_length": len(data["crc"])
+
             })
 
 
-        return rows
+        return result
