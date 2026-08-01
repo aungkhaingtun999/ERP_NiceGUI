@@ -261,41 +261,82 @@ Discount : {money(discount)}
 
 
 
-    # ==========================================================================
-    # PAYMENT METHOD
-    # ==========================================================================
-
-    payment_method = st.selectbox(
-
-        "Payment Method",
-
-        [
-
-            "CASH",
-
-            "BANK",
-
-            "MOBILE",
-
-            "CREDIT"
-
-        ]
-
-    )
-
-    st.session_state.payment_method = payment_method
-
-
     # ----------------------------------------------------------------------
-# MOBILE PAYMENT QR
-# ----------------------------------------------------------------------
+    # MOBILE PAYMENT QR
+    # ----------------------------------------------------------------------
 
-if payment_method == "MOBILE":
+    if payment_method == "MOBILE":
+
+        provider = st.selectbox(
+
+            "Mobile Provider",
+
+            [
+                "KBZ Pay",
+                "Wave Pay",
+                "AYA Pay"
+            ]
+
+        )
+
+
+        # --------------------------------------------------------------
+        # PAYMENT ACCOUNT
+        # --------------------------------------------------------------
+
+        account_name = "U AUNG KHAING TUN"
+
+        account_no = "09267772367"
+
+
+
+        # --------------------------------------------------------------
+        # QR GENERATOR
+        # --------------------------------------------------------------
+
+        if provider == "KBZ Pay":
+
+
+            qr_buffer = KBZPayQRService.generate_qr(
+
+                account_no=account_no,
+
+                amount=grand_total,
+
+                sale_id="TEMP"
+
+            )
+
+
+        else:
+
+
+            qr_buffer = generate_payment_qr(
+
+                provider=provider,
+
+                account_name=account_name,
+
+                account_no=account_no,
+
+                amount=grand_total,
+
+                sale_id="TEMP"
+
+            )
+
+
+
+        # --------------------------------------------------------------
+        # DISPLAY QR
+        # --------------------------------------------------------------
 
         st.image(
 
             qr_buffer,
+
             caption=f"Scan to pay with {provider}",
+
             width=250
 
         )
@@ -308,6 +349,7 @@ if payment_method == "MOBILE":
         )
 
 
+
         mobile_txn = st.text_input(
 
             "Transaction ID",
@@ -318,8 +360,8 @@ if payment_method == "MOBILE":
 
 
         st.session_state.mobile_provider = provider
-        st.session_state.mobile_txn = mobile_txn
 
+        st.session_state.mobile_txn = mobile_txn
 
 
 
