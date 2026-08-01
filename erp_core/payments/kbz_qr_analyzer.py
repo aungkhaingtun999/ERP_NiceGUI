@@ -40,16 +40,16 @@ class KBZQRAnalyzer:
                       return None
 
 
-                       part = hex_data[
-                       pos+4:
-                       pos+40
+                      part = hex_data[
+                      pos+4:
+                      pos+40
         ]
 
 
-                        text = bytes.fromhex(
-                        part
-                         ).decode(
-                        errors="ignore"
+                       text = bytes.fromhex(
+                       part
+                       ).decode(
+                       errors="ignore"
         )
 
 
