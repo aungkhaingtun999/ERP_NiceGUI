@@ -1,6 +1,4 @@
-# ==============================================================================
-# ERP ENTERPRISE KBZ CRC TOOL v2.0
-# ==============================================================================
+import re
 
 
 class KBZCRCTool:
@@ -9,56 +7,56 @@ class KBZCRCTool:
     @staticmethod
     def split_crc(raw):
 
-        if not raw:
-            return {
-                "payload": "",
-                "crc": ""
-            }
 
-
-        # KBZ CRC starts after base64 payload padding
-        # find last '=' padding
-
-        pos = raw.rfind("=")
-
-
-        if pos >= 0:
-
-            payload = raw[:pos+1]
-
-            crc = raw[pos+1:]
-
-
-        else:
-
-            # no padding
-            # CRC normally starts at last F marker
-
-            marker = raw.rfind("F")
-
-
-            if marker > 0:
-
-                payload = raw[:marker]
-
-                crc = raw[marker:]
-
-
-            else:
-
-                payload = raw
-
-                crc = ""
-
-
-
-        return {
-
-            "payload": payload,
-
-            "crc": crc
-
+        result = {
+            "payload": raw,
+            "crc": ""
         }
+
+
+        if not raw:
+            return result
+
+
+
+        # remove final base64 padding only for searching
+        clean = raw.rstrip("=")
+
+
+        # KBZ CRC pattern
+        # F + 12 chars at the end
+        match = re.search(
+            r"(F[A-Za-z0-9+]{12})$",
+            clean
+        )
+
+
+        if match:
+
+
+            crc = match.group(1)
+
+            start = match.start()
+
+
+            payload = clean[:start]
+
+
+            # restore base64 padding
+            padding = raw[len(clean):]
+
+
+            payload = payload + padding
+
+
+
+            result["payload"] = payload
+
+            result["crc"] = crc
+
+
+
+        return result
 
 
 
@@ -66,7 +64,7 @@ class KBZCRCTool:
     def analyze_samples(samples):
 
 
-        result = []
+        output = []
 
 
         for raw in samples:
@@ -77,7 +75,7 @@ class KBZCRCTool:
             )
 
 
-            result.append({
+            output.append({
 
                 "raw": raw,
 
@@ -92,4 +90,4 @@ class KBZCRCTool:
             })
 
 
-        return result
+        return output
