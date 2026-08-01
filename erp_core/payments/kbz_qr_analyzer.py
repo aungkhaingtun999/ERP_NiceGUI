@@ -23,7 +23,7 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-        @staticmethod
+    @staticmethod
     def extract_account(hex_data):
 
         try:
