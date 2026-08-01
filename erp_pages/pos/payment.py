@@ -287,81 +287,10 @@ Discount : {money(discount)}
 
 
     # ----------------------------------------------------------------------
-    # MOBILE PAYMENT QR
-    # ----------------------------------------------------------------------
+# MOBILE PAYMENT QR
+# ----------------------------------------------------------------------
 
-    if payment_method == "MOBILE":
-
-        provider = st.selectbox(
-
-            "Mobile Provider",
-
-            ["KBZ Pay", "Wave Pay", "AYA Pay"]
-
-        )
-
-
-        if provider == "KBZ Pay":
-
-            qr_buffer = KBZPayQRService.generate_qr(
-
-                account_no=account_no,
-
-                amount=grand_total,
-
-                sale_id="TEMP"
-
-            )
-
-
-        else:
-
-            qr_buffer = generate_payment_qr(
-
-                provider=provider,
-
-                account_name=account_name,
-
-                account_no=account_no,
-
-                amount=grand_total,
-
-                sale_id="TEMP"
-
-            )
-
-
-        st.image(
-
-            qr_buffer,
-
-            caption=f"Scan to pay with {provider}",
-
-            width=250
-
-        )
-
-
-        st.info(
-
-            f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
-
-        )
-
-
-        mobile_txn = st.text_input(
-
-            "Transaction ID",
-
-            placeholder="Enter mobile banking transaction number"
-
-        )
-
-
-        st.session_state.mobile_provider = provider
-
-        st.session_state.mobile_txn = mobile_txn
-            )
+if payment_method == "MOBILE":
 
         st.image(
 
