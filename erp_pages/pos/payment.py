@@ -261,66 +261,112 @@ Discount : {money(discount)}
 
 
 
-    # ----------------------------------------------------------------------
     # ==========================================================================
-# PAYMENT METHOD
-# ==========================================================================
+    # PAYMENT METHOD
+    # ==========================================================================
 
-payment_method = st.selectbox(
+    payment_method = st.selectbox(
 
-    "Payment Method",
+        "Payment Method",
 
-    [
-        "CASH",
-        "BANK",
-        "MOBILE",
-        "CREDIT"
-    ]
+        [
+            "CASH",
+            "BANK",
+            "MOBILE",
+            "CREDIT"
+        ]
 
-)
+    )
 
-st.session_state.payment_method = payment_method
+    st.session_state.payment_method = payment_method
+
+
+
+    # ==========================================================================
+    # MOBILE PAYMENT QR
+    # ==========================================================================
+
+    if payment_method == "MOBILE":
+
+
+        settings = SettingsService()
+
+
+
+        provider = st.selectbox(
+
+            "Mobile Provider",
+
+            [
+                "KBZ Pay",
+                "Wave Pay",
+                "AYA Pay"
+            ]
+
+        )
+
+
 
         # --------------------------------------------------------------
-        # PAYMENT ACCOUNT
+        # PAYMENT ACCOUNT FROM SETTINGS
         # --------------------------------------------------------------
+
         if provider == "KBZ Pay":
 
-    account_name = settings.get_setting(
-        "PAYMENT_KBZ_NAME",
-        "ERP SHOP"
-    )
 
-    account_no = settings.get_setting(
-        "PAYMENT_KBZ_ACCOUNT",
-        ""
-    )
+            account_name = settings.get_setting(
 
+                "PAYMENT_KBZ_NAME",
 
-elif provider == "Wave Pay":
+                "ERP SHOP"
 
-    account_name = "ERP SHOP"
-
-    account_no = settings.get_setting(
-        "PAYMENT_WAVE_ACCOUNT",
-        ""
-    )
+            )
 
 
-else:
+            account_no = settings.get_setting(
 
-    account_name = "ERP SHOP"
+                "PAYMENT_KBZ_ACCOUNT",
 
-    account_no = settings.get_setting(
-        "PAYMENT_AYA_ACCOUNT",
-        ""
-    )
-        
+                ""
+
+            )
+
+
+
+        elif provider == "Wave Pay":
+
+
+            account_name = "ERP SHOP"
+
+
+            account_no = settings.get_setting(
+
+                "PAYMENT_WAVE_ACCOUNT",
+
+                ""
+
+            )
+
+
+
+        else:
+
+
+            account_name = "ERP SHOP"
+
+
+            account_no = settings.get_setting(
+
+                "PAYMENT_AYA_ACCOUNT",
+
+                ""
+
+            )
 
 
 
         # --------------------------------------------------------------
-        # QR GENERATOR
+        # QR GENERATE
         # --------------------------------------------------------------
 
         if provider == "KBZ Pay":
@@ -356,10 +402,6 @@ else:
 
 
 
-        # --------------------------------------------------------------
-        # DISPLAY QR
-        # --------------------------------------------------------------
-
         st.image(
 
             qr_buffer,
@@ -369,6 +411,7 @@ else:
             width=250
 
         )
+
 
 
         st.info(
@@ -388,10 +431,10 @@ else:
         )
 
 
+
         st.session_state.mobile_provider = provider
 
         st.session_state.mobile_txn = mobile_txn
-
 
 
 
