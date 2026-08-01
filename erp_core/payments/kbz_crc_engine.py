@@ -276,3 +276,38 @@ class KBZCRCEngine:
 
 
         return results
+    # =====================================================
+    # CRC STRING ANALYZER
+    # =====================================================
+
+    @staticmethod
+    def analyze_crc_string(crc_string):
+
+        if not crc_string:
+
+            return {"error": "empty"}
+
+
+        return {
+
+            "raw": crc_string,
+
+            "length": len(crc_string),
+
+            "prefix": crc_string[0],
+
+            "body": crc_string[1:],
+
+            "body_length": len(crc_string[1:]),
+
+            "contains_plus": "+" in crc_string,
+
+            "contains_equal": "=" in crc_string,
+
+            "is_hex_body": all(
+                c in "0123456789abcdefABCDEF"
+                for c in crc_string[1:]
+            )
+
+        }
+        
