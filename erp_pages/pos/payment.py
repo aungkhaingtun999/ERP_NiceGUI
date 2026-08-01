@@ -257,10 +257,6 @@ Tax : {money(tax_amount)}
 Discount : {money(discount)}
 """
     )
-
-
-
-
     # ==========================================================================
     # PAYMENT METHOD
     # ==========================================================================
@@ -308,7 +304,7 @@ Discount : {money(discount)}
 
 
         # --------------------------------------------------------------
-        # PAYMENT ACCOUNT FROM SETTINGS
+        # PAYMENT ACCOUNT
         # --------------------------------------------------------------
 
         if provider == "KBZ Pay":
@@ -332,7 +328,6 @@ Discount : {money(discount)}
             )
 
 
-
         elif provider == "Wave Pay":
 
 
@@ -346,7 +341,6 @@ Discount : {money(discount)}
                 ""
 
             )
-
 
 
         else:
@@ -413,7 +407,6 @@ Discount : {money(discount)}
         )
 
 
-
         st.info(
 
             f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
@@ -431,14 +424,9 @@ Discount : {money(discount)}
         )
 
 
-
         st.session_state.mobile_provider = provider
 
         st.session_state.mobile_txn = mobile_txn
-
-
-
-
 
     # ==========================================================================
     # RECEIVED
