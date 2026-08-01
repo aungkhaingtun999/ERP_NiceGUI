@@ -311,3 +311,34 @@ class KBZCRCEngine:
 
         }
         
+    # =====================================================
+    # CRC BODY TO INTEGER
+    # =====================================================
+
+    @staticmethod
+    def crc_body_info(crc_string):
+
+        body = crc_string[1:]
+
+        if all(c in "0123456789abcdefABCDEF" for c in body):
+
+            return {
+
+                "body": body,
+
+                "hex_int": int(body, 16),
+
+                "bit_length": int(body, 16).bit_length()
+
+            }
+
+        return {
+
+            "body": body,
+
+            "hex_int": None,
+
+            "bit_length": None
+
+        }
+        
