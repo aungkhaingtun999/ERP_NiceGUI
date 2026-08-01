@@ -31,7 +31,7 @@ from .cart import (
 from .engine import (
     get_default_tax_rate
 )
-
+from database import generate_payment_qr
 
 
 # ==============================================================================
@@ -261,10 +261,9 @@ Discount : {money(discount)}
 
 
 
-    # ==========================================================================
+        # ==========================================================================
     # PAYMENT METHOD
     # ==========================================================================
-
 
     payment_method = st.selectbox(
 
@@ -283,45 +282,81 @@ Discount : {money(discount)}
         ]
 
     )
-    from database import generate_payment_qr
-
-provider = st.selectbox(
-    "Provider",
-    ["KBZ Pay", "Wave Pay", "AYA Pay"]
-)
-
-if provider == "KBZ Pay":
-    account_name = "ABC STORE"
-    account_no = "09XXXXXXXXX"
-
-elif provider == "Wave Pay":
-    account_name = "ABC STORE"
-    account_no = "09XXXXXXXXX"
-
-else:
-    account_name = "ABC STORE"
-    account_no = "09XXXXXXXXX"
-
-
-qr_buffer = generate_payment_qr(
-    provider=provider,
-    account_name=account_name,
-    account_no=account_no,
-    amount=final_total,
-    sale_id="TEMP"
-)
-
-st.image(
-    qr_buffer,
-    caption=f"Scan to pay with {provider}",
-    width=250
-)
-
-st.info(
-    f"Pay MMK {final_total:,.0f} to {account_name} ({account_no})"
-)
 
     st.session_state.payment_method = payment_method
+
+
+    # ----------------------------------------------------------------------
+    # MOBILE PAYMENT QR
+    # ----------------------------------------------------------------------
+
+    if payment_method == "MOBILE":
+
+        provider = st.selectbox(
+
+            "Mobile Provider",
+
+            ["KBZ Pay", "Wave Pay", "AYA Pay"]
+
+        )
+
+
+        if provider == "KBZ Pay":
+
+            account_name = "ABC STORE"
+            account_no = "09XXXXXXXXX"
+
+        elif provider == "Wave Pay":
+
+            account_name = "ABC STORE"
+            account_no = "09XXXXXXXXX"
+
+        else:
+
+            account_name = "ABC STORE"
+            account_no = "09XXXXXXXXX"
+
+
+        qr_buffer = generate_payment_qr(
+
+            provider=provider,
+            account_name=account_name,
+            account_no=account_no,
+            amount=grand_total,
+            sale_id="TEMP"
+
+        )
+
+
+        st.image(
+
+            qr_buffer,
+            caption=f"Scan to pay with {provider}",
+            width=250
+
+        )
+
+
+        st.info(
+
+            f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
+
+        )
+
+
+        mobile_txn = st.text_input(
+
+            "Transaction ID",
+
+            placeholder="Enter mobile banking transaction number"
+
+        )
+
+
+        st.session_state.mobile_provider = provider
+        st.session_state.mobile_txn = mobile_txn
+)
+
 
 
 
