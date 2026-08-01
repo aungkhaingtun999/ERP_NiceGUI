@@ -31,7 +31,7 @@ from .cart import (
 from .engine import (
     get_default_tax_rate
 )
-from database import generate_payment_qr
+from erp_core.payments import KBZPayQRService
 
 
 # ==============================================================================
@@ -317,15 +317,29 @@ Discount : {money(discount)}
             account_no = "09267772367"
 
 
-        qr_buffer = generate_payment_qr(
+        if provider == "KBZ Pay":
 
-            provider=provider,
-            account_name=account_name,
-            account_no=account_no,
-            amount=grand_total,
-            sale_id="TEMP"
+    qr_buffer = KBZPayQRService.generate_qr(
 
-        )
+        account_no=account_no,
+
+        amount=grand_total,
+
+        sale_id="TEMP"
+
+    )
+
+else:
+
+    qr_buffer = generate_payment_qr(
+
+        provider=provider,
+        account_name=account_name,
+        account_no=account_no,
+        amount=grand_total,
+        sale_id="TEMP"
+
+    )
 
 
         st.image(
