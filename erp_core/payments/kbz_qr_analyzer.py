@@ -13,47 +13,58 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
+@staticmethod
+def extract_account(hex_data):
 
-    @staticmethod
-    def decode_base64_part(raw):
+    try:
 
-        try:
-
-            if not raw:
-                return None
-
-
-            # Remove CRC part
-            if "==" in raw:
-
-                data = raw.split("==")[0] + "=="
+        # KBZ account pattern
+        marker = "5716"
 
 
-            else:
-
-                data = raw.split("F")[0]
+        pos = hex_data.find(marker)
 
 
-
-            decoded = base64.b64decode(
-                data
-            )
-
-
-            return decoded.hex()
-
-
-
-        except Exception as e:
-
-            print(
-                "BASE64 ERROR:",
-                e
-            )
+        if pos == -1:
 
             return None
 
 
+
+        # after 5716
+        account_hex = hex_data[
+            pos + 4 :
+            pos + 4 + 24
+        ]
+
+
+
+        account = bytes.fromhex(
+            account_hex
+        ).decode(
+            errors="ignore"
+        )
+
+
+        # keep only number
+        account = "".join(
+            x for x in account
+            if x.isdigit()
+        )
+
+
+        return account
+
+
+
+    except Exception as e:
+
+        print(
+            "ACCOUNT ERROR:",
+            e
+        )
+
+        return None
 
     # ==========================================================================
     # ACCOUNT NUMBER
