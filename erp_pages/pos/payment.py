@@ -362,12 +362,11 @@ Discount : {money(discount)}
 
 
 
-    # ==========================================================================
+        # ==========================================================================
     # RECEIVED
     # ==========================================================================
 
-
-        if payment_method == "MOBILE":
+    if payment_method == "MOBILE":
 
         received = grand_total
 
@@ -375,7 +374,7 @@ Discount : {money(discount)}
             f"Mobile payment expected: {money(received)}"
         )
 
-        else:
+    else:
 
         received = st.number_input(
 
