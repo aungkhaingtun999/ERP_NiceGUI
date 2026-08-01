@@ -66,7 +66,36 @@ def run():
         )
 
         st.json(result)
+st.divider()
 
+st.subheader(
+    "🔐 CRC Candidate Test"
+)
+
+
+payload = st.text_input(
+    "KBZ Payload",
+    key="crc_payload"
+)
+
+
+crc = st.text_input(
+    "Expected CRC",
+    key="crc_expected"
+)
+
+
+if st.button(
+    "Run CRC Test",
+    key="run_crc_test"
+):
+
+    result = KBZCRCEngine.compare(
+        payload,
+        crc
+    )
+
+    st.json(result)
 
 # direct run support
 if __name__ == "__main__":
