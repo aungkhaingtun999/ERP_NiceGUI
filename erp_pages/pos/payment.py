@@ -306,38 +306,21 @@ Discount : {money(discount)}
         )
 
 
+# --------------------------------------------------------------
+# PAYMENT ACCOUNT FROM MASTER TABLE
+# --------------------------------------------------------------
 
-        # --------------------------------------------------------------
-        # PAYMENT ACCOUNT
-        # --------------------------------------------------------------
-
-        if provider == "KBZ Pay":
-
-
-            account = get_payment_account(
-
-            provider,
-
-            branch_id=1
-
+branch_id = st.session_state.get(
+    "branch_id",
+    1
 )
-
-
-if not account:
-
-    st.error(
-        f"{provider} account not configured"
-    )
-
-    return
-
 
 
 account = get_payment_account(
 
     provider,
 
-    branch_id=1
+    branch_id=branch_id
 
 )
 
@@ -353,96 +336,15 @@ if not account:
 
 
 account_name = account.get(
-    "account_name"
+    "account_name",
+    "ERP SHOP"
 )
 
 
 account_no = account.get(
-    "account_no"
+    "account_no",
+    ""
 )
-
-        elif provider == "Wave Pay":
-
-
-            account = get_payment_account(
-
-            provider,
-
-            branch_id=1
-
-)
-
-
-if not account:
-
-    st.error(
-        f"{provider} account not configured"
-    )
-
-    return
-
-
-
-account = get_payment_account(
-
-    provider,
-
-    branch_id=1
-
-)
-
-
-if not account:
-
-    st.error(
-        f"{provider} account not configured"
-    )
-
-    return
-
-
-
-account_name = account.get(
-    "account_name"
-)
-
-
-account_no = account.get(
-    "account_no"
-)
-
-
-        else:
-
-
-            account = get_payment_account(
-
-    provider,
-
-    branch_id=1
-
-)
-
-
-if not account:
-
-    st.error(
-        f"{provider} account not configured"
-    )
-
-    return
-
-
-
-account_name = account.get(
-    "account_name"
-)
-
-
-account_no = account.get(
-    "account_no"
-)
-
 
         # --------------------------------------------------------------
         # QR GENERATE
