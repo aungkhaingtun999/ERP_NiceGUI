@@ -221,6 +221,11 @@ try:
 except Exception:
     ReceiptService = None
 
+try:
+    from .services.payment_service import PaymentService
+except Exception:
+    PaymentService = None
+
 # ==============================================================================
 # HELPERS
 # ==============================================================================
@@ -298,7 +303,8 @@ __all__ = [
     "PurchaseService",  
     "InventoryService",  
     "RefundService",  
-    "ReceiptService",  
+    "ReceiptService",
+    "PaymentService",  
 
     # Utils  
     "money",  
