@@ -280,127 +280,119 @@ Discount : {money(discount)}
 
 
 
-    # ==========================================================================
-    # MOBILE PAYMENT QR
-    # ==========================================================================
+    # ======================================================================
+# MOBILE PAYMENT QR
+# ======================================================================
 
-    if payment_method == "MOBILE":
-
-
-        settings = SettingsService(
-                   db()
-)
+if payment_method == "MOBILE":
 
 
+    provider = st.selectbox(
 
-        provider = st.selectbox(
+        "Mobile Provider",
 
-            "Mobile Provider",
+        [
+            "KBZ Pay",
+            "Wave Pay",
+            "AYA Pay"
+        ]
 
-            [
-                "KBZ Pay",
-                "Wave Pay",
-                "AYA Pay"
-            ]
-
-        )
-
-
-# --------------------------------------------------------------
-# PAYMENT ACCOUNT FROM MASTER TABLE
-# --------------------------------------------------------------
-
-branch_id = st.session_state.get(
-    "branch_id",
-    1
-)
-
-
-account = get_payment_account(
-
-    provider,
-
-    branch_id=branch_id
-
-)
-
-
-if not account:
-
-    st.error(
-        f"{provider} account not configured"
     )
 
-    return
+
+    # --------------------------------------------------------------
+    # PAYMENT ACCOUNT FROM MASTER TABLE
+    # --------------------------------------------------------------
+
+    branch_id = st.session_state.get(
+        "branch_id",
+        1
+    )
+
+
+    account = get_payment_account(
+
+        provider,
+
+        branch_id=branch_id
+
+    )
+
+
+    if not account:
+
+        st.error(
+            f"{provider} account not configured"
+        )
+
+        return
 
 
 
-account_name = account.get(
-    "account_name",
-    "ERP SHOP"
-)
+    account_name = account.get(
+        "account_name",
+        "ERP SHOP"
+    )
 
 
-account_no = account.get(
-    "account_no",
-    ""
-)
-
-        # --------------------------------------------------------------
-        # QR GENERATE
-        # --------------------------------------------------------------
-
-        if provider == "KBZ Pay":
+    account_no = account.get(
+        "account_no",
+        ""
+    )
 
 
-            qr_buffer = KBZPayQRService.generate_qr(
+    # --------------------------------------------------------------
+    # QR GENERATOR
+    # --------------------------------------------------------------
 
-                account_no=account_no,
+    if provider == "KBZ Pay":
 
-                amount=grand_total,
+        qr_buffer = KBZPayQRService.generate_qr(
 
-                sale_id="TEMP"
+            account_no=account_no,
 
-            )
+            amount=grand_total,
 
-
-        else:
-
-
-            qr_buffer = generate_payment_qr(
-
-                provider=provider,
-
-                account_name=account_name,
-
-                account_no=account_no,
-
-                amount=grand_total,
-
-                sale_id="TEMP"
-
-            )
-
-
-
-        st.image(
-
-            qr_buffer,
-
-            caption=f"Scan to pay with {provider}",
-
-            width=250
+            sale_id="TEMP"
 
         )
 
 
-        st.info(
+    else:
 
-            f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
+        qr_buffer = generate_payment_qr(
+
+            provider=provider,
+
+            account_name=account_name,
+
+            account_no=account_no,
+
+            amount=grand_total,
+
+            sale_id="TEMP"
 
         )
 
 
+    st.image(
+
+        qr_buffer,
+
+        caption=f"Scan to pay with {provider}",
+
+        width=250
+
+    )
+
+
+    st.info(
+
+        f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
+
+    )
+
+            
 
         mobile_txn = st.text_input(
 
