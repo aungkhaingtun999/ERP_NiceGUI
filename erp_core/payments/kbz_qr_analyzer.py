@@ -16,23 +16,23 @@ class KBZQRAnalyzer:
     @staticmethod
     def extract_account(hex_data):
 
-        try:
+    try:
 
-            # KBZ account pattern
-            marker = "5716"
-
-
-            pos = hex_data.find(marker)
+        # KBZ account pattern
+        marker = "5716"
 
 
-            if pos == -1:
+        pos = hex_data.find(marker)
+
+
+        if pos == -1:
 
             return None
 
 
 
-            # after 5716
-            account_hex = hex_data[
+        # after 5716
+        account_hex = hex_data[
             pos + 4 :
             pos + 4 + 24
         ]
