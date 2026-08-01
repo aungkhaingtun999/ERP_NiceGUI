@@ -13,60 +13,57 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-    @staticmethod
-    def extract_account(hex_data):
-
-        try:
+@staticmethod
+def extract_account(hex_data):    
+    try:
 
         # known KBZ phone pattern
                
-            for number in [
+         for number in [
             "09267772367"
-        ]:
+     ]:
 
-            encoded = number.encode().hex()
+              encoded = number.encode().hex()
 
-                if encoded in hex_data:
+              if encoded in hex_data:
 
-                    return number
+                  return number
 
 
 
                     # TLV search
                     marker = "5716"
 
-        pos = hex_data.find(marker)
+                     pos = hex_data.find(marker)
 
-              if pos == -1:
-                  return None
+               if pos == -1:
+                   return None
 
 
-        part = hex_data[
-            pos+4:
-            pos+40
+                    part = hex_data[
+                    pos+4:
+                    pos+40
         ]
 
 
-        text = bytes.fromhex(
-            part
-        ).decode(
-            errors="ignore"
+                    text = bytes.fromhex(
+                    part
+                    ).decode(
+                    errors="ignore"
         )
 
 
-        digits = "".join(
-            x for x in text
-            if x.isdigit()
-        )
+                    digits = "".join(
+                    x for x in text
+                    if x.isdigit()
+      )
+
+              return digits or None
 
 
-            return digits or None
+    except Exception:
 
-
-
-        except Exception:
-
-            return None
+        return None
 
     # ==========================================================================
     # ACCOUNT NUMBER
