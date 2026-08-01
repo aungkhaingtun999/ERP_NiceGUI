@@ -303,18 +303,18 @@ Discount : {money(discount)}
 
         if provider == "KBZ Pay":
 
-            account_name = "ABC STORE"
-            account_no = "09XXXXXXXXX"
+            account_name = "Aung Khaing Tun"
+            account_no = "09267772367"
 
         elif provider == "Wave Pay":
 
-            account_name = "ABC STORE"
-            account_no = "09XXXXXXXXX"
+            account_name = "Aung Khaing Tun"
+            account_no = "09267772367"
 
         else:
 
-            account_name = "ABC STORE"
-            account_no = "09XXXXXXXXX"
+            account_name = "Aung Khaing Tun"
+            account_no = "09267772367"
 
 
         qr_buffer = generate_payment_qr(
