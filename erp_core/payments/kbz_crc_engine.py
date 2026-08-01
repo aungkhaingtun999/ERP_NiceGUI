@@ -1,30 +1,31 @@
 # ==============================================================================
-# ERP ENTERPRISE KBZ CRC ENGINE v2.0
-#
-# KBZ QR CRC Research Engine
+# ERP ENTERPRISE KBZ CRC ENGINE v3.0
 # ==============================================================================
 
 
 import binascii
 
 
+
 class KBZCRCEngine:
 
 
-    # ==========================================================================
-    # CRC CANDIDATES
-    # ==========================================================================
 
     @staticmethod
-    def crc16_ccitt(data):
+    def crc16_ccitt_false(data):
+
 
         crc = 0xFFFF
 
+
         for byte in data:
+
 
             crc ^= byte << 8
 
+
             for _ in range(8):
+
 
                 if crc & 0x8000:
 
@@ -32,12 +33,15 @@ class KBZCRCEngine:
                         crc << 1
                     ) ^ 0x1021
 
+
                 else:
 
                     crc <<= 1
 
 
+
                 crc &= 0xFFFF
+
 
 
         return format(
@@ -47,48 +51,91 @@ class KBZCRCEngine:
 
 
 
+
+    @staticmethod
+    def crc16_xmodem(data):
+
+
+        crc = 0x0000
+
+
+        for byte in data:
+
+
+            crc ^= byte << 8
+
+
+            for _ in range(8):
+
+
+                if crc & 0x8000:
+
+                    crc = (
+                        crc << 1
+                    ) ^ 0x1021
+
+
+                else:
+
+                    crc <<= 1
+
+
+
+                crc &= 0xFFFF
+
+
+
+        return format(
+            crc,
+            "04X"
+        )
+
+
+
+
     @staticmethod
     def crc32(data):
 
+
         return format(
-            binascii.crc32(data) & 0xffffffff,
+
+            binascii.crc32(data)
+            &
+            0xffffffff,
+
             "08X"
+
         )
-    
+
+
+
+
+    # =====================================================
+    # DECODED HEX CRC TEST
+    # =====================================================
+
     @staticmethod
     def crc16_variants(hex_data):
-    
-        data = bytes.fromhex(hex_data)
-    
-        return {
-    
-            "CRC16_CCITT_FALSE":
-                KBZCRCEngine.crc16_ccitt_false(data),
-    
-            "CRC16_XMODEM":
-                KBZCRCEngine.crc16_xmodem(data)
-    
-        }
 
 
-    # ==========================================================================
-    # TEST GENERATOR
-    # ==========================================================================
-
-    @staticmethod
-    def calculate_candidates(payload):
-
-
-        data = payload.encode(
-            "utf-8"
+        data = bytes.fromhex(
+            hex_data
         )
 
 
         return {
 
-            "CRC16_CCITT":
 
-                KBZCRCEngine.crc16_ccitt(
+            "CRC16_CCITT_FALSE":
+
+                KBZCRCEngine.crc16_ccitt_false(
+                    data
+                ),
+
+
+            "CRC16_XMODEM":
+
+                KBZCRCEngine.crc16_xmodem(
                     data
                 ),
 
@@ -103,9 +150,10 @@ class KBZCRCEngine:
 
 
 
-    # ==========================================================================
-    # COMPARE
-    # ==========================================================================
+
+    # =====================================================
+    # PAYLOAD TEST
+    # =====================================================
 
     @staticmethod
     def compare(
@@ -114,38 +162,37 @@ class KBZCRCEngine:
     ):
 
 
-        candidates = (
-            KBZCRCEngine.calculate_candidates(
-                payload
-            )
+        data = payload.encode(
+            "utf-8"
         )
-
-
-        matched = []
-
-
-        for name, value in candidates.items():
-
-            if value in expected_crc:
-
-                matched.append(
-                    name
-                )
-
 
 
         return {
 
-            "payload":
-                payload,
 
             "expected_crc":
+
                 expected_crc,
 
-            "candidates":
-                candidates,
 
-            "matched":
-                matched
+            "CRC16_CCITT_FALSE":
+
+                KBZCRCEngine.crc16_ccitt_false(
+                    data
+                ),
+
+
+            "CRC16_XMODEM":
+
+                KBZCRCEngine.crc16_xmodem(
+                    data
+                ),
+
+
+            "CRC32":
+
+                KBZCRCEngine.crc32(
+                    data
+                )
 
         }
