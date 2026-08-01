@@ -262,23 +262,24 @@ Discount : {money(discount)}
 
 
     # ----------------------------------------------------------------------
-    # MOBILE PAYMENT QR
-    # ----------------------------------------------------------------------
+    # ==========================================================================
+# PAYMENT METHOD
+# ==========================================================================
 
-    if payment_method == "MOBILE":
+payment_method = st.selectbox(
 
-        provider = st.selectbox(
+    "Payment Method",
 
-            "Mobile Provider",
+    [
+        "CASH",
+        "BANK",
+        "MOBILE",
+        "CREDIT"
+    ]
 
-            [
-                "KBZ Pay",
-                "Wave Pay",
-                "AYA Pay"
-            ]
+)
 
-        )
-
+st.session_state.payment_method = payment_method
 
         # --------------------------------------------------------------
         # PAYMENT ACCOUNT
