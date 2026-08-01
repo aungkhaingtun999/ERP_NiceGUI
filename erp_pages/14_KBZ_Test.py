@@ -291,6 +291,23 @@ def run():
         )
 
         st.json(result)
+        st.divider()
+
+    st.subheader("🔢 CRC Body Integer Test")
+
+    crc_num = st.text_input(
+        "CRC For Integer Test",
+        key="crc_num_test"
+    )
+
+    if st.button(
+        "Convert CRC Body",
+        key="crc_num_btn"
+    ):
+
+        st.json(
+            KBZCRCEngine.crc_body_info(crc_num)
+        )
         
 # ==============================================================================
 # DIRECT RUN
