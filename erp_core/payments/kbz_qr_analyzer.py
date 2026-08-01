@@ -13,10 +13,10 @@ class KBZQRAnalyzer:
     # ==========================================================================
     # BASE64 DECODE
     # ==========================================================================
-@staticmethod
-def extract_account(hex_data):
+    @staticmethod
+    def extract_account(hex_data):
 
-    try:
+        try:
 
         # known KBZ phone pattern
         for number in [
