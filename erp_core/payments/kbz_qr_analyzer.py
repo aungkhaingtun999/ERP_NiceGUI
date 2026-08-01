@@ -25,9 +25,8 @@ class KBZQRAnalyzer:
         pos = hex_data.find(marker)
 
 
-        if pos == -1:
-
-            return None
+            if pos == -1:
+         return None
 
 
 
