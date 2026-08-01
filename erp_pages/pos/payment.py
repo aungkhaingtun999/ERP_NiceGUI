@@ -1,10 +1,9 @@
 # ==============================================================================
 # erp_pages/pos/payment.py
-# ERP ENTERPRISE POS PAYMENT MODULE v13.0 UI COMPACT EDITION
+# ERP ENTERPRISE POS PAYMENT MODULE v14.0
 #
-# Compact POS Payment Panel
-# ERP Tax Controlled
-# Professional Checkout Layout
+# Mobile Payment Account Master Integrated
+# KBZ Pay / Wave Pay / AYA Pay
 #
 # ==============================================================================
 
@@ -31,11 +30,24 @@ from .cart import (
 from .engine import (
     get_default_tax_rate
 )
-from erp_core.payments import KBZPayQRService
-from database import generate_payment_qr
+
+
+from erp_core.payments import (
+    KBZPayQRService
+)
+
+
+from database import (
+    generate_payment_qr
+)
+
+
 from erp_core.repositories.payment_account_repository import (
     get_payment_account
 )
+
+
+
 # ==============================================================================
 # MONEY FORMAT
 # ==============================================================================
@@ -84,7 +96,7 @@ def render_payment(
 
 
     # ==========================================================================
-    # CART SUMMARY
+    # SUMMARY
     # ==========================================================================
 
 
@@ -95,12 +107,12 @@ def render_payment(
 
     total_qty = sum(
         int(
-            x.get(
+            item.get(
                 "qty",
                 0
             )
         )
-        for x in cart
+        for item in cart
     )
 
 
@@ -110,57 +122,39 @@ def render_payment(
 
 
     tax_amount = (
-
         subtotal
         *
         tax_rate
         /
         100
-
     )
 
-
-
-
-
-    # ==========================================================================
-    # COMPACT SUMMARY
-    # ==========================================================================
 
 
     c1, c2, c3 = st.columns(3)
 
 
-
     with c1:
 
-        st.caption(
-            "Items"
-        )
+        st.caption("Items")
 
         st.write(
             len(cart)
         )
 
 
-
     with c2:
 
-        st.caption(
-            "Total Qty"
-        )
+        st.caption("Total Qty")
 
         st.write(
             total_qty
         )
 
 
-
     with c3:
 
-        st.caption(
-            "Subtotal"
-        )
+        st.caption("Subtotal")
 
         st.write(
             money(subtotal)
@@ -168,12 +162,9 @@ def render_payment(
 
 
 
-
     st.caption(
-        f"🧾 ERP Tax {tax_rate:.2f}% : {money(tax_amount)}"
+        f"🧾 Tax {tax_rate:.2f}% : {money(tax_amount)}"
     )
-
-
 
 
 
@@ -184,40 +175,28 @@ def render_payment(
 
     discount = st.number_input(
 
-
         "Discount (MMK)",
-
 
         min_value=0.0,
 
-
         value=float(
-
             st.session_state.get(
-
                 "discount",
-
                 0
-
             )
-
         ),
-
 
         step=100.0
 
     )
 
 
-
     st.session_state.discount = discount
 
 
 
-
-
     # ==========================================================================
-    # FINAL TOTAL
+    # TOTAL
     # ==========================================================================
 
 
@@ -226,32 +205,26 @@ def render_payment(
         0,
 
         subtotal
-
         +
-
         tax_amount
-
         -
-
         discount
 
     )
 
 
 
-
     st.markdown(
         f"""
-        ### 💰 Total Payable
+### 💰 Total Payable
 
-        # {money(grand_total)}
-        """
+# {money(grand_total)}
+"""
     )
 
 
-
     st.caption(
-f"""
+        f"""
 Subtotal : {money(subtotal)}
 
 Tax : {money(tax_amount)}
@@ -259,9 +232,13 @@ Tax : {money(tax_amount)}
 Discount : {money(discount)}
 """
     )
+
+
+
     # ==========================================================================
     # PAYMENT METHOD
     # ==========================================================================
+
 
     payment_method = st.selectbox(
 
@@ -276,123 +253,137 @@ Discount : {money(discount)}
 
     )
 
+
     st.session_state.payment_method = payment_method
 
 
 
-    # ======================================================================
-# MOBILE PAYMENT QR
-# ======================================================================
-
-if payment_method == "MOBILE":
+    # ==========================================================================
+    # MOBILE PAYMENT
+    # ==========================================================================
 
 
-    provider = st.selectbox(
-
-        "Mobile Provider",
-
-        [
-            "KBZ Pay",
-            "Wave Pay",
-            "AYA Pay"
-        ]
-
-    )
+    if payment_method == "MOBILE":
 
 
-    # --------------------------------------------------------------
-    # PAYMENT ACCOUNT FROM MASTER TABLE
-    # --------------------------------------------------------------
+        provider = st.selectbox(
 
-    branch_id = st.session_state.get(
-        "branch_id",
-        1
-    )
+            "Mobile Provider",
 
-
-    account = get_payment_account(
-
-        provider,
-
-        branch_id=branch_id
-
-    )
-
-
-    if not account:
-
-        st.error(
-            f"{provider} account not configured"
-        )
-
-        return
-
-
-
-    account_name = account.get(
-        "account_name",
-        "ERP SHOP"
-    )
-
-
-    account_no = account.get(
-        "account_no",
-        ""
-    )
-
-
-    # --------------------------------------------------------------
-    # QR GENERATOR
-    # --------------------------------------------------------------
-
-    if provider == "KBZ Pay":
-
-        qr_buffer = KBZPayQRService.generate_qr(
-
-            account_no=account_no,
-
-            amount=grand_total,
-
-            sale_id="TEMP"
+            [
+                "KBZ Pay",
+                "Wave Pay",
+                "AYA Pay"
+            ]
 
         )
 
 
-    else:
+        # --------------------------------------------------------------
+        # LOAD ACCOUNT MASTER
+        # --------------------------------------------------------------
 
-        qr_buffer = generate_payment_qr(
 
-            provider=provider,
+        branch_id = st.session_state.get(
+            "branch_id",
+            1
+        )
 
-            account_name=account_name,
 
-            account_no=account_no,
+        account = get_payment_account(
 
-            amount=grand_total,
+            provider,
 
-            sale_id="TEMP"
+            branch_id=branch_id
 
         )
 
 
-    st.image(
-
-        qr_buffer,
-
-        caption=f"Scan to pay with {provider}",
-
-        width=250
-
-    )
+        if not account:
 
 
-    st.info(
+            st.error(
+                f"{provider} account not configured"
+            )
 
-        f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
 
-    )
+            return
 
-            
+
+
+        account_name = account.get(
+
+            "account_name",
+
+            "ERP SHOP"
+
+        )
+
+
+        account_no = account.get(
+
+            "account_no",
+
+            ""
+
+        )
+
+
+
+        # --------------------------------------------------------------
+        # QR GENERATE
+        # --------------------------------------------------------------
+
+
+        if provider == "KBZ Pay":
+
+
+            qr_buffer = KBZPayQRService.generate_qr(
+
+                account_no=account_no,
+
+                amount=grand_total,
+
+                sale_id="TEMP"
+
+            )
+
+
+        else:
+
+
+            qr_buffer = generate_payment_qr(
+
+                provider=provider,
+
+                account_name=account_name,
+
+                account_no=account_no,
+
+                amount=grand_total,
+
+                sale_id="TEMP"
+
+            )
+
+
+        st.image(
+
+            qr_buffer,
+
+            caption=f"Scan to pay with {provider}",
+
+            width=250
+
+        )
+
+
+        st.info(
+
+            f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
+
+        )
+
 
         mobile_txn = st.text_input(
 
@@ -407,19 +398,26 @@ if payment_method == "MOBILE":
 
         st.session_state.mobile_txn = mobile_txn
 
+            # ==========================================================================
+    # RECEIVED AMOUNT
     # ==========================================================================
-    # RECEIVED
-    # ==========================================================================
+
 
     if payment_method == "MOBILE":
 
+
         received = grand_total
 
+
         st.success(
+
             f"Mobile payment expected: {money(received)}"
+
         )
 
+
     else:
+
 
         received = st.number_input(
 
@@ -443,10 +441,9 @@ if payment_method == "MOBILE":
 
 
 
-
     st.caption(
 
-f"""
+        f"""
 Received : {money(received)}
 
 Change : {money(change)}
@@ -456,11 +453,8 @@ Change : {money(change)}
 
 
 
-
-
-
     # ==========================================================================
-    # CHECKOUT
+    # COMPLETE SALE
     # ==========================================================================
 
 
@@ -485,8 +479,8 @@ Change : {money(change)}
 
             )
 
-            return
 
+            return
 
 
 
@@ -507,19 +501,17 @@ Change : {money(change)}
 
                 warehouse_id=warehouse_id,
 
-                cashier_id=
+                cashier_id=st.session_state.get(
 
-                    st.session_state.get(
+                    "user",
 
-                        "user",
+                    {}
 
-                        {}
+                ).get(
 
-                    ).get(
+                    "id"
 
-                        "id"
-
-                    ),
+                ),
 
 
                 payment_method=payment_method,
@@ -528,7 +520,6 @@ Change : {money(change)}
                 discount=discount
 
             )
-
 
 
 
@@ -553,8 +544,8 @@ Change : {money(change)}
 
 
 
-
                 sale_data.update({
+
 
                     "subtotal":
 
@@ -600,7 +591,42 @@ Change : {money(change)}
 
                         cart
 
+
                 })
+
+
+
+
+                # MOBILE PAYMENT INFO
+                # --------------------------------------------------
+
+
+                if payment_method == "MOBILE":
+
+
+                    sale_data.update({
+
+
+                        "mobile_provider":
+
+                            st.session_state.get(
+
+                                "mobile_provider"
+
+                            ),
+
+
+                        "mobile_txn":
+
+                            st.session_state.get(
+
+                                "mobile_txn"
+
+                            )
+
+
+                    })
+
 
 
 
@@ -611,12 +637,15 @@ Change : {money(change)}
                 st.session_state.show_receipt = True
 
 
+
                 st.rerun()
 
 
 
 
+
             else:
+
 
 
                 st.error(
@@ -635,6 +664,7 @@ Change : {money(change)}
 
 
 
+
         except Exception as e:
 
 
@@ -643,8 +673,6 @@ Change : {money(change)}
                 f"Checkout Error : {e}"
 
             )
-
-
 
 
 
