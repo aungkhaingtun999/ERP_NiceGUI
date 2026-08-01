@@ -16,10 +16,10 @@ class KBZQRAnalyzer:
     @staticmethod
     def extract_account(hex_data):
 
-    try:
+        try:
 
         # known KBZ phone pattern
-        for number in [
+            for number in [
             "09267772367"
         ]:
 
@@ -36,8 +36,8 @@ class KBZQRAnalyzer:
 
         pos = hex_data.find(marker)
 
-        if pos == -1:
-            return None
+            if pos == -1:
+                return None
 
 
         part = hex_data[
