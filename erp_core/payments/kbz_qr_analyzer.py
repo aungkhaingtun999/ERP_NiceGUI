@@ -15,7 +15,8 @@ class KBZQRAnalyzer:
     # HEX CONVERT
     # ==========================================================================
 @staticmethod
-def decode_base64_part(raw):
+def 
+    decode_base64_part(raw):
 
     try:
 
