@@ -4,8 +4,7 @@
 # Product Search Engine
 # ==============================================================================
 
-
-from erp_core.database import get_supabase
+from database import get_supabase
 
 
 
