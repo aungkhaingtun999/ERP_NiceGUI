@@ -197,11 +197,33 @@ Discount : {money(discount)}
                 sale_id="TEMP"
             )
 
-        st.image(
-            qr_buffer,
-            caption=f"Scan to pay with {provider}",
-            width=250
-        )
+st.image(
+    qr_buffer,
+    caption=f"Scan to pay with {provider}",
+    width=250
+)
+
+
+st.success(
+    f"""
+💰 Payment Amount
+
+# {grand_total:,.0f} MMK
+"""
+)
+
+
+st.info(
+    f"""
+Pay to:
+
+👤 {account_name}
+
+📱 {account_no}
+
+Amount: {grand_total:,.0f} MMK
+"""
+)
 
         if qr_mode == "STATIC":
             st.info(
