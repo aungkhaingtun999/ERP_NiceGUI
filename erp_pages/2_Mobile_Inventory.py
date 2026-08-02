@@ -65,15 +65,15 @@ def run():
 
         else:
 
-    st.session_state.new_barcode = barcode
+            st.session_state.new_barcode = barcode
 
-    st.warning(
-    "🆕 New Product"
+            st.warning(
+            "🆕 New Product"
 )
 
 
-    render_new_product_form(
-    barcode
+            render_new_product_form(
+            barcode
 )
 
 
