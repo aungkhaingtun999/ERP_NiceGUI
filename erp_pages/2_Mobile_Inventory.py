@@ -5,7 +5,12 @@
 # ==============================================================================
 
 import streamlit as st
-from erp_pages.inventory.scanner import get_barcode
+
+
+from erp_pages.inventory.scanner import (
+    get_barcode
+)
+
 
 from erp_pages.inventory.product_search import (
     search_product,
