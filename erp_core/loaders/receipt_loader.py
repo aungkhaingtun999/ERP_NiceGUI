@@ -1,13 +1,13 @@
 # ==============================================================================
 # erp_core/loaders/receipt_loader.py
-# ERP ENTERPRISE RECEIPT LOADER v3.2 FINAL
+# ERP ENTERPRISE RECEIPT LOADER v3.1 FIXED
 #
-# UTC SAFE
-# Myanmar Time Conversion Removed
-# Smart Invoice Search
-#
+# Myanmar Time + Smart Search
 # ==============================================================================
 
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from typing import (
     Dict,
@@ -23,20 +23,61 @@ from ..base_repo import (
 
 
 
+MYANMAR_TZ = ZoneInfo(
+    "Asia/Yangon"
+)
+
+
+
+# ==============================================================================
+# TIME CONVERTER
+# ==============================================================================
+
+def convert_mm_time(value):
+
+    if not value:
+        return value
+
+    try:
+
+        dt = datetime.fromisoformat(
+            value.replace(
+                "Z",
+                "+00:00"
+            )
+        )
+
+        return (
+            dt
+            .astimezone(
+                MYANMAR_TZ
+            )
+            .strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        )
+
+
+    except Exception:
+
+        return value
+
+
+
+
+
 # ==============================================================================
 # SALE ITEMS
 # ==============================================================================
-
 
 def get_sale_items(
 
     sale_id: int
 
-) -> List[Dict[str, Any]]:
+) -> List[Dict[str,Any]]:
 
 
     try:
-
 
         response = (
 
@@ -74,14 +115,12 @@ def get_sale_items(
         items = response.data or []
 
 
-
         for item in items:
 
 
             product = item.get(
                 "products"
             ) or {}
-
 
 
             name = product.get(
@@ -91,32 +130,23 @@ def get_sale_items(
 
             if not name:
 
-
                 name = (
-
                     item.get(
                         "product_name"
                     )
-
                     or
-
                     f"Product #{item.get('product_id')}"
-
                 )
-
 
 
             item["name"] = name
 
-
             item["product_name"] = name
-
 
             item["qty"] = item.get(
                 "quantity",
                 0
             )
-
 
 
         return items
@@ -127,11 +157,8 @@ def get_sale_items(
 
 
         log_error(
-
             message="Load sale items failed",
-
             exception=e
-
         )
 
 
@@ -145,12 +172,11 @@ def get_sale_items(
 # GET RECEIPT
 # ==============================================================================
 
-
 def get_receipt(
 
-    invoice_no: str
+    invoice_no:str
 
-) -> Dict[str, Any]:
+) -> Dict[str,Any]:
 
 
     try:
@@ -197,11 +223,8 @@ def get_receipt(
             )
 
             .eq(
-
                 "invoice_no",
-
                 invoice_no
-
             )
 
             .execute()
@@ -209,13 +232,10 @@ def get_receipt(
         )
 
 
-
         rows = result.data or []
 
 
-
         if not rows:
-
 
             return {}
 
@@ -223,18 +243,15 @@ def get_receipt(
 
         sale = rows[0]
 
-
-
         # ==============================================================
-        # IMPORTANT
-        #
-        # DO NOT CONVERT TIME HERE
-        #
-        # Supabase returns UTC
-        # UI/PDF layer handles Myanmar Time
-        #
+        # MYANMAR STANDARD TIME
         # ==============================================================
 
+        if sale.get("created_at"):
+
+            sale["created_at"] = convert_mm_time(
+                sale["created_at"]
+            )
 
 
 
@@ -242,41 +259,33 @@ def get_receipt(
         # TAX RATE RECOVERY
         # ==============================================================
 
-
         tax_rate = sale.get(
             "tax_rate"
         )
-
 
 
         if tax_rate is None or tax_rate == 0:
 
 
             subtotal = float(
-
                 sale.get(
                     "subtotal",
                     0
                 )
                 or 0
-
             )
 
 
             tax = float(
-
                 sale.get(
                     "tax",
                     0
                 )
                 or 0
-
             )
 
 
-
             if subtotal > 0 and tax > 0:
-
 
                 sale["tax_rate"] = round(
 
@@ -285,18 +294,14 @@ def get_receipt(
                         /
                         subtotal
                     )
-
                     *
-
                     100,
 
                     2
 
                 )
 
-
             else:
-
 
                 sale["tax_rate"] = 0
 
@@ -320,22 +325,24 @@ def get_receipt(
 
         return {}
 
+
+
+
+
+
 # ==============================================================================
 # FULL RECEIPT
 # ==============================================================================
 
-
 def get_full_receipt(
 
-    invoice_no: str
+    invoice_no:str
 
 ):
 
 
     sale = get_receipt(
-
         invoice_no
-
     )
 
 
@@ -344,11 +351,11 @@ def get_full_receipt(
 
         return {
 
-            "success": False,
+            "success":False,
 
-            "sale": {},
+            "sale":{},
 
-            "items": []
+            "items":[]
 
         }
 
@@ -366,11 +373,12 @@ def get_full_receipt(
 
     return {
 
-        "success": True,
 
-        "sale": sale,
+        "success":True,
 
-        "items": items
+        "sale":sale,
+
+        "items":items
 
     }
 
@@ -380,8 +388,9 @@ def get_full_receipt(
 
 # ==============================================================================
 # SMART SEARCH RECEIPTS
+# ==============================================================================
 #
-# Supports:
+# Search example:
 #
 # 1
 # 288
@@ -390,10 +399,9 @@ def get_full_receipt(
 #
 # ==============================================================================
 
-
 def search_receipts(
 
-    keyword: str = ""
+    keyword:str=""
 
 ) -> List[Dict]:
 
@@ -423,37 +431,25 @@ def search_receipts(
         )
 
 
-
-        keyword = keyword.strip()
+        keyword = (
+            keyword
+            .strip()
+        )
 
 
 
         if keyword:
 
 
+            # invoice search
 
-            if keyword.isdigit():
+            query = query.ilike(
 
+                "invoice_no",
 
-                query = query.or_(
+                f"%{keyword}%"
 
-                    f"id.eq.{keyword},"
-                    f"invoice_no.ilike.%{keyword}%"
-
-                )
-
-
-
-            else:
-
-
-                query = query.ilike(
-
-                    "invoice_no",
-
-                    f"%{keyword}%"
-
-                )
+            )
 
 
 
@@ -475,7 +471,11 @@ def search_receipts(
 
 
 
-        return result.data or []
+        data = result.data or []
+
+
+
+        return data
 
 
 
@@ -512,4 +512,4 @@ __all__ = [
 
     "search_receipts"
 
-    ]
+]
