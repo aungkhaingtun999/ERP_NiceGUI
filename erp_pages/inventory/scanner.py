@@ -27,6 +27,7 @@ def manual_barcode_input():
 def preprocess_image(img_bgr):
 
     import cv2
+    import numpy as np
 
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
@@ -34,12 +35,11 @@ def preprocess_image(img_bgr):
     gray = cv2.equalizeHist(gray)
 
     # Sharpen
-    kernel = [[0, -1, 0],
-              [-1, 5, -1],
-              [0, -1, 0]]
-
-    import numpy as np
-    kernel = np.array(kernel)
+    kernel = np.array([
+        [0, -1, 0],
+        [-1, 5, -1],
+        [0, -1, 0]
+    ])
 
     sharp = cv2.filter2D(gray, -1, kernel)
 
@@ -61,18 +61,23 @@ def decode_opencv(img_bgr):
     # OpenCV version compatibility
     if len(result) == 4:
         ok, decoded_info, decoded_type, points = result
+
     elif len(result) == 3:
         decoded_info, decoded_type, points = result
         ok = bool(decoded_info)
+
     else:
         return None
 
     if ok and decoded_info:
 
-        value = decoded_info[0]
+        value = decoded_info[0].strip()
 
-        if value:
-            return value.strip()
+        # Reject invalid short reads like "8"
+        if len(value) < 8:
+            return None
+
+        return value
 
     return None
 
@@ -90,7 +95,11 @@ def decode_pyzbar(img_pil):
         result = decode(img_pil)
 
         if result:
-            return result[0].data.decode("utf-8").strip()
+
+            value = result[0].data.decode("utf-8").strip()
+
+            if len(value) >= 8:
+                return value
 
     except Exception:
         return None
@@ -123,25 +132,7 @@ def decode_barcode(image):
         processed = preprocess_image(img_bgr)
 
         # -------------------------------------------------
-        # 1. OpenCV original
-        # -------------------------------------------------
-
-        value = decode_opencv(img_bgr)
-
-        if value:
-            return value
-
-        # -------------------------------------------------
-        # 2. OpenCV processed
-        # -------------------------------------------------
-
-        value = decode_opencv(cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR))
-
-        if value:
-            return value
-
-        # -------------------------------------------------
-        # 3. pyzbar original
+        # 1. pyzbar original (best for EAN13)
         # -------------------------------------------------
 
         value = decode_pyzbar(img_pil)
@@ -150,12 +141,32 @@ def decode_barcode(image):
             return value
 
         # -------------------------------------------------
-        # 4. pyzbar processed
+        # 2. pyzbar processed
         # -------------------------------------------------
 
         processed_pil = Image.fromarray(processed)
 
         value = decode_pyzbar(processed_pil)
+
+        if value:
+            return value
+
+        # -------------------------------------------------
+        # 3. OpenCV original
+        # -------------------------------------------------
+
+        value = decode_opencv(img_bgr)
+
+        if value:
+            return value
+
+        # -------------------------------------------------
+        # 4. OpenCV processed
+        # -------------------------------------------------
+
+        value = decode_opencv(
+            cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
+        )
 
         if value:
             return value
@@ -173,9 +184,7 @@ def decode_barcode(image):
 
 def camera_barcode_scan():
 
-    image = st.camera_input(
-        "📷 Scan Barcode"
-    )
+    image = st.camera_input("📷 Scan Barcode")
 
     if image is None:
         return None
@@ -207,3 +216,4 @@ def get_barcode():
         return barcode
 
     return manual_barcode_input()
+    
