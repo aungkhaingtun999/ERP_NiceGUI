@@ -17,3 +17,4 @@ streamlit-webrtc
 av
 numpy
 streamlit-javascript
+streamlit-js-eval
