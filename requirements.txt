@@ -11,6 +11,8 @@ bcrypt
 qrcode
 plotly
 opencv-python-headless
-numpy
 pyzbar
 Pillow
+streamlit-webrtc
+av
+numpy
