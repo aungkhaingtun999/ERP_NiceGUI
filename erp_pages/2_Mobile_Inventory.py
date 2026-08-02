@@ -6,7 +6,7 @@
 
 import streamlit as st
 
-
+from erp_pages.inventory import scanner
 from erp_pages.inventory.scanner import (
     get_barcode
 )
