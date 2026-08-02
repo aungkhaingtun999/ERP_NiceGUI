@@ -31,11 +31,9 @@ from .engine import (
     get_default_tax_rate
 )
 
-
-from erp_core.payments import (
-    KBZPayQRService
+from erp_core.payments.payment_qr_service import (
+    PaymentQRService
 )
-
 
 from database import (
     generate_payment_qr
