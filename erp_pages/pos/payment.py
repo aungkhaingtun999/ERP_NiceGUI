@@ -335,16 +335,19 @@ Discount : {money(discount)}
 
         if provider == "KBZ Pay":
 
+    qr_buffer = PaymentQRService.generate_qr(
 
-            qr_buffer = KBZPayQRService.generate_qr(
+        provider="KBZ Pay",
 
-                account_no=account_no,
+        account_name=account_name,
 
-                amount=grand_total,
+        account_no=account_no,
 
-                sale_id="TEMP"
+        amount=grand_total,
 
-            )
+        sale_id="TEMP"
+
+    )
 
 
         else:
