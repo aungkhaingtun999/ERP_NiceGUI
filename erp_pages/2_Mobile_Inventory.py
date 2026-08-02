@@ -8,11 +8,11 @@
 import streamlit as st
 
 
-from inventory.scanner import (
+from erp_pages.inventory.scanner import (
     barcode_input
 )
 
-from inventory.product_search import (
+from erp_pages.inventory.product_search import (
     search_product,
     product_card
 )
