@@ -342,3 +342,38 @@ class KBZCRCEngine:
 
         }
         
+        # =====================================================
+    # PAYLOAD TAIL COMPARE
+    # =====================================================
+
+    @staticmethod
+    def payload_tail_compare(hex_data, crc_string):
+
+        body = crc_string[1:]
+
+        if not all(c in "0123456789abcdefABCDEF" for c in body):
+
+            return {
+                "error": "CRC body is not hex"
+            }
+
+        crc_bytes = body.lower()
+
+        return {
+
+            "payload_tail_12": hex_data[-12:].lower(),
+
+            "payload_tail_16": hex_data[-16:].lower(),
+
+            "payload_tail_24": hex_data[-24:].lower(),
+
+            "crc_body": crc_bytes,
+
+            "tail12_match": hex_data[-12:].lower() == crc_bytes,
+
+            "tail16_contains": crc_bytes in hex_data[-16:].lower(),
+
+            "tail24_contains": crc_bytes in hex_data[-24:].lower()
+
+        }
+        
