@@ -475,142 +475,126 @@ Change : {money(change)}
 
 
 
-    # ==========================================================================
-    # COMPLETE SALE
-    # ==========================================================================
+# ==========================================================================
+# COMPLETE SALE
+# ==========================================================================
 
-    if st.button(
+if st.button(
+    "✅ Complete Sale",
+    use_container_width=True,
+    type="primary"
+):
 
-        "✅ Complete Sale",
+    if received < grand_total:
 
-        use_container_width=True,
+        st.error(
+            "Insufficient payment."
+        )
 
-        type="primary"
+        return
 
-    ):
+    start_processing()
 
+    try:
 
-        if received < grand_total:
+        result = process_checkout(
+            cart=cart,
+            paid_amount=received,
+            warehouse_id=warehouse_id,
+            cashier_id=st.session_state.get(
+                "user",
+                {}
+            ).get(
+                "id"
+            ),
+            payment_method=payment_method,
+            discount=discount
+        )
 
+        if result.get(
+            "success",
+            False
+        ):
 
-            st.error(
-
-                "Insufficient payment."
-
-            )
-            return
-
-
-
-
-            start_processing()
-
-
-
-        try:
-
-
-
-            result = process_checkout(
-
-                cart=cart,
-
-                paid_amount=received,
-
-                warehouse_id=warehouse_id,
-
-                cashier_id=st.session_state.get(
-
-                    "user",
-
-                    {}
-
-                ).get(
-
-                    "id"
-
-                ),
-
-
-                payment_method=payment_method,
-
-
-                discount=discount
-
+            sale_data = result.get(
+                "data",
+                {}
             )
 
+            sale_data.update({
 
+                "subtotal":
+                    subtotal,
 
+                "discount":
+                    discount,
 
-            if result.get(
+                "tax":
+                    tax_amount,
 
-                "success",
+                "tax_rate":
+                    tax_rate,
 
-                False
+                "total":
+                    grand_total,
 
-            ):
+                "paid_amount":
+                    received,
 
+                "change_amount":
+                    change,
 
+                "payment_method":
+                    payment_method,
 
-                sale_data = result.get(
+                "items":
+                    cart
 
-                    "data",
+            })
 
-                    {}
-
-                )
-
-
+            # MOBILE PAYMENT INFO
+            if payment_method == "MOBILE":
 
                 sale_data.update({
 
+                    "mobile_provider":
+                        st.session_state.get(
+                            "mobile_provider"
+                        ),
 
-                    "subtotal":
-
-                        subtotal,
-
-
-                    "discount":
-
-                        discount,
-
-
-                    "tax":
-
-                        tax_amount,
-
-
-                    "tax_rate":
-
-                        tax_rate,
-
-
-                    "total":
-
-                        grand_total,
-
-
-                    "paid_amount":
-
-                        received,
-
-
-                    "change_amount":
-
-                        change,
-
-
-                    "payment_method":
-
-                        payment_method,
-
-
-                    "items":
-
-                        cart
-
+                    "mobile_txn":
+                        st.session_state.get(
+                            "mobile_txn"
+                        )
 
                 })
+
+            st.session_state.sale_data = sale_data
+            st.session_state.show_receipt = True
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                result.get(
+                    "message",
+                    "Checkout Failed"
+                )
+            )
+
+    except Exception as e:
+
+        st.error(
+            f"Checkout Error : {e}"
+        )
+
+    finally:
+
+        stop_processing()
+
+
+            
 
 
 
