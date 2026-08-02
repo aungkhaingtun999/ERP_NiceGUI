@@ -1,45 +1,73 @@
-# ==============================================================================
-# erp_pages/inventory/zxing_scanner.py
-# MOBILE INVENTORY v3
-# ZXing Live Scanner Bridge
-# ==============================================================================
-
-
 import streamlit as st
 import streamlit.components.v1 as components
 
-from streamlit_js_eval import streamlit_js_eval
-
-
 
 def scan_barcode():
-
 
     st.subheader(
         "📷 Live Barcode Scanner"
     )
 
 
-    scanner = r"""
+    scanner_html = r"""
+
+<!DOCTYPE html>
+
+<html>
+
+<body>
+
+
+<video
+
+id="video"
+
+width="100%"
+
+height="350"
+
+autoplay
+
+playsinline
+
+muted>
+
+</video>
+
+
+<h3 id="result">
+Waiting scan...
+</h3>
+
+
 
 <script type="module">
 
+
 import {
- BrowserMultiFormatReader
+
+BrowserMultiFormatReader
+
 }
+
 from
+
 "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
+
 
 
 const reader =
 new BrowserMultiFormatReader();
 
 
+
 async function start(){
 
 
 const devices =
-await BrowserMultiFormatReader.listVideoInputDevices();
+await BrowserMultiFormatReader
+.listVideoInputDevices();
+
 
 
 let camera =
@@ -47,7 +75,9 @@ devices[devices.length-1].deviceId;
 
 
 
-for(const d of devices){
+for(
+const d of devices
+){
 
 if(
 d.label.toLowerCase()
@@ -74,17 +104,23 @@ camera,
 if(result){
 
 
-localStorage.setItem(
-"barcode_result",
-result.text
-);
+document.getElementById(
+"result"
+).innerHTML =
+
+"✅ Barcode: "
++
+result.text;
+
 
 
 }
 
+
 }
 
 );
+
 
 
 }
@@ -96,42 +132,20 @@ start();
 </script>
 
 
+</body>
 
-<video
-
-id="video"
-
-width="100%"
-
-height="350"
-
-autoplay
-
-playsinline
-
-muted>
-
-</video>
-
+</html>
 
 """
 
 
     components.html(
-        scanner,
-        height=400
-    )
 
+        scanner_html,
 
-
-    barcode = streamlit_js_eval(
-
-        js_expressions=
-        "localStorage.getItem('barcode_result')",
-
-        key="barcode_reader"
+        height=500
 
     )
 
 
-    return barcode
+    return None
