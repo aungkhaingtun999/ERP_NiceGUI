@@ -5,7 +5,6 @@
 # ==============================================================================
 import streamlit as st
 
-print("PRODUCT FORM FUNCTION CALLED")
 def render_new_product_form(barcode=""):
 
     st.divider()
