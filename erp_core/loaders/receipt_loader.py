@@ -24,7 +24,8 @@ from ..base_repo import (
     db,
     log_error
 )
-
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 
@@ -563,7 +564,35 @@ def search_receipts(
 
 
 
+# ==============================================================================
+# TIMEZONE HELPER
+# ==============================================================================
 
+MYANMAR_TZ = ZoneInfo("Asia/Yangon")
+
+
+def convert_mm_time(value):
+
+    if not value:
+        return value
+
+    try:
+
+        dt = datetime.fromisoformat(
+            value.replace("Z", "+00:00")
+        )
+
+        return (
+            dt
+            .astimezone(MYANMAR_TZ)
+            .strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        )
+
+    except Exception:
+
+        return value
 
 # ==============================================================================
 # EXPORT
