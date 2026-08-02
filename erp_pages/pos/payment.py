@@ -474,12 +474,12 @@ Change : {money(change)}
                 "Insufficient payment."
 
             )
-                return
+            return
 
 
 
 
-        start_processing()
+            start_processing()
 
 
 
