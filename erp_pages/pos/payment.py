@@ -173,9 +173,14 @@ Discount : {money(discount)}
 
             if qr_mode == "STATIC" and account.get("qr_payload_template"):
 
-                qr_buffer = PaymentQRService.generate_qr(
-                    raw_payload=account.get("qr_payload_template")
-                )
+                qr_buffer = generate_payment_qr(
+    provider=provider,
+    account_name=account_name,
+    account_no=account_no,
+    amount=grand_total,
+    sale_id="TEMP",
+    raw_payload=account.get("qr_payload_template")
+)
 
             else:
 
