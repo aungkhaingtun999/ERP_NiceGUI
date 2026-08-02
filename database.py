@@ -212,11 +212,12 @@ def get_pending_payments():
 
     return PaymentService.pending_payments()
 def generate_payment_qr(
-    provider,
-    account_name,
-    account_no,
-    amount,
-    sale_id
+    provider="",
+    account_name="",
+    account_no="",
+    amount=0,
+    sale_id="",
+    raw_payload=None
 ):
 
     return PaymentQRService.generate_qr(
@@ -224,7 +225,8 @@ def generate_payment_qr(
         account_name=account_name,
         account_no=account_no,
         amount=amount,
-        sale_id=sale_id
+        sale_id=sale_id,
+        raw_payload=raw_payload
     )
 
 
