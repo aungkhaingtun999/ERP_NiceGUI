@@ -4,17 +4,11 @@
 # REAL-TIME LIVE BARCODE SCANNER
 # ==============================================================================
 
-
 import streamlit as st
-barcode_from_url = st.query_params.get(
-    "barcode",
-    ""
-)
 
 from erp_pages.inventory.zxing_scanner import (
     scan_barcode
 )
-
 
 from erp_pages.inventory.product_search import (
     search_product
@@ -59,7 +53,7 @@ def run():
     # LIVE SCANNER
     # ------------------------------------------------------------------
 
-    barcode = barcode_from_url
+    barcode = scan_barcode()
 
 
 
