@@ -1,56 +1,46 @@
 # ==============================================================================
 # erp_pages/2_Mobile_Inventory.py
-# MOBILE INVENTORY v2
-# Camera Auto Scan + Search
+# MOBILE INVENTORY v3
+# REAL-TIME LIVE BARCODE SCANNER
 # ==============================================================================
 
 import streamlit as st
 
-from erp_pages.inventory.scanner import get_barcode
+from erp_pages.inventory.live_scanner import (
+    live_barcode_scanner
+)
+
 from erp_pages.inventory.product_search import (
     search_product,
     product_card
 )
 
 
-# ==============================================================================
-# MAIN PAGE
-# ==============================================================================
-
 def run():
 
-    st.title("📦 Mobile Inventory v2")
+    st.title("📦 Mobile Inventory v3")
 
-    st.caption("📷 Camera Scan • 🔍 SKU • Product Search")
-
-    st.info(
-        "📌 Barcode ကို မျက်နှာပြင်အလယ်ထားပြီး 10–15 cm အကွာမှ ရိုက်ပါ။ "
-        "အလင်းရောင်ကောင်းကောင်းရှိပြီး reflection မထိစေပါနှင့်။"
-    )
-
-    # ------------------------------------------------------------------
-    # SESSION
-    # ------------------------------------------------------------------
+    st.caption("📷 Live Barcode Scanner • Mobile Optimized")
 
     if "mobile_product" not in st.session_state:
         st.session_state.mobile_product = None
 
-    if "last_scanned_barcode" not in st.session_state:
-        st.session_state.last_scanned_barcode = ""
+    if "last_code" not in st.session_state:
+        st.session_state.last_code = ""
 
     # ------------------------------------------------------------------
-    # SCANNER
+    # LIVE SCANNER
     # ------------------------------------------------------------------
 
-    barcode = get_barcode()
+    barcode = live_barcode_scanner()
 
     # ------------------------------------------------------------------
-    # AUTO SEARCH (Camera success)
+    # AUTO SEARCH
     # ------------------------------------------------------------------
 
-    if barcode and barcode != st.session_state.last_scanned_barcode:
+    if barcode and barcode != st.session_state.last_code:
 
-        st.session_state.last_scanned_barcode = barcode
+        st.session_state.last_code = barcode
 
         product = search_product(barcode)
 
@@ -58,46 +48,11 @@ def run():
 
             st.session_state.mobile_product = product_card(product)
 
-            st.success(f"📷 Scanned: {barcode}")
+            st.success("✅ Product loaded automatically")
 
         else:
 
             st.warning(f"Barcode not found: {barcode}")
-
-    # ------------------------------------------------------------------
-    # MANUAL SEARCH
-    # ------------------------------------------------------------------
-
-    st.divider()
-
-    st.subheader("🔍 Search Product")
-
-    search_text = st.text_input(
-        "Product Name / SKU",
-        placeholder="Example: Coke or SKU001"
-    )
-
-    if st.button("🔎 Find Product"):
-
-        keyword = barcode if barcode else search_text
-
-        if keyword:
-
-            product = search_product(keyword)
-
-            if product:
-
-                st.session_state.mobile_product = product_card(product)
-
-            else:
-
-                st.session_state.mobile_product = None
-
-                st.warning("Product not found")
-
-        else:
-
-            st.warning("Enter barcode or product name")
 
     # ------------------------------------------------------------------
     # PRODUCT CARD
@@ -108,8 +63,6 @@ def run():
     if product:
 
         st.divider()
-
-        st.success("✅ Product Found")
 
         st.subheader(f"📦 {product.get('name', 'Unknown')}")
 
@@ -138,18 +91,10 @@ def run():
 
             st.write(f"Barcode : {product.get('barcode', '-')}")
 
-        st.divider()
-
-        st.info("Next Phase: Opening Stock / Stock In / Adjustment")
-
     else:
 
-        st.info("📷 Scan barcode or search product")
+        st.info("📷 Point the camera at a barcode")
 
-
-# ==============================================================================
-# DIRECT RUN
-# ==============================================================================
 
 if __name__ == "__main__":
 
