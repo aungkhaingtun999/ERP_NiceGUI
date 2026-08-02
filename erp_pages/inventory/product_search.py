@@ -12,8 +12,6 @@ from erp_core.database import get_supabase
 # ==============================================================================
 # SEARCH BY BARCODE / SKU / NAME
 # ==============================================================================
-
-
 def search_product(keyword):
 
     if not keyword:
@@ -22,53 +20,7 @@ def search_product(keyword):
 
     supabase = get_supabase()
 
-    keyword = keyword.strip()
 
-
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("barcode", keyword)
-        .execute()
-    )
-
-
-    if result.data:
-        return result.data[0]
-
-
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("sku", keyword)
-        .execute()
-    )
-
-
-    if result.data:
-        return result.data[0]
-
-
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .ilike(
-            "name",
-            f"%{keyword}%"
-        )
-        .limit(10)
-        .execute()
-    )
-
-
-    if result.data:
-        return result.data[0]
-
-
-    return None
 
 
     # -------------------------------------------------
