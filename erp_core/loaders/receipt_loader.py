@@ -246,7 +246,7 @@ def get_receipt(
 
 
         sale = response.data or {}
-        # ==============================================================
+# ==============================================================
 # MYANMAR STANDARD TIME
 # ==============================================================
 
@@ -475,59 +475,49 @@ def get_full_receipt(
 
         }
 
-
-
-
-
-
-
-
 # ==============================================================================
 # SEARCH RECEIPTS
 # ==============================================================================
 
-
 def search_receipts(
-
     keyword: str = ""
-
 ) -> List[Dict]:
 
 
     try:
-
 
         query = (
 
             db()
 
             .table(
-
                 "sales"
-
             )
 
             .select(
-
-                "*"
-
+                """
+                id,
+                invoice_no,
+                total,
+                payment_method,
+                created_at
+                """
             )
 
         )
 
 
-
         if keyword:
 
 
+            keyword = keyword.strip()
+
+
+            # invoice exact / partial
             query = query.ilike(
-
                 "invoice_no",
-
                 f"%{keyword}%"
-
             )
-
 
 
         result = (
@@ -535,11 +525,12 @@ def search_receipts(
             query
 
             .order(
-
                 "created_at",
-
                 desc=True
+            )
 
+            .limit(
+                100
             )
 
             .execute()
@@ -547,10 +538,21 @@ def search_receipts(
         )
 
 
+        receipts = result.data or []
 
-        return result.data or []
+
+        # Myanmar Time convert
+
+        for row in receipts:
+
+            if row.get("created_at"):
+
+                row["created_at"] = convert_mm_time(
+                    row["created_at"]
+                )
 
 
+        return receipts
 
 
 
@@ -567,12 +569,6 @@ def search_receipts(
 
 
         return []
-
-
-
-
-
-
 # ==============================================================================
 # TIMEZONE HELPER
 # ==============================================================================
