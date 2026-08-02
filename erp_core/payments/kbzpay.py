@@ -2,7 +2,6 @@ import io
 import qrcode
 
 
-
 class KBZPayQRService:
 
 
@@ -12,15 +11,32 @@ class KBZPayQRService:
         amount
     ):
 
-
         payload = (
-            template
-            .replace(
+            template.replace(
                 "{amount}",
                 str(amount)
             )
         )
 
+        return KBZPayQRService.generate_qr(
+            payload
+        )
+
+
+    @staticmethod
+    def generate_from_payload(
+        payload
+    ):
+
+        return KBZPayQRService.generate_qr(
+            payload
+        )
+
+
+    @staticmethod
+    def generate_qr(
+        payload
+    ):
 
         qr = qrcode.QRCode(
             version=None,
@@ -28,30 +44,24 @@ class KBZPayQRService:
             border=4
         )
 
-
         qr.add_data(
             payload
         )
 
-
         qr.make(
             fit=True
         )
-
 
         img = qr.make_image()
 
 
         buffer = io.BytesIO()
 
-
         img.save(
             buffer,
             format="PNG"
         )
 
-
         buffer.seek(0)
-
 
         return buffer
