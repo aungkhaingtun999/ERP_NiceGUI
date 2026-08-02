@@ -32,17 +32,9 @@ from database import (
 # TIME ENGINE
 # ==============================================================================
 
-#from utils.timezone import (
-
-#    format_db_datetime
-
-#)
 from utils.timezone import (
-    format_db_datetime(
-    raw_time
-    )
-
-
+    format_db_datetime
+)
 # ==============================================================================
 # RECEIPT ENGINE
 # ==============================================================================
