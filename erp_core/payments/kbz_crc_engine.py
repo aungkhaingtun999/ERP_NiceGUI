@@ -106,8 +106,41 @@ class KBZCRCEngine:
             "08X"
 
         )
+import hashlib
 
 
+class KBZCRCEngine:
+
+    ...
+
+    # =====================================================
+    # HASH TRUNCATION TEST
+    # =====================================================
+
+    @staticmethod
+    def hash_truncation_test(hex_data):
+
+        data = bytes.fromhex(hex_data)
+
+        sha1 = hashlib.sha1(data).hexdigest()
+        md5 = hashlib.md5(data).hexdigest()
+
+        return {
+
+            "SHA1_FULL": sha1,
+
+            "SHA1_FIRST_12": sha1[:12].upper(),
+
+            "SHA1_LAST_12": sha1[-12:].upper(),
+
+            "MD5_FULL": md5,
+
+            "MD5_FIRST_12": md5[:12].upper(),
+
+            "MD5_LAST_12": md5[-12:].upper()
+
+        }
+        
 
 
     # =====================================================
