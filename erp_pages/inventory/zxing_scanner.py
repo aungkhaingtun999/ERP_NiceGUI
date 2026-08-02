@@ -1,18 +1,14 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
-# MOBILE INVENTORY v2
-# ZXing Browser Live Barcode Scanner
+# MOBILE INVENTORY v3
+# ZXing Browser Live Scanner
+# Streamlit Cloud Compatible
 # ==============================================================================
 
 
 import streamlit as st
 import streamlit.components.v1 as components
 
-
-
-# ==============================================================================
-# LIVE SCANNER
-# ==============================================================================
 
 
 def zxing_live_scanner():
@@ -23,155 +19,217 @@ def zxing_live_scanner():
     )
 
 
-    scanner_html = """
+    html_code = r"""
 
-    <div>
+<!DOCTYPE html>
 
-    <video
-        id="video"
-        width="100%"
-        style="border-radius:10px;"
-        autoplay
-        playsinline>
-    </video>
+<html>
 
+<head>
 
-    <h4 id="result">
-        Waiting for barcode...
-    </h4>
+<meta charset="UTF-8">
 
 
-    </div>
+<script type="module">
 
 
-    <script type="module">
+import {
+    BrowserMultiFormatReader
+}
+from
+"https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
 
 
-    import {
-        BrowserMultiFormatReader
-    }
-    from "https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/+esm";
 
+const codeReader =
+new BrowserMultiFormatReader();
 
-    const codeReader =
-        new BrowserMultiFormatReader();
 
 
-    const video =
-        document.getElementById("video");
+const video =
+document.getElementById("video");
 
 
-    const result =
-        document.getElementById("result");
 
+async function startCamera(){
 
 
-    async function startScanner(){
+try{
 
 
-        try{
+const devices =
+await codeReader.listVideoInputDevices();
 
 
-            const devices =
-                await codeReader.listVideoInputDevices();
 
+if(devices.length === 0)
+{
 
+document.getElementById("status").innerHTML =
+"No camera found";
 
-            let selectedDeviceId =
-                devices[0].deviceId;
+return;
 
+}
 
 
-            for(
-                const device of devices
-            ){
 
-                if(
-                    device.label.toLowerCase()
-                    .includes("back")
-                ){
+let deviceId =
+devices[0].deviceId;
 
-                    selectedDeviceId =
-                    device.deviceId;
 
-                }
 
-            }
+for(
+const d of devices
+){
 
+if(
+d.label.toLowerCase()
+.includes("back")
+){
 
+deviceId =
+d.deviceId;
 
-            codeReader.decodeFromVideoDevice(
+}
 
-                selectedDeviceId,
+}
 
-                video,
 
-                (scanResult, error)=>{
 
+document.getElementById("status").innerHTML =
+"Camera started";
 
-                    if(scanResult){
 
 
-                        result.innerHTML =
-                        "Barcode: "
-                        + scanResult.text;
+codeReader.decodeFromVideoDevice(
 
+deviceId,
 
-                        window.parent.postMessage(
+video,
 
-                            {
-                                type:
-                                "barcode",
+(result, error)=>{
 
-                                value:
-                                scanResult.text
-                            },
 
-                            "*"
+if(result)
+{
 
-                        );
+document.getElementById("result").innerHTML =
+"Barcode: "
++
+result.text;
 
-                    }
 
-                }
+window.parent.postMessage(
 
-            );
+{
 
+type:
+"barcode_scan",
 
-        }
+barcode:
+result.text
 
-        catch(error){
+},
 
+"*"
 
-            result.innerHTML =
-            "Camera Error: "
-            + error;
+);
 
 
-        }
+}
 
 
-    }
+}
 
+);
 
 
-    startScanner();
 
+}
 
-    </script>
+catch(e)
+{
 
-    """
 
+document.getElementById("status").innerHTML =
+"Camera Error: "
++
+e;
+
+
+}
+
+
+}
+
+
+
+startCamera();
+
+
+
+</script>
+
+
+</head>
+
+
+<body>
+
+
+<h4 id="status">
+Starting camera...
+</h4>
+
+
+
+<video
+
+id="video"
+
+width="100%"
+
+height="350"
+
+style="
+border-radius:12px;
+background:black;
+"
+
+autoplay
+
+playsinline
+
+muted>
+
+</video>
+
+
+
+<h4 id="result">
+
+Point camera at barcode
+
+</h4>
+
+
+
+</body>
+
+
+</html>
+
+"""
 
 
     components.html(
 
-        scanner_html,
+        html_code,
 
         height=500
 
     )
-
 
 
     return None
