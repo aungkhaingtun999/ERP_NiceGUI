@@ -63,10 +63,11 @@ def run():
 
         else:
 
-            st.warning(
-                "Barcode not found"
-            )
+    st.session_state.new_barcode = barcode
 
+    st.warning(
+        "🆕 New Product Barcode"
+    )
 
 
     product = st.session_state.mobile_product
