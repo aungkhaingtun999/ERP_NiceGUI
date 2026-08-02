@@ -3,18 +3,16 @@
 # ERP ENTERPRISE POS PAYMENT MODULE v15.0 STABLE
 # ==============================================================================
 
+import streamlit as str_module  # or keep as st
 import streamlit as st
 
-from .session import start_processing, stop_processing
-from .checkout import process_checkout
+from database import generate_payment_qr
+from erp_core.repositories.payment_account_repository import \
+    get_payment_account
 from .cart import calculate_subtotal
+from .checkout import process_checkout
 from .engine import get_default_tax_rate
-
-from database import generate_payment_qr
-
-from database import generate_payment_qr
-
-from erp_core.repositories.payment_account_repository import get_payment_account
+from .session import start_processing, stop_processing
 
 
 # ==============================================================================
@@ -22,7 +20,6 @@ from erp_core.repositories.payment_account_repository import get_payment_account
 # ==============================================================================
 
 def money(value):
-
     try:
         return f"{float(value):,.0f} MMK"
     except Exception:
@@ -34,7 +31,6 @@ def money(value):
 # ==============================================================================
 
 def render_payment(warehouse_id):
-
     cart = st.session_state.get("cart", [])
 
     if not cart:
@@ -155,9 +151,7 @@ Discount : {money(discount)}
         )
 
         if not account:
-
             st.error(f"{provider} account not configured")
-
             return
 
         account_name = account.get("account_name", "ERP SHOP")
@@ -172,18 +166,16 @@ Discount : {money(discount)}
         if provider == "KBZ Pay":
 
             if qr_mode == "STATIC" and account.get("qr_payload_template"):
-
                 qr_buffer = generate_payment_qr(
-    provider=provider,
-    account_name=account_name,
-    account_no=account_no,
-    amount=grand_total,
-    sale_id="TEMP",
-    raw_payload=account.get("qr_payload_template")
-)
+                    provider=provider,
+                    account_name=account_name,
+                    account_no=account_no,
+                    amount=grand_total,
+                    sale_id="TEMP",
+                    raw_payload=account.get("qr_payload_template")
+                )
 
             else:
-
                 qr_buffer = PaymentQRService.generate_qr(
                     provider=provider,
                     account_name=account_name,
@@ -197,7 +189,6 @@ Discount : {money(discount)}
         # ----------------------------------------------------------------------
 
         else:
-
             qr_buffer = generate_payment_qr(
                 provider=provider,
                 account_name=account_name,
@@ -213,7 +204,6 @@ Discount : {money(discount)}
         )
 
         if qr_mode == "STATIC":
-
             st.info(
                 f"Scan with {provider} and pay to {account_name} ({account_no})"
             )
@@ -223,7 +213,6 @@ Discount : {money(discount)}
             )
 
         else:
-
             st.info(
                 f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
             )
@@ -243,7 +232,6 @@ Discount : {money(discount)}
         )
 
     else:
-
         received = st.number_input(
             "Received Amount",
             min_value=0.0,
@@ -271,15 +259,12 @@ Change : {money(change)}
     ):
 
         if received < grand_total:
-
             st.error("Insufficient payment.")
-
             return
 
         start_processing()
 
         try:
-
             result = process_checkout(
                 cart=cart,
                 paid_amount=received,
@@ -295,11 +280,9 @@ Change : {money(change)}
             )
 
             if result.get("success", False):
-
                 sale_data = result.get("data", {})
 
                 sale_data.update({
-
                     "subtotal": subtotal,
                     "discount": discount,
                     "tax": tax_amount,
@@ -309,20 +292,15 @@ Change : {money(change)}
                     "change_amount": change,
                     "payment_method": payment_method,
                     "items": cart
-
                 })
 
                 # MOBILE PAYMENT INFO
                 if payment_method == "MOBILE":
-
                     sale_data.update({
-
                         "mobile_provider":
                             st.session_state.get("mobile_provider"),
-
                         "mobile_txn":
                             st.session_state.get("mobile_txn")
-
                     })
 
                 st.session_state.sale_data = sale_data
@@ -331,7 +309,6 @@ Change : {money(change)}
                 st.rerun()
 
             else:
-
                 st.error(
                     result.get(
                         "message",
@@ -340,11 +317,9 @@ Change : {money(change)}
                 )
 
         except Exception as e:
-
             st.error(
                 f"Checkout Error : {e}"
             )
 
         finally:
-
             stop_processing()
