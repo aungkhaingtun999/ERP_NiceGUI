@@ -4,95 +4,30 @@
 # ERP ENTERPRISE PRODUCT REGISTRATION
 # ==============================================================================
 
-
 import streamlit as st
-
 
 from database import (
     get_inventory_service,
     get_categories,
     get_suppliers,
-    get_warehouses
+    get_warehouses,
 )
 
 
-
-# ==============================================================================
-# LOAD OPTIONS
-# ==============================================================================
-
-
-def load_options():
-
-
-    categories = get_categories()
-
-    suppliers = get_suppliers()
-
-    warehouses = get_warehouses()
-
-
-    return (
-        categories or [],
-        suppliers or [],
-        warehouses or []
-    )
-
-
-
-# ==============================================================================
-# NEW PRODUCT FORM
-# ==============================================================================
-
-
-def render_new_product_form(barcode):
-
+def render_new_product_form(barcode: str):
 
     st.divider()
+    st.subheader("🆕 New Product Registration")
 
+    categories = get_categories() or []
+    suppliers = get_suppliers() or []
+    warehouses = get_warehouses() or []
 
-    st.subheader(
-        "🆕 New Product Registration"
-    )
+    category_options = {c["id"]: c["name"] for c in categories}
+    supplier_options = {s["id"]: s["name"] for s in suppliers}
+    warehouse_options = {w["id"]: w["name"] for w in warehouses}
 
-
-    categories, suppliers, warehouses = load_options()
-
-
-
-    category_map = {
-
-        c["id"]: c["name"]
-
-        for c in categories
-
-    }
-
-
-    supplier_map = {
-
-        s["id"]: s["name"]
-
-        for s in suppliers
-
-    }
-
-
-    warehouse_map = {
-
-        w["id"]: w["name"]
-
-        for w in warehouses
-
-    }
-
-
-
-    with st.form(
-        "mobile_product_form"
-    ):
-
-
+    with st.form("mobile_inventory_new_product"):
 
         st.text_input(
             "📷 Barcode",
@@ -100,236 +35,134 @@ def render_new_product_form(barcode):
             disabled=True
         )
 
+        name = st.text_input("📝 Product Name")
+        short_name = st.text_input("🔤 Short Name")
+        sku = st.text_input("🏷 SKU")
 
-        name = st.text_input(
-            "📝 Product Name"
+        category_id = None
+        if category_options:
+            category_id = st.selectbox(
+                "📂 Category",
+                options=list(category_options.keys()),
+                format_func=lambda x: category_options[x]
+            )
+
+        supplier_id = None
+        if supplier_options:
+            supplier_id = st.selectbox(
+                "🏭 Supplier",
+                options=list(supplier_options.keys()),
+                format_func=lambda x: supplier_options[x]
+            )
+
+        warehouse_id = None
+        if warehouse_options:
+            warehouse_id = st.selectbox(
+                "🏬 Warehouse",
+                options=list(warehouse_options.keys()),
+                format_func=lambda x: warehouse_options[x]
+            )
+
+        unit = st.selectbox(
+            "📏 Unit",
+            ["pcs", "box", "kg", "liter"]
         )
-
-
-        sku = st.text_input(
-            "🏷 SKU"
-        )
-
-
 
         col1, col2 = st.columns(2)
 
-
-
         with col1:
-
             purchase_price = st.number_input(
                 "💰 Purchase Price",
-                min_value=0.0
+                min_value=0.0,
+                step=100.0
             )
 
-
-            markup = st.number_input(
+            markup_percent = st.number_input(
                 "📈 Markup %",
                 min_value=0.0,
-                value=20.0
+                value=20.0,
+                step=1.0
             )
-
 
         with col2:
-
-
             selling_price = st.number_input(
                 "💵 Selling Price",
-                min_value=0.0
+                min_value=0.0,
+                step=100.0
             )
 
-
-            stock = st.number_input(
+            opening_stock = st.number_input(
                 "📦 Opening Stock",
                 min_value=0,
                 step=1
             )
 
-
-
-        category_id = st.selectbox(
-
-            "📂 Category",
-
-            options=list(category_map.keys()),
-
-            format_func=lambda x:
-                category_map[x]
-
-        ) if category_map else None
-
-
-
-
-        supplier_id = st.selectbox(
-
-            "🏭 Supplier",
-
-            options=list(supplier_map.keys()),
-
-            format_func=lambda x:
-                supplier_map[x]
-
-        ) if supplier_map else None
-
-
-
-        warehouse_id = st.selectbox(
-
-            "🏬 Warehouse",
-
-            options=list(warehouse_map.keys()),
-
-            format_func=lambda x:
-                warehouse_map[x]
-
-        ) if warehouse_map else None
-
-
-
-
-        unit = st.selectbox(
-
-            "Unit",
-
-            [
-                "pcs",
-                "box",
-                "kg",
-                "liter"
-            ]
-
+        minimum_stock = st.number_input(
+            "⚠️ Minimum Stock",
+            min_value=0,
+            value=5
         )
 
+        reorder_level = st.number_input(
+            "🔁 Reorder Level",
+            min_value=0,
+            value=10
+        )
 
+        notes = st.text_area("📝 Notes")
 
-        save = st.form_submit_button(
+        save_btn = st.form_submit_button(
             "💾 Save Product"
         )
 
+        if save_btn:
 
-
-        if save:
-
-
-            if not name:
-
-                st.error(
-                    "Product name required"
-                )
-
+            if not name.strip():
+                st.error("Product name is required")
                 return
 
-
-
             product_data = {
-
-
-                "name":
-                    name,
-
-
-                "barcode":
-                    barcode,
-
-
-                "sku":
-                    sku,
-
-
-                "purchase_price":
-                    purchase_price,
-
-
-                "selling_price":
-                    selling_price,
-
-
-                "final_selling_price":
-                    selling_price,
-
-
-                "markup_percent":
-                    markup,
-
-
-                "category_id":
-                    category_id,
-
-
-                "supplier_id":
-                    supplier_id,
-
-
-                "unit":
-                    unit,
-
-
-                "stock":
-                    stock
-
+                "name": name.strip(),
+                "short_name": short_name.strip() or None,
+                "barcode": barcode,
+                "sku": sku.strip() or None,
+                "category_id": category_id,
+                "supplier_id": supplier_id,
+                "unit": unit,
+                "purchase_price": purchase_price,
+                "selling_price": selling_price,
+                "final_selling_price": selling_price,
+                "markup_percent": markup_percent,
+                "minimum_stock": minimum_stock,
+                "reorder_level": reorder_level,
+                "notes": notes.strip() or None,
+                "is_active": True,
             }
-
-
 
             try:
 
+                service = get_inventory_service()
 
-                service = (
-                    get_inventory_service()
+                result = service.create_product_with_stock(
+                    product_data=product_data,
+                    opening_stock=int(opening_stock),
+                    warehouse_id=warehouse_id,
+                    created_by=None,
                 )
-
-
-                result = (
-
-                    service
-                    .create_product_with_stock(
-
-                        product_data,
-
-                        opening_stock=stock,
-
-                        warehouse_id=warehouse_id
-
-                    )
-
-                )
-
-
 
                 if result.get("success"):
 
+                    st.success("✅ Product created successfully")
 
-                    st.success(
-                        "✅ Product Saved Successfully"
-                    )
-
-
-                    st.session_state.mobile_product = (
-                        result["data"]
-                    )
-
+                    st.session_state.mobile_product = result["data"]
 
                     st.rerun()
 
-
-
                 else:
 
-
-                    st.error(
-                        result.get(
-                            "message",
-                            "Save failed"
-                        )
-                    )
-
-
+                    st.error(result.get("message", "Save failed"))
 
             except Exception as e:
 
-
-                st.error(
-                    f"Error: {e}"
-                )
+                st.error(f"Save error: {e}")
+                
