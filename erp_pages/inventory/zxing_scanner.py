@@ -1,12 +1,14 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
 # MOBILE INVENTORY v3
-# ZXing Live Mobile Barcode Scanner
+# ZXing Live Scanner Bridge
 # ==============================================================================
 
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+from streamlit_js_eval import streamlit_js_eval
 
 
 
@@ -18,64 +20,90 @@ def scan_barcode():
     )
 
 
-    scanner_html = r"""
+    scanner = r"""
 
-<!DOCTYPE html>
+<script type="module">
 
-<html>
+import {
+ BrowserMultiFormatReader
+}
+from
+"https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
 
 
-<head>
+const reader =
+new BrowserMultiFormatReader();
 
-<meta charset="UTF-8">
+
+async function start(){
 
 
-<style>
+const devices =
+await BrowserMultiFormatReader.listVideoInputDevices();
 
-body {
 
-margin:0;
+let camera =
+devices[devices.length-1].deviceId;
 
-padding:0;
+
+
+for(const d of devices){
+
+if(
+d.label.toLowerCase()
+.includes("back")
+){
+
+camera=d.deviceId;
+
+}
 
 }
 
 
-video {
 
-width:100%;
+reader.decodeFromVideoDevice(
 
-border-radius:12px;
+camera,
 
-background:black;
+"video",
+
+(result,error)=>{
+
+
+if(result){
+
+
+localStorage.setItem(
+"barcode_result",
+result.text
+);
+
+
+}
+
+}
+
+);
+
 
 }
 
 
-#result {
-
-font-size:18px;
-
-font-weight:bold;
-
-margin-top:10px;
-
-}
-
-</style>
+start();
 
 
-</head>
-
-
-
-<body>
+</script>
 
 
 
 <video
 
 id="video"
+
+width="100%"
+
+height="350"
 
 autoplay
 
@@ -86,250 +114,24 @@ muted>
 </video>
 
 
-
-<div id="status">
-
-Starting camera...
-
-</div>
-
-
-<div id="result">
-
-Point the camera at a barcode
-
-</div>
-
-
-
-
-<script type="module">
-
-
-import {
-
-BrowserMultiFormatReader
-
-}
-
-from
-
-"https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
-
-
-
-
-const codeReader =
-
-new BrowserMultiFormatReader();
-
-
-
-
-const video =
-
-document.getElementById(
-"video"
-);
-
-
-
-const status =
-
-document.getElementById(
-"status"
-);
-
-
-
-const resultBox =
-
-document.getElementById(
-"result"
-);
-
-
-
-
-
-async function startScanner(){
-
-
-
-try{
-
-
-
-const devices =
-
-await BrowserMultiFormatReader
-.listVideoInputDevices();
-
-
-
-
-if(devices.length === 0){
-
-
-status.innerHTML =
-"No camera found";
-
-
-return;
-
-
-}
-
-
-
-
-
-let selectedCamera =
-
-devices[0].deviceId;
-
-
-
-
-// Prefer Back Camera
-
-for(
-
-const camera of devices
-
-){
-
-
-
-const label =
-
-camera.label.toLowerCase();
-
-
-
-if(
-
-label.includes("back")
-
-||
-
-label.includes("rear")
-
-||
-
-label.includes("environment")
-
-){
-
-
-selectedCamera =
-
-camera.deviceId;
-
-
-break;
-
-
-}
-
-
-}
-
-
-
-
-status.innerHTML =
-"Back camera selected";
-
-
-
-
-
-codeReader.decodeFromVideoDevice(
-
-
-selectedCamera,
-
-
-video,
-
-
-(result,error)=>{
-
-
-
-if(result){
-
-
-
-resultBox.innerHTML =
-
-"Barcode: "
-+
-result.text;
-
-
-
-}
-
-
-
-
-
-}
-
-
-
-);
-
-
-
-}
-
-
-catch(error){
-
-
-status.innerHTML =
-
-"Camera Error: "
-+
-error;
-
-
-
-}
-
-
-
-}
-
-
-
-
-
-startScanner();
-
-
-
-</script>
-
-
-</body>
-
-
-</html>
-
 """
 
 
     components.html(
+        scanner,
+        height=400
+    )
 
-        scanner_html,
 
-        height=550
+
+    barcode = streamlit_js_eval(
+
+        js_expressions=
+        "localStorage.getItem('barcode_result')",
+
+        key="barcode_reader"
 
     )
 
 
-    return None
+    return barcode
