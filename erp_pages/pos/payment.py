@@ -328,40 +328,64 @@ Discount : {money(discount)}
 
 
 
-        # --------------------------------------------------------------
-        # QR GENERATE
-        # --------------------------------------------------------------
+# --------------------------------------------------------------
+# QR GENERATE (STATIC / DYNAMIC)
+# --------------------------------------------------------------
 
+        qr_mode = account.get(
+            "qr_mode",
+            "DYNAMIC"
+        )
 
-if provider == "KBZ Pay":
-    # --------------------------------------------------------------
-    # QR GENERATE (STATIC / DYNAMIC)
-    # --------------------------------------------------------------
-    
-    qr_mode = account.get(
-        "qr_mode",
-        "DYNAMIC"
-    )
-    
-    
-    if qr_mode == "STATIC":
-    
-        qr_buffer = PaymentQRService.generate_qr(
-            raw_payload=account.get(
-                "qr_payload_template"
+        if provider == "KBZ Pay":
+
+            # STATIC QR FROM DATABASE
+            if qr_mode == "STATIC" and account.get("qr_payload_template"):
+
+                qr_buffer = PaymentQRService.generate_qr(
+                    raw_payload=account.get(
+                        "qr_payload_template"
+                    )
+                )
+
+            # DYNAMIC QR
+            else:
+
+                qr_buffer = PaymentQRService.generate_qr(
+                    provider=provider,
+                    account_name=account_name,
+                    account_no=account_no,
+                    amount=grand_total,
+                    sale_id="TEMP"
+                )
+
+        else:
+
+            qr_buffer = generate_payment_qr(
+                provider=provider,
+                account_name=account_name,
+                account_no=account_no,
+                amount=grand_total,
+                sale_id="TEMP"
             )
+
+        st.image(
+            qr_buffer,
+            caption=f"Scan to pay with {provider}",
+            width=250
         )
-    
-    
-    else:
-    
-        qr_buffer = PaymentQRService.generate_qr(
-            provider=provider,
-            account_name=account_name,
-            account_no=account_no,
-            amount=grand_total,
-            sale_id="TEMP"
+
+        st.info(
+            f"Pay MMK {grand_total:,.0f} to {account_name} ({account_no})"
         )
+
+        mobile_txn = st.text_input(
+            "Transaction ID",
+            placeholder="Enter mobile banking transaction number"
+        )
+
+        st.session_state.mobile_provider = provider
+        st.session_state.mobile_txn = mobile_txn
 
 
 
