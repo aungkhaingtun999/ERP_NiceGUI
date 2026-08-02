@@ -1,7 +1,7 @@
 # ==============================================================================
 # erp_pages/inventory/scanner.py
 # MOBILE INVENTORY v2
-# Camera + Manual Barcode Scanner Engine
+# Barcode Scanner Engine
 # ==============================================================================
 
 
@@ -9,61 +9,16 @@ import streamlit as st
 
 
 
-# ==============================================================================
-# MANUAL BARCODE INPUT
-# ==============================================================================
-
-
 def manual_barcode_input():
 
-    barcode = st.text_input(
+    return st.text_input(
         "⌨️ Manual Barcode / SKU",
-        placeholder="Enter barcode or SKU..."
-    )
+        placeholder="Enter barcode..."
+    ).strip()
 
-    return barcode.strip()
-
-
-
-# ==============================================================================
-# CAMERA BARCODE SCANNER
-# ==============================================================================
-
-
-def camera_barcode_scan():
-
-    image = st.camera_input(
-        "📷 Scan Barcode"
-    )
-
-
-    if image is None:
-        return None
-
-
-    barcode = decode_barcode(image)
-
-
-    return barcode
-
-
-
-# ==============================================================================
-# BARCODE DECODER
-# ==============================================================================
 
 
 def decode_barcode(image):
-
-    """
-    Barcode decoder engine
-
-    Future:
-        pyzbar
-        OpenCV
-        Bluetooth scanner
-
-    """
 
     try:
 
@@ -72,7 +27,6 @@ def decode_barcode(image):
 
 
         img = Image.open(image)
-
 
         result = decode(img)
 
@@ -83,30 +37,42 @@ def decode_barcode(image):
                 "utf-8"
             )
 
-
     except Exception:
 
         return None
-
 
 
     return None
 
 
 
-# ==============================================================================
-# UNIFIED SCANNER
-# ==============================================================================
+def camera_barcode_scan():
 
+    image = st.camera_input(
+        "📷 Scan Barcode"
+    )
+
+
+    if image:
+
+        return decode_barcode(image)
+
+
+    return None
+
+
+
+# ==========================================================
+# MAIN SCANNER FUNCTION
+# ==========================================================
 
 def get_barcode():
 
     """
-    Priority:
+    Scanner priority
 
-    1. Camera Scan
+    1. Camera
     2. Manual Input
-
     """
 
     barcode = camera_barcode_scan()
