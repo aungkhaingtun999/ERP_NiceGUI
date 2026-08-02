@@ -360,6 +360,26 @@ def run():
                 tail_crc
             )
         )
+    st.divider()
+
+    st.subheader("🔐 Hash Truncation Test")
+
+    hash_hex = st.text_area(
+        "HEX For Hash Test",
+        height=120,
+        key="hash_hex_input"
+    )
+
+    if st.button(
+        "Run Hash Test",
+        key="hash_test_btn"
+    ):
+
+        st.json(
+            KBZCRCEngine.hash_truncation_test(
+                hash_hex
+            )
+        )
         
 # ==============================================================================
 # DIRECT RUN
