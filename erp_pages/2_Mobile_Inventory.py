@@ -1,5 +1,5 @@
 # ==============================================================================
-# erp_pages/Mobile_Inventory.py
+# erp_pages/2_Mobile_Inventory.py
 # MOBILE INVENTORY v2
 # Phase 1 - Barcode + Product Search
 # ==============================================================================
