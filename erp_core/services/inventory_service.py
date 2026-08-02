@@ -274,5 +274,142 @@ class InventoryService:
 # ==============================================================================
 # Export
 # ==============================================================================
+    # ==========================================================================
+    # MOBILE INVENTORY v3
+    # CREATE PRODUCT + OPENING STOCK
+    # ==========================================================================
 
+    def create_product_with_stock(
+        self,
+        product_data: Dict[str, Any],
+        opening_stock: int = 0,
+        warehouse_id: int = None,
+        created_by: Any = None,
+    ):
+
+        try:
+
+            # Duplicate barcode check
+
+            barcode = product_data.get("barcode")
+
+
+            if barcode:
+
+                existing = (
+                    self.client
+                    .table("products")
+                    .select("id")
+                    .eq("barcode", barcode)
+                    .execute()
+                )
+
+
+                if existing.data:
+
+                    return {
+                        "success": False,
+                        "message": "Barcode already exists"
+                    }
+
+
+
+            # Product create
+
+            product_data["stock"] = opening_stock
+
+            product_data.setdefault(
+                "is_active",
+                True
+            )
+
+
+            result = (
+                self.client
+                .table("products")
+                .insert(product_data)
+                .execute()
+            )
+
+
+            product = result.data[0]
+
+            product_id = product["id"]
+
+
+
+            # Opening Stock Log
+
+            if opening_stock > 0:
+
+                self.create_inventory_log(
+                    product_id=product_id,
+                    quantity=opening_stock,
+                    balance_after=opening_stock,
+                    warehouse_id=warehouse_id,
+                    created_by=created_by
+                )
+
+
+
+            return {
+                "success": True,
+                "data": product
+            }
+
+
+
+        except Exception as e:
+
+            log_error(
+                message="Mobile product creation failed",
+                exception=e
+            )
+
+            return {
+                "success": False,
+                "message": str(e)
+            }
+
+
+
+    # ==========================================================================
+    # MOBILE INVENTORY LOG
+    # ==========================================================================
+
+    def create_inventory_log(
+        self,
+        product_id,
+        quantity,
+        balance_after,
+        warehouse_id=None,
+        created_by=None
+    ):
+
+        payload = {
+
+            "product_id": product_id,
+
+            "reference_type": "OPENING",
+
+            "quantity": quantity,
+
+            "balance_after": balance_after,
+
+            "remarks":
+            "Mobile Inventory Opening Stock",
+
+            "warehouse_id": warehouse_id,
+
+            "created_by": created_by
+
+        }
+
+
+        return (
+            self.client
+            .table("inventory_logs")
+            .insert(payload)
+            .execute()
+            )
 __all__ = ["InventoryService"]
