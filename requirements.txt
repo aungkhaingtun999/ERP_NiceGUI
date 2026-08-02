@@ -12,4 +12,5 @@ qrcode
 plotly
 opencv-python-headless
 numpy
+pyzbar
 Pillow
