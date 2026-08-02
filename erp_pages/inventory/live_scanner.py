@@ -1,87 +1,95 @@
 # ==============================================================================
 # erp_pages/inventory/live_scanner.py
-# REAL-TIME MOBILE BARCODE SCANNER
+# MOBILE INVENTORY v2
+# LIVE CAMERA BARCODE SCANNER
 # ==============================================================================
 
+
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-import cv2
+
+from streamlit_webrtc import (
+    webrtc_streamer,
+    VideoProcessorBase,
+    WebRtcMode
+)
+
 import av
+import cv2
 
 
-class BarcodeTransformer(VideoTransformerBase):
+
+class BarcodeProcessor(VideoProcessorBase):
+
 
     def __init__(self):
-        self.last_code = ""
 
-    def transform(self, frame):
+        self.barcode = None
 
-        img = frame.to_ndarray(format="bgr24")
-
-        detector = cv2.barcode_BarcodeDetector()
-
-        result = detector.detectAndDecode(img)
-
-        code = ""
-
-        try:
-            if len(result) == 4:
-                ok, decoded_info, decoded_type, points = result
-            elif len(result) == 3:
-                decoded_info, decoded_type, points = result
-                ok = bool(decoded_info)
-            else:
-                ok = False
-                decoded_info = []
-
-            if ok and decoded_info:
-
-                value = decoded_info[0].strip()
-
-                if len(value) >= 8:
-                    code = value
-                    self.last_code = value
-
-                    cv2.putText(
-                        img,
-                        value,
-                        (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 255, 0),
-                        2
-                    )
-
-        except Exception:
-            pass
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+        self.detector = cv2.QRCodeDetector()
 
 
-def live_barcode_scanner():
 
-    st.subheader("📷 Live Barcode Scanner")
+    def recv(self, frame):
 
-    ctx = webrtc_streamer(
-        key="barcode-scanner",
-        video_transformer_factory=BarcodeTransformer,
-        media_stream_constraints={
-            "video": {
-                "facingMode": "environment"
-            },
-            "audio": False,
-        },
-        async_processing=True,
+
+        img = frame.to_ndarray(
+            format="bgr24"
+        )
+
+
+        # Barcode detector
+        data, points, _ = self.detector.detectAndDecode(
+            img
+        )
+
+
+        if data:
+
+            self.barcode = data
+
+
+
+        return av.VideoFrame.from_ndarray(
+            img,
+            format="bgr24"
+        )
+
+
+
+
+def live_barcode_scan():
+
+
+    st.subheader(
+        "📷 Live Barcode Scanner"
     )
 
-    if ctx.video_transformer:
 
-        code = ctx.video_transformer.last_code
+    ctx = webrtc_streamer(
 
-        if code:
+        key="barcode-scanner",
 
-            st.success(f"📦 Scanned: {code}")
+        mode=WebRtcMode.SENDRECV,
 
-            return code
+        video_processor_factory=BarcodeProcessor,
+
+        media_stream_constraints={
+            "video": True,
+            "audio": False
+        },
+
+    )
+
+
+    if ctx:
+
+        if ctx.video_processor:
+
+            code = ctx.video_processor.barcode
+
+            if code:
+
+                return code
+
 
     return None
