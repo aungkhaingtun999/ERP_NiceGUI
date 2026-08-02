@@ -5,22 +5,23 @@
 # ==============================================================================
 import streamlit as st
 
-from database import db
 
-def render_new_product_form(barcode):
+def render_product_form(barcode=""):
 
-st.subheader("🆕 New Product")
+    st.subheader("🆕 New Product Registration")
 
-with st.form("new_product_form"):
-
-    st.text_input(
-        "Barcode",
-        value=barcode,
-        disabled=True
+    name = st.text_input(
+        "Product Name"
     )
 
-    name = st.text_input("Product Name")
-    sku = st.text_input("SKU")
+    sku = st.text_input(
+        "SKU"
+    )
+
+    barcode_value = st.text_input(
+        "Barcode",
+        value=barcode
+    )
 
     purchase_price = st.number_input(
         "Purchase Price",
@@ -37,36 +38,41 @@ with st.form("new_product_form"):
         min_value=0
     )
 
-    save = st.form_submit_button("Save Product")
 
-    if save:
+    if st.button("💾 Save Product"):
 
         if not name:
 
-            st.error("Product name required")
-
-            return
-
-        result = (
-            db()
-            .table("products")
-            .insert(
-                {
-                    "name": name,
-                    "barcode": barcode,
-                    "sku": sku,
-                    "purchase_price": purchase_price,
-                    "selling_price": selling_price,
-                    "stock": stock,
-                    "unit": "pcs",
-                    "is_active": True
-                }
+            st.warning(
+                "Product name required"
             )
-            .execute()
+
+            return None
+
+
+        product = {
+
+            "name": name,
+
+            "sku": sku,
+
+            "barcode": barcode_value,
+
+            "purchase_price": purchase_price,
+
+            "selling_price": selling_price,
+
+            "stock": stock
+
+        }
+
+
+        st.success(
+            "Product data ready"
         )
 
-        st.success("Product saved")
 
-        st.session_state.mobile_product = result.data[0]
+        return product
 
-        st.rerun()
+
+    return None
