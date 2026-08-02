@@ -5,8 +5,8 @@
 # ==============================================================================
 
 import streamlit as st
-from erp_components.zxing_barcode import (
-    zxing_scanner
+from erp_pages.inventory.zxing_scanner import (
+    zxing_live_scanner
 )
 
 
