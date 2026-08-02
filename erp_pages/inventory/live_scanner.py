@@ -6,16 +6,20 @@
 
 
 import streamlit as st
-
-from streamlit_webrtc import (
-    webrtc_streamer,
-    VideoProcessorBase,
-    WebRtcMode
-)
-
 import av
 import cv2
 
+
+from streamlit_webrtc import (
+    webrtc_streamer,
+    VideoProcessorBase
+)
+
+
+
+# ==============================================================================
+# BARCODE PROCESSOR
+# ==============================================================================
 
 
 class BarcodeProcessor(VideoProcessorBase):
@@ -25,7 +29,14 @@ class BarcodeProcessor(VideoProcessorBase):
 
         self.barcode = None
 
-        self.detector = cv2.QRCodeDetector()
+
+        try:
+
+            self.detector = cv2.barcode.BarcodeDetector()
+
+        except Exception:
+
+            self.detector = None
 
 
 
@@ -37,15 +48,47 @@ class BarcodeProcessor(VideoProcessorBase):
         )
 
 
-        # Barcode detector
-        data, points, _ = self.detector.detectAndDecode(
-            img
-        )
+        # ==============================================================
+        # OpenCV 1D Barcode Detector
+        # ==============================================================
+
+        if self.detector:
 
 
-        if data:
+            try:
 
-            self.barcode = data
+                result = self.detector.detectAndDecode(
+                    img
+                )
+
+
+                if isinstance(result, tuple):
+
+                    if len(result) == 3:
+
+                        ok, decoded, points = result
+
+
+                        if ok and decoded:
+
+                            self.barcode = decoded
+
+
+
+                    elif len(result) == 2:
+
+                        decoded, points = result
+
+
+                        if decoded:
+
+                            self.barcode = decoded
+
+
+
+            except Exception:
+
+                pass
 
 
 
@@ -56,8 +99,12 @@ class BarcodeProcessor(VideoProcessorBase):
 
 
 
+# ==============================================================================
+# LIVE SCANNER
+# ==============================================================================
 
-def live_barcode_scan():
+
+def live_barcode_scanner():
 
 
     st.subheader(
@@ -67,29 +114,39 @@ def live_barcode_scan():
 
     ctx = webrtc_streamer(
 
-        key="barcode-scanner",
-
-        mode=WebRtcMode.SENDRECV,
+        key="mobile-inventory-scanner",
 
         video_processor_factory=BarcodeProcessor,
 
         media_stream_constraints={
-            "video": True,
+
+            "video": {
+
+                "facingMode": "environment"
+
+            },
+
             "audio": False
-        },
+
+        }
 
     )
 
 
-    if ctx:
+
+    if ctx is not None:
+
 
         if ctx.video_processor:
 
+
             code = ctx.video_processor.barcode
+
 
             if code:
 
                 return code
+
 
 
     return None
