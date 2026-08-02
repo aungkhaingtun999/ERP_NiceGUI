@@ -1,0 +1,87 @@
+# ==============================================================================
+# erp_pages/inventory/live_scanner.py
+# REAL-TIME MOBILE BARCODE SCANNER
+# ==============================================================================
+
+import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import cv2
+import av
+
+
+class BarcodeTransformer(VideoTransformerBase):
+
+    def __init__(self):
+        self.last_code = ""
+
+    def transform(self, frame):
+
+        img = frame.to_ndarray(format="bgr24")
+
+        detector = cv2.barcode_BarcodeDetector()
+
+        result = detector.detectAndDecode(img)
+
+        code = ""
+
+        try:
+            if len(result) == 4:
+                ok, decoded_info, decoded_type, points = result
+            elif len(result) == 3:
+                decoded_info, decoded_type, points = result
+                ok = bool(decoded_info)
+            else:
+                ok = False
+                decoded_info = []
+
+            if ok and decoded_info:
+
+                value = decoded_info[0].strip()
+
+                if len(value) >= 8:
+                    code = value
+                    self.last_code = value
+
+                    cv2.putText(
+                        img,
+                        value,
+                        (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        (0, 255, 0),
+                        2
+                    )
+
+        except Exception:
+            pass
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+
+def live_barcode_scanner():
+
+    st.subheader("📷 Live Barcode Scanner")
+
+    ctx = webrtc_streamer(
+        key="barcode-scanner",
+        video_transformer_factory=BarcodeTransformer,
+        media_stream_constraints={
+            "video": {
+                "facingMode": "environment"
+            },
+            "audio": False,
+        },
+        async_processing=True,
+    )
+
+    if ctx.video_transformer:
+
+        code = ctx.video_transformer.last_code
+
+        if code:
+
+            st.success(f"📦 Scanned: {code}")
+
+            return code
+
+    return None
