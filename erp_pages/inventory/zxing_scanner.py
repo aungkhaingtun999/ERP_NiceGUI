@@ -2,7 +2,6 @@
 # erp_pages/inventory/zxing_scanner.py
 # MOBILE INVENTORY v3
 # ZXing Browser Live Scanner
-# Streamlit Cloud Compatible
 # ==============================================================================
 
 
@@ -25,18 +24,54 @@ def zxing_live_scanner():
 
 <html>
 
+
 <head>
 
 <meta charset="UTF-8">
+
+
+</head>
+
+
+<body>
+
+
+<h4 id="status">
+Starting camera...
+</h4>
+
+
+<video
+id="video"
+width="100%"
+height="350"
+style="
+background:black;
+border-radius:10px;
+"
+autoplay
+playsinline
+muted>
+</video>
+
+
+<h4 id="result">
+Waiting barcode...
+</h4>
+
 
 
 <script type="module">
 
 
 import {
-    BrowserMultiFormatReader
+
+BrowserMultiFormatReader
+
 }
+
 from
+
 "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
 
 
@@ -51,18 +86,18 @@ document.getElementById("video");
 
 
 
-async function startCamera(){
+async function start(){
 
 
 try{
 
 
 const devices =
-await codeReader.listVideoInputDevices();
+await BrowserMultiFormatReader.listVideoInputDevices();
 
 
 
-if(devices.length === 0)
+if(!devices.length)
 {
 
 document.getElementById("status").innerHTML =
@@ -74,22 +109,23 @@ return;
 
 
 
-let deviceId =
+let cameraId =
 devices[0].deviceId;
 
 
 
 for(
-const d of devices
+const cam of devices
 ){
 
 if(
-d.label.toLowerCase()
+cam.label.toLowerCase()
 .includes("back")
-){
+)
+{
 
-deviceId =
-d.deviceId;
+cameraId =
+cam.deviceId;
 
 }
 
@@ -98,21 +134,22 @@ d.deviceId;
 
 
 document.getElementById("status").innerHTML =
-"Camera started";
+"Camera ready";
 
 
 
 codeReader.decodeFromVideoDevice(
 
-deviceId,
+cameraId,
 
 video,
 
-(result, error)=>{
+(result,error)=>{
 
 
 if(result)
 {
+
 
 document.getElementById("result").innerHTML =
 "Barcode: "
@@ -120,24 +157,8 @@ document.getElementById("result").innerHTML =
 result.text;
 
 
-window.parent.postMessage(
-
-{
-
-type:
-"barcode_scan",
-
-barcode:
-result.text
-
-},
-
-"*"
-
-);
-
-
 }
+
 
 
 }
@@ -147,6 +168,7 @@ result.text
 
 
 }
+
 
 catch(e)
 {
@@ -165,58 +187,14 @@ e;
 
 
 
-startCamera();
+start();
 
 
 
 </script>
 
 
-</head>
-
-
-<body>
-
-
-<h4 id="status">
-Starting camera...
-</h4>
-
-
-
-<video
-
-id="video"
-
-width="100%"
-
-height="350"
-
-style="
-border-radius:12px;
-background:black;
-"
-
-autoplay
-
-playsinline
-
-muted>
-
-</video>
-
-
-
-<h4 id="result">
-
-Point camera at barcode
-
-</h4>
-
-
-
 </body>
-
 
 </html>
 
@@ -230,6 +208,3 @@ Point camera at barcode
         height=500
 
     )
-
-
-    return None
