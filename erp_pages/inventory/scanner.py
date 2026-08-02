@@ -18,31 +18,61 @@ def manual_barcode_input():
 
 
 
+# ==============================================================================
+# BARCODE DECODER (Improved)
+# ==============================================================================
+
 def decode_barcode(image):
 
     try:
 
+        import numpy as np
+        import cv2
         from PIL import Image
+
+        # Streamlit UploadedFile → PIL
+        img_pil = Image.open(image).convert("RGB")
+
+        # PIL → OpenCV
+        img = np.array(img_pil)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+        # -------------------------------------------------
+        # 1) OpenCV BarcodeDetector
+        # -------------------------------------------------
+
+        detector = cv2.barcode_BarcodeDetector()
+
+        ok, decoded_info, decoded_type, points = detector.detectAndDecode(img)
+
+        if ok and decoded_info:
+
+            value = decoded_info[0]
+
+            if value:
+                return value.strip()
+
+        # -------------------------------------------------
+        # 2) pyzbar fallback
+        # -------------------------------------------------
+
         from pyzbar.pyzbar import decode
 
-
-        img = Image.open(image)
-
-        result = decode(img)
-
+        result = decode(img_pil)
 
         if result:
 
-            return result[0].data.decode(
-                "utf-8"
-            )
+            return result[0].data.decode("utf-8").strip()
+
+    except Exception as e:
+
+        print("Barcode decode error:", e)
+
+    return None
 
     except Exception:
 
         return None
-
-
-    return None
 
 
 
