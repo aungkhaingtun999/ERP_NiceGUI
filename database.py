@@ -50,6 +50,7 @@ from erp_core import (
     get_warehouses,
 
     get_default_warehouse_id,
+    get_categories,
 
     get_suppliers,
 
@@ -267,7 +268,7 @@ __all__ = [
     "get_warehouses",
 
     "get_default_warehouse_id",
-
+    "get_categories",
     "get_suppliers",
 
     "get_customers",
