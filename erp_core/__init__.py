@@ -92,7 +92,16 @@ try:
 except Exception:
     def get_suppliers(*args, **kwargs):  
         return []
-
+# ==============================================================================
+# CATEGORY
+# ==============================================================================
+try:
+    from .loaders.category_loader import (
+        get_categories
+    )
+except Exception:
+    def get_categories(*args, **kwargs):
+        return []
 # ==============================================================================
 # SETTINGS
 # ==============================================================================
@@ -278,7 +287,8 @@ __all__ = [
 
     # Supplier  
     "get_suppliers",
-
+    # Category
+    "get_categories",
     # Customer  
     "get_customers",
 
