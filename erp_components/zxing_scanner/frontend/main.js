@@ -1,5 +1,17 @@
-const codeReader =
-new ZXing.BrowserMultiFormatReader();
+import {
+
+BrowserMultiFormatReader
+
+}
+
+from
+
+"https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
+
+
+
+const reader =
+new BrowserMultiFormatReader();
 
 
 
@@ -14,7 +26,7 @@ async function start(){
 
 
 const devices =
-await codeReader.listVideoInputDevices();
+await BrowserMultiFormatReader.listVideoInputDevices();
 
 
 
@@ -24,7 +36,7 @@ devices[0].deviceId;
 
 
 for(
-let d of devices
+const d of devices
 ){
 
 if(
@@ -41,7 +53,7 @@ d.deviceId;
 
 
 
-codeReader.decodeFromVideoDevice(
+reader.decodeFromVideoDevice(
 
 camera,
 
@@ -57,7 +69,8 @@ window.parent.postMessage(
 
 {
 
-type:"streamlit:setComponentValue",
+type:
+"streamlit:setComponentValue",
 
 value:
 result.text
@@ -71,14 +84,12 @@ result.text
 
 }
 
-
 }
 
 );
 
 
 }
-
 
 
 start();
