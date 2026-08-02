@@ -41,28 +41,30 @@ def render_new_product_form(barcode=""):
 
     if st.button("💾 Save Product"):
 
-        if not name:
+        if name == "":
+
             st.warning(
                 "Product name required"
             )
+
             return None
 
 
-        product = {
+        return {
+
             "name": name,
+
             "sku": sku,
+
             "barcode": barcode_value,
+
             "purchase_price": purchase_price,
+
             "selling_price": selling_price,
+
             "stock": stock
+
         }
-
-
-        st.success(
-            "Product data ready"
-        )
-
-        return product
 
 
     return None
