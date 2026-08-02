@@ -1,16 +1,11 @@
 # ==============================================================================
 # erp_core/loaders/receipt_loader.py
-# ERP ENTERPRISE RECEIPT LOADER v3.0 FINAL
+# ERP ENTERPRISE RECEIPT LOADER v3.1 FIXED
 #
-# Features:
-#
-# - Receipt Header Loading
-# - Tax Rate Recovery
-# - Receipt Items Join
-# - Product Name Support
-# - Full Receipt Package
-#
+# Myanmar Time + Smart Search
 # ==============================================================================
+
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -28,35 +23,71 @@ from ..base_repo import (
 
 
 
+MYANMAR_TZ = ZoneInfo(
+    "Asia/Yangon"
+)
+
+
+
+# ==============================================================================
+# TIME CONVERTER
+# ==============================================================================
+
+def convert_mm_time(value):
+
+    if not value:
+        return value
+
+    try:
+
+        dt = datetime.fromisoformat(
+            value.replace(
+                "Z",
+                "+00:00"
+            )
+        )
+
+        return (
+            dt
+            .astimezone(
+                MYANMAR_TZ
+            )
+            .strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        )
+
+
+    except Exception:
+
+        return value
+
+
+
 
 
 # ==============================================================================
 # SALE ITEMS
 # ==============================================================================
 
-
 def get_sale_items(
 
     sale_id: int
 
-) -> List[Dict[str, Any]]:
+) -> List[Dict[str,Any]]:
 
 
     try:
-
 
         response = (
 
             db()
 
             .table(
-
                 "sale_items"
-
             )
 
             .select(
-
                 """
                 id,
                 sale_id,
@@ -69,15 +100,11 @@ def get_sale_items(
                     name
                 )
                 """
-
             )
 
             .eq(
-
                 "sale_id",
-
                 sale_id
-
             )
 
             .execute()
@@ -85,67 +112,44 @@ def get_sale_items(
         )
 
 
-
         items = response.data or []
-
 
 
         for item in items:
 
 
             product = item.get(
-
                 "products"
-
             ) or {}
 
 
-
             name = product.get(
-
                 "name"
-
             )
-
 
 
             if not name:
 
-
                 name = (
-
                     item.get(
-
                         "product_name"
-
                     )
-
                     or
-
                     f"Product #{item.get('product_id')}"
-
                 )
-
 
 
             item["name"] = name
 
-
             item["product_name"] = name
 
-
             item["qty"] = item.get(
-
                 "quantity",
-
                 0
-
             )
 
 
-
         return items
-
 
 
 
@@ -153,11 +157,8 @@ def get_sale_items(
 
 
         log_error(
-
             message="Load sale items failed",
-
             exception=e
-
         )
 
 
@@ -167,36 +168,29 @@ def get_sale_items(
 
 
 
-
-
-
 # ==============================================================================
 # GET RECEIPT
 # ==============================================================================
 
-
 def get_receipt(
 
-    invoice_no: str
+    invoice_no:str
 
-) -> Dict[str, Any]:
+) -> Dict[str,Any]:
 
 
     try:
 
 
-        response = (
+        result = (
 
             db()
 
             .table(
-
                 "sales"
-
             )
 
             .select(
-
                 """
                 id,
                 invoice_no,
@@ -226,36 +220,38 @@ def get_receipt(
 
                 created_at
                 """
-
             )
 
             .eq(
-
                 "invoice_no",
-
                 invoice_no
-
             )
-
-            .single()
 
             .execute()
 
         )
 
 
+        rows = result.data or []
 
-        sale = response.data or {}
-# ==============================================================
-# MYANMAR STANDARD TIME
-# ==============================================================
 
-if sale.get("created_at"):
+        if not rows:
 
-    sale["created_at"] = convert_mm_time(
-        sale["created_at"]
-    )
+            return {}
 
+
+
+        sale = rows[0]
+
+        # ==============================================================
+        # MYANMAR STANDARD TIME
+        # ==============================================================
+
+        if sale.get("created_at"):
+
+            sale["created_at"] = convert_mm_time(
+                sale["created_at"]
+            )
 
 
 
@@ -263,81 +259,55 @@ if sale.get("created_at"):
         # TAX RATE RECOVERY
         # ==============================================================
 
-
         tax_rate = sale.get(
-
             "tax_rate"
-
         )
-
 
 
         if tax_rate is None or tax_rate == 0:
 
 
             subtotal = float(
-
                 sale.get(
-
                     "subtotal",
-
                     0
-
                 )
-
+                or 0
             )
 
 
             tax = float(
-
                 sale.get(
-
                     "tax",
-
                     0
-
                 )
-
+                or 0
             )
-
 
 
             if subtotal > 0 and tax > 0:
 
-
                 sale["tax_rate"] = round(
 
                     (
-
                         tax
-
                         /
-
                         subtotal
-
                     )
-
                     *
-
                     100,
 
                     2
 
                 )
 
-
             else:
-
 
                 sale["tax_rate"] = 0
 
 
 
-
-
         return sale
-
-
 
 
 
@@ -360,148 +330,127 @@ if sale.get("created_at"):
 
 
 
-
-
-
 # ==============================================================================
 # FULL RECEIPT
 # ==============================================================================
 
-
 def get_full_receipt(
 
-    invoice_no: str
+    invoice_no:str
 
-) -> Dict[str, Any]:
-
-
-    try:
+):
 
 
-        sale = get_receipt(
-
-            invoice_no
-
-        )
+    sale = get_receipt(
+        invoice_no
+    )
 
 
-
-        if not sale:
-
-
-            return {
-
-                "success":
-
-                    False,
-
-                "sale":
-
-                    {},
-
-                "items":
-
-                    []
-
-            }
-
-
-
-
-
-        items = get_sale_items(
-
-            sale.get(
-
-                "id"
-
-            )
-
-        )
-
+    if not sale:
 
 
         return {
 
+            "success":False,
 
-            "success":
+            "sale":{},
 
-                True,
-
-
-            "sale":
-
-                sale,
-
-
-            "items":
-
-                items
+            "items":[]
 
         }
 
 
 
+    items = get_sale_items(
 
-
-    except Exception as e:
-
-
-        log_error(
-
-            message="Full receipt load failed",
-
-            exception=e
-
+        sale.get(
+            "id"
         )
 
-
-        return {
-
-
-            "success":
-
-                False,
+    )
 
 
-            "sale":
 
-                {},
+    return {
 
 
-            "items":
+        "success":True,
 
-                []
+        "sale":sale,
 
-        }
+        "items":items
+
+    }
+
+
+
+
 
 # ==============================================================================
-# SEARCH RECEIPTS
+# SMART SEARCH RECEIPTS
 # ==============================================================================
+#
+# Search example:
+#
+# 1
+# 288
+# INV-20260802
+# 20260802
+#
+# ==============================================================================
+
 def search_receipts(
-    keyword: str = ""
+
+    keyword:str=""
+
 ) -> List[Dict]:
 
 
     try:
 
+
         query = (
 
             db()
 
-            .table("sales")
+            .table(
+                "sales"
+            )
 
-            .select("*")
+            .select(
+                """
+                id,
+                invoice_no,
+                total,
+                created_at,
+                payment_method,
+                status
+                """
+            )
 
         )
 
 
+        keyword = (
+            keyword
+            .strip()
+        )
+
+
+
         if keyword:
 
+
+            # invoice search
+
             query = query.ilike(
+
                 "invoice_no",
-                f"%{keyword.strip()}%"
+
+                f"%{keyword}%"
+
             )
+
 
 
         result = (
@@ -509,8 +458,11 @@ def search_receipts(
             query
 
             .order(
+
                 "created_at",
+
                 desc=True
+
             )
 
             .execute()
@@ -518,47 +470,32 @@ def search_receipts(
         )
 
 
-        return result.data or []
+
+        data = result.data or []
+
+
+
+        return data
+
 
 
     except Exception as e:
 
+
         log_error(
+
             message="Search receipts failed",
+
             exception=e
+
         )
+
 
         return []
-        
-# ==============================================================================
-# TIMEZONE HELPER
-# ==============================================================================
-
-MYANMAR_TZ = ZoneInfo("Asia/Yangon")
 
 
-def convert_mm_time(value):
 
-    if not value:
-        return value
 
-    try:
-
-        dt = datetime.fromisoformat(
-            value.replace("Z", "+00:00")
-        )
-
-        return (
-            dt
-            .astimezone(MYANMAR_TZ)
-            .strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        )
-
-    except Exception:
-
-        return value
 
 # ==============================================================================
 # EXPORT
