@@ -1,27 +1,34 @@
 # ==============================================================================
 # erp_pages/inventory/scanner.py
 # MOBILE INVENTORY v2
-# Barcode Scanner Engine
+# OpenCV Barcode Scanner (Cloud Friendly)
 # ==============================================================================
 
 import streamlit as st
 
 
+# ------------------------------------------------------------------------------
+# MANUAL INPUT
+# ------------------------------------------------------------------------------
+
 def manual_barcode_input():
+
     return st.text_input(
         "⌨️ Manual Barcode / SKU",
         placeholder="Enter barcode..."
     ).strip()
 
 
-# ==============================================================================
-# BARCODE DECODER (Improved)
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# BARCODE DECODER (OpenCV only)
+# ------------------------------------------------------------------------------
 
 def decode_barcode(image):
+
     try:
-        import numpy as np
+
         import cv2
+        import numpy as np
         from PIL import Image
 
         # Streamlit UploadedFile → PIL
@@ -31,59 +38,51 @@ def decode_barcode(image):
         img = np.array(img_pil)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-        # -------------------------------------------------
-        # 1) OpenCV BarcodeDetector
-        # -------------------------------------------------
-
+        # Barcode detector
         detector = cv2.barcode_BarcodeDetector()
 
         ok, decoded_info, decoded_type, points = detector.detectAndDecode(img)
 
         if ok and decoded_info:
+
             value = decoded_info[0]
 
             if value:
                 return value.strip()
 
-        # -------------------------------------------------
-        # 2) pyzbar fallback
-        # -------------------------------------------------
-
-        from pyzbar.pyzbar import decode
-
-        result = decode(img_pil)
-
-        if result:
-            return result[0].data.decode("utf-8").strip()
-
     except Exception as e:
-        print("Barcode decode error:", e)
+
+        st.error(f"SCAN ERROR: {e}")
 
     return None
 
+
+# ------------------------------------------------------------------------------
+# CAMERA SCAN
+# ------------------------------------------------------------------------------
 
 def camera_barcode_scan():
-    image = st.camera_input(
-        "📷 Scan Barcode"
-    )
 
-    if image:
-        return decode_barcode(image)
+    image = st.camera_input("📷 Scan Barcode")
 
-    return None
+    if image is None:
+        return None
+
+    barcode = decode_barcode(image)
+
+    if barcode:
+        st.success(f"📷 Barcode: {barcode}")
+    else:
+        st.warning("❌ Barcode not detected. Try again.")
+
+    return barcode
 
 
-# ==========================================================
-# MAIN SCANNER FUNCTION
-# ==========================================================
+# ------------------------------------------------------------------------------
+# MAIN ENTRY
+# ------------------------------------------------------------------------------
 
 def get_barcode():
-    """
-    Scanner priority
-
-    1. Camera
-    2. Manual Input
-    """
 
     barcode = camera_barcode_scan()
 
