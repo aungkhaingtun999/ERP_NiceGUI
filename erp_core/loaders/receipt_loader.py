@@ -478,7 +478,6 @@ def get_full_receipt(
 # ==============================================================================
 # SEARCH RECEIPTS
 # ==============================================================================
-
 def search_receipts(
     keyword: str = ""
 ) -> List[Dict]:
@@ -490,33 +489,18 @@ def search_receipts(
 
             db()
 
-            .table(
-                "sales"
-            )
+            .table("sales")
 
-            .select(
-                """
-                id,
-                invoice_no,
-                total,
-                payment_method,
-                created_at
-                """
-            )
+            .select("*")
 
         )
 
 
         if keyword:
 
-
-            keyword = keyword.strip()
-
-
-            # invoice exact / partial
             query = query.ilike(
                 "invoice_no",
-                f"%{keyword}%"
+                f"%{keyword.strip()}%"
             )
 
 
@@ -529,46 +513,23 @@ def search_receipts(
                 desc=True
             )
 
-            .limit(
-                100
-            )
-
             .execute()
 
         )
 
 
-        receipts = result.data or []
-
-
-        # Myanmar Time convert
-
-        for row in receipts:
-
-            if row.get("created_at"):
-
-                row["created_at"] = convert_mm_time(
-                    row["created_at"]
-                )
-
-
-        return receipts
-
+        return result.data or []
 
 
     except Exception as e:
 
-
         log_error(
-
             message="Search receipts failed",
-
             exception=e
-
         )
 
-
         return []
+        
 # ==============================================================================
 # TIMEZONE HELPER
 # ==============================================================================
