@@ -10,7 +10,7 @@ from .checkout import process_checkout
 from .cart import calculate_subtotal
 from .engine import get_default_tax_rate
 
-from erp_core.payments.payment_qr_service import PaymentQRService
+from database import generate_payment_qr
 
 from database import generate_payment_qr
 
