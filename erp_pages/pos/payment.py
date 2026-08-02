@@ -468,7 +468,7 @@ Change : {money(change)}
 
 
 
-        if received < grand_total:
+    if received < grand_total:
 
 
             st.error(
@@ -476,7 +476,7 @@ Change : {money(change)}
                 "Insufficient payment."
 
             )
-         return
+        return
 
 
 
