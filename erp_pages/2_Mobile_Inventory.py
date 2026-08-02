@@ -174,3 +174,6 @@ else:
     st.info(
         "Scan barcode or search product"
     )
+
+if __name__ == "__main__":
+    run()
