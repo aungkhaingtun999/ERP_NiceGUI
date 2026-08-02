@@ -8,9 +8,7 @@ import streamlit as st
 from erp_components.zxing_barcode import (
     zxing_scanner
 )
-from erp_pages.inventory.live_scanner import (
-    live_barcode_scanner
-)
+
 
 from erp_pages.inventory.product_search import (
     search_product,
