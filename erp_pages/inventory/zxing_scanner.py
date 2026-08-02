@@ -7,7 +7,17 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
+from erp_components.zxing_scanner import (
+    zxing_scanner
+)
 
+
+
+def scan_barcode():
+
+    return zxing_scanner(
+        key="mobile_inventory_barcode"
+    )
 
 
 def zxing_live_scanner():
