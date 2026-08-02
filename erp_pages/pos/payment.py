@@ -466,8 +466,7 @@ Change : {money(change)}
     ):
 
 
-
-    if received < grand_total:
+        if received < grand_total:
 
 
             st.error(
