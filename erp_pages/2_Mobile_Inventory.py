@@ -32,9 +32,7 @@ def run():
     # LIVE SCANNER
     # ------------------------------------------------------------------
 
-    barcode = zxing_scanner(
-    key="mobile_barcode"
-)
+    barcode = zxing_live_scanner()
 
     # ------------------------------------------------------------------
     # AUTO SEARCH
