@@ -333,39 +333,36 @@ Discount : {money(discount)}
         # --------------------------------------------------------------
 
 
-        if provider == "KBZ Pay":
-
-    qr_buffer = PaymentQRService.generate_qr(
-
-        provider="KBZ Pay",
-
-        account_name=account_name,
-
-        account_no=account_no,
-
-        amount=grand_total,
-
-        sale_id="TEMP"
-
+    if provider == "KBZ Pay":
+    # --------------------------------------------------------------
+    # QR GENERATE (STATIC / DYNAMIC)
+    # --------------------------------------------------------------
+    
+    qr_mode = account.get(
+        "qr_mode",
+        "DYNAMIC"
     )
-
-
-        else:
-
-
-            qr_buffer = generate_payment_qr(
-
-                provider=provider,
-
-                account_name=account_name,
-
-                account_no=account_no,
-
-                amount=grand_total,
-
-                sale_id="TEMP"
-
+    
+    
+    if qr_mode == "STATIC":
+    
+        qr_buffer = PaymentQRService.generate_qr(
+            raw_payload=account.get(
+                "qr_payload_template"
             )
+        )
+    
+    
+    else:
+    
+        qr_buffer = PaymentQRService.generate_qr(
+            provider=provider,
+            account_name=account_name,
+            account_no=account_no,
+            amount=grand_total,
+            sale_id="TEMP"
+        )
+
 
 
         st.image(
