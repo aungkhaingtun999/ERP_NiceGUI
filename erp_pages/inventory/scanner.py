@@ -4,18 +4,14 @@
 # Barcode Scanner Engine
 # ==============================================================================
 
-
 import streamlit as st
 
 
-
 def manual_barcode_input():
-
     return st.text_input(
         "⌨️ Manual Barcode / SKU",
         placeholder="Enter barcode..."
     ).strip()
-
 
 
 # ==============================================================================
@@ -23,9 +19,7 @@ def manual_barcode_input():
 # ==============================================================================
 
 def decode_barcode(image):
-
     try:
-
         import numpy as np
         import cv2
         from PIL import Image
@@ -46,7 +40,6 @@ def decode_barcode(image):
         ok, decoded_info, decoded_type, points = detector.detectAndDecode(img)
 
         if ok and decoded_info:
-
             value = decoded_info[0]
 
             if value:
@@ -61,35 +54,23 @@ def decode_barcode(image):
         result = decode(img_pil)
 
         if result:
-
             return result[0].data.decode("utf-8").strip()
 
     except Exception as e:
-
         print("Barcode decode error:", e)
 
     return None
 
-    except Exception:
-
-        return None
-
-
 
 def camera_barcode_scan():
-
     image = st.camera_input(
         "📷 Scan Barcode"
     )
 
-
     if image:
-
         return decode_barcode(image)
 
-
     return None
-
 
 
 # ==========================================================
@@ -97,7 +78,6 @@ def camera_barcode_scan():
 # ==========================================================
 
 def get_barcode():
-
     """
     Scanner priority
 
@@ -107,10 +87,7 @@ def get_barcode():
 
     barcode = camera_barcode_scan()
 
-
     if barcode:
-
         return barcode
-
 
     return manual_barcode_input()
