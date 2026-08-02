@@ -44,8 +44,6 @@ MENU = {
 
         ("🧾", "Receipt", "2_Receipt"),
 
-        ( "🔍","KBZ QR Test", "14_KBZ_Test"),
-
         ("🛍", "Purchase", "7_Purchase"),
 
         ("🔁", "Transfer", "8_Transfer"),
