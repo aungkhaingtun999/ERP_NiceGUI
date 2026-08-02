@@ -6,9 +6,6 @@
 # ==============================================================================
 
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 from typing import (
     Dict,
     Any,
@@ -23,44 +20,38 @@ from ..base_repo import (
 
 
 
-MYANMAR_TZ = ZoneInfo(
-    "Asia/Yangon"
-)
-
-
-
 # ==============================================================================
 # TIME CONVERTER
 # ==============================================================================
 
-def convert_mm_time(value):
+#def convert_mm_time(value):
 
-    if not value:
-        return value
+#    if not value:
+#        return value
 
-    try:
+#    try:
 
-        dt = datetime.fromisoformat(
-            value.replace(
-                "Z",
-                "+00:00"
-            )
-        )
+#        dt = datetime.fromisoformat(
+#            value.replace(
+#                "Z",
+#                "+00:00"
+#            )
+#        )
 
-        return (
-            dt
-            .astimezone(
-                MYANMAR_TZ
-            )
-            .strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        )
+#        return (
+#            dt
+#           .astimezone(
+#                MYANMAR_TZ
+#            )
+#            .strftime(
+#                "%Y-%m-%d %H:%M:%S"
+#           )
+#        )
 
 
-    except Exception:
+#    except Exception:
 
-        return value
+#        return value
 
 
 
