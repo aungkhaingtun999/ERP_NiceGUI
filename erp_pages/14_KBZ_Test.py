@@ -334,6 +334,32 @@ def run():
         st.json(
             KBZCRCEngine.crc_body_info(crc_num)
         )
+    st.divider()
+
+    st.subheader("🔬 Payload Tail Compare")
+
+    tail_hex = st.text_area(
+        "Decoded HEX For Tail Compare",
+        height=120,
+        key="tail_hex_input"
+    )
+
+    tail_crc = st.text_input(
+        "CRC For Tail Compare",
+        key="tail_crc_input"
+    )
+
+    if st.button(
+        "Run Tail Compare",
+        key="tail_compare_btn"
+    ):
+
+        st.json(
+            KBZCRCEngine.payload_tail_compare(
+                tail_hex,
+                tail_crc
+            )
+        )
         
 # ==============================================================================
 # DIRECT RUN
