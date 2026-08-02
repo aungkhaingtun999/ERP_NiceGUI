@@ -8,7 +8,9 @@ import streamlit as st
 from erp_pages.inventory.zxing_scanner import (
     zxing_live_scanner
 )
-
+from erp_pages.inventory.zxing_scanner import (
+    scan_barcode
+)
 
 from erp_pages.inventory.product_search import (
     search_product,
@@ -32,8 +34,28 @@ def run():
     # LIVE SCANNER
     # ------------------------------------------------------------------
 
-    barcode = zxing_live_scanner()
+    barcode = scan_barcode()
+    if barcode:
 
+    st.success(
+        f"Barcode: {barcode}"
+    )
+
+
+    product = search_product(
+        barcode
+    )
+
+
+    if product:
+
+        st.session_state.mobile_product = product
+
+    else:
+
+        st.warning(
+            "Barcode not found"
+        )
     # ------------------------------------------------------------------
     # AUTO SEARCH
     # ------------------------------------------------------------------
