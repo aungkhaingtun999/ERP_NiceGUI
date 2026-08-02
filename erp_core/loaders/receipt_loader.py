@@ -246,6 +246,15 @@ def get_receipt(
 
 
         sale = response.data or {}
+        # ==============================================================
+# MYANMAR STANDARD TIME
+# ==============================================================
+
+if sale.get("created_at"):
+
+    sale["created_at"] = convert_mm_time(
+        sale["created_at"]
+    )
 
 
 
