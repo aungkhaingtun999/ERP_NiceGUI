@@ -455,7 +455,6 @@ Change : {money(change)}
     # COMPLETE SALE
     # ==========================================================================
 
-
     if st.button(
 
         "✅ Complete Sale",
