@@ -1,84 +1,123 @@
+// ==============================================================================
+// ZXING LIVE BARCODE SCANNER
+// ==============================================================================
+
+
 const codeReader =
-new ZXing.BrowserMultiFormatReader();
+    new ZXing.BrowserMultiFormatReader();
 
 
 
 const video =
-document.getElementById(
-"video"
-);
+    document.getElementById("video");
 
 
 
-async function start(){
+async function startScanner(){
 
 
-const devices =
-await codeReader.listVideoInputDevices();
+    try{
+
+
+        const devices =
+            await codeReader.listVideoInputDevices();
+
+
+        if(devices.length === 0){
+
+            document.body.innerHTML =
+            "No Camera Found";
+
+            return;
+
+        }
 
 
 
-let camera =
-devices[0].deviceId;
+        let cameraId =
+            devices[0].deviceId;
 
 
 
-for(
-let d of devices
-){
+        for(
+            const device of devices
+        ){
 
-if(
-d.label.toLowerCase()
-.includes("back")
-){
+            if(
+                device.label
+                .toLowerCase()
+                .includes("back")
+            ){
 
-camera =
-d.deviceId;
+                cameraId =
+                device.deviceId;
+
+            }
+
+        }
+
+
+
+        codeReader.decodeFromVideoDevice(
+
+            cameraId,
+
+            video,
+
+            (result, error)=>{
+
+
+                if(result){
+
+
+                    const barcode =
+                    result.text;
+
+
+
+                    window.parent.postMessage(
+
+                        {
+
+                        type:
+                        "streamlit:setComponentValue",
+
+                        value:
+                        barcode
+
+                        },
+
+                        "*"
+
+                    );
+
+
+                }
+
+
+            }
+
+        );
+
+
+    }
+
+    catch(error){
+
+
+        console.error(error);
+
+
+        document.body.innerHTML =
+        "Camera Error: "
+        + error;
+
+
+    }
+
 
 }
 
-}
 
 
-
-codeReader.decodeFromVideoDevice(
-
-camera,
-
-video,
-
-(result,error)=>{
-
-
-if(result){
-
-
-window.parent.postMessage(
-
-{
-
-type:"streamlit:setComponentValue",
-
-value:
-result.text
-
-},
-
-"*"
-
-);
-
-
-}
-
-
-}
-
-);
-
-
-}
-
-
-
-start();
+startScanner();
