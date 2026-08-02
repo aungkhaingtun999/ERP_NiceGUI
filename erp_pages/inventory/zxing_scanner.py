@@ -1,10 +1,11 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
 # MOBILE INVENTORY v3
-# ZXING LIVE CAMERA
+# ZXing Live Mobile Barcode Scanner
 # ==============================================================================
 
 
+import streamlit as st
 import streamlit.components.v1 as components
 
 
@@ -12,22 +13,69 @@ import streamlit.components.v1 as components
 def scan_barcode():
 
 
-    html = r"""
+    st.subheader(
+        "📷 Live Barcode Scanner"
+    )
+
+
+    scanner_html = r"""
 
 <!DOCTYPE html>
 
 <html>
 
+
+<head>
+
+<meta charset="UTF-8">
+
+
+<style>
+
+body {
+
+margin:0;
+
+padding:0;
+
+}
+
+
+video {
+
+width:100%;
+
+border-radius:12px;
+
+background:black;
+
+}
+
+
+#result {
+
+font-size:18px;
+
+font-weight:bold;
+
+margin-top:10px;
+
+}
+
+</style>
+
+
+</head>
+
+
+
 <body>
+
 
 
 <video
 
 id="video"
-
-width="100%"
-
-height="350"
 
 autoplay
 
@@ -38,9 +86,20 @@ muted>
 </video>
 
 
-<h4 id="result">
+
+<div id="status">
+
+Starting camera...
+
+</div>
+
+
+<div id="result">
+
 Point the camera at a barcode
-</h4>
+
+</div>
+
 
 
 
@@ -59,39 +118,151 @@ from
 
 
 
-const reader =
+
+const codeReader =
+
 new BrowserMultiFormatReader();
 
 
 
-async function start(){
+
+const video =
+
+document.getElementById(
+"video"
+);
+
+
+
+const status =
+
+document.getElementById(
+"status"
+);
+
+
+
+const resultBox =
+
+document.getElementById(
+"result"
+);
+
+
+
+
+
+async function startScanner(){
+
+
+
+try{
+
 
 
 const devices =
-await BrowserMultiFormatReader.listVideoInputDevices();
+
+await BrowserMultiFormatReader
+.listVideoInputDevices();
 
 
 
-let deviceId =
+
+if(devices.length === 0){
+
+
+status.innerHTML =
+"No camera found";
+
+
+return;
+
+
+}
+
+
+
+
+
+let selectedCamera =
+
 devices[0].deviceId;
 
 
 
-reader.decodeFromVideoDevice(
 
-deviceId,
+// Prefer Back Camera
 
-"video",
+for(
+
+const camera of devices
+
+){
+
+
+
+const label =
+
+camera.label.toLowerCase();
+
+
+
+if(
+
+label.includes("back")
+
+||
+
+label.includes("rear")
+
+||
+
+label.includes("environment")
+
+){
+
+
+selectedCamera =
+
+camera.deviceId;
+
+
+break;
+
+
+}
+
+
+}
+
+
+
+
+status.innerHTML =
+"Back camera selected";
+
+
+
+
+
+codeReader.decodeFromVideoDevice(
+
+
+selectedCamera,
+
+
+video,
+
 
 (result,error)=>{
+
 
 
 if(result){
 
 
-document.getElementById(
-"result"
-).innerHTML =
+
+resultBox.innerHTML =
 
 "Barcode: "
 +
@@ -101,16 +272,43 @@ result.text;
 
 }
 
+
+
+
+
 }
+
+
 
 );
 
 
+
+}
+
+
+catch(error){
+
+
+status.innerHTML =
+
+"Camera Error: "
++
+error;
+
+
+
 }
 
 
 
-start();
+}
+
+
+
+
+
+startScanner();
 
 
 
@@ -119,6 +317,7 @@ start();
 
 </body>
 
+
 </html>
 
 """
@@ -126,9 +325,9 @@ start();
 
     components.html(
 
-        html,
+        scanner_html,
 
-        height=450
+        height=550
 
     )
 
