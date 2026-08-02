@@ -247,11 +247,11 @@ def get_receipt(
         # MYANMAR STANDARD TIME
         # ==============================================================
 
-        if sale.get("created_at"):
+        #if sale.get("created_at"):
 
-            sale["created_at"] = convert_mm_time(
+         #   sale["created_at"] = convert_mm_time(
                 sale["created_at"]
-            )
+         #   )
 
 
 
