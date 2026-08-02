@@ -6,7 +6,7 @@
 import streamlit as st
 
 
-def render_product_form(barcode=""):
+def render_new_product_form(barcode=""):
 
     st.subheader("🆕 New Product Registration")
 
@@ -42,35 +42,25 @@ def render_product_form(barcode=""):
     if st.button("💾 Save Product"):
 
         if not name:
-
             st.warning(
                 "Product name required"
             )
-
             return None
 
 
         product = {
-
             "name": name,
-
             "sku": sku,
-
             "barcode": barcode_value,
-
             "purchase_price": purchase_price,
-
             "selling_price": selling_price,
-
             "stock": stock
-
         }
 
 
         st.success(
             "Product data ready"
         )
-
 
         return product
 
