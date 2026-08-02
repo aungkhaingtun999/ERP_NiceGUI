@@ -10,13 +10,9 @@ def render_new_product_form(barcode=""):
 
     st.subheader("🆕 New Product Registration")
 
-    name = st.text_input(
-        "Product Name"
-    )
+    name = st.text_input("Product Name")
 
-    sku = st.text_input(
-        "SKU"
-    )
+    sku = st.text_input("SKU")
 
     barcode_value = st.text_input(
         "Barcode",
@@ -41,29 +37,18 @@ def render_new_product_form(barcode=""):
 
     if st.button("💾 Save Product"):
 
-        if name == "":
-
-            st.warning(
-                "Product name required"
-            )
-
+        if not name:
+            st.warning("Product name required")
             return None
 
 
         return {
-
             "name": name,
-
             "sku": sku,
-
             "barcode": barcode_value,
-
             "purchase_price": purchase_price,
-
             "selling_price": selling_price,
-
             "stock": stock
-
         }
 
 
