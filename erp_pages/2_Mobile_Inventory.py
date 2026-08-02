@@ -6,7 +6,10 @@
 
 
 import streamlit as st
-
+barcode_from_url = st.query_params.get(
+    "barcode",
+    ""
+)
 
 from erp_pages.inventory.zxing_scanner import (
     scan_barcode
@@ -56,7 +59,7 @@ def run():
     # LIVE SCANNER
     # ------------------------------------------------------------------
 
-    barcode = scan_barcode()
+    barcode = barcode_from_url
 
 
 
