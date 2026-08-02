@@ -1,7 +1,8 @@
 # ==============================================================================
 # erp_pages/inventory/scanner.py
 # MOBILE INVENTORY v2
-# OpenCV Barcode Scanner (Cloud Friendly)
+# Enterprise Barcode Scanner Engine
+# OpenCV + pyzbar + Image Enhancement
 # ==============================================================================
 
 import streamlit as st
@@ -20,7 +21,85 @@ def manual_barcode_input():
 
 
 # ------------------------------------------------------------------------------
-# BARCODE DECODER (OpenCV only)
+# IMAGE PREPROCESS
+# ------------------------------------------------------------------------------
+
+def preprocess_image(img_bgr):
+
+    import cv2
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    # Contrast improve
+    gray = cv2.equalizeHist(gray)
+
+    # Sharpen
+    kernel = [[0, -1, 0],
+              [-1, 5, -1],
+              [0, -1, 0]]
+
+    import numpy as np
+    kernel = np.array(kernel)
+
+    sharp = cv2.filter2D(gray, -1, kernel)
+
+    return sharp
+
+
+# ------------------------------------------------------------------------------
+# OPENCV DECODER
+# ------------------------------------------------------------------------------
+
+def decode_opencv(img_bgr):
+
+    import cv2
+
+    detector = cv2.barcode_BarcodeDetector()
+
+    result = detector.detectAndDecode(img_bgr)
+
+    # OpenCV version compatibility
+    if len(result) == 4:
+        ok, decoded_info, decoded_type, points = result
+    elif len(result) == 3:
+        decoded_info, decoded_type, points = result
+        ok = bool(decoded_info)
+    else:
+        return None
+
+    if ok and decoded_info:
+
+        value = decoded_info[0]
+
+        if value:
+            return value.strip()
+
+    return None
+
+
+# ------------------------------------------------------------------------------
+# PYZBAR DECODER
+# ------------------------------------------------------------------------------
+
+def decode_pyzbar(img_pil):
+
+    try:
+
+        from pyzbar.pyzbar import decode
+
+        result = decode(img_pil)
+
+        if result:
+            return result[0].data.decode("utf-8").strip()
+
+    except Exception:
+        return None
+
+    return None
+
+
+# ------------------------------------------------------------------------------
+# MAIN DECODER
 # ------------------------------------------------------------------------------
 
 def decode_barcode(image):
@@ -31,24 +110,55 @@ def decode_barcode(image):
         import numpy as np
         from PIL import Image
 
-        # Streamlit UploadedFile → PIL
+        # Streamlit image → PIL
         img_pil = Image.open(image).convert("RGB")
 
         # PIL → OpenCV
-        img = np.array(img_pil)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        img_bgr = cv2.cvtColor(
+            np.array(img_pil),
+            cv2.COLOR_RGB2BGR
+        )
 
-        # Barcode detector
-        detector = cv2.barcode_BarcodeDetector()
+        # Enhanced image
+        processed = preprocess_image(img_bgr)
 
-        ok, decoded_info, decoded_type, points = detector.detectAndDecode(img)
+        # -------------------------------------------------
+        # 1. OpenCV original
+        # -------------------------------------------------
 
-        if ok and decoded_info:
+        value = decode_opencv(img_bgr)
 
-            value = decoded_info[0]
+        if value:
+            return value
 
-            if value:
-                return value.strip()
+        # -------------------------------------------------
+        # 2. OpenCV processed
+        # -------------------------------------------------
+
+        value = decode_opencv(cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR))
+
+        if value:
+            return value
+
+        # -------------------------------------------------
+        # 3. pyzbar original
+        # -------------------------------------------------
+
+        value = decode_pyzbar(img_pil)
+
+        if value:
+            return value
+
+        # -------------------------------------------------
+        # 4. pyzbar processed
+        # -------------------------------------------------
+
+        processed_pil = Image.fromarray(processed)
+
+        value = decode_pyzbar(processed_pil)
+
+        if value:
+            return value
 
     except Exception as e:
 
@@ -63,7 +173,9 @@ def decode_barcode(image):
 
 def camera_barcode_scan():
 
-    image = st.camera_input("📷 Scan Barcode")
+    image = st.camera_input(
+        "📷 Scan Barcode"
+    )
 
     if image is None:
         return None
@@ -71,9 +183,14 @@ def camera_barcode_scan():
     barcode = decode_barcode(image)
 
     if barcode:
+
         st.success(f"📷 Barcode: {barcode}")
+
     else:
-        st.warning("❌ Barcode not detected. Try again.")
+
+        st.warning(
+            "❌ Barcode not detected. Try again with better light."
+        )
 
     return barcode
 
