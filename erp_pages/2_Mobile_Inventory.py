@@ -54,7 +54,23 @@ def run():
     # ==========================================================================
 
     barcode = get_barcode()
+    # AUTO SEARCH WHEN CAMERA SCAN SUCCESS
 
+if barcode and barcode != st.session_state.get("last_scanned_barcode"):
+
+    st.session_state.last_scanned_barcode = barcode
+
+    product = search_product(barcode)
+
+    if product:
+
+        st.session_state.mobile_product = product_card(product)
+
+        st.success(f"📷 Scanned: {barcode}")
+
+    else:
+
+        st.warning(f"Barcode not found: {barcode}")
 
 
     # ==========================================================================
