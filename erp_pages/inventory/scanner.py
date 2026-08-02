@@ -1,219 +1,88 @@
 # ==============================================================================
-# erp_pages/inventory/scanner.py
-# MOBILE INVENTORY v2
-# Enterprise Barcode Scanner Engine
-# OpenCV + pyzbar + Image Enhancement
+# erp_pages/inventory/live_scanner.py
+# REAL-TIME MOBILE BARCODE SCANNER
+# Compatible with latest streamlit-webrtc
 # ==============================================================================
 
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import cv2
+import av
 
 
-# ------------------------------------------------------------------------------
-# MANUAL INPUT
-# ------------------------------------------------------------------------------
-
-def manual_barcode_input():
-
-    return st.text_input(
-        "⌨️ Manual Barcode / SKU",
-        placeholder="Enter barcode..."
-    ).strip()
+# Shared scan result
+SCAN_RESULT = {"code": ""}
 
 
-# ------------------------------------------------------------------------------
-# IMAGE PREPROCESS
-# ------------------------------------------------------------------------------
+class BarcodeTransformer(VideoTransformerBase):
 
-def preprocess_image(img_bgr):
+    def transform(self, frame):
 
-    import cv2
-    import numpy as np
+        img = frame.to_ndarray(format="bgr24")
 
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        detector = cv2.barcode_BarcodeDetector()
 
-    # Contrast improve
-    gray = cv2.equalizeHist(gray)
+        result = detector.detectAndDecode(img)
 
-    # Sharpen
-    kernel = np.array([
-        [0, -1, 0],
-        [-1, 5, -1],
-        [0, -1, 0]
-    ])
+        try:
 
-    sharp = cv2.filter2D(gray, -1, kernel)
+            if len(result) == 4:
+                ok, decoded_info, decoded_type, points = result
 
-    return sharp
+            elif len(result) == 3:
+                decoded_info, decoded_type, points = result
+                ok = bool(decoded_info)
 
+            else:
+                ok = False
+                decoded_info = []
 
-# ------------------------------------------------------------------------------
-# OPENCV DECODER
-# ------------------------------------------------------------------------------
+            if ok and decoded_info:
 
-def decode_opencv(img_bgr):
+                value = decoded_info[0].strip()
 
-    import cv2
+                if len(value) >= 8:
 
-    detector = cv2.barcode_BarcodeDetector()
+                    SCAN_RESULT["code"] = value
 
-    result = detector.detectAndDecode(img_bgr)
+                    cv2.putText(
+                        img,
+                        value,
+                        (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        (0, 255, 0),
+                        2
+                    )
 
-    # OpenCV version compatibility
-    if len(result) == 4:
-        ok, decoded_info, decoded_type, points = result
+        except Exception:
+            pass
 
-    elif len(result) == 3:
-        decoded_info, decoded_type, points = result
-        ok = bool(decoded_info)
-
-    else:
-        return None
-
-    if ok and decoded_info:
-
-        value = decoded_info[0].strip()
-
-        # Reject invalid short reads like "8"
-        if len(value) < 8:
-            return None
-
-        return value
-
-    return None
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ------------------------------------------------------------------------------
-# PYZBAR DECODER
-# ------------------------------------------------------------------------------
+def live_barcode_scanner():
 
-def decode_pyzbar(img_pil):
+    st.subheader("📷 Live Barcode Scanner")
 
-    try:
+    webrtc_streamer(
+        key="barcode-scanner",
+        video_transformer_factory=BarcodeTransformer,
+        media_stream_constraints={
+            "video": {
+                "facingMode": "environment"
+            },
+            "audio": False,
+        },
+        async_processing=True,
+    )
 
-        from pyzbar.pyzbar import decode
+    code = SCAN_RESULT.get("code", "")
 
-        result = decode(img_pil)
+    if code:
 
-        if result:
+        st.success(f"📦 Scanned: {code}")
 
-            value = result[0].data.decode("utf-8").strip()
-
-            if len(value) >= 8:
-                return value
-
-    except Exception:
-        return None
+        return code
 
     return None
-
-
-# ------------------------------------------------------------------------------
-# MAIN DECODER
-# ------------------------------------------------------------------------------
-
-def decode_barcode(image):
-
-    try:
-
-        import cv2
-        import numpy as np
-        from PIL import Image
-
-        # Streamlit image → PIL
-        img_pil = Image.open(image).convert("RGB")
-
-        # PIL → OpenCV
-        img_bgr = cv2.cvtColor(
-            np.array(img_pil),
-            cv2.COLOR_RGB2BGR
-        )
-
-        # Enhanced image
-        processed = preprocess_image(img_bgr)
-
-        # -------------------------------------------------
-        # 1. pyzbar original (best for EAN13)
-        # -------------------------------------------------
-
-        value = decode_pyzbar(img_pil)
-
-        if value:
-            return value
-
-        # -------------------------------------------------
-        # 2. pyzbar processed
-        # -------------------------------------------------
-
-        processed_pil = Image.fromarray(processed)
-
-        value = decode_pyzbar(processed_pil)
-
-        if value:
-            return value
-
-        # -------------------------------------------------
-        # 3. OpenCV original
-        # -------------------------------------------------
-
-        value = decode_opencv(img_bgr)
-
-        if value:
-            return value
-
-        # -------------------------------------------------
-        # 4. OpenCV processed
-        # -------------------------------------------------
-
-        value = decode_opencv(
-            cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
-        )
-
-        if value:
-            return value
-
-    except Exception as e:
-
-        st.error(f"SCAN ERROR: {e}")
-
-    return None
-
-
-# ------------------------------------------------------------------------------
-# CAMERA SCAN
-# ------------------------------------------------------------------------------
-
-def camera_barcode_scan():
-
-    image = st.camera_input("📷 Scan Barcode")
-
-    if image is None:
-        return None
-
-    barcode = decode_barcode(image)
-
-    if barcode:
-
-        st.success(f"📷 Barcode: {barcode}")
-
-    else:
-
-        st.warning(
-            "❌ Barcode not detected. Try again with better light."
-        )
-
-    return barcode
-
-
-# ------------------------------------------------------------------------------
-# MAIN ENTRY
-# ------------------------------------------------------------------------------
-
-def get_barcode():
-
-    barcode = camera_barcode_scan()
-
-    if barcode:
-        return barcode
-
-    return manual_barcode_input()
-    
