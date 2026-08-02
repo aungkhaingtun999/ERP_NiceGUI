@@ -23,9 +23,6 @@ from ..base_repo import (
 
 
 
-MYANMAR_TZ = ZoneInfo(
-    "Asia/Yangon"
-)
 
 
 
