@@ -1,124 +1,70 @@
 # ==============================================================================
 # erp_pages/inventory/product_search.py
-# MOBILE INVENTORY v2
+# MOBILE INVENTORY v3
 # Product Search Engine
 # ==============================================================================
 
-from database import get_supabase
+
+import streamlit as st
+
+from database import get_products
 
 
 
-# ==============================================================================
-# SEARCH BY BARCODE / SKU / NAME
-# ==============================================================================
 def search_product(keyword):
 
     if not keyword:
+
         return None
 
 
-    supabase = get_supabase()
+    keyword = str(keyword).strip()
+
+
+    products = get_products()
+
+
+    for p in products:
+
+
+        barcode = str(
+            p.get("barcode", "")
+        ).strip()
+
+
+        sku = str(
+            p.get("sku", "")
+        ).strip()
+
+
+        name = str(
+            p.get("name", "")
+        ).lower()
 
 
 
+        # Barcode exact match
 
-    # -------------------------------------------------
-    # 1. Barcode Exact
-    # -------------------------------------------------
+        if barcode == keyword:
 
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("barcode", keyword)
-        .execute()
-    )
-
-
-    if result.data:
-        return result.data[0]
+            return p
 
 
 
-    # -------------------------------------------------
-    # 2. SKU Exact
-    # -------------------------------------------------
+        # SKU exact match
 
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("sku", keyword)
-        .execute()
-    )
+        if sku == keyword:
 
-
-    if result.data:
-        return result.data[0]
+            return p
 
 
 
-    # -------------------------------------------------
-    # 3. Product Name Search
-    # -------------------------------------------------
+        # Product name search
 
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .ilike(
-            "name",
-            f"%{keyword}%"
-        )
-        .limit(10)
-        .execute()
-    )
+        if keyword.lower() in name:
 
+            return p
 
-    if result.data:
-
-        return result.data[0]
 
 
     return None
-
-
-
-# ==============================================================================
-# PRODUCT CARD FORMAT
-# ==============================================================================
-
-
-def product_card(product):
-
-    if not product:
-        return None
-
-
-    return {
-
-        "id":
-            product.get("id"),
-
-        "barcode":
-            product.get("barcode"),
-
-        "sku":
-            product.get("sku"),
-
-        "name":
-            product.get("name"),
-
-        "purchase_price":
-            product.get("purchase_price",0),
-
-        "selling_price":
-            product.get("selling_price",0),
-
-        "stock":
-            product.get("stock",0),
-
-        "unit":
-            product.get("unit","pcs")
-
-    }
