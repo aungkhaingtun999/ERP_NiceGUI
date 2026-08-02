@@ -14,44 +14,93 @@ def run():
     st.title("📦 Mobile Inventory")
     st.caption("📷 Barcode Scanner")
 
+
     if "mobile_product" not in st.session_state:
         st.session_state.mobile_product = None
 
+
+    if "scanned_barcode" not in st.session_state:
+        st.session_state.scanned_barcode = None
+
+
     barcode = scan_barcode()
+
 
     if barcode:
 
-        st.success(f"Barcode: {barcode}")
+        st.session_state.scanned_barcode = barcode
+
+
+    barcode = st.session_state.scanned_barcode
+
+
+    if barcode:
+
+        st.success(
+            f"Barcode: {barcode}"
+        )
+
 
         product = search_product(barcode)
+
 
         if product:
 
             st.session_state.mobile_product = product
 
+
         else:
 
-            st.warning("Barcode not found")
+            st.warning(
+                "Barcode not found"
+            )
 
-            render_new_product_form(barcode)
+
+            render_new_product_form(
+                barcode
+            )
+
 
     product = st.session_state.mobile_product
+
 
     if product:
 
         st.divider()
 
-        st.subheader(product.get("name", "Unknown Product"))
+        st.subheader(
+            product.get(
+                "name",
+                "Unknown Product"
+            )
+        )
 
-        st.write(f"Barcode: {product.get('barcode', '-')}")
-        st.write(f"SKU: {product.get('sku', '-')}")
-        st.write(f"Purchase Price: {product.get('purchase_price', 0)}")
-        st.write(f"Selling Price: {product.get('selling_price', 0)}")
-        st.write(f"Stock: {product.get('stock', 0)}")
+        st.write(
+            f"Barcode: {product.get('barcode','-')}"
+        )
 
-    else:
+        st.write(
+            f"SKU: {product.get('sku','-')}"
+        )
 
-        st.info("Scan a barcode")
+        st.write(
+            f"Purchase Price: {product.get('purchase_price',0)}"
+        )
+
+        st.write(
+            f"Selling Price: {product.get('selling_price',0)}"
+        )
+
+        st.write(
+            f"Stock: {product.get('stock',0)}"
+        )
+
+
+    elif not barcode:
+
+        st.info(
+            "Scan a barcode"
+        )
 
 
 if __name__ == "__main__":
