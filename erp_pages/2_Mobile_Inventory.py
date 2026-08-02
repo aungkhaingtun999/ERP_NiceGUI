@@ -5,7 +5,9 @@
 # ==============================================================================
 
 import streamlit as st
-
+from erp_components.zxing_barcode import (
+    zxing_scanner
+)
 from erp_pages.inventory.live_scanner import (
     live_barcode_scanner
 )
@@ -32,7 +34,9 @@ def run():
     # LIVE SCANNER
     # ------------------------------------------------------------------
 
-    barcode = live_barcode_scanner()
+    barcode = zxing_scanner(
+    key="mobile_barcode"
+)
 
     # ------------------------------------------------------------------
     # AUTO SEARCH
