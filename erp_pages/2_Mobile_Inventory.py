@@ -11,7 +11,9 @@ from erp_pages.inventory.zxing_scanner import (
     scan_barcode
 )
 
-
+from erp_pages.inventory.product_form import (
+    render_new_product_form
+)
 from erp_pages.inventory.product_search import (
     search_product
 )
@@ -66,8 +68,13 @@ def run():
     st.session_state.new_barcode = barcode
 
     st.warning(
-        "🆕 New Product Barcode"
-    )
+    "🆕 New Product"
+)
+
+
+    render_new_product_form(
+    barcode
+)
 
 
     product = st.session_state.mobile_product
