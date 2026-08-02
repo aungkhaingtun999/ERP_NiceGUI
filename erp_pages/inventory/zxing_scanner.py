@@ -1,72 +1,45 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
 # MOBILE INVENTORY v3
-# ZXing Browser Live Scanner
+# ZXING LIVE CAMERA
 # ==============================================================================
 
 
-import streamlit as st
 import streamlit.components.v1 as components
-from erp_components.zxing_scanner import (
-    zxing_scanner
-)
 
 
 
 def scan_barcode():
 
-    return zxing_scanner(
-        key="mobile_inventory_barcode"
-    )
 
-
-def zxing_live_scanner():
-
-
-    st.subheader(
-        "📷 Live Barcode Scanner"
-    )
-
-
-    html_code = r"""
+    html = r"""
 
 <!DOCTYPE html>
 
 <html>
 
-
-<head>
-
-<meta charset="UTF-8">
-
-
-</head>
-
-
 <body>
 
 
-<h4 id="status">
-Starting camera...
-</h4>
-
-
 <video
+
 id="video"
+
 width="100%"
+
 height="350"
-style="
-background:black;
-border-radius:10px;
-"
+
 autoplay
+
 playsinline
+
 muted>
+
 </video>
 
 
 <h4 id="result">
-Waiting barcode...
+Point the camera at a barcode
 </h4>
 
 
@@ -86,20 +59,12 @@ from
 
 
 
-const codeReader =
+const reader =
 new BrowserMultiFormatReader();
 
 
 
-const video =
-document.getElementById("video");
-
-
-
 async function start(){
-
-
-try{
 
 
 const devices =
@@ -107,90 +72,38 @@ await BrowserMultiFormatReader.listVideoInputDevices();
 
 
 
-if(!devices.length)
-{
-
-document.getElementById("status").innerHTML =
-"No camera found";
-
-return;
-
-}
-
-
-
-let cameraId =
+let deviceId =
 devices[0].deviceId;
 
 
 
-for(
-const cam of devices
-){
+reader.decodeFromVideoDevice(
 
-if(
-cam.label.toLowerCase()
-.includes("back")
-)
-{
+deviceId,
 
-cameraId =
-cam.deviceId;
-
-}
-
-}
-
-
-
-document.getElementById("status").innerHTML =
-"Camera ready";
-
-
-
-codeReader.decodeFromVideoDevice(
-
-cameraId,
-
-video,
+"video",
 
 (result,error)=>{
 
 
-if(result)
-{
+if(result){
 
 
-document.getElementById("result").innerHTML =
+document.getElementById(
+"result"
+).innerHTML =
+
 "Barcode: "
 +
 result.text;
 
 
+
 }
-
-
 
 }
 
 );
-
-
-
-}
-
-
-catch(e)
-{
-
-
-document.getElementById("status").innerHTML =
-"Camera Error: "
-+
-e;
-
-
-}
 
 
 }
@@ -213,8 +126,11 @@ start();
 
     components.html(
 
-        html_code,
+        html,
 
-        height=500
+        height=450
 
     )
+
+
+    return None
