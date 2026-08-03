@@ -1,7 +1,7 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
-# MOBILE INVENTORY v3
-# ZXING LIVE BARCODE SCANNER BRIDGE
+# ZXING LIVE BARCODE SCANNER
+# TEST VERSION
 # ==============================================================================
 
 import streamlit as st
@@ -20,11 +20,10 @@ COMPONENT_PATH = (
 )
 
 
-zxing_component = components.declare_component(
+scanner_component = components.declare_component(
     "zxing_barcode",
     path=str(COMPONENT_PATH)
 )
-
 
 
 def scan_barcode():
@@ -34,8 +33,8 @@ def scan_barcode():
     )
 
 
-    barcode = zxing_component(
-        key="zxing_live_scanner",
+    barcode = scanner_component(
+        key="barcode_scanner",
         default=""
     )
 
