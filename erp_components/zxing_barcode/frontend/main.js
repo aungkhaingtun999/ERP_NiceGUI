@@ -1,123 +1,67 @@
-// ==============================================================================
-// ZXING LIVE BARCODE SCANNER
-// ==============================================================================
+import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
 
+const video = document.getElementById('video');
+const reader = new BrowserMultiFormatReader();
 
-const codeReader =
-    new ZXing.BrowserMultiFormatReader();
+async function startScanner() {
 
-
-
-const video =
-    document.getElementById("video");
-
-
-
-async function startScanner(){
-
-
-    try{
-
+    try {
 
         const devices =
-            await codeReader.listVideoInputDevices();
+            await BrowserMultiFormatReader.listVideoInputDevices();
 
-
-        if(devices.length === 0){
+        if (devices.length === 0) {
 
             document.body.innerHTML =
-            "No Camera Found";
+                '<div style="color:white;padding:20px">No camera found</div>';
 
             return;
-
         }
 
+        let cameraId = devices[0].deviceId;
 
+        for (const d of devices) {
 
-        let cameraId =
-            devices[0].deviceId;
+            const label = (d.label || '').toLowerCase();
 
-
-
-        for(
-            const device of devices
-        ){
-
-            if(
-                device.label
-                .toLowerCase()
-                .includes("back")
-            ){
-
-                cameraId =
-                device.deviceId;
-
+            if (
+                label.includes('back') ||
+                label.includes('rear') ||
+                label.includes('environment')
+            ) {
+                cameraId = d.deviceId;
             }
-
         }
 
-
-
-        codeReader.decodeFromVideoDevice(
-
+        reader.decodeFromVideoDevice(
             cameraId,
-
             video,
+            (result, error) => {
 
-            (result, error)=>{
-
-
-                if(result){
-
-
-                    const barcode =
-                    result.text;
-
-
+                if (result) {
 
                     window.parent.postMessage(
-
                         {
-
-                        type:
-                        "streamlit:setComponentValue",
-
-                        value:
-                        barcode
-
+                            type: 'streamlit:setComponentValue',
+                            value: result.text
                         },
-
-                        "*"
-
+                        '*'
                     );
 
-
+                    reader.reset();
                 }
-
-
             }
-
         );
 
-
-    }
-
-    catch(error){
-
-
-        console.error(error);
-
+    } catch (e) {
 
         document.body.innerHTML =
-        "Camera Error: "
-        + error;
+            '<div style="color:red;padding:20px">Camera Error: ' +
+            e +
+            '</div>';
 
-
+        console.error(e);
     }
-
-
 }
-
-
 
 startScanner();
