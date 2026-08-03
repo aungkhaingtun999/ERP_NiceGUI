@@ -1,12 +1,10 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
-# ZXING LIVE BARCODE SCANNER
-# TEST VERSION
+# ZXING COMPONENT BRIDGE
 # ==============================================================================
 
 import streamlit as st
 import streamlit.components.v1 as components
-
 from pathlib import Path
 
 
@@ -20,7 +18,7 @@ COMPONENT_PATH = (
 )
 
 
-scanner_component = components.declare_component(
+_component = components.declare_component(
     "zxing_barcode",
     path=str(COMPONENT_PATH)
 )
@@ -28,20 +26,14 @@ scanner_component = components.declare_component(
 
 def scan_barcode():
 
-    st.subheader(
-        "📷 Live Barcode Scanner"
-    )
-
-
-    barcode = scanner_component(
-        key="barcode_scanner",
+    value = _component(
+        key="zxing_barcode_test",
         default=""
     )
 
+    st.write(
+        "COMPONENT RAW:",
+        repr(value)
+    )
 
-    if barcode:
-
-        return str(barcode).strip()
-
-
-    return ""
+    return value
