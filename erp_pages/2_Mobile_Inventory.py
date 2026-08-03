@@ -1,3 +1,9 @@
+# ==============================================================================
+# erp_pages/2_Mobile_Inventory.py
+# MOBILE INVENTORY v3
+# BARCODE + PRODUCT SEARCH + NEW PRODUCT
+# ==============================================================================
+
 import streamlit as st
 
 from erp_pages.inventory.zxing_scanner import scan_barcode
@@ -5,29 +11,36 @@ from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.product_form import render_new_product_form
 
 
+
 def run():
 
     st.title("📦 Mobile Inventory")
-    st.caption("📷 Live Barcode Scanner")
+
+    st.caption(
+        "📷 Barcode Inventory Scanner"
+    )
 
 
-    # ==========================
+    # ==================================================
     # SESSION
-    # ==========================
+    # ==================================================
 
     if "scanner_on" not in st.session_state:
         st.session_state.scanner_on = False
 
-    if "barcode_input" not in st.session_state:
-        st.session_state.barcode_input = ""
 
-    if "last_scanned" not in st.session_state:
-        st.session_state.last_scanned = ""
+    if "barcode_value" not in st.session_state:
+        st.session_state.barcode_value = ""
 
 
-    # ==========================
+    if "product" not in st.session_state:
+        st.session_state.product = None
+
+
+
+    # ==================================================
     # CAMERA BUTTON
-    # ==========================
+    # ==================================================
 
     col1, col2 = st.columns(2)
 
@@ -40,7 +53,7 @@ def run():
         ):
 
             st.session_state.scanner_on = True
-            st.rerun()
+            st.session_state.product = None
 
 
 
@@ -52,66 +65,53 @@ def run():
         ):
 
             st.session_state.scanner_on = False
-            st.rerun()
 
 
 
-    # ==========================
-    # CAMERA SCANNER
-    # ==========================
+    # ==================================================
+    # CAMERA
+    # ==================================================
 
     if st.session_state.scanner_on:
 
 
-        scanned = scan_barcode()
+        barcode = scan_barcode()
 
 
-        if scanned:
+        if barcode:
 
 
-            scanned = str(scanned).strip()
+            barcode = str(barcode).strip()
 
 
-            if scanned != st.session_state.last_scanned:
+            st.session_state.barcode_value = barcode
 
 
-                st.session_state.last_scanned = scanned
-
-                st.session_state.barcode_input = scanned
-
-                st.session_state.scanner_on = False
+            st.session_state.scanner_on = False
 
 
-                st.success(
-                    f"✅ Scanned : {scanned}"
-                )
-
-
-                st.rerun()
+            st.success(
+                f"✅ Scanned : {barcode}"
+            )
 
 
 
-    # ==========================
+    # ==================================================
     # BARCODE BOX
-    # ==========================
+    # ==================================================
 
     barcode = st.text_input(
         "📷 Barcode",
-        key="barcode_input"
+        key="barcode_value"
     )
 
 
 
-    # ==========================
-    # SEARCH BUTTON
-    # ==========================
+    # ==================================================
+    # SEARCH
+    # ==================================================
 
     if barcode:
-
-
-        st.success(
-            f"Barcode : {barcode}"
-        )
 
 
         if st.button(
@@ -128,17 +128,13 @@ def run():
             if product:
 
 
-                st.success(
-                    "Product Found"
-                )
-
-
-                st.write(
-                    product
-                )
+                st.session_state.product = product
 
 
             else:
+
+
+                st.session_state.product = None
 
 
                 st.warning(
@@ -146,9 +142,96 @@ def run():
                 )
 
 
-                render_new_product_form(
-                    barcode
-                )
+
+    # ==================================================
+    # EXISTING PRODUCT
+    # ==================================================
+
+    product = st.session_state.product
+
+
+    if product:
+
+
+        st.divider()
+
+        st.subheader(
+            "📦 Product Found"
+        )
+
+
+        st.write(
+            "Name :",
+            product.get(
+                "name",
+                "-"
+            )
+        )
+
+
+        st.write(
+            "Barcode :",
+            product.get(
+                "barcode",
+                "-"
+            )
+        )
+
+
+        st.write(
+            "SKU :",
+            product.get(
+                "sku",
+                "-"
+            )
+        )
+
+
+        st.write(
+            "Purchase Price :",
+            product.get(
+                "purchase_price",
+                0
+            )
+        )
+
+
+        st.write(
+            "Selling Price :",
+            product.get(
+                "selling_price",
+                0
+            )
+        )
+
+
+        st.write(
+            "Stock :",
+            product.get(
+                "stock",
+                0
+            )
+        )
+
+
+
+    # ==================================================
+    # NEW PRODUCT
+    # ==================================================
+
+    elif barcode:
+
+
+        st.divider()
+
+        st.subheader(
+            "🆕 New Product Registration"
+        )
+
+
+        render_new_product_form(
+            barcode
+        )
 
 
 
@@ -156,5 +239,12 @@ def run():
 
 
         st.info(
-            "Press 📷 Start Scanner"
+            "Press Start Scanner"
         )
+
+
+
+
+if __name__ == "__main__":
+
+    run()
