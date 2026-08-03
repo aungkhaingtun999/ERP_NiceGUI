@@ -1,8 +1,3 @@
-# ==============================================================================
-# erp_pages/inventory/zxing_scanner.py
-# ZXING COMPONENT BRIDGE
-# ==============================================================================
-
 import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
@@ -18,6 +13,17 @@ COMPONENT_PATH = (
 )
 
 
+st.write(
+    "COMPONENT PATH:",
+    str(COMPONENT_PATH)
+)
+
+st.write(
+    "EXISTS:",
+    COMPONENT_PATH.exists()
+)
+
+
 _component = components.declare_component(
     "zxing_barcode",
     path=str(COMPONENT_PATH)
@@ -27,12 +33,12 @@ _component = components.declare_component(
 def scan_barcode():
 
     value = _component(
-        key="zxing_barcode_test",
+        key="zxing_test",
         default=""
     )
 
     st.write(
-        "COMPONENT RAW:",
+        "RAW:",
         repr(value)
     )
 
