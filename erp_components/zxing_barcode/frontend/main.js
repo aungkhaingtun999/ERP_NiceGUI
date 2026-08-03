@@ -40,6 +40,7 @@ async function startScanner() {
 
                 if (result) {
 
+                    // Send barcode to Streamlit
                     window.parent.postMessage(
                         {
                             type: 'streamlit:setComponentValue',
