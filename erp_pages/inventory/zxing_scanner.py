@@ -1,39 +1,48 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
-# DEBUG CLEAN VERSION
+# MOBILE INVENTORY v3
+# ZXING LIVE BARCODE SCANNER BRIDGE
 # ==============================================================================
 
 import streamlit as st
+import streamlit.components.v1 as components
+
+from pathlib import Path
+
+
+COMPONENT_PATH = (
+    Path(__file__)
+    .resolve()
+    .parents[2]
+    / "erp_components"
+    / "zxing_barcode"
+    / "frontend"
+)
+
+
+zxing_component = components.declare_component(
+    "zxing_barcode",
+    path=str(COMPONENT_PATH)
+)
+
 
 
 def scan_barcode():
 
     st.subheader(
-        "📷 Barcode Scanner Test"
+        "📷 Live Barcode Scanner"
     )
 
 
-    barcode = st.text_input(
-        "Scan Barcode Here",
-        key="debug_barcode"
-    )
-
-
-    # DEBUG
-    st.write(
-        "INNER VALUE:",
-        repr(barcode)
-    )
-
-    st.write(
-        "INNER TYPE:",
-        type(barcode).__name__
+    barcode = zxing_component(
+        key="zxing_live_scanner",
+        default=""
     )
 
 
     if barcode:
 
-        return barcode.strip()
+        return str(barcode).strip()
 
 
     return ""
