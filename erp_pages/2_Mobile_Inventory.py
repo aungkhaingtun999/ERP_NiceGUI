@@ -12,7 +12,7 @@ from erp_pages.inventory.product_form import render_new_product_form
 
 st.write(
     "DEBUG FUNCTION:",
-    scan_barcode.__module__
+    get_barcode().__module__
 )
 
 
