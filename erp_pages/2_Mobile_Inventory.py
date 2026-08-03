@@ -1,5 +1,6 @@
 import streamlit as st
 
+from erp_pages.inventory.zxing_scanner import scan_barcode
 from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.product_form import render_new_product_form
 
@@ -8,11 +9,45 @@ def run():
 
     st.title("📦 Mobile Inventory")
 
-    st.caption("📷 Barcode Search Test")
+    st.caption("📷 Live Barcode Scanner")
+
+    if "scanner_on" not in st.session_state:
+        st.session_state.scanner_on = False
+
+    if "barcode_input" not in st.session_state:
+        st.session_state.barcode_input = ""
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button(
+            "📷 Start Scanner",
+            use_container_width=True
+        ):
+            st.session_state.scanner_on = True
+
+    with col2:
+        if st.button(
+            "🛑 Stop Scanner",
+            use_container_width=True
+        ):
+            st.session_state.scanner_on = False
+
+    if st.session_state.scanner_on:
+
+        scanned = scan_barcode()
+
+        if scanned:
+
+            st.session_state.barcode_input = scanned
+
+            st.success(
+                f"Scanned : {scanned}"
+            )
 
     barcode = st.text_input(
-        "📷 Scanned Barcode",
-        placeholder="Scan barcode and paste here"
+        "📷 Barcode",
+        key="barcode_input"
     )
 
     if barcode:
@@ -26,9 +61,7 @@ def run():
             use_container_width=True
         ):
 
-            product = search_product(
-                barcode
-            )
+            product = search_product(barcode)
 
             if product:
 
@@ -66,14 +99,12 @@ def run():
                     "Barcode not found - Create New Product"
                 )
 
-                render_new_product_form(
-                    barcode
-                )
+                render_new_product_form(barcode)
 
     else:
 
         st.info(
-            "Enter or scan a barcode"
+            "Press 📷 Start Scanner or enter barcode manually"
         )
 
 
