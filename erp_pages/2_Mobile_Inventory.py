@@ -5,8 +5,7 @@
 # ==============================================================================
 
 import streamlit as st
-
-from erp_pages.inventory.zxing_scanner import scan_barcode
+from erp_pages.inventory.scanner import get_barcode
 from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.product_form import render_new_product_form
 
@@ -82,7 +81,7 @@ def run():
     if st.session_state.scanner_on:
 
 
-        scanned = scan_barcode()
+        scanned = get_barcode()
 
 
         st.write(
