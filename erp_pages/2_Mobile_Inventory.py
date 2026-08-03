@@ -8,7 +8,6 @@ from erp_pages.inventory.product_form import render_new_product_form
 def run():
 
     st.title("📦 Mobile Inventory")
-
     st.caption("📷 Live Barcode Scanner")
 
     if "scanner_on" not in st.session_state:
@@ -33,17 +32,29 @@ def run():
         ):
             st.session_state.scanner_on = False
 
+    # --------------------------------------------------
+    # SCANNER
+    # --------------------------------------------------
+
     if st.session_state.scanner_on:
 
         scanned = scan_barcode()
 
         if scanned:
 
-            st.session_state.barcode_input = scanned
+            # Auto fill barcode box
+            st.session_state.barcode_input = scanned.strip()
 
             st.success(
                 f"Scanned : {scanned}"
             )
+
+            # Stop scanner after successful scan
+            st.session_state.scanner_on = False
+
+    # --------------------------------------------------
+    # BARCODE INPUT
+    # --------------------------------------------------
 
     barcode = st.text_input(
         "📷 Barcode",
@@ -99,6 +110,7 @@ def run():
                     "Barcode not found - Create New Product"
                 )
 
+                # Barcode auto passed into form
                 render_new_product_form(barcode)
 
     else:
