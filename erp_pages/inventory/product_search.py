@@ -8,7 +8,7 @@ from database import get_products
 
 def search_product(keyword):
 
-    if not keyword:
+    if keyword is None:
         return None
 
     keyword = str(keyword).strip()
@@ -18,10 +18,17 @@ def search_product(keyword):
     for p in products:
 
         barcode = str(
-            p.get("barcode", "")
+            p.get("barcode") or ""
+        ).strip()
+
+        sku = str(
+            p.get("sku") or ""
         ).strip()
 
         if barcode == keyword:
+            return p
+
+        if sku == keyword:
             return p
 
     return None
