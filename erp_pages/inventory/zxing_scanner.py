@@ -1,6 +1,6 @@
 # ==============================================================================
 # erp_pages/inventory/zxing_scanner.py
-# DEBUG VERSION
+# DEBUG
 # ==============================================================================
 
 import streamlit as st
@@ -19,9 +19,4 @@ def scan_barcode():
     )
 
 
-    if barcode:
-
-        return barcode.strip()
-
-
-    return ""
+    return barcode
