@@ -1,37 +1,45 @@
 <!DOCTYPE html>
-
 <html>
-
-<head>
-
-<meta charset="UTF-8">
-
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0"></script>
-
-</head>
-
-
 <body>
 
+<h2>
+ZXING COMPONENT TEST OK
+</h2>
 
-<video
-id="video"
-width="100%"
-height="350"
-autoplay
-playsinline
-muted>
-</video>
-
-
-<h3 id="result">
-Waiting scan...
-</h3>
+<input 
+id="test"
+placeholder="Type here"
+>
 
 
-<script src="main.js"></script>
+<button onclick="send()">
+Send
+</button>
+
+
+<script>
+
+function send(){
+
+let value =
+document.getElementById("test").value;
+
+
+window.parent.postMessage(
+
+{
+type:"streamlit:setComponentValue",
+value:value
+},
+
+"*"
+
+);
+
+}
+
+</script>
 
 
 </body>
-
 </html>
