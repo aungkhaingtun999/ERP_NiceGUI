@@ -8,17 +8,9 @@ import streamlit as st
 
 from erp_pages.inventory.zxing_scanner import scan_barcode
 from erp_pages.inventory.product_search import search_product
-from erp_pages.inventory.product_form import render_new_product_form
+from erp_pages.inventory.zxing_scanner import scan_barcode
 
-
-
-def run():
-
-    st.title("📦 Mobile Inventory")
-
-    st.caption(
-        "📷 Barcode Inventory Scanner"
-    )
+st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
 
     # ==================================================
