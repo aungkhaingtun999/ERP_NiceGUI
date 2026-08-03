@@ -1,3 +1,7 @@
+# ==============================================================================
+# erp_pages/inventory/zxing_scanner.py
+# ZXING BARCODE SCANNER
+# ==============================================================================
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -14,10 +18,11 @@ COMPONENT_PATH = (
 )
 
 
-scanner_component = components.declare_component(
+barcode_component = components.declare_component(
     "zxing_barcode",
     path=str(COMPONENT_PATH)
 )
+
 
 
 def scan_barcode():
@@ -27,10 +32,15 @@ def scan_barcode():
     )
 
 
-    barcode = scanner_component(
-        key="live_barcode_scanner",
+    barcode = barcode_component(
+        key="barcode_scanner",
         default=""
     )
+
+
+    # IMPORTANT
+    # Do not use st.write / st.success here
+    # because it returns DeltaGenerator
 
 
     if barcode:
