@@ -86,7 +86,7 @@ def run():
 
 
         scanned = scan_barcode()
-
+        st.write("TYPE:", type(scanned))
 
         if scanned:
 
