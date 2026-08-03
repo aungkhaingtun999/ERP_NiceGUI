@@ -8,9 +8,28 @@ import streamlit as st
 
 from erp_pages.inventory.zxing_scanner import scan_barcode
 from erp_pages.inventory.product_search import search_product
-from erp_pages.inventory.zxing_scanner import scan_barcode
+from erp_pages.inventory.product_form import render_new_product_form
 
-st.write("DEBUG FUNCTION:", scan_barcode.__module__)
+
+st.write(
+    "DEBUG FUNCTION:",
+    scan_barcode.__module__
+)
+
+
+
+def run():
+
+
+    st.title(
+        "📦 Mobile Inventory"
+    )
+
+
+    st.caption(
+        "📷 Barcode Inventory"
+    )
+
 
 
     # ==================================================
@@ -31,7 +50,7 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
 
     # ==================================================
-    # CAMERA BUTTON
+    # BUTTON
     # ==================================================
 
     col1, col2 = st.columns(2)
@@ -45,7 +64,6 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
         ):
 
             st.session_state.scanner_on = True
-            st.session_state.product = None
 
 
 
@@ -61,29 +79,28 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
 
     # ==================================================
-    # CAMERA
+    # SCANNER
     # ==================================================
 
     if st.session_state.scanner_on:
 
 
-        barcode = scan_barcode()
+        scanned = scan_barcode()
 
 
-        if barcode:
+        if scanned:
 
 
-            barcode = str(barcode).strip()
-
-
-            st.session_state.barcode_value = barcode
+            st.session_state.barcode_value = (
+                str(scanned).strip()
+            )
 
 
             st.session_state.scanner_on = False
 
 
             st.success(
-                f"✅ Scanned : {barcode}"
+                f"Scanned : {scanned}"
             )
 
 
@@ -107,8 +124,7 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
 
         if st.button(
-            "🔍 Search Product",
-            use_container_width=True
+            "🔍 Search Product"
         ):
 
 
@@ -119,15 +135,12 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
             if product:
 
-
                 st.session_state.product = product
 
 
             else:
 
-
                 st.session_state.product = None
-
 
                 st.warning(
                     "Barcode not found"
@@ -136,13 +149,13 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
 
     # ==================================================
-    # EXISTING PRODUCT
+    # PRODUCT RESULT
     # ==================================================
 
-    product = st.session_state.product
+    if st.session_state.product:
 
 
-    if product:
+        product = st.session_state.product
 
 
         st.divider()
@@ -153,58 +166,21 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
 
         st.write(
-            "Name :",
-            product.get(
-                "name",
-                "-"
-            )
+            "Name:",
+            product.get("name")
         )
 
 
         st.write(
-            "Barcode :",
-            product.get(
-                "barcode",
-                "-"
-            )
+            "Barcode:",
+            product.get("barcode")
         )
 
 
         st.write(
-            "SKU :",
-            product.get(
-                "sku",
-                "-"
-            )
+            "SKU:",
+            product.get("sku")
         )
-
-
-        st.write(
-            "Purchase Price :",
-            product.get(
-                "purchase_price",
-                0
-            )
-        )
-
-
-        st.write(
-            "Selling Price :",
-            product.get(
-                "selling_price",
-                0
-            )
-        )
-
-
-        st.write(
-            "Stock :",
-            product.get(
-                "stock",
-                0
-            )
-        )
-
 
 
     # ==================================================
@@ -216,24 +192,9 @@ st.write("DEBUG FUNCTION:", scan_barcode.__module__)
 
         st.divider()
 
-        st.subheader(
-            "🆕 New Product Registration"
-        )
-
-
         render_new_product_form(
             barcode
         )
-
-
-
-    else:
-
-
-        st.info(
-            "Press Start Scanner"
-        )
-
 
 
 
