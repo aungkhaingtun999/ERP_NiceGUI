@@ -1,45 +1,6 @@
 <!DOCTYPE html>
 <html>
 <body>
-
-<h2>
-ZXING COMPONENT TEST OK
-</h2>
-
-<input 
-id="test"
-placeholder="Type here"
->
-
-
-<button onclick="send()">
-Send
-</button>
-
-
-<script>
-
-function send(){
-
-let value =
-document.getElementById("test").value;
-
-
-window.parent.postMessage(
-
-{
-type:"streamlit:setComponentValue",
-value:value
-},
-
-"*"
-
-);
-
-}
-
-</script>
-
-
+<h1>COMPONENT LOADED</h1>
 </body>
 </html>
