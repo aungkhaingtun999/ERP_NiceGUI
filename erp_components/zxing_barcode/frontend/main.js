@@ -1,13 +1,75 @@
-console.log("ZXING COMPONENT LOADED");
+const codeReader = new ZXing.BrowserMultiFormatReader();
 
+const video = document.getElementById("video");
+const resultBox = document.getElementById("result");
 
-window.parent.postMessage(
+let scanned = false;
 
-{
-    type: "streamlit:setComponentValue",
-    value: "TEST123456"
-},
+async function startScanner(){
 
-"*"
+    try{
 
-);
+        const devices = await codeReader.listVideoInputDevices();
+
+        if(devices.length === 0){
+            resultBox.innerHTML = "❌ No camera found";
+            return;
+        }
+
+        // Default last camera
+        let cameraId = devices[devices.length - 1].deviceId;
+
+        // Prefer back camera
+        for(const device of devices){
+
+            const label = (device.label || "").toLowerCase();
+
+            if(
+                label.includes("back") ||
+                label.includes("rear") ||
+                label.includes("environment")
+            ){
+                cameraId = device.deviceId;
+            }
+        }
+
+        codeReader.decodeFromVideoDevice(
+
+            cameraId,
+
+            video,
+
+            (result, error) => {
+
+                if(result && !scanned){
+
+                    scanned = true;
+
+                    const barcode = result.text;
+
+                    resultBox.innerHTML =
+                        "✅ Barcode: " + barcode;
+
+                    // Send barcode to Streamlit
+                    window.parent.postMessage(
+                        {
+                            type: "streamlit:setComponentValue",
+                            value: barcode
+                        },
+                        "*"
+                    );
+
+                    // Stop camera after successful scan
+                    codeReader.reset();
+                }
+            }
+        );
+
+    }catch(e){
+
+        resultBox.innerHTML =
+            "❌ Camera Error: " + e;
+    }
+}
+
+startScanner();
