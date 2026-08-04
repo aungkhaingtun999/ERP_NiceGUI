@@ -2,7 +2,7 @@ import os
 import streamlit.components.v1 as components
 
 
-_COMPONENT_PATH = os.path.abspath(
+COMPONENT_PATH = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
         "../../erp_components/zxing_scanner/frontend"
@@ -10,16 +10,15 @@ _COMPONENT_PATH = os.path.abspath(
 )
 
 
-_component = components.declare_component(
+zxing_component = components.declare_component(
     "zxing_scanner",
-    path=_COMPONENT_PATH
+    path=COMPONENT_PATH
 )
 
 
 def zxing_scanner():
 
-    return _component(
+    return zxing_component(
         key="zxing_scanner",
-        default="",
-        height=500
+        default=""
     )
