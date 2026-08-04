@@ -53,13 +53,13 @@ def run():
 
         scanned_code = zxing_scanner()
 
-        if scanned_code:
-            st.session_state.barcode_value = scanned_code
-            st.success(f"✅ Scanned: {scanned_code}")
+    if scanned_code:
+        st.session_state.barcode_value = scanned_code
+        st.success(f"✅ Scanned: {scanned_code}")
 
-    else:
+        else:
 
-        st.info("Scanner OFF")
+            st.info("Scanner OFF")
 
     # --------------------------------------------------
     # BARCODE INPUT
