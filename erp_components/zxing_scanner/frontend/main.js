@@ -1,75 +1,81 @@
-import { BrowserMultiFormatReader }
-from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
-
-const reader = new BrowserMultiFormatReader();
+const codeReader = new ZXing.BrowserMultiFormatReader();
 
 const video = document.getElementById("video");
-const statusBox = document.getElementById("status");
-const startBtn = document.getElementById("startBtn");
+const resultBox = document.getElementById("result");
 
-let controls = null;
+let sent = false;
 
-async function startCamera(){
+async function startScanner(){
 
     try{
 
-        statusBox.innerHTML = "Requesting camera permission...";
-
         const devices =
-            await BrowserMultiFormatReader.listVideoInputDevices();
+            await codeReader.listVideoInputDevices();
 
         if(devices.length === 0){
-            statusBox.innerHTML = "❌ No camera found";
+            resultBox.innerHTML = "❌ No camera found";
             return;
         }
 
+        // Prefer back camera
         let cameraId = devices[devices.length - 1].deviceId;
 
-        for(const d of devices){
+        for(const device of devices){
 
-            const label = (d.label || "").toLowerCase();
+            const label = (device.label || "").toLowerCase();
 
             if(
                 label.includes("back") ||
                 label.includes("rear") ||
                 label.includes("environment")
             ){
-                cameraId = d.deviceId;
+                cameraId = device.deviceId;
             }
         }
 
-        controls = await reader.decodeFromVideoDevice(
+        resultBox.innerHTML = "📷 Camera started";
+
+        codeReader.decodeFromVideoDevice(
+
             cameraId,
+
             video,
+
             (result, error) => {
 
-                if(result){
+                if(result && !sent){
+
+                    sent = true;
 
                     const barcode = result.text;
 
-                    statusBox.innerHTML =
-                        "✅ " + barcode;
+                    resultBox.innerHTML =
+                        "✅ Barcode: " + barcode;
 
+                    // Send barcode to Streamlit
                     window.parent.postMessage(
                         {
-                            type:"streamlit:setComponentValue",
-                            value:barcode
+                            type: "streamlit:setComponentValue",
+                            value: barcode
                         },
                         "*"
                     );
+
+                    // Stop scanner after successful scan
+                    setTimeout(() => {
+                        codeReader.reset();
+                    }, 300);
                 }
             }
         );
-
-        statusBox.innerHTML = "📷 Camera started";
 
     }catch(e){
 
         console.error(e);
 
-        statusBox.innerHTML =
+        resultBox.innerHTML =
             "❌ Camera Error: " + e.message;
     }
 }
 
-startBtn.addEventListener("click", startCamera);
+startScanner();
