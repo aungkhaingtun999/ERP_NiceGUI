@@ -1,94 +1,75 @@
 import {
-
 BrowserMultiFormatReader
-
 }
-
 from
-
 "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
-
 
 
 const reader =
 new BrowserMultiFormatReader();
 
 
-
 const video =
-document.getElementById(
-"video"
-);
+document.getElementById("video");
 
+
+let sent = false;
 
 
 async function start(){
 
 
-const devices =
-await BrowserMultiFormatReader.listVideoInputDevices();
+    const devices =
+    await BrowserMultiFormatReader.listVideoInputDevices();
 
 
-
-let camera =
-devices[0].deviceId;
-
-
-
-for(
-const d of devices
-){
-
-if(
-d.label.toLowerCase()
-.includes("back")
-){
-
-camera =
-d.deviceId;
-
-}
-
-}
+    if(devices.length === 0){
+        return;
+    }
 
 
-
-reader.decodeFromVideoDevice(
-
-camera,
-
-video,
-
-(result,error)=>{
+    let camera =
+    devices[devices.length - 1].deviceId;
 
 
-if(result){
+    for(const d of devices){
+
+        const label =
+        (d.label || "").toLowerCase();
+
+        if(
+            label.includes("back") ||
+            label.includes("rear") ||
+            label.includes("environment")
+        ){
+            camera = d.deviceId;
+        }
+    }
 
 
-window.parent.postMessage(
+    reader.decodeFromVideoDevice(
 
-{
+        camera,
 
-type:
-"streamlit:setComponentValue",
+        video,
 
-value:
-result.text
+        (result,error)=>{
 
-},
+            if(result && !sent){
 
-"*"
+                sent = true;
 
-);
+                window.parent.postMessage(
+                {
+                    type:"streamlit:setComponentValue",
+                    value:result.text
+                },
+                "*");
 
-
-}
-
-}
-
-);
-
-
+                reader.reset();
+            }
+        }
+    );
 }
 
 
