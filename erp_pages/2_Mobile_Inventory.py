@@ -16,6 +16,7 @@ def run():
     st.title("📦 Mobile Inventory")
     st.caption("📷 Barcode Scanner / Manual Input")
 
+
     # --------------------------------------------------
     # SESSION STATE
     # --------------------------------------------------
@@ -29,19 +30,33 @@ def run():
     if "product" not in st.session_state:
         st.session_state.product = None
 
+
     # --------------------------------------------------
-    # ON / OFF BUTTONS
+    # BUTTONS
     # --------------------------------------------------
 
     col1, col2 = st.columns(2)
 
+
     with col1:
-        if st.button("📷 Start Scanner", use_container_width=True):
+
+        if st.button(
+            "📷 Start Scanner",
+            use_container_width=True
+        ):
             st.session_state.scanner_on = True
 
+
+
     with col2:
-        if st.button("🛑 Stop Scanner", use_container_width=True):
+
+        if st.button(
+            "🛑 Stop Scanner",
+            use_container_width=True
+        ):
             st.session_state.scanner_on = False
+
+
 
     # --------------------------------------------------
     # CAMERA SCANNER
@@ -49,75 +64,115 @@ def run():
 
     if st.session_state.scanner_on:
 
-        st.success("📷 Scanner ON - point camera to barcode")
+        st.success(
+            "📷 Scanner ON - point camera to barcode"
+        )
 
-        scanned_code = zxing_scanner()
 
-    if scanned_code:
-        st.session_state.barcode_value = scanned_code
-        st.success(f"✅ Scanned: {scanned_code}")
+        # Camera component
+        zxing_scanner()
 
-        else:
 
-            st.info("Scanner OFF")
+    else:
+
+        st.info("Scanner OFF")
+
+
 
     # --------------------------------------------------
     # BARCODE INPUT
     # --------------------------------------------------
 
     barcode = st.text_input(
+
         "📷 Barcode",
+
         value=st.session_state.barcode_value,
+
         key="barcode_input",
+
         placeholder="Scan barcode here or type manually"
+
     )
 
-    # Keep session value in sync
+
     st.session_state.barcode_value = barcode
 
+
+
     # --------------------------------------------------
-    # AUTO FOCUS FOR SCANNER GUN / KEYBOARD MODE
+    # AUTO FOCUS
     # --------------------------------------------------
 
     components.html(
+
         """
         <script>
-        const doc = window.parent.document;
 
-        const input = doc.querySelector(
-            'input[aria-label="📷 Barcode"]'
-        );
+        const doc =
+            window.parent.document;
+
+
+        const input =
+            doc.querySelector(
+                'input[aria-label="📷 Barcode"]'
+            );
+
 
         if(input){
+
             input.focus();
+
         }
+
         </script>
         """,
+
         height=0
+
     )
+
+
 
     # --------------------------------------------------
     # SEARCH PRODUCT
     # --------------------------------------------------
 
-    if st.button("🔍 Search Product", use_container_width=True):
+    if st.button(
+        "🔍 Search Product",
+        use_container_width=True
+    ):
+
 
         if barcode:
 
-            product = search_product(barcode.strip())
+
+            product = search_product(
+                barcode.strip()
+            )
+
 
             if product:
 
                 st.session_state.product = product
 
+
             else:
 
                 st.session_state.product = None
-                st.warning(f"❌ Barcode not found: {barcode}")
+
+                st.warning(
+                    f"❌ Barcode not found: {barcode}"
+                )
+
 
         else:
 
-            st.warning("⚠️ Please scan or enter barcode first")
+            st.warning(
+                "⚠️ Please scan or enter barcode first"
+            )
+
+
 
     # --------------------------------------------------
     # PRODUCT RESULT
@@ -125,29 +180,74 @@ def run():
 
     product = st.session_state.product
 
+
     if product:
 
-        st.divider()
-        st.subheader("📦 Product Found")
 
-        st.write("**Name:**", product.get("name", "-"))
-        st.write("**Barcode:**", product.get("barcode", "-"))
-        st.write("**SKU:**", product.get("sku", "-"))
-        st.write("**Purchase Price:**", product.get("purchase_price", 0))
-        st.write("**Selling Price:**", product.get("selling_price", 0))
-        st.write("**Stock:**", product.get("stock", 0))
+        st.divider()
+
+        st.subheader(
+            "📦 Product Found"
+        )
+
+
+        st.write(
+            "**Name:**",
+            product.get("name","-")
+        )
+
+
+        st.write(
+            "**Barcode:**",
+            product.get("barcode","-")
+        )
+
+
+        st.write(
+            "**SKU:**",
+            product.get("sku","-")
+        )
+
+
+        st.write(
+            "**Purchase Price:**",
+            product.get("purchase_price",0)
+        )
+
+
+        st.write(
+            "**Selling Price:**",
+            product.get("selling_price",0)
+        )
+
+
+        st.write(
+            "**Stock:**",
+            product.get("stock",0)
+        )
+
+
 
     # --------------------------------------------------
-    # NEW PRODUCT FORM
+    # NEW PRODUCT
     # --------------------------------------------------
 
     elif barcode:
 
-        st.divider()
-        st.subheader("🆕 New Product Registration")
 
-        render_new_product_form(barcode)
+        st.divider()
+
+        st.subheader(
+            "🆕 New Product Registration"
+        )
+
+
+        render_new_product_form(
+            barcode
+        )
+
 
 
 if __name__ == "__main__":
+
     run()
