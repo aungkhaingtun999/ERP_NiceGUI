@@ -10,7 +10,7 @@ _COMPONENT_PATH = os.path.abspath(
 )
 
 
-zxing_component = components.declare_component(
+_component = components.declare_component(
     "zxing_scanner",
     path=_COMPONENT_PATH
 )
@@ -18,7 +18,8 @@ zxing_component = components.declare_component(
 
 def zxing_scanner():
 
-    return zxing_component(
-        key="barcode_scanner",
-        default=""
+    return _component(
+        key="zxing_scanner",
+        default="",
+        height=500
     )
