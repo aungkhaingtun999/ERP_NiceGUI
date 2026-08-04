@@ -1,77 +1,111 @@
-import {
-  BrowserMultiFormatReader
-} from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
+import { BrowserMultiFormatReader } from
+"https://cdn.jsdelivr.net/npm/@zxing/library@latest/+esm";
 
-const reader = new BrowserMultiFormatReader();
+
 const video = document.getElementById("video");
 
-let sent = false;
 
-async function start(){
+const reader = new BrowserMultiFormatReader();
 
-  try{
 
-    const devices =
-      await BrowserMultiFormatReader.listVideoInputDevices();
+function sendValue(value){
 
-    if(devices.length === 0){
-      return;
-    }
-
-    let camera =
-      devices[devices.length - 1].deviceId;
-
-    for(const d of devices){
-
-      const label =
-        (d.label || "").toLowerCase();
-
-      if(
-        label.includes("back") ||
-        label.includes("rear") ||
-        label.includes("environment")
-      ){
-        camera = d.deviceId;
-      }
-    }
-
-    reader.decodeFromVideoDevice(
-
-      camera,
-
-      video,
-
-      (result, error) => {
-
-        if(result && !sent){
-
-          sent = true;
-
-          const code = result.text;
-
-          console.log("BARCODE:", code);
-
-          // ---- IMPORTANT ----
-          window.parent.postMessage(
-            {
-              isStreamlitMessage: true,
-              type: "streamlit:setComponentValue",
-              value: code
-            },
-            "*"
-          );
-
-          setTimeout(() => {
-            reader.reset();
-          }, 300);
-        }
-      }
+    window.parent.postMessage(
+        {
+            type: "streamlit:setComponentValue",
+            value: value
+        },
+        "*"
     );
 
-  }catch(e){
-
-    console.error(e);
-  }
 }
 
-start();
+
+
+async function startScanner(){
+
+    try{
+
+
+        const devices =
+            await reader.listVideoInputDevices();
+
+
+        if(devices.length === 0){
+
+            return;
+
+        }
+
+
+        let cameraId =
+            devices[devices.length - 1].deviceId;
+
+
+
+        for(const device of devices){
+
+
+            const label =
+                (device.label || "")
+                .toLowerCase();
+
+
+            if(
+                label.includes("back") ||
+                label.includes("rear") ||
+                label.includes("environment")
+            ){
+
+                cameraId =
+                    device.deviceId;
+
+            }
+
+        }
+
+
+
+        reader.decodeFromVideoDevice(
+
+            cameraId,
+
+            video,
+
+
+            (result,error)=>{
+
+
+                if(result){
+
+
+                    const code =
+                        result.text;
+
+
+                    sendValue(code);
+
+
+                    reader.reset();
+
+
+                }
+
+
+            }
+
+        );
+
+
+    }
+    catch(e){
+
+        console.log(e);
+
+    }
+
+}
+
+
+
+startScanner();
