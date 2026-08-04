@@ -1,138 +1,53 @@
-import { BrowserMultiFormatReader } from
-"https://cdn.jsdelivr.net/npm/@zxing/library@latest/+esm";
-
-
 const video = document.getElementById("video");
 const status = document.getElementById("status");
 
 
-const reader = new BrowserMultiFormatReader();
+async function startCamera(){
+
+    try {
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+
+            video:{
+                facingMode:"environment",
+                width:{
+                    ideal:1280
+                },
+                height:{
+                    ideal:720
+                }
+            },
+
+            audio:false
+
+        });
 
 
-
-function sendBarcode(code){
-
-    window.parent.postMessage(
-
-        {
-            type:"streamlit:setComponentValue",
-            value:code
-        },
-
-        "*"
-
-    );
-
-}
+        video.srcObject = stream;
 
 
-
-async function startScanner(){
-
-    try{
-
-
-        const devices =
-            await reader.listVideoInputDevices();
+        video.setAttribute(
+            "playsinline",
+            true
+        );
 
 
-
-        if(devices.length === 0){
-
-            status.innerHTML =
-            "❌ No camera found";
-
-            return;
-
-        }
-
-
-
-        let cameraId =
-            devices[devices.length - 1].deviceId;
-
-
-
-        for(const device of devices){
-
-            const label =
-            (device.label || "")
-            .toLowerCase();
-
-
-
-            if(
-                label.includes("back") ||
-                label.includes("rear") ||
-                label.includes("environment")
-            ){
-
-                cameraId =
-                device.deviceId;
-
-            }
-
-        }
-
+        await video.play();
 
 
         status.innerHTML =
-        "📷 Scan barcode...";
-
-
-
-        reader.decodeFromVideoDevice(
-
-            cameraId,
-
-            video,
-
-
-            (result,error)=>{
-
-
-                if(result){
-
-
-                    const code =
-                    result.text;
-
-
-
-                    status.innerHTML =
-                    "✅ " + code;
-
-
-
-                    sendBarcode(code);
-
-
-
-                    reader.reset();
-
-
-                }
-
-
-            }
-
-        );
-
+            "📷 Camera Preview OK";
 
 
     }
     catch(error){
 
-
         status.innerHTML =
-        "❌ " + error;
-
+            "❌ Camera Error: " + error.message;
 
     }
-
 
 }
 
 
-
-startScanner();
+startCamera();
