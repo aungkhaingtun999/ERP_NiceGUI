@@ -1,101 +1,57 @@
-import { BrowserMultiFormatReader } from
-"https://cdn.jsdelivr.net/npm/@zxing/library@latest/+esm";
-
-
 const video = document.getElementById("video");
 const status = document.getElementById("status");
 
 
-const reader = new BrowserMultiFormatReader();
+async function startCamera(){
+
+    try {
+
+        const stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video:{
+                    facingMode:{
+                        ideal:"environment"
+                    },
+
+                    width:{
+                        ideal:1280
+                    },
+
+                    height:{
+                        ideal:720
+                    }
+
+                },
+
+                audio:false
+
+            });
 
 
 
-function sendBarcode(code){
-
-    window.parent.postMessage(
-
-        {
-            type:"streamlit:setComponentValue",
-            value: code
-        },
-
-        "*"
-
-    );
-
-}
+        video.srcObject = stream;
 
 
+        video.onloadedmetadata = async () => {
 
-async function startScanner(){
-
-    try{
-
-
-        const devices =
-            await reader.listVideoInputDevices();
-
-
-        if(devices.length === 0){
+            await video.play();
 
             status.innerHTML =
-            "❌ No camera";
+                "📷 Camera Preview OK";
 
-            return;
-
-        }
-
-
-        let cameraId =
-            devices[devices.length - 1].deviceId;
-
-
-
-        reader.decodeFromVideoDevice(
-
-            cameraId,
-
-            video,
-
-
-            (result,error)=>{
-
-
-                if(result){
-
-
-                    const code =
-                    result.text;
-
-
-                    status.innerHTML =
-                    "✅ " + code;
-
-
-                    sendBarcode(code);
-
-
-                    reader.reset();
-
-
-                }
-
-
-            }
-
-        );
+        };
 
 
     }
     catch(e){
 
         status.innerHTML =
-        "❌ " + e;
+            "❌ Camera Error: " + e.message;
 
     }
 
 }
 
 
-
-startScanner();
+startCamera();
