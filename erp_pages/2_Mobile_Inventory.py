@@ -8,9 +8,7 @@ import streamlit.components.v1 as components
 
 from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.zxing_scanner import zxing_scanner
-barcode = zxing_scanner()
 
-st.write("Scanned:", barcode)
 from erp_pages.inventory.product_form import render_new_product_form
 
 
@@ -28,7 +26,13 @@ def run():
 
     if "product" not in st.session_state:
         st.session_state.product = None
+    if st.session_state.scanner_on:
 
+    scanned_code = zxing_scanner()
+
+    if scanned_code:
+        st.session_state.barcode_value = scanned_code
+        st.success(f"Scanned: {scanned_code}")
 
     # --------------------------------------------------
     # ON / OFF BUTTONS
