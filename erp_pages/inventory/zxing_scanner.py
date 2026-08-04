@@ -19,6 +19,7 @@ zxing_component = components.declare_component(
 def zxing_scanner():
 
     return zxing_component(
-        key="zxing_scanner",
-        default=""
-    )
+    key="zxing_scanner",
+    default="",
+    height=450
+)
