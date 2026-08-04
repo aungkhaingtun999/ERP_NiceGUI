@@ -1,12 +1,12 @@
 # ==============================================================================
 # erp_pages/2_Mobile_Inventory.py
-# MOBILE INVENTORY v4
-# CAMERA SNAPSHOT + BARCODE SEARCH + NEW PRODUCT
+# MOBILE INVENTORY v5 STABLE
+# MANUAL / SCANNER INPUT + SEARCH + NEW PRODUCT
 # ==============================================================================
 
 import streamlit as st
+import streamlit.components.v1 as components
 
-from erp_pages.inventory.scanner import get_barcode
 from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.product_form import render_new_product_form
 
@@ -15,7 +15,15 @@ def run():
 
     st.title('📦 Mobile Inventory')
 
-    st.caption('📷 Camera Barcode Scanner')
+    st.caption('📷 Barcode Scanner / Manual Input')
+
+
+    # --------------------------------------------------
+    # SESSION
+    # --------------------------------------------------
+
+    if 'scanner_on' not in st.session_state:
+        st.session_state.scanner_on = False
 
 
     if 'barcode_value' not in st.session_state:
@@ -26,22 +34,93 @@ def run():
         st.session_state.product = None
 
 
-    st.info('Tap **Take Photo** and point the camera at the barcode.')
+    # --------------------------------------------------
+    # ON / OFF BUTTONS
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
 
 
-    scanned = get_barcode()
+    with col1:
+
+        if st.button(
+            '📷 Start Scanner',
+            use_container_width=True
+        ):
+
+            st.session_state.scanner_on = True
 
 
-    if scanned and isinstance(scanned, str):
+    with col2:
 
-        st.session_state.barcode_value = scanned.strip()
+        if st.button(
+            '🛑 Stop Scanner',
+            use_container_width=True
+        ):
 
+            st.session_state.scanner_on = False
+
+
+    # --------------------------------------------------
+    # BARCODE INPUT
+    # --------------------------------------------------
 
     barcode = st.text_input(
         '📷 Barcode',
-        key='barcode_value'
+        key='barcode_value',
+        placeholder='Scan barcode or type manually'
     )
 
+
+    # --------------------------------------------------
+    # AUTO FOCUS WHEN SCANNER ON
+    # --------------------------------------------------
+
+    if st.session_state.scanner_on:
+
+
+        components.html(
+            '''
+            <script>
+            const doc = window.parent.document;
+
+            const input = doc.querySelector(
+                'input[aria-label="📷 Barcode"]'
+            );
+
+            if(input){
+
+                input.focus();
+
+                input.select();
+
+                input.addEventListener(
+                    'blur',
+                    () => setTimeout(() => input.focus(), 100)
+                );
+            }
+            </script>
+            ''',
+            height=0
+        )
+
+
+        st.success(
+            '📷 Scanner ON - scan barcode now'
+        )
+
+
+    else:
+
+
+        st.info(
+            'Scanner OFF'
+        )
+
+
+    # --------------------------------------------------
+    # SEARCH BUTTON
+    # --------------------------------------------------
 
     if st.button(
         '🔍 Search Product',
@@ -52,7 +131,7 @@ def run():
         if barcode:
 
 
-            product = search_product(barcode)
+            product = search_product(barcode.strip())
 
 
             if product:
@@ -68,31 +147,44 @@ def run():
 
 
                 st.warning(
-                    'Barcode not found - Create New Product'
+                    f'Barcode not found: {barcode}'
                 )
 
 
-    if st.session_state.product:
+        else:
 
 
-        product = st.session_state.product
+            st.warning(
+                'Please scan or enter barcode first'
+            )
 
 
-        st.success('📦 Product Found')
+    # --------------------------------------------------
+    # PRODUCT RESULT
+    # --------------------------------------------------
+
+    product = st.session_state.product
 
 
-        st.write('Name:', product.get('name', '-'))
+    if product:
 
-        st.write('Barcode:', product.get('barcode', '-'))
 
-        st.write('SKU:', product.get('sku', '-'))
+        st.divider()
 
-        st.write('Purchase Price:', product.get('purchase_price', 0))
+        st.subheader('📦 Product Found')
 
-        st.write('Selling Price:', product.get('selling_price', 0))
 
-        st.write('Stock:', product.get('stock', 0))
+        st.write('**Name:**', product.get('name', '-'))
+        st.write('**Barcode:**', product.get('barcode', '-'))
+        st.write('**SKU:**', product.get('sku', '-'))
+        st.write('**Purchase Price:**', product.get('purchase_price', 0))
+        st.write('**Selling Price:**', product.get('selling_price', 0))
+        st.write('**Stock:**', product.get('stock', 0))
 
+
+    # --------------------------------------------------
+    # NEW PRODUCT FORM
+    # --------------------------------------------------
 
     elif barcode:
 
@@ -105,4 +197,5 @@ def run():
 
 
 if __name__ == '__main__':
+
     run()
