@@ -20,4 +20,4 @@ def scan_barcode():
         default=""
     )
 
-    return value or ""
+    return value
