@@ -7,6 +7,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from erp_pages.inventory.product_search import search_product
+from erp_pages.inventory.zxing_scanner.zxing_scanner import zxing_scanner
+
+barcode = zxing_scanner()
+
+st.write("Scanned:", barcode)
 from erp_pages.inventory.product_form import render_new_product_form
 
 
