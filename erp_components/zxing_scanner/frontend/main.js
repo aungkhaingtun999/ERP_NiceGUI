@@ -1,35 +1,138 @@
+import { BrowserMultiFormatReader } from
+"https://cdn.jsdelivr.net/npm/@zxing/library@latest/+esm";
+
+
 const video = document.getElementById("video");
 const status = document.getElementById("status");
 
 
-navigator.mediaDevices.getUserMedia({
+const reader = new BrowserMultiFormatReader();
 
-    video: {
-        facingMode: {
-            ideal: "environment"
+
+
+function sendBarcode(code){
+
+    window.parent.postMessage(
+
+        {
+            type:"streamlit:setComponentValue",
+            value:code
+        },
+
+        "*"
+
+    );
+
+}
+
+
+
+async function startScanner(){
+
+    try{
+
+
+        const devices =
+            await reader.listVideoInputDevices();
+
+
+
+        if(devices.length === 0){
+
+            status.innerHTML =
+            "❌ No camera found";
+
+            return;
+
         }
-    },
-
-    audio:false
-
-})
-.then(stream => {
-
-    video.srcObject = stream;
-
-    video.onloadedmetadata = () => {
-
-        video.play();
-
-    };
 
 
-    status.innerHTML = "📷 Camera OK";
 
-})
-.catch(error => {
+        let cameraId =
+            devices[devices.length - 1].deviceId;
 
-    status.innerHTML =
+
+
+        for(const device of devices){
+
+            const label =
+            (device.label || "")
+            .toLowerCase();
+
+
+
+            if(
+                label.includes("back") ||
+                label.includes("rear") ||
+                label.includes("environment")
+            ){
+
+                cameraId =
+                device.deviceId;
+
+            }
+
+        }
+
+
+
+        status.innerHTML =
+        "📷 Scan barcode...";
+
+
+
+        reader.decodeFromVideoDevice(
+
+            cameraId,
+
+            video,
+
+
+            (result,error)=>{
+
+
+                if(result){
+
+
+                    const code =
+                    result.text;
+
+
+
+                    status.innerHTML =
+                    "✅ " + code;
+
+
+
+                    sendBarcode(code);
+
+
+
+                    reader.reset();
+
+
+                }
+
+
+            }
+
+        );
+
+
+
+    }
+    catch(error){
+
+
+        status.innerHTML =
         "❌ " + error;
 
-});
+
+    }
+
+
+}
+
+
+
+startScanner();
