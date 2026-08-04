@@ -1,10 +1,11 @@
 # ==============================================================================
-# MOBILE INVENTORY v7 LIVE SCANNER AUTO FILL
+# MOBILE INVENTORY v8 CLOUD STABLE
+# SCANNER KEYBOARD MODE + INVENTORY SEARCH
 # ==============================================================================
 
 import streamlit as st
+import streamlit.components.v1 as components
 
-from erp_pages.inventory.zxing_scanner import scan_barcode
 from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.product_form import render_new_product_form
 
@@ -12,7 +13,7 @@ from erp_pages.inventory.product_form import render_new_product_form
 def run():
 
     st.title("📦 Mobile Inventory")
-    st.caption("📷 Live Barcode Scanner")
+    st.caption("📷 Barcode Scanner / Manual Input")
 
 
     # --------------------------------------------------
@@ -25,15 +26,12 @@ def run():
     if "barcode_value" not in st.session_state:
         st.session_state.barcode_value = ""
 
-    if "last_scanned" not in st.session_state:
-        st.session_state.last_scanned = ""
-
     if "product" not in st.session_state:
         st.session_state.product = None
 
 
     # --------------------------------------------------
-    # START / STOP BUTTON
+    # ON / OFF BUTTONS
     # --------------------------------------------------
 
     col1, col2 = st.columns(2)
@@ -48,40 +46,55 @@ def run():
 
 
     # --------------------------------------------------
-    # LIVE SCANNER
-    # --------------------------------------------------
-
-    if st.session_state.scanner_on:
-
-        scanned = scan_barcode()
-
-        # Barcode ရလာရင် textbox ထဲ auto ထည့်
-        if scanned and scanned != st.session_state.last_scanned:
-
-            st.session_state.last_scanned = scanned
-            st.session_state.barcode_value = scanned.strip()
-
-            st.success(f"✅ Scanned: {scanned}")
-
-            # scanner ပိတ်
-            st.session_state.scanner_on = False
-
-            # textbox update ပြန်ပြ
-            st.rerun()
-
-
-    # --------------------------------------------------
-    # BARCODE BOX
+    # BARCODE INPUT
     # --------------------------------------------------
 
     barcode = st.text_input(
         "📷 Barcode",
-        key="barcode_value"
+        key="barcode_value",
+        placeholder="Scan barcode here or type manually"
     )
 
 
     # --------------------------------------------------
-    # SEARCH
+    # AUTO FOCUS WHEN SCANNER ON
+    # --------------------------------------------------
+
+    if st.session_state.scanner_on:
+
+        components.html(
+            """
+            <script>
+            const doc = window.parent.document;
+
+            const input = doc.querySelector(
+                'input[aria-label="📷 Barcode"]'
+            );
+
+            if(input){
+
+                input.focus();
+                input.select();
+
+                input.addEventListener(
+                    'blur',
+                    () => setTimeout(() => input.focus(), 100)
+                );
+            }
+            </script>
+            """,
+            height=0
+        )
+
+        st.success("📷 Scanner ON - scan barcode now")
+
+    else:
+
+        st.info("Scanner OFF")
+
+
+    # --------------------------------------------------
+    # SEARCH PRODUCT
     # --------------------------------------------------
 
     if st.button("🔍 Search Product", use_container_width=True):
@@ -97,14 +110,11 @@ def run():
             else:
 
                 st.session_state.product = None
-
-                st.warning(
-                    f"Barcode not found: {barcode}"
-                )
+                st.warning(f"Barcode not found: {barcode}")
 
         else:
 
-            st.warning("Please scan barcode first")
+            st.warning("Please scan or enter barcode first")
 
 
     # --------------------------------------------------
@@ -136,11 +146,6 @@ def run():
         st.subheader("🆕 New Product Registration")
 
         render_new_product_form(barcode)
-
-
-    else:
-
-        st.info("Press 📷 Start Scanner")
 
 
 if __name__ == "__main__":
