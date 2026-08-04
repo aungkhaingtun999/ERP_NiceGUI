@@ -3,26 +3,28 @@ const codeReader = new ZXing.BrowserMultiFormatReader();
 const video = document.getElementById("video");
 const resultBox = document.getElementById("result");
 
-let scanned = false;
+let sent = false;
 
 async function startScanner(){
 
     try{
 
-        const devices = await codeReader.listVideoInputDevices();
+        const devices =
+            await codeReader.listVideoInputDevices();
 
         if(devices.length === 0){
+
             resultBox.innerHTML = "❌ No camera found";
             return;
         }
 
-        // Default last camera
+        // Prefer back camera
         let cameraId = devices[devices.length - 1].deviceId;
 
-        // Prefer back camera
         for(const device of devices){
 
-            const label = (device.label || "").toLowerCase();
+            const label =
+                (device.label || "").toLowerCase();
 
             if(
                 label.includes("back") ||
@@ -33,6 +35,8 @@ async function startScanner(){
             }
         }
 
+        resultBox.innerHTML = "📷 Camera started";
+
         codeReader.decodeFromVideoDevice(
 
             cameraId,
@@ -41,9 +45,9 @@ async function startScanner(){
 
             (result, error) => {
 
-                if(result && !scanned){
+                if(result && !sent){
 
-                    scanned = true;
+                    sent = true;
 
                     const barcode = result.text;
 
@@ -60,15 +64,19 @@ async function startScanner(){
                     );
 
                     // Stop camera after successful scan
-                    codeReader.reset();
+                    setTimeout(() => {
+                        codeReader.reset();
+                    }, 300);
                 }
             }
         );
 
     }catch(e){
 
+        console.error(e);
+
         resultBox.innerHTML =
-            "❌ Camera Error: " + e;
+            "❌ Camera Error: " + e.message;
     }
 }
 
