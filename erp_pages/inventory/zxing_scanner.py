@@ -14,5 +14,10 @@ _component = components.declare_component(
 )
 
 def scan_barcode():
-    value = _component(key="live_barcode_scanner", default="")
+
+    value = _component(
+        key="zxing_scanner_live",
+        default=""
+    )
+
     return value or ""
