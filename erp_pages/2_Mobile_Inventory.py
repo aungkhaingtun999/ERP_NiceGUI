@@ -1,6 +1,6 @@
 # ==============================================================================
-# MOBILE INVENTORY v9 STABLE
-# CAMERA SCANNER + SCANNER GUN + MANUAL INPUT
+# MOBILE INVENTORY v10
+# CAMERA SCAN AUTO SEARCH + MANUAL BARCODE INPUT
 # ==============================================================================
 
 import streamlit as st
@@ -11,28 +11,56 @@ from erp_pages.inventory.zxing_scanner import zxing_scanner
 from erp_pages.inventory.product_form import render_new_product_form
 
 
+def load_product(barcode):
+
+    if not barcode:
+        return
+
+    product = search_product(barcode.strip())
+
+    if product:
+
+        st.session_state.product = product
+        st.session_state.barcode_value = barcode
+
+    else:
+
+        st.session_state.product = None
+
+        st.warning(
+            f"❌ Barcode not found: {barcode}"
+        )
+
+
+
 def run():
 
     st.title("📦 Mobile Inventory")
-    st.caption("📷 Barcode Scanner / Manual Input")
+
+    st.caption(
+        "📷 Camera Scanner + Manual Barcode"
+    )
 
 
     # --------------------------------------------------
-    # SESSION STATE
+    # SESSION
     # --------------------------------------------------
 
     if "scanner_on" not in st.session_state:
         st.session_state.scanner_on = False
 
+
     if "barcode_value" not in st.session_state:
         st.session_state.barcode_value = ""
+
 
     if "product" not in st.session_state:
         st.session_state.product = None
 
 
+
     # --------------------------------------------------
-    # BUTTONS
+    # BUTTON
     # --------------------------------------------------
 
     col1, col2 = st.columns(2)
@@ -44,6 +72,7 @@ def run():
             "📷 Start Scanner",
             use_container_width=True
         ):
+
             st.session_state.scanner_on = True
 
 
@@ -54,6 +83,7 @@ def run():
             "🛑 Stop Scanner",
             use_container_width=True
         ):
+
             st.session_state.scanner_on = False
 
 
@@ -64,118 +94,71 @@ def run():
 
     if st.session_state.scanner_on:
 
+
         st.success(
-            "📷 Scanner ON - point camera to barcode"
+            "📷 Point camera to barcode"
         )
 
 
-        # Camera component
-        zxing_scanner()
+        scanned_code = zxing_scanner()
+
+
+        # AUTO SEARCH
+        if scanned_code:
+
+
+            st.success(
+                f"✅ Scanned: {scanned_code}"
+            )
+
+
+            load_product(
+                scanned_code
+            )
+
 
 
     else:
 
-        st.info("Scanner OFF")
+        st.info(
+            "Scanner OFF"
+        )
 
 
 
     # --------------------------------------------------
-    # BARCODE INPUT
+    # MANUAL BARCODE
     # --------------------------------------------------
+
+    st.divider()
+
 
     barcode = st.text_input(
 
-        "📷 Barcode",
+        "📷 Manual Barcode / SKU",
 
         value=st.session_state.barcode_value,
 
-        key="barcode_input",
-
-        placeholder="Scan barcode here or type manually"
+        placeholder="Type barcode manually"
 
     )
 
 
-    st.session_state.barcode_value = barcode
+    if barcode:
 
+        if st.button(
+            "🔍 Search Product",
+            use_container_width=True
+        ):
 
-
-    # --------------------------------------------------
-    # AUTO FOCUS
-    # --------------------------------------------------
-
-    components.html(
-
-        """
-        <script>
-
-        const doc =
-            window.parent.document;
-
-
-        const input =
-            doc.querySelector(
-                'input[aria-label="📷 Barcode"]'
-            );
-
-
-        if(input){
-
-            input.focus();
-
-        }
-
-        </script>
-        """,
-
-        height=0
-
-    )
-
-
-
-    # --------------------------------------------------
-    # SEARCH PRODUCT
-    # --------------------------------------------------
-
-    if st.button(
-        "🔍 Search Product",
-        use_container_width=True
-    ):
-
-
-        if barcode:
-
-
-            product = search_product(
-                barcode.strip()
-            )
-
-
-            if product:
-
-                st.session_state.product = product
-
-
-            else:
-
-                st.session_state.product = None
-
-                st.warning(
-                    f"❌ Barcode not found: {barcode}"
-                )
-
-
-        else:
-
-            st.warning(
-                "⚠️ Please scan or enter barcode first"
+            load_product(
+                barcode
             )
 
 
 
     # --------------------------------------------------
-    # PRODUCT RESULT
+    # PRODUCT
     # --------------------------------------------------
 
     product = st.session_state.product
@@ -186,46 +169,46 @@ def run():
 
         st.divider()
 
+
         st.subheader(
             "📦 Product Found"
         )
 
 
         st.write(
-            "**Name:**",
+            "Name:",
             product.get("name","-")
         )
 
 
         st.write(
-            "**Barcode:**",
+            "Barcode:",
             product.get("barcode","-")
         )
 
 
         st.write(
-            "**SKU:**",
+            "SKU:",
             product.get("sku","-")
         )
 
 
         st.write(
-            "**Purchase Price:**",
+            "Purchase:",
             product.get("purchase_price",0)
         )
 
 
         st.write(
-            "**Selling Price:**",
+            "Selling:",
             product.get("selling_price",0)
         )
 
 
         st.write(
-            "**Stock:**",
+            "Stock:",
             product.get("stock",0)
         )
-
 
 
     # --------------------------------------------------
@@ -240,7 +223,6 @@ def run():
         st.subheader(
             "🆕 New Product Registration"
         )
-
 
         render_new_product_form(
             barcode
