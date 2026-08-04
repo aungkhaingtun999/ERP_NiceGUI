@@ -1,53 +1,101 @@
+import { BrowserMultiFormatReader } from
+"https://cdn.jsdelivr.net/npm/@zxing/library@latest/+esm";
+
+
 const video = document.getElementById("video");
 const status = document.getElementById("status");
 
 
-async function startCamera(){
+const reader = new BrowserMultiFormatReader();
 
-    try {
 
-        const stream = await navigator.mediaDevices.getUserMedia({
 
-            video:{
-                facingMode:"environment",
-                width:{
-                    ideal:1280
-                },
-                height:{
-                    ideal:720
+function sendBarcode(code){
+
+    window.parent.postMessage(
+
+        {
+            type:"streamlit:setComponentValue",
+            value: code
+        },
+
+        "*"
+
+    );
+
+}
+
+
+
+async function startScanner(){
+
+    try{
+
+
+        const devices =
+            await reader.listVideoInputDevices();
+
+
+        if(devices.length === 0){
+
+            status.innerHTML =
+            "❌ No camera";
+
+            return;
+
+        }
+
+
+        let cameraId =
+            devices[devices.length - 1].deviceId;
+
+
+
+        reader.decodeFromVideoDevice(
+
+            cameraId,
+
+            video,
+
+
+            (result,error)=>{
+
+
+                if(result){
+
+
+                    const code =
+                    result.text;
+
+
+                    status.innerHTML =
+                    "✅ " + code;
+
+
+                    sendBarcode(code);
+
+
+                    reader.reset();
+
+
                 }
-            },
-
-            audio:false
-
-        });
 
 
-        video.srcObject = stream;
+            }
 
-
-        video.setAttribute(
-            "playsinline",
-            true
         );
 
 
-        await video.play();
-
-
-        status.innerHTML =
-            "📷 Camera Preview OK";
-
-
     }
-    catch(error){
+    catch(e){
 
         status.innerHTML =
-            "❌ Camera Error: " + error.message;
+        "❌ " + e;
 
     }
 
 }
 
 
-startCamera();
+
+startScanner();
