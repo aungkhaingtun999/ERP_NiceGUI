@@ -4,16 +4,22 @@ import { BrowserMultiFormatReader } from
 
 const video = document.getElementById("video");
 
+const status = document.createElement("p");
+status.style.color = "white";
+status.innerHTML = "Starting camera...";
+document.body.appendChild(status);
+
 
 const reader = new BrowserMultiFormatReader();
+
 
 
 function sendValue(value){
 
     window.parent.postMessage(
         {
-            type: "streamlit:setComponentValue",
-            value: value
+            type:"streamlit:setComponentValue",
+            value:value
         },
         "*"
     );
@@ -26,16 +32,18 @@ async function startScanner(){
 
     try{
 
-
         const devices =
             await reader.listVideoInputDevices();
 
 
         if(devices.length === 0){
 
-            return;
+            status.innerHTML =
+            "❌ No camera found";
 
+            return;
         }
+
 
 
         let cameraId =
@@ -45,24 +53,28 @@ async function startScanner(){
 
         for(const device of devices){
 
-
-            const label =
-                (device.label || "")
-                .toLowerCase();
+            const name =
+            (device.label || "")
+            .toLowerCase();
 
 
             if(
-                label.includes("back") ||
-                label.includes("rear") ||
-                label.includes("environment")
+                name.includes("back") ||
+                name.includes("rear") ||
+                name.includes("environment")
             ){
 
                 cameraId =
-                    device.deviceId;
+                device.deviceId;
 
             }
 
         }
+
+
+
+        status.innerHTML =
+        "📷 Camera starting...";
 
 
 
@@ -78,16 +90,18 @@ async function startScanner(){
 
                 if(result){
 
-
                     const code =
-                        result.text;
+                    result.text;
+
+
+                    status.innerHTML =
+                    "✅ " + code;
 
 
                     sendValue(code);
 
 
                     reader.reset();
-
 
                 }
 
@@ -98,14 +112,15 @@ async function startScanner(){
 
 
     }
+
     catch(e){
 
-        console.log(e);
+        status.innerHTML =
+        "❌ " + e;
 
     }
 
 }
-
 
 
 startScanner();
