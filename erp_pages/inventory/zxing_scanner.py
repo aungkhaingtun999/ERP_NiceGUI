@@ -2,12 +2,20 @@ import os
 import streamlit.components.v1 as components
 
 
+CURRENT_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+
 COMPONENT_PATH = os.path.abspath(
     os.path.join(
-        os.path.dirname(__file__),
+        CURRENT_DIR,
         "../../erp_components/zxing_scanner/frontend"
     )
 )
+
+
+print("ZXING PATH:", COMPONENT_PATH)
 
 
 zxing_component = components.declare_component(
@@ -19,7 +27,7 @@ zxing_component = components.declare_component(
 def zxing_scanner():
 
     return zxing_component(
-    key="zxing_scanner",
-    default="",
-    height=450
-)
+        key="zxing_scanner",
+        default="",
+        height=450
+    )
