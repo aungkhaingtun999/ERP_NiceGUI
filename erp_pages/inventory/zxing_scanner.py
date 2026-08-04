@@ -1,4 +1,8 @@
-import streamlit as st
+# ==============================================================================
+# erp_pages/inventory/zxing_scanner.py
+# ZXING LIVE BARCODE SCANNER BRIDGE
+# ==============================================================================
+
 import streamlit.components.v1 as components
 from pathlib import Path
 
@@ -6,25 +10,25 @@ from pathlib import Path
 COMPONENT_PATH = (
     Path(__file__).resolve().parents[2]
     / "erp_components"
-    / "zxing_barcode"
+    / "zxing_scanner"   # ← ဒီနေရာပြောင်းထားတယ်
     / "frontend"
 )
 
-st.write("PATH:", COMPONENT_PATH)
-st.write("EXISTS:", COMPONENT_PATH.exists())
 
-
-_component = components.declare_component(
-    "zxing_test",
+scanner_component = components.declare_component(
+    "zxing_scanner",
     path=str(COMPONENT_PATH)
 )
 
 
 def scan_barcode():
 
-    value = _component(
-        key="zxing_test",
+    barcode = scanner_component(
+        key="live_barcode_scanner",
         default=""
     )
 
-    return value
+    if barcode:
+        return str(barcode).strip()
+
+    return ""
