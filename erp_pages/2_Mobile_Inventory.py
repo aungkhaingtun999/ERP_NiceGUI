@@ -131,6 +131,8 @@ def run():
     if barcode and barcode != st.session_state.barcode_value:
         load_product(barcode)
 
+    # Use session value after auto search
+    barcode = st.session_state.barcode_value
     product = st.session_state.product
 
     # --------------------------------------------------------------------------
