@@ -18,8 +18,7 @@ def clear_product_form():
     ]
 
     for key in keys:
-        if key in st.session_state:
-            del st.session_state[key]
+        st.session_state.pop(key, None)
 
 
 
@@ -32,13 +31,13 @@ def render_new_product_form(barcode=""):
     if barcode:
 
         st.success(
-            f"📷 Barcode : {barcode}"
+            f"📷 Barcode: {barcode}"
         )
 
     else:
 
         st.warning(
-            "Enter barcode or scan first"
+            "Please enter or scan a barcode first."
         )
 
 
@@ -84,24 +83,18 @@ def render_new_product_form(barcode=""):
         )
 
 
-        col1, col2 = st.columns(2)
+        # Form အတွင်းမှာ Save Product ခလုတ် တစ်ခုတည်းသာ ထားရှိပါသည်
+        save_btn = st.form_submit_button(
+            "💾 Save Product",
+            use_container_width=True
+        )
 
 
-        with col1:
-
-            save_btn = st.form_submit_button(
-                "💾 Save Product",
-                use_container_width=True
-            )
-
-
-        with col2:
-
-            clear_btn = st.form_submit_button(
-                "🧹 Clear",
-                use_container_width=True
-            )
-
+    # Clear Button ကို form အပြင်ဘက်သို့ ရွှေ့ပြောင်းထားပါသည်
+    clear_btn = st.button(
+        "🧹 Clear Form",
+        use_container_width=True
+    )
 
 
     if clear_btn:
@@ -162,11 +155,6 @@ def render_new_product_form(barcode=""):
         st.success(
             "✅ Product data ready"
         )
-
-
-        # clear after successful prepare
-
-        clear_product_form()
 
 
         return product_data
