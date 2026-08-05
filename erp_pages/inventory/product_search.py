@@ -1,34 +1,102 @@
 # ==============================================================================
 # erp_pages/inventory/product_search.py
-# MOBILE INVENTORY v3
-# Product Search Engine
+# MOBILE INVENTORY v4
+# ERP PRODUCT SEARCH ENGINE
 # ==============================================================================
-from database import get_products
+
+from database import db
 
 
 def search_product(keyword):
 
-    if keyword is None:
+    if not keyword:
         return None
+
 
     keyword = str(keyword).strip()
 
-    products = get_products()
 
-    for p in products:
+    try:
 
-        barcode = str(
-            p.get("barcode") or ""
-        ).strip()
+        client = db()
 
-        sku = str(
-            p.get("sku") or ""
-        ).strip()
 
-        if barcode == keyword:
-            return p
+        # --------------------------------------------------
+        # 1. Barcode Search
+        # --------------------------------------------------
 
-        if sku == keyword:
-            return p
+        result = (
+            client
+            .table("products")
+            .select(
+                """
+                id,
+                name,
+                barcode,
+                sku,
+                purchase_price,
+                selling_price,
+                stock,
+                unit,
+                minimum_stock
+                """
+            )
+            .eq(
+                "barcode",
+                keyword
+            )
+            .limit(1)
+            .execute()
+        )
 
-    return None
+
+        if result.data:
+
+            return result.data[0]
+
+
+        # --------------------------------------------------
+        # 2. SKU Search
+        # --------------------------------------------------
+
+        result = (
+            client
+            .table("products")
+            .select(
+                """
+                id,
+                name,
+                barcode,
+                sku,
+                purchase_price,
+                selling_price,
+                stock,
+                unit,
+                minimum_stock
+                """
+            )
+            .eq(
+                "sku",
+                keyword
+            )
+            .limit(1)
+            .execute()
+        )
+
+
+        if result.data:
+
+            return result.data[0]
+
+
+        return None
+
+
+    except Exception as e:
+
+        print(
+            "Product Search Error:",
+            e
+        )
+
+        return None
