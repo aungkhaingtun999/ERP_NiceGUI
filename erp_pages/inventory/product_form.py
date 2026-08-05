@@ -1,48 +1,130 @@
 # ==============================================================================
 # erp_pages/inventory/product_form.py
 # MOBILE INVENTORY v5
-# ERP ENTERPRISE PRODUCT REGISTRATION FORM
+# ERP ENTERPRISE PRODUCT REGISTRATION ENGINE
 # ==============================================================================
 
+import time
 import streamlit as st
 
+from database import (
+    db,
+    get_warehouses,
+)
 
 
 # ------------------------------------------------------------------------------
-# Clear Product Form
+# CLEAR FORM
 # ------------------------------------------------------------------------------
 
 def clear_product_form():
 
-    if "product_form_version" not in st.session_state:
+    keys = [
+        "product_name",
+        "product_sku",
+        "purchase_price",
+        "selling_price",
+        "opening_stock",
+        "selected_warehouse"
+    ]
 
-        st.session_state["product_form_version"] = 0
-
-    else:
-
-        st.session_state["product_form_version"] += 1
+    for key in keys:
+        st.session_state.pop(key, None)
 
 
 
 # ------------------------------------------------------------------------------
-# Product Registration Form
+# BARCODE DUPLICATE CHECK
 # ------------------------------------------------------------------------------
 
-def render_new_product_form(barcode=""):
+def check_barcode_exists(barcode):
+
+    try:
+
+        result = (
+            db()
+            .table("products")
+            .select(
+                "id,name,barcode,sku"
+            )
+            .eq(
+                "barcode",
+                barcode
+            )
+            .execute()
+        )
+
+        if result.data:
+
+            return result.data[0]
+
+        return None
 
 
-    # Initialize form version
+    except Exception:
 
-    if "product_form_version" not in st.session_state:
-
-        st.session_state["product_form_version"] = 0
+        return None
 
 
 
-    form_key = (
-        f"new_product_form_"
-        f"{st.session_state['product_form_version']}"
-    )
+# ------------------------------------------------------------------------------
+# CREATE PRODUCT RPC
+# ------------------------------------------------------------------------------
+
+def create_product(
+    product_data,
+    warehouse_id
+):
+
+    try:
+
+        response = (
+            db()
+            .rpc(
+                "create_product_full",
+                {
+                    "p_data": product_data,
+                    "p_warehouse_id": int(warehouse_id),
+                    "p_initial_qty": int(
+                        product_data.get(
+                            "stock",
+                            0
+                        )
+                    )
+                }
+            )
+            .execute()
+        )
+
+
+        result = response.data
+
+
+        if isinstance(result, list):
+
+            result = result[0]
+
+
+        return result
+
+
+    except Exception as e:
+
+        return {
+            "status":"error",
+            "message":str(e)
+        }
+
+
+
+
+# ------------------------------------------------------------------------------
+# MAIN FORM
+# ------------------------------------------------------------------------------
+
+def render_new_product_form(
+    barcode=""
+):
 
 
     st.divider()
@@ -52,106 +134,138 @@ def render_new_product_form(barcode=""):
     )
 
 
-    barcode = barcode.strip()
-
-
-
     if barcode:
 
         st.success(
-            f"📷 Barcode: {barcode}"
+            f"📷 Barcode : {barcode}"
         )
 
     else:
 
         st.warning(
-            "Please scan or enter barcode first."
+            "Barcode required"
         )
 
 
+    # --------------------------------------------------
+    # WAREHOUSE LOAD
+    # --------------------------------------------------
 
-    # --------------------------------------------------------------------------
-    # Product Form
-    # --------------------------------------------------------------------------
+    warehouses = get_warehouses()
+
+
+    if not warehouses:
+
+        st.error(
+            "No warehouse found"
+        )
+
+        return None
+
+
+
+    warehouse_map = {
+
+        w.get("name"):
+        w.get("id")
+
+        for w in warehouses
+
+    }
+
+
 
     with st.form(
-        form_key,
+        "mobile_product_registration",
         clear_on_submit=False
     ):
 
 
+        warehouse_name = st.selectbox(
+
+            "🏭 Warehouse",
+
+            list(
+                warehouse_map.keys()
+            ),
+
+            key="selected_warehouse"
+
+        )
+
+
         name = st.text_input(
-            "Product Name"
+            "Product Name",
+            key="product_name"
         )
 
 
         sku = st.text_input(
-            "SKU"
+            "SKU",
+            key="product_sku"
         )
 
 
         purchase_price = st.number_input(
+
             "Purchase Price",
+
             min_value=0.0,
+
             step=100.0,
-            value=0.0
+
+            key="purchase_price"
+
         )
 
 
         selling_price = st.number_input(
+
             "Selling Price",
+
             min_value=0.0,
+
             step=100.0,
-            value=0.0
+
+            key="selling_price"
+
         )
 
 
         stock = st.number_input(
+
             "Opening Stock",
+
             min_value=0,
+
             step=1,
-            value=0
+
+            key="opening_stock"
+
         )
 
 
+        save = st.form_submit_button(
 
-        save_btn = st.form_submit_button(
             "💾 Save Product",
+
             use_container_width=True
+
         )
 
 
 
-    # --------------------------------------------------------------------------
-    # Clear Button
-    # --------------------------------------------------------------------------
+    # --------------------------------------------------
+    # SAVE
+    # --------------------------------------------------
 
-    clear_btn = st.button(
-        "🧹 Clear Form",
-        use_container_width=True
-    )
-
-
-
-    if clear_btn:
-
-        clear_product_form()
-
-        st.rerun()
-
-
-
-    # --------------------------------------------------------------------------
-    # Save Processing
-    # --------------------------------------------------------------------------
-
-    if save_btn:
+    if save:
 
 
         if not barcode:
 
             st.error(
-                "❌ Barcode required"
+                "❌ Barcode missing"
             )
 
             return None
@@ -161,55 +275,137 @@ def render_new_product_form(barcode=""):
         if not name.strip():
 
             st.error(
-                "❌ Enter product name"
+                "❌ Product name required"
             )
 
             return None
 
 
 
-        product_data = {
+        # Duplicate check
+
+        duplicate = check_barcode_exists(
+            barcode
+        )
 
 
-            "name": name.strip(),
+        if duplicate:
 
 
-            "barcode": barcode,
-
-
-            "sku": sku.strip(),
-
-
-            "purchase_price": float(
-                purchase_price
-            ),
-
-
-            "selling_price": float(
-                selling_price
-            ),
-
-
-            "stock": int(
-                stock
+            st.error(
+                "❌ Barcode already exists"
             )
+
+
+            st.json(
+                duplicate
+            )
+
+            return None
+
+
+
+        payload = {
+
+
+            "name":
+                name.strip(),
+
+
+            "barcode":
+                barcode.strip(),
+
+
+            "sku":
+                sku.strip(),
+
+
+            "purchase_price":
+                float(
+                    purchase_price
+                ),
+
+
+            "selling_price":
+                float(
+                    selling_price
+                ),
+
+
+            "category_id":
+                1,
+
+
+            "unit":
+                "PCS",
+
+
+            "minimum_stock":
+                5
+
 
         }
 
 
 
-        st.success(
-            "✅ Product data ready"
+        result = create_product(
+
+            payload,
+
+            warehouse_map[
+                warehouse_name
+            ]
+
         )
 
 
-        st.json(
-            product_data
-        )
+
+        if result.get("status") == "success":
 
 
-        return product_data
+            st.success(
+                "✅ Product Created Successfully"
+            )
 
+
+            st.info(
+                f"""
+                Product ID :
+                {result.get('product_id')}
+
+                Warehouse :
+                {warehouse_name}
+
+                Opening Stock :
+                {stock}
+                """
+            )
+
+
+            time.sleep(1)
+
+
+            clear_product_form()
+
+
+            st.rerun()
+
+
+
+        else:
+
+
+            st.error(
+                "❌ Product Create Failed"
+            )
+
+
+            st.code(
+                result.get(
+                    "message",
+                    "Unknown error"
+                )
+            )
 
 
     return None
