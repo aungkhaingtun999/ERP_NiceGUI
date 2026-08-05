@@ -1,71 +1,154 @@
+# ==============================================================================
+# erp_components/mobile_scanner/scanner.py
+# MOBILE BARCODE SCANNER v2.0
+# Streamlit WebRTC + OpenCV + PyZBar
+# ==============================================================================
+
+
+import time
+import threading
+
 import streamlit as st
+import av
 
 from streamlit_webrtc import (
     webrtc_streamer,
     VideoProcessorBase,
-    RTCConfiguration
+    RTCConfiguration,
 )
-
-import av
 
 from .decoder import decode_barcode
 
 
 
-class BarcodeProcessor(
-    VideoProcessorBase
-):
+# ==============================================================================
+# GLOBAL SCAN CONTROL
+# ==============================================================================
+
+SCAN_COOLDOWN = 2
+
+
+
+# ==============================================================================
+# BARCODE PROCESSOR
+# ==============================================================================
+
+
+class BarcodeProcessor(VideoProcessorBase):
+
 
     def __init__(self):
 
-        self.barcode = None
+        self.last_scan = None
+
+        self.last_time = 0
 
 
 
     def recv(self, frame):
+
 
         img = frame.to_ndarray(
             format="bgr24"
         )
 
 
-        result = decode_barcode(
-            img
-        )
+        now = time.time()
 
 
-        if result:
 
-            self.barcode = result
+        # ----------------------------------------------------------
+        # Decode only after cooldown
+        # ----------------------------------------------------------
+
+        if now - self.last_time > SCAN_COOLDOWN:
 
 
-            st.session_state[
-                "barcode_value"
-            ] = result
+            result = decode_barcode(
+                img
+            )
+
+
+            if result:
+
+
+                self.last_scan = result
+
+                self.last_time = now
+
+
+
+                # Safe callback
+                threading.Thread(
+
+                    target=
+                    self.save_result,
+
+                    args=(result,)
+
+                ).start()
 
 
 
         return av.VideoFrame.from_ndarray(
+
             img,
+
             format="bgr24"
+
         )
 
 
 
 
+    def save_result(self, value):
+
+
+        st.session_state[
+            "barcode_value"
+        ] = value
+
+
+
+
+
+# ==============================================================================
+# WEBRTC CONFIG
+# ==============================================================================
+
+
 RTC_CONFIG = RTCConfiguration(
+
     {
-        "iceServers":[
+
+        "iceServers":
+
+        [
+
             {
-                "urls":[
+
+                "urls":
+
+                [
+
                     "stun:stun.l.google.com:19302"
+
                 ]
+
             }
+
         ]
+
     }
+
 )
 
 
+
+
+# ==============================================================================
+# PUBLIC FUNCTION
+# ==============================================================================
 
 
 def mobile_scanner():
@@ -77,42 +160,90 @@ def mobile_scanner():
 
 
 
+    st.subheader(
+        "📷 Barcode Scanner"
+    )
+
+
+
     webrtc_ctx = webrtc_streamer(
 
-        key="mobile_barcode_scanner",
+        key=
+        "mobile_barcode_scanner_v2",
+
 
         video_processor_factory=
-            BarcodeProcessor,
+        BarcodeProcessor,
+
 
         rtc_configuration=
-            RTC_CONFIG,
+        RTC_CONFIG,
 
-        media_stream_constraints={
 
-            "video": {
+        media_stream_constraints=
+
+        {
+
+            "video":
+
+            {
+
                 "facingMode":
-                "environment"
+                {
+
+                    "ideal":
+                    "environment"
+
+                }
+
             },
 
-            "audio": False
-        }
+
+            "audio":
+            False
+
+        },
+
+
+        async_processing=True
 
     )
 
 
-    if st.session_state.barcode_value:
+
+    barcode = st.session_state.get(
+
+        "barcode_value",
+
+        ""
+
+    )
+
+
+
+    if barcode:
 
 
         st.success(
-            "Barcode: "
-            +
-            st.session_state.barcode_value
+
+            f"✅ Barcode : {barcode}"
+
         )
 
 
-        return (
-            st.session_state.barcode_value
+        return barcode
+
+
+
+    else:
+
+
+        st.info(
+
+            "Waiting for scan..."
+
         )
+
 
 
     return None
