@@ -1,32 +1,60 @@
 # ==============================================================================
 # erp_pages/inventory/product_form.py
-# MOBILE INVENTORY v4
+# MOBILE INVENTORY v5
 # ERP ENTERPRISE PRODUCT REGISTRATION FORM
 # ==============================================================================
 
 import streamlit as st
 
 
+
+# ------------------------------------------------------------------------------
+# Clear Product Form
+# ------------------------------------------------------------------------------
+
 def clear_product_form():
 
-    keys = [
-        "product_name",
-        "product_sku",
-        "purchase_price",
-        "selling_price",
-        "opening_stock"
-    ]
+    if "product_form_version" not in st.session_state:
 
-    for key in keys:
-        st.session_state.pop(key, None)
+        st.session_state["product_form_version"] = 0
+
+    else:
+
+        st.session_state["product_form_version"] += 1
 
 
+
+# ------------------------------------------------------------------------------
+# Product Registration Form
+# ------------------------------------------------------------------------------
 
 def render_new_product_form(barcode=""):
 
+
+    # Initialize form version
+
+    if "product_form_version" not in st.session_state:
+
+        st.session_state["product_form_version"] = 0
+
+
+
+    form_key = (
+        f"new_product_form_"
+        f"{st.session_state['product_form_version']}"
+    )
+
+
     st.divider()
 
-    st.subheader("🆕 New Product Registration")
+    st.subheader(
+        "🆕 New Product Registration"
+    )
+
+
+    barcode = barcode.strip()
+
+
 
     if barcode:
 
@@ -37,25 +65,28 @@ def render_new_product_form(barcode=""):
     else:
 
         st.warning(
-            "Please enter or scan a barcode first."
+            "Please scan or enter barcode first."
         )
 
 
+
+    # --------------------------------------------------------------------------
+    # Product Form
+    # --------------------------------------------------------------------------
+
     with st.form(
-        "new_product_form",
+        form_key,
         clear_on_submit=False
     ):
 
 
         name = st.text_input(
-            "Product Name",
-            key="product_name"
+            "Product Name"
         )
 
 
         sku = st.text_input(
-            "SKU",
-            key="product_sku"
+            "SKU"
         )
 
 
@@ -63,7 +94,7 @@ def render_new_product_form(barcode=""):
             "Purchase Price",
             min_value=0.0,
             step=100.0,
-            key="purchase_price"
+            value=0.0
         )
 
 
@@ -71,7 +102,7 @@ def render_new_product_form(barcode=""):
             "Selling Price",
             min_value=0.0,
             step=100.0,
-            key="selling_price"
+            value=0.0
         )
 
 
@@ -79,22 +110,27 @@ def render_new_product_form(barcode=""):
             "Opening Stock",
             min_value=0,
             step=1,
-            key="opening_stock"
+            value=0
         )
 
 
-        # Form အတွင်းမှာ Save Product ခလုတ် တစ်ခုတည်းသာ ထားရှိပါသည်
+
         save_btn = st.form_submit_button(
             "💾 Save Product",
             use_container_width=True
         )
 
 
-    # Clear Button ကို form အပြင်ဘက်သို့ ရွှေ့ပြောင်းထားပါသည်
+
+    # --------------------------------------------------------------------------
+    # Clear Button
+    # --------------------------------------------------------------------------
+
     clear_btn = st.button(
         "🧹 Clear Form",
         use_container_width=True
     )
+
 
 
     if clear_btn:
@@ -104,6 +140,10 @@ def render_new_product_form(barcode=""):
         st.rerun()
 
 
+
+    # --------------------------------------------------------------------------
+    # Save Processing
+    # --------------------------------------------------------------------------
 
     if save_btn:
 
@@ -130,19 +170,25 @@ def render_new_product_form(barcode=""):
 
         product_data = {
 
+
             "name": name.strip(),
 
-            "barcode": barcode.strip(),
+
+            "barcode": barcode,
+
 
             "sku": sku.strip(),
+
 
             "purchase_price": float(
                 purchase_price
             ),
 
+
             "selling_price": float(
                 selling_price
             ),
+
 
             "stock": int(
                 stock
@@ -154,6 +200,11 @@ def render_new_product_form(barcode=""):
 
         st.success(
             "✅ Product data ready"
+        )
+
+
+        st.json(
+            product_data
         )
 
 
