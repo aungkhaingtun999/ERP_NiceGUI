@@ -1,13 +1,13 @@
 # ==============================================================================
-# MOBILE INVENTORY v11 STABLE
-# BUILT-IN CAMERA SCAN + MANUAL BARCODE INPUT
+# MOBILE INVENTORY v12 STABLE
+# CAMERA ON/OFF + AUTO SEARCH + MANUAL BARCODE
 # ==============================================================================
 
 import io
 import streamlit as st
 from PIL import Image
 
-# pyzbar ကို optional လုပ်ထားတယ်
+# Barcode decoder
 try:
     from pyzbar.pyzbar import decode
     PYZBAR_OK = True
@@ -18,12 +18,14 @@ from erp_pages.inventory.product_search import search_product
 from erp_pages.inventory.product_form import render_new_product_form
 
 
-def scan_barcode_from_camera():
+# ------------------------------------------------------------------------------
+# CAMERA SCAN
+# ------------------------------------------------------------------------------
 
+def scan_barcode_from_camera():
     if not PYZBAR_OK:
         st.error(
-            'pyzbar / zbar library မရှိသေးပါ။ '
-            'Streamlit Cloud မှာ packages.txt ထည့်ဖို့လိုပါတယ်။'
+            'pyzbar / zbar library မရှိပါ။ packages.txt တွင် libzbar0 ထည့်ပါ။'
         )
         return None
 
@@ -33,7 +35,6 @@ def scan_barcode_from_camera():
         return None
 
     image = Image.open(io.BytesIO(photo.getvalue()))
-
     codes = decode(image)
 
     if codes:
@@ -43,31 +44,33 @@ def scan_barcode_from_camera():
     return None
 
 
-def load_product(barcode):
+# ------------------------------------------------------------------------------
+# LOAD PRODUCT
+# ------------------------------------------------------------------------------
 
+def load_product(barcode):
     if not barcode:
         return
 
     barcode = str(barcode).strip()
-
     product = search_product(barcode)
 
-    if product:
+    st.session_state.barcode_value = barcode
+    st.session_state.product = product
 
-        st.session_state.product = product
-        st.session_state.barcode_value = barcode
 
-    else:
-
-        st.session_state.product = None
-
-        st.warning(f'❌ Barcode not found: {barcode}')
-
+# ------------------------------------------------------------------------------
+# MAIN PAGE
+# ------------------------------------------------------------------------------
 
 def run():
 
     st.title('📦 Mobile Inventory')
     st.caption('📷 Camera Scan + Manual Barcode')
+
+    # Session state
+    if 'camera_on' not in st.session_state:
+        st.session_state.camera_on = False
 
     if 'barcode_value' not in st.session_state:
         st.session_state.barcode_value = ''
@@ -75,23 +78,48 @@ def run():
     if 'product' not in st.session_state:
         st.session_state.product = None
 
-    # --------------------------------------------------
-    # CAMERA SCAN
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
+    # CAMERA CONTROL
+    # --------------------------------------------------------------------------
 
-    scanned_code = scan_barcode_from_camera()
+    col1, col2 = st.columns(2)
 
-    if scanned_code:
+    with col1:
+        if st.button('📷 Camera ON', use_container_width=True):
+            st.session_state.camera_on = True
+            st.rerun()
 
-        st.success(f'✅ Scanned: {scanned_code}')
+    with col2:
+        if st.button('🛑 Camera OFF', use_container_width=True):
+            st.session_state.camera_on = False
+            st.rerun()
 
-        load_product(scanned_code)
+    # --------------------------------------------------------------------------
+    # CAMERA SCAN AUTO SEARCH
+    # --------------------------------------------------------------------------
+
+    if st.session_state.camera_on:
+
+        st.success('📷 Camera ON - point to barcode')
+
+        scanned = scan_barcode_from_camera()
+
+        if scanned:
+
+            st.success(f'✅ Scanned: {scanned}')
+
+            # AUTO SEARCH
+            load_product(scanned)
+
+    else:
+
+        st.info('Camera OFF')
 
     st.divider()
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # MANUAL BARCODE
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     barcode = st.text_input(
         '📷 Manual Barcode / SKU',
@@ -99,30 +127,31 @@ def run():
         placeholder='Type barcode manually'
     )
 
-    if st.button('🔍 Search Product', use_container_width=True):
-
-        if barcode:
-            load_product(barcode)
-        else:
-            st.warning('Enter barcode first')
-
-    # --------------------------------------------------
-    # PRODUCT DISPLAY
-    # --------------------------------------------------
+    # AUTO SEARCH WHEN MANUAL INPUT CHANGES
+    if barcode and barcode != st.session_state.barcode_value:
+        load_product(barcode)
 
     product = st.session_state.product
+
+    # --------------------------------------------------------------------------
+    # PRODUCT DISPLAY
+    # --------------------------------------------------------------------------
 
     if product:
 
         st.divider()
         st.subheader('📦 Product Found')
 
-        st.write('Name:', product.get('name', '-'))
-        st.write('Barcode:', product.get('barcode', '-'))
-        st.write('SKU:', product.get('sku', '-'))
-        st.write('Purchase:', product.get('purchase_price', 0))
-        st.write('Selling:', product.get('selling_price', 0))
-        st.write('Stock:', product.get('stock', 0))
+        st.write('**Name:**', product.get('name', '-'))
+        st.write('**Barcode:**', product.get('barcode', '-'))
+        st.write('**SKU:**', product.get('sku', '-'))
+        st.write('**Purchase Price:**', product.get('purchase_price', 0))
+        st.write('**Selling Price:**', product.get('selling_price', 0))
+        st.write('**Stock:**', product.get('stock', 0))
+
+    # --------------------------------------------------------------------------
+    # NEW PRODUCT
+    # --------------------------------------------------------------------------
 
     elif barcode:
 
