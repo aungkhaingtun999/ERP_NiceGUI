@@ -6,6 +6,7 @@ const status = document.getElementById("status");
 let scanned = false;
 
 
+
 async function startScanner(){
 
     try {
@@ -13,11 +14,17 @@ async function startScanner(){
         status.innerHTML = "📷 Opening camera...";
 
 
+        // Force video visible
+        video.style.display = "block";
+        video.style.visibility = "visible";
+        video.style.opacity = "1";
+
+
         const devices =
             await codeReader.listVideoInputDevices();
 
 
-        if(devices.length === 0){
+        if(!devices || devices.length === 0){
 
             status.innerHTML =
             "❌ No camera found";
@@ -26,9 +33,13 @@ async function startScanner(){
         }
 
 
-        let cameraId = devices[0].deviceId;
+
+        let cameraId =
+        devices[0].deviceId;
 
 
+
+        // Prefer back camera
         for(const device of devices){
 
             const label =
@@ -41,12 +52,18 @@ async function startScanner(){
                 label.includes("environment")
             ){
 
-                cameraId = device.deviceId;
+                cameraId =
+                device.deviceId;
 
+                break;
             }
 
         }
 
+
+
+        status.innerHTML =
+        "📷 Camera ready...";
 
 
         codeReader.decodeFromVideoDevice(
@@ -64,8 +81,9 @@ async function startScanner(){
                     result.getText();
 
 
+
                     status.innerHTML =
-                    "✅ " + barcode;
+                    "✅ Barcode: " + barcode;
 
 
 
@@ -86,7 +104,7 @@ async function startScanner(){
 
                         codeReader.reset();
 
-                    },500);
+                    },1000);
 
 
                 }
@@ -96,11 +114,28 @@ async function startScanner(){
         );
 
 
+
+        // Wait video render
+        setTimeout(()=>{
+
+            video.play()
+            .then(()=>{
+
+                video.style.display="block";
+
+            })
+            .catch(()=>{});
+
+
+        },1000);
+
+
+
     }
     catch(e){
 
         status.innerHTML =
-        "❌ Camera Error: " + e;
+        "❌ Camera Error: " + e.message;
 
     }
 
