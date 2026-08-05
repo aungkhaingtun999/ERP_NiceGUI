@@ -4,120 +4,83 @@
 # Streamlit WebRTC + OpenCV + PyZBar
 # Camera stays open until user leaves the page
 # ==============================================================================
+import streamlit.components.v1 as components
+import uuid
 
-import time
+def mobile_scanner(key=None, height=500):
+    component_key = key or f"mobile-scanner-{uuid.uuid4()}"
 
-import streamlit as st
-import av
+    html_code = """
+    <div style="text-align:center">
+        <video id="video" width="100%" autoplay playsinline
+               style="border-radius:12px;border:1px solid #ddd;"></video>
+        <p id="status">📷 Camera starting...</p>
+    </div>
 
-from streamlit_webrtc import (
-    webrtc_streamer,
-    VideoProcessorBase,
-    RTCConfiguration,
-)
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    const video = document.getElementById("video");
+    const statusEl = document.getElementById("status");
 
-from .decoder import decode_barcode
+    let scanned = false;
 
+    async function startScanner() {
+        try {
+            const devices = await codeReader.listVideoInputDevices();
 
-# ==============================================================================
-# GLOBAL SCAN CONTROL
-# ==============================================================================
-
-SCAN_COOLDOWN = 2  # seconds
-
-
-# ==============================================================================
-# BARCODE PROCESSOR
-# ==============================================================================
-
-class BarcodeProcessor(VideoProcessorBase):
-
-    def __init__(self):
-        self.last_scan = None
-        self.last_time = 0
-
-    def recv(self, frame):
-
-        img = frame.to_ndarray(format="bgr24")
-
-        now = time.time()
-
-        # Decode only after cooldown
-        if now - self.last_time > SCAN_COOLDOWN:
-
-            result = decode_barcode(img)
-
-            if result:
-                self.last_scan = result
-                self.last_time = now
-
-        return av.VideoFrame.from_ndarray(
-            img,
-            format="bgr24"
-        )
-
-
-# ==============================================================================
-# WEBRTC CONFIG
-# ==============================================================================
-
-RTC_CONFIG = RTCConfiguration(
-    {
-        "iceServers": [
-            {
-                "urls": [
-                    "stun:stun.l.google.com:19302"
-                ]
+            if (devices.length === 0) {
+                statusEl.innerHTML = "❌ No camera found";
+                return;
             }
-        ]
-    }
-)
 
+            let cameraId = devices[devices.length - 1].deviceId;
 
-# ==============================================================================
-# PUBLIC FUNCTION
-# ==============================================================================
-
-def mobile_scanner():
-
-    if "barcode_value" not in st.session_state:
-        st.session_state.barcode_value = ""
-
-    st.subheader("📷 Barcode Scanner")
-
-    webrtc_ctx = webrtc_streamer(
-        key="mobile_barcode_scanner_v3",
-
-        video_processor_factory=BarcodeProcessor,
-
-        rtc_configuration=RTC_CONFIG,
-
-        media_stream_constraints={
-            "video": {
-                "facingMode": {
-                    "ideal": "environment"
+            for (const device of devices) {
+                const label = (device.label || "").toLowerCase();
+                if (
+                    label.includes("back") ||
+                    label.includes("rear") ||
+                    label.includes("environment")
+                ) {
+                    cameraId = device.deviceId;
                 }
-            },
-            "audio": False
-        },
+            }
 
-        async_processing=True,
-    )
+            statusEl.innerHTML = "📷 Camera ready";
 
-    # Get scanned value from processor
-    if webrtc_ctx and webrtc_ctx.video_processor:
+            codeReader.decodeFromVideoDevice(
+                cameraId,
+                video,
+                (result, error) => {
+                    if (result && !scanned) {
+                        scanned = true;
 
-        scanned = webrtc_ctx.video_processor.last_scan
+                        const barcode = result.text;
+                        statusEl.innerHTML = "✅ Scanned: " + barcode;
 
-        if scanned and scanned != st.session_state.barcode_value:
-            st.session_state.barcode_value = scanned
+                        window.parent.postMessage(
+                            {
+                                type: "streamlit:setComponentValue",
+                                value: barcode
+                            },
+                            "*"
+                        );
 
-    barcode = st.session_state.get("barcode_value", "")
+                        // scan ပြီးမှ camera ပိတ်
+                        setTimeout(() => {
+                            codeReader.reset();
+                        }, 500);
+                    }
+                }
+            );
+        } catch (e) {
+            statusEl.innerHTML = "❌ Camera Error: " + e;
+        }
+    }
 
-    if barcode:
-        st.success(f"✅ Barcode : {barcode}")
-        return barcode
+    startScanner();
+    </script>
+    """
 
-    st.info("Waiting for scan...")
-
-    return None
+    return components.html(html_code, height=height, key=component_key)
