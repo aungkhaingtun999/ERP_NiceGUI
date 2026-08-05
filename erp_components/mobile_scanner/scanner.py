@@ -1,86 +1,126 @@
 # ==============================================================================
 # erp_components/mobile_scanner/scanner.py
-# MOBILE BARCODE SCANNER v3.0 STABLE
-# Streamlit WebRTC + OpenCV + PyZBar
-# Camera stays open until user leaves the page
+# MOBILE BARCODE SCANNER v3.0
+# HTML5 CAMERA + ZXING JS
 # ==============================================================================
-import streamlit.components.v1 as components
-import uuid
 
-def mobile_scanner(key=None, height=500):
-    component_key = key or f"mobile-scanner-{uuid.uuid4()}"
+import streamlit as st
+import streamlit.components.v1 as components
+
+
+def mobile_scanner():
+
+    st.subheader("📷 Barcode Scanner")
 
     html_code = """
-    <div style="text-align:center">
-        <video id="video" width="100%" autoplay playsinline
-               style="border-radius:12px;border:1px solid #ddd;"></video>
-        <p id="status">📷 Camera starting...</p>
+    <div>
+        <video id="video" 
+               width="100%" 
+               autoplay 
+               playsinline>
+        </video>
+
+        <div id="result">
+            Waiting scan...
+        </div>
     </div>
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
+
     <script>
+
     const codeReader = new ZXing.BrowserMultiFormatReader();
+
     const video = document.getElementById("video");
-    const statusEl = document.getElementById("status");
+    const resultBox = document.getElementById("result");
 
     let scanned = false;
 
-    async function startScanner() {
-        try {
-            const devices = await codeReader.listVideoInputDevices();
 
-            if (devices.length === 0) {
-                statusEl.innerHTML = "❌ No camera found";
+    async function startScanner(){
+
+        try{
+
+            const devices =
+                await codeReader.listVideoInputDevices();
+
+
+            if(devices.length === 0){
+
+                resultBox.innerHTML =
+                "❌ No camera found";
+
                 return;
             }
 
-            let cameraId = devices[devices.length - 1].deviceId;
 
-            for (const device of devices) {
-                const label = (device.label || "").toLowerCase();
-                if (
-                    label.includes("back") ||
-                    label.includes("rear") ||
-                    label.includes("environment")
-                ) {
-                    cameraId = device.deviceId;
-                }
-            }
+            let cameraId =
+                devices[devices.length-1].deviceId;
 
-            statusEl.innerHTML = "📷 Camera ready";
 
             codeReader.decodeFromVideoDevice(
                 cameraId,
                 video,
-                (result, error) => {
-                    if (result && !scanned) {
+                (result, err)=>{
+
+
+                    if(result && !scanned){
+
                         scanned = true;
 
-                        const barcode = result.text;
-                        statusEl.innerHTML = "✅ Scanned: " + barcode;
+
+                        const barcode =
+                        result.text;
+
+
+                        resultBox.innerHTML =
+                        "✅ Barcode: " + barcode;
+
 
                         window.parent.postMessage(
-                            {
-                                type: "streamlit:setComponentValue",
-                                value: barcode
-                            },
-                            "*"
+                        {
+                            type:
+                            "streamlit:setComponentValue",
+                            value:
+                            barcode
+                        },
+                        "*"
                         );
 
-                        // scan ပြီးမှ camera ပိတ်
-                        setTimeout(() => {
+
+                        setTimeout(()=>{
+
                             codeReader.reset();
-                        }, 500);
+
+                        },500);
+
                     }
+
                 }
             );
-        } catch (e) {
-            statusEl.innerHTML = "❌ Camera Error: " + e;
+
+
         }
+        catch(e){
+
+            resultBox.innerHTML =
+            "❌ Camera Error: " + e;
+
+        }
+
     }
 
+
     startScanner();
+
     </script>
     """
 
-    return components.html(html_code, height=height, key=component_key)
+
+    barcode = components.html(
+        html_code,
+        height=450
+    )
+
+
+    return barcode
