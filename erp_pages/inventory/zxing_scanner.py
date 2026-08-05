@@ -40,7 +40,7 @@ def zxing_scanner():
 
 
     result = zxing_component(
-        key="zxing_scanner",
+        key="zxing_scanner_v3",
         default="",
         height=450
     )
