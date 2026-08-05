@@ -1,16 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+
+html,body{
+
+    margin:0;
+    padding:0;
+
+    width:100%;
+    height:100%;
+
+    overflow:hidden;
+
+    background:black;
+
+}
+
+
+#video{
+
+    position:relative;
+
+    display:block;
+
+    width:100%;
+
+    height:450px;
+
+    background:black;
+
+    object-fit:cover;
+
+    z-index:999;
+
+}
+
+
+#status{
+
+    position:relative;
+
+    color:white;
+
+    font-size:18px;
+
+    text-align:center;
+
+    padding:10px;
+
+    z-index:1000;
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
 <video
 id="video"
 autoplay
 playsinline
-muted
-style="
-width:100%;
-height:450px;
-display:block;
-background:#000;
-object-fit:cover;
-">
+muted>
 </video>
+
 
 <div id="status">
 Starting camera...
@@ -18,3 +79,8 @@ Starting camera...
 
 
 <script src="main.js"></script>
+
+
+</body>
+
+</html>
