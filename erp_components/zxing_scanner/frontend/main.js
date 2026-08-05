@@ -1,146 +1,61 @@
-const codeReader = new ZXing.BrowserMultiFormatReader();
-
 const video = document.getElementById("video");
 const status = document.getElementById("status");
 
-let scanned = false;
 
-
-
-async function startScanner(){
+async function startCamera(){
 
     try {
 
-        status.innerHTML = "📷 Opening camera...";
+        status.innerHTML = "📷 Requesting camera...";
 
 
-        // Force video visible
-        video.style.display = "block";
-        video.style.visibility = "visible";
-        video.style.opacity = "1";
+        const stream =
+        await navigator.mediaDevices.getUserMedia({
 
+            video:{
+                facingMode:{
+                    ideal:"environment"
+                },
 
-        const devices =
-            await codeReader.listVideoInputDevices();
+                width:{
+                    ideal:1280
+                },
 
-
-        if(!devices || devices.length === 0){
-
-            status.innerHTML =
-            "❌ No camera found";
-
-            return;
-        }
-
-
-
-        let cameraId =
-        devices[0].deviceId;
-
-
-
-        // Prefer back camera
-        for(const device of devices){
-
-            const label =
-            (device.label || "").toLowerCase();
-
-
-            if(
-                label.includes("back") ||
-                label.includes("rear") ||
-                label.includes("environment")
-            ){
-
-                cameraId =
-                device.deviceId;
-
-                break;
-            }
-
-        }
-
-
-
-        status.innerHTML =
-        "📷 Camera ready...";
-
-
-        codeReader.decodeFromVideoDevice(
-            cameraId,
-            video,
-            (result, error)=>{
-
-
-                if(result && !scanned){
-
-                    scanned = true;
-
-
-                    const barcode =
-                    result.getText();
-
-
-
-                    status.innerHTML =
-                    "✅ Barcode: " + barcode;
-
-
-
-                    window.parent.postMessage(
-                    {
-                        type:
-                        "streamlit:setComponentValue",
-
-                        value:
-                        barcode
-                    },
-                    "*"
-                    );
-
-
-
-                    setTimeout(()=>{
-
-                        codeReader.reset();
-
-                    },1000);
-
-
+                height:{
+                    ideal:720
                 }
+            },
+
+            audio:false
+        });
 
 
-            }
+
+        video.srcObject = stream;
+
+
+        video.setAttribute(
+            "playsinline",
+            true
         );
 
 
-
-        // Wait video render
-        setTimeout(()=>{
-
-            video.play()
-            .then(()=>{
-
-                video.style.display="block";
-
-            })
-            .catch(()=>{});
+        await video.play();
 
 
-        },1000);
-
+        status.innerHTML =
+        "✅ Camera preview OK";
 
 
     }
-    catch(e){
+    catch(error){
 
         status.innerHTML =
-        "❌ Camera Error: " + e.message;
+        "❌ " + error.name + " : " + error.message;
 
     }
 
 }
 
 
-
-startScanner();
+startCamera();
