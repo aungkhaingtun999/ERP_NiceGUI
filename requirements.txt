@@ -1,4 +1,4 @@
-streamlit
+streamlit==1.49.1
 supabase
 postgrest
 pandas
@@ -18,3 +18,5 @@ numpy
 streamlit-javascript
 streamlit-js-eval
 pyzbar
+starlette==0.37.2
+uvicorn==0.30.6
