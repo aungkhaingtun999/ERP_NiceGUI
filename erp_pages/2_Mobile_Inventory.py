@@ -26,7 +26,7 @@ except Exception:
 # ------------------------------------------------------------------------------
 
 from erp_pages.inventory.product_search import search_product
-from erp_pages.inventory.product_form import render_new_product_form
+import erp_pages.inventory.product_form as product_form
 
 from database import (
     get_warehouses,
@@ -415,9 +415,7 @@ def run():
         )
 
 
-        render_new_product_form(
-            barcode
-        )
+        product_form.render_new_product_form(barcode)
 
 
 
