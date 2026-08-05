@@ -18,5 +18,4 @@ numpy
 streamlit-javascript
 streamlit-js-eval
 pyzbar
-starlette==0.37.2
-uvicorn==0.30.6
+
