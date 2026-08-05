@@ -1,7 +1,6 @@
 # ==============================================================================
-# erp_pages/inventory/product_search.py
-# MOBILE INVENTORY v5
-# PRODUCT + WAREHOUSE STOCK SEARCH
+# MOBILE INVENTORY PRODUCT SEARCH ENGINE v4
+# Barcode + SKU + Warehouse Stock
 # ==============================================================================
 
 from database import db
@@ -21,7 +20,7 @@ def search_product(keyword):
         client = db()
 
 
-        result = (
+        response = (
             client
             .table("products")
             .select(
@@ -40,88 +39,43 @@ def search_product(keyword):
                 )
                 """
             )
-            .eq(
-                "barcode",
-                keyword
+            .or_(
+                f"barcode.eq.{keyword},sku.eq.{keyword}"
             )
-            .limit(1)
             .execute()
         )
 
 
-        if result.data:
-
-            product = result.data[0]
+        products = response.data
 
 
-            # Warehouse stock ပြောင်းထည့်
-            stocks = product.get(
-                "warehouse_stock",
-                []
-            )
+        if not products:
+            return None
 
 
-            if stocks:
-
-                product["stock"] = stocks[0].get(
-                    "available_qty",
-                    0
-                )
+        product = products[0]
 
 
-            return product
-
-
-        # SKU နဲ့ ထပ်ရှာမယ်
-
-        result = (
-            client
-            .table("products")
-            .select(
-                """
-                id,
-                name,
-                barcode,
-                sku,
-                purchase_price,
-                selling_price,
-                stock,
-                warehouse_stock(
-                    warehouse_id,
-                    qty,
-                    available_qty
-                )
-                """
-            )
-            .eq(
-                "sku",
-                keyword
-            )
-            .limit(1)
-            .execute()
+        # Warehouse stock priority
+        warehouse_stock = product.get(
+            "warehouse_stock",
+            []
         )
 
 
-        if result.data:
+        if warehouse_stock:
 
-            product = result.data[0]
-
-            stocks = product.get(
-                "warehouse_stock",
-                []
+            total_qty = sum(
+                int(
+                    w.get("available_qty",0)
+                )
+                for w in warehouse_stock
             )
 
-            if stocks:
-
-                product["stock"] = stocks[0].get(
-                    "available_qty",
-                    0
-                )
-
-            return product
+            product["stock"] = total_qty
 
 
-        return None
+        return product
 
 
     except Exception as e:
