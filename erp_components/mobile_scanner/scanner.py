@@ -1,9 +1,7 @@
-#erp_components/mobile_scanner/scanner.py
-
 # ==============================================================================
 # erp_components/mobile_scanner/scanner.py
-# MOBILE BARCODE SCANNER v3.1 STABLE
-# HTML5 CAMERA + ZXING JS
+# MOBILE BARCODE SCANNER v3.2 STABLE
+# HTML5 CAMERA + ZXING JS + SESSION STATE
 # ==============================================================================
 
 import streamlit as st
@@ -12,7 +10,8 @@ import streamlit.components.v1 as components
 
 def mobile_scanner():
 
-    st.subheader("📷 Barcode Scanner")
+    if "barcode_value" not in st.session_state:
+        st.session_state.barcode_value = ""
 
 
     html_code = """
@@ -24,7 +23,11 @@ def mobile_scanner():
     </video>
 
 
-    <div id="result">
+    <div id="result"
+         style="
+         font-size:20px;
+         text-align:center;
+         margin-top:10px;">
         📷 Waiting scan...
     </div>
 
@@ -85,6 +88,7 @@ def mobile_scanner():
                 .toLowerCase();
 
 
+
                 if(
                     label.includes("back") ||
                     label.includes("rear") ||
@@ -122,7 +126,8 @@ def mobile_scanner():
 
 
                         resultBox.innerHTML =
-                        "✅ Barcode: " + barcode;
+                        "✅ Barcode: "
+                        + barcode;
 
 
 
@@ -144,11 +149,16 @@ def mobile_scanner():
 
 
 
+                        // stop camera
+
                         setTimeout(()=>{
 
-                            scanned=false;
 
-                        },1000);
+                            codeReader.reset();
+
+
+                        },500);
+
 
 
                     }
@@ -164,8 +174,11 @@ def mobile_scanner():
 
         catch(e){
 
+
             resultBox.innerHTML =
-            "❌ " + e;
+            "❌ Camera Error : "
+            + e;
+
 
         }
 
@@ -175,6 +188,7 @@ def mobile_scanner():
 
 
     startScanner();
+
 
 
     </script>
@@ -189,4 +203,7 @@ def mobile_scanner():
     )
 
 
-    return None
+    return st.session_state.get(
+        "barcode_value",
+        ""
+    )
