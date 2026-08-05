@@ -1,157 +1,79 @@
-// ==============================================================================
-// ZXING LIVE BARCODE SCANNER v2
-// Streamlit Custom Component
-// ==============================================================================
-
+const codeReader = new ZXing.BrowserMultiFormatReader();
 
 const video = document.getElementById("video");
-const status = document.getElementById("status");
-
-
-// ZXing reader
-
-const codeReader =
-    new ZXing.BrowserMultiFormatReader();
-
-
+const resultBox = document.getElementById("result");
 
 let scanned = false;
 
-
-
 async function startScanner(){
 
+    try {
 
-    try{
-
-
-        const devices =
-            await codeReader.listVideoInputDevices();
-
-
-
-        if(devices.length === 0){
-
-            status.innerHTML =
-                "❌ No camera found";
-
-            return;
-        }
-
-
-
-        let cameraId =
-            devices[devices.length - 1].deviceId;
-
-
-
-        // Prefer back camera
-
-        for(const device of devices){
-
-
-            const label =
-                (device.label || "")
-                .toLowerCase();
-
-
-
-            if(
-
-                label.includes("back") ||
-
-                label.includes("rear") ||
-
-                label.includes("environment")
-
-            ){
-
-                cameraId =
-                    device.deviceId;
-
+        const constraints = {
+            video: {
+                facingMode: {
+                    ideal: "environment"
+                },
+                width: {
+                    ideal: 1280
+                },
+                height: {
+                    ideal: 720
+                }
             }
-
-        }
-
+        };
 
 
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-        status.innerHTML =
-            "📷 Starting scanner...";
-
-
+        video.srcObject = stream;
 
 
-        codeReader.decodeFromVideoDevice(
+        await video.play();
 
-            cameraId,
 
+        codeReader.decodeFromStream(
+            stream,
             video,
-
             (result, error)=>{
-
 
                 if(result && !scanned){
 
-
                     scanned = true;
 
-
-                    const barcode =
-                        result.text;
+                    let barcode = result.text;
 
 
+                    resultBox.innerHTML =
+                    "✅ Barcode : " + barcode;
 
-                    status.innerHTML =
-                        "✅ Barcode: " + barcode;
-
-
-
-                    // Send value to Streamlit
 
                     window.parent.postMessage(
-
-                        {
-
-                            type:
-                            "streamlit:setComponentValue",
-
-                            value:
-                            barcode
-
-                        },
-
-                        "*"
-
+                    {
+                        type:"streamlit:setComponentValue",
+                        value:barcode
+                    },
+                    "*"
                     );
-
 
 
                     codeReader.reset();
 
                 }
 
-
             }
-
         );
 
 
-
     }
-
     catch(e){
 
-
-        status.innerHTML =
-            "❌ Scanner Error: " + e.message;
-
+        resultBox.innerHTML =
+        "❌ Camera Error : " + e;
 
     }
 
-
 }
-
 
 
 startScanner();
