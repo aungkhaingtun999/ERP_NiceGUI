@@ -1,8 +1,16 @@
+# ==============================================================================
+# ZXING BARCODE SCANNER v2 ENTERPRISE
+# Streamlit Camera Barcode Integration
+# ==============================================================================
+
 import os
+import streamlit as st
 import streamlit.components.v1 as components
 
 
+
 CURRENT = os.path.abspath(__file__)
+
 
 PROJECT_ROOT = os.path.abspath(
     os.path.join(
@@ -20,34 +28,6 @@ FRONTEND = os.path.join(
 )
 
 
-print("==========================")
-print("CURRENT FILE:")
-print(CURRENT)
-
-print("PROJECT ROOT:")
-print(PROJECT_ROOT)
-
-print("FRONTEND PATH:")
-print(FRONTEND)
-
-print("FRONTEND EXISTS:")
-print(os.path.exists(FRONTEND))
-
-print("INDEX EXISTS:")
-print(
-    os.path.exists(
-        os.path.join(FRONTEND, "index.html")
-    )
-)
-
-print("MAIN EXISTS:")
-print(
-    os.path.exists(
-        os.path.join(FRONTEND, "main.js")
-    )
-)
-print("==========================")
-
 
 zxing_component = components.declare_component(
     "zxing_scanner",
@@ -55,10 +35,31 @@ zxing_component = components.declare_component(
 )
 
 
+
 def zxing_scanner():
 
-    return zxing_component(
+
+    result = zxing_component(
         key="zxing_scanner",
         default="",
         height=450
     )
+
+
+    if result:
+
+
+        barcode = str(result).strip()
+
+
+        if barcode:
+
+
+            st.session_state.barcode_value = barcode
+
+
+            return barcode
+
+
+
+    return None
