@@ -17,4 +17,4 @@ av
 numpy
 streamlit-javascript
 streamlit-js-eval
-
+pyzbar
