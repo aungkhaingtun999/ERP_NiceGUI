@@ -1,65 +1,96 @@
 const codeReader = new ZXing.BrowserMultiFormatReader();
 
 const video = document.getElementById("video");
-const resultBox = document.getElementById("result");
+const status = document.getElementById("status");
 
 let scanned = false;
+
 
 async function startScanner(){
 
     try {
 
-        const constraints = {
-            video: {
-                facingMode: {
-                    ideal: "environment"
-                },
-                width: {
-                    ideal: 1280
-                },
-                height: {
-                    ideal: 720
-                }
+        status.innerHTML = "📷 Opening camera...";
+
+
+        const devices =
+            await codeReader.listVideoInputDevices();
+
+
+        if(devices.length === 0){
+
+            status.innerHTML =
+            "❌ No camera found";
+
+            return;
+        }
+
+
+        let cameraId = devices[0].deviceId;
+
+
+        for(const device of devices){
+
+            const label =
+            (device.label || "").toLowerCase();
+
+
+            if(
+                label.includes("back") ||
+                label.includes("rear") ||
+                label.includes("environment")
+            ){
+
+                cameraId = device.deviceId;
+
             }
-        };
+
+        }
 
 
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-        video.srcObject = stream;
-
-
-        await video.play();
-
-
-        codeReader.decodeFromStream(
-            stream,
+        codeReader.decodeFromVideoDevice(
+            cameraId,
             video,
             (result, error)=>{
+
 
                 if(result && !scanned){
 
                     scanned = true;
 
-                    let barcode = result.text;
+
+                    const barcode =
+                    result.getText();
 
 
-                    resultBox.innerHTML =
-                    "✅ Barcode : " + barcode;
+                    status.innerHTML =
+                    "✅ " + barcode;
+
 
 
                     window.parent.postMessage(
                     {
-                        type:"streamlit:setComponentValue",
-                        value:barcode
+                        type:
+                        "streamlit:setComponentValue",
+
+                        value:
+                        barcode
                     },
                     "*"
                     );
 
 
-                    codeReader.reset();
+
+                    setTimeout(()=>{
+
+                        codeReader.reset();
+
+                    },500);
+
 
                 }
+
 
             }
         );
@@ -68,12 +99,13 @@ async function startScanner(){
     }
     catch(e){
 
-        resultBox.innerHTML =
-        "❌ Camera Error : " + e;
+        status.innerHTML =
+        "❌ Camera Error: " + e;
 
     }
 
 }
+
 
 
 startScanner();
