@@ -7,7 +7,7 @@
 import streamlit as st
 
 
-from database import supabase
+from database import db
 
 
 # ------------------------------------------------------------------------------
@@ -115,12 +115,14 @@ def render_new_product_form(barcode=None):
         try:
 
 
+            client = db()
+
             result = (
-                supabase
-                .table("products")
-                .insert(data)
-                .execute()
-            )
+            client
+            .table("products")
+            .insert(data)
+            .execute()
+)
 
 
 
