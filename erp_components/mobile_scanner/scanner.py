@@ -1,64 +1,191 @@
+#erp_components/mobile_scanner/scanner.py
+
 # ==============================================================================
 # erp_components/mobile_scanner/scanner.py
-# MOBILE BARCODE SCANNER v4.0
-# STREAMLIT CUSTOM COMPONENT + ZXING JS
+# MOBILE BARCODE SCANNER v3.1 STABLE
+# HTML5 CAMERA + ZXING JS
 # ==============================================================================
 
-import os
 import streamlit as st
 import streamlit.components.v1 as components
 
 
-# ------------------------------------------------------------------------------
-# Component Setup
-# ------------------------------------------------------------------------------
-
-COMPONENT_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "frontend"
-)
-
-
-_mobile_scanner = components.declare_component(
-    "mobile_scanner",
-    path=COMPONENT_PATH
-)
-
-
-
-# ------------------------------------------------------------------------------
-# Public Function
-# ------------------------------------------------------------------------------
-
 def mobile_scanner():
 
-    st.subheader(
-        "📷 Barcode Scanner"
-    )
+    st.subheader("📷 Barcode Scanner")
 
 
-    barcode = _mobile_scanner(
-        key="mobile_barcode_scanner",
-        default=""
-    )
+    html_code = """
+
+    <video id="video"
+           width="100%"
+           autoplay
+           playsinline>
+    </video>
 
 
-    if barcode:
-
-        st.session_state["barcode_value"] = barcode
-
-
-        st.success(
-            f"✅ Barcode : {barcode}"
-        )
+    <div id="result">
+        📷 Waiting scan...
+    </div>
 
 
-        return barcode
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+
+
+    <script>
+
+    const codeReader =
+        new ZXing.BrowserMultiFormatReader();
+
+
+    const video =
+        document.getElementById("video");
+
+
+    const resultBox =
+        document.getElementById("result");
+
+
+    let scanned = false;
 
 
 
-    st.info(
-        "Waiting scan..."
+    async function startScanner(){
+
+
+        try{
+
+
+            const devices =
+            await codeReader.listVideoInputDevices();
+
+
+
+            if(devices.length === 0){
+
+                resultBox.innerHTML =
+                "❌ No camera";
+
+                return;
+
+            }
+
+
+
+            let cameraId =
+            devices[devices.length-1].deviceId;
+
+
+
+            for(const device of devices){
+
+
+                let label =
+                (device.label || "")
+                .toLowerCase();
+
+
+                if(
+                    label.includes("back") ||
+                    label.includes("rear") ||
+                    label.includes("environment")
+                ){
+
+                    cameraId =
+                    device.deviceId;
+
+                }
+
+            }
+
+
+
+            codeReader.decodeFromVideoDevice(
+
+                cameraId,
+
+                video,
+
+
+                (result,error)=>{
+
+
+                    if(result && !scanned){
+
+
+                        scanned = true;
+
+
+                        const barcode =
+                        result.text;
+
+
+
+                        resultBox.innerHTML =
+                        "✅ Barcode: " + barcode;
+
+
+
+                        window.parent.postMessage(
+
+                        {
+
+                            type:
+                            "barcode_scan",
+
+                            value:
+                            barcode
+
+                        },
+
+                        "*"
+
+                        );
+
+
+
+                        setTimeout(()=>{
+
+                            scanned=false;
+
+                        },1000);
+
+
+                    }
+
+
+                }
+
+            );
+
+
+
+        }
+
+        catch(e){
+
+            resultBox.innerHTML =
+            "❌ " + e;
+
+        }
+
+
+    }
+
+
+
+    startScanner();
+
+
+    </script>
+
+    """
+
+
+
+    components.html(
+        html_code,
+        height=450
     )
 
 
