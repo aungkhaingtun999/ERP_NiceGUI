@@ -1,29 +1,134 @@
-from database import get_products
+# ==============================================================================
+# erp_pages/inventory/product_search.py
+# MOBILE INVENTORY v5
+# PRODUCT + WAREHOUSE STOCK SEARCH
+# ==============================================================================
+
+from database import db
 
 
 def search_product(keyword):
 
-    print("SEARCH:", keyword)
-
-    products = get_products()
-
-    print("TOTAL:", len(products))
+    if not keyword:
+        return None
 
 
-    for p in products:
+    keyword = str(keyword).strip()
 
-        print(
-            "CHECK:",
-            p.get("name"),
-            p.get("barcode")
+
+    try:
+
+        client = db()
+
+
+        result = (
+            client
+            .table("products")
+            .select(
+                """
+                id,
+                name,
+                barcode,
+                sku,
+                purchase_price,
+                selling_price,
+                stock,
+                warehouse_stock(
+                    warehouse_id,
+                    qty,
+                    available_qty
+                )
+                """
+            )
+            .eq(
+                "barcode",
+                keyword
+            )
+            .limit(1)
+            .execute()
         )
 
 
-        if str(p.get("barcode")) == str(keyword):
-            print("FOUND:", p)
-            return p
+        if result.data:
+
+            product = result.data[0]
 
 
-    print("NOT FOUND")
+            # Warehouse stock ပြောင်းထည့်
+            stocks = product.get(
+                "warehouse_stock",
+                []
+            )
 
-    return None
+
+            if stocks:
+
+                product["stock"] = stocks[0].get(
+                    "available_qty",
+                    0
+                )
+
+
+            return product
+
+
+        # SKU နဲ့ ထပ်ရှာမယ်
+
+        result = (
+            client
+            .table("products")
+            .select(
+                """
+                id,
+                name,
+                barcode,
+                sku,
+                purchase_price,
+                selling_price,
+                stock,
+                warehouse_stock(
+                    warehouse_id,
+                    qty,
+                    available_qty
+                )
+                """
+            )
+            .eq(
+                "sku",
+                keyword
+            )
+            .limit(1)
+            .execute()
+        )
+
+
+        if result.data:
+
+            product = result.data[0]
+
+            stocks = product.get(
+                "warehouse_stock",
+                []
+            )
+
+            if stocks:
+
+                product["stock"] = stocks[0].get(
+                    "available_qty",
+                    0
+                )
+
+            return product
+
+
+        return None
+
+
+    except Exception as e:
+
+        print(
+            "Product Search Error:",
+            e
+        )
+
+        return None
