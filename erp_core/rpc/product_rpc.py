@@ -180,12 +180,11 @@ def update_product_rpc(
 
 
             "purchase_price":
-            float(purchase_price),
-
+            float(purchase_price or 0),
 
 
             "selling_price":
-            float(selling_price),
+            float(selling_price or 0),
 
 
 
