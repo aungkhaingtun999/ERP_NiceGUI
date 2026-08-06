@@ -24,11 +24,6 @@ from typing import (
 
 
 
-from ..config import (
-    TABLE_PRODUCT_VIEW
-)
-
-
 from ..base_repo import (
     log_error
 )
@@ -38,7 +33,11 @@ from .base_repository import (
     BaseRepository
 )
 
-
+from ..config import (
+    TABLE_PRODUCT_VIEW,
+    TABLE_PRODUCTS,
+    TABLE_WAREHOUSE_STOCK
+)
 
 
 
@@ -66,7 +65,138 @@ class ProductRepository(BaseRepository):
 
     """
 
+    # ==========================================================================
+    # INVENTORY MASTER VIEW
+    # ==========================================================================
 
+    def get_inventory_products(
+        self,
+        warehouse_id=None,
+        keyword=None,
+        limit=100
+    ):
+
+        try:
+
+            query = (
+
+                self.client
+
+                .table(
+                    "warehouse_stock"
+                )
+
+                .select(
+                    """
+                    warehouse_id,
+                    qty,
+                    reserved_qty,
+                    available_qty,
+
+                    products(
+                        id,
+                        name,
+                        sku,
+                        barcode,
+                        purchase_price,
+                        selling_price,
+                        minimum_stock,
+                        unit,
+                        notes,
+                        is_active
+                    ),
+
+                    warehouses(
+                        id,
+                        name
+                    )
+                    """
+                )
+
+            )
+
+
+            if warehouse_id is not None:
+
+                query = (
+                    query.eq(
+                        "warehouse_id",
+                        int(warehouse_id)
+                    )
+                )
+
+
+            result = (
+                query
+                .limit(limit)
+                .execute()
+            )
+
+
+            rows = []
+
+
+            for x in result.data or []:
+
+                p = x.get("products") or {}
+                w = x.get("warehouses") or {}
+
+
+                rows.append({
+
+                    "id":
+                    p.get("id"),
+
+                    "name":
+                    p.get("name"),
+
+                    "sku":
+                    p.get("sku"),
+
+                    "barcode":
+                    p.get("barcode"),
+
+                    "purchase_price":
+                    p.get("purchase_price"),
+
+                    "selling_price":
+                    p.get("selling_price"),
+
+                    "minimum_stock":
+                    p.get("minimum_stock"),
+
+                    "unit":
+                    p.get("unit"),
+
+                    "warehouse_id":
+                    x.get("warehouse_id"),
+
+                    "warehouse":
+                    w.get("name"),
+
+                    "qty":
+                    x.get("qty"),
+
+                    "reserved_qty":
+                    x.get("reserved_qty"),
+
+                    "available_qty":
+                    x.get("available_qty"),
+
+                })
+
+
+            return rows
+
+
+        except Exception as e:
+
+            log_error(
+                message="Inventory product load failed",
+                exception=e
+            )
+
+            return []
 
 
     # ==========================================================================
