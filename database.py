@@ -79,8 +79,7 @@ from erp_core import (
     refund_sale_rpc,
 
     stock_adjustment_rpc,
-
-    update_product_rpc,
+    # (update_product_rpc ကို ဤနေရာမှ ဖယ်ရှားပြီးပါပြီ)
 
 
     # ------------------------------------------------------------------
@@ -164,7 +163,9 @@ def get_refund_service():
     return RefundService(
         db()
     )
-    # ==============================================================================
+
+
+# ==============================================================================
 # PAYMENT HELPERS
 # ==============================================================================
 
@@ -212,6 +213,8 @@ def reject_payment(
 def get_pending_payments():
 
     return PaymentService.pending_payments()
+
+
 def generate_payment_qr(
     provider="",
     account_name="",
@@ -229,6 +232,15 @@ def generate_payment_qr(
         sale_id=sale_id,
         raw_payload=raw_payload
     )
+
+
+# ==============================================================================
+# CUSTOM UPDATE PRODUCT FUNCTION (Added)
+# ==============================================================================
+
+def update_product_rcp(...):
+    # လိုအပ်သော logic ကို ဤနေရာတွင် ထည့်သွင်းရန်
+    pass
 
 
 # ==============================================================================
@@ -298,8 +310,7 @@ __all__ = [
     "refund_sale_rpc",
 
     "stock_adjustment_rpc",
-
-    "update_product_rpc",
+    "update_product_rpc", # __all__ ထဲတွင် ဆက်လက် ထည့်သွင်းထားသည်
 
 
 
@@ -317,6 +328,7 @@ __all__ = [
 
     "ReceiptService",
     "PaymentService",
+    "PaymentQRService",
     "generate_payment_qr",
 
     # ------------------------------------------------------------------
