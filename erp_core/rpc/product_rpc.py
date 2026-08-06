@@ -83,8 +83,7 @@ def update_product_rpc(
 
             )
 
-            .single()
-
+            .maybe_single()
             .execute()
 
         )
@@ -290,8 +289,7 @@ def update_product_rpc(
 
             )
 
-            .single()
-
+            .maybe_single()
             .execute()
 
         )
