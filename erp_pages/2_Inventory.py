@@ -1244,23 +1244,10 @@ f"""
                     with st.container(border=True):
 
 
-                        st.write(
-
-                            f"ID: {row.get('id')}"
-
-                        )
-
-                        st.write(
-
-                            f"Qty: {row.get('qty')}"
-
-                        )
-
-                        st.write(
-
-                            f"Reason: {row.get('reason')}"
-
-                        )
+                        st.write(f"ID: {row['id']}")
+                        st.write(f"Product: {row['product_name']}")
+                        st.write(f"Qty: {row['qty']}")
+                        st.write(f"Reason: {row['reason']}")
 
                         st.write(
 
