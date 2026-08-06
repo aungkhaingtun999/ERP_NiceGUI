@@ -236,7 +236,11 @@ def generate_payment_qr(
 
 # ==============================================================================
 # CUSTOM UPDATE PRODUCT FUNCTION
+
 # ==============================================================================
+# CUSTOM UPDATE PRODUCT FUNCTION (FIXED)
+# ==============================================================================
+
 def update_product_rpc(
     product_id,
     name,
@@ -254,139 +258,126 @@ def update_product_rpc(
 
         client = db()
 
-
-        # ==============================================================
-        # LOAD EXISTING SKU / BARCODE
-        # ==============================================================
+        # --------------------------------------------------------------
+        # LOAD EXISTING PRODUCT
+        # --------------------------------------------------------------
 
         old_result = (
             client
             .table("products")
-            .select(
-                "sku, barcode"
-            )
-            .eq(
-                "id",
-                int(product_id)
-            )
+            .select("id, sku, barcode, minimum_stock")
+            .eq("id", int(product_id))
             .single()
             .execute()
         )
 
+        old_data = old_result.data
 
-        old_data = old_result.data or {}
+        if not old_data:
+            return {
+                "success": False,
+                "message": f"Product ID {product_id} not found"
+            }
 
-
-        old_sku = old_data.get("sku")
-
-        old_barcode = old_data.get("barcode")
-
-
-
-        # ==============================================================
+        # --------------------------------------------------------------
         # KEEP OLD VALUE IF INPUT EMPTY
-        # ==============================================================
+        # --------------------------------------------------------------
 
         final_sku = (
             sku.strip()
-            if sku and sku.strip()
-            else old_sku
+            if sku and str(sku).strip()
+            else old_data.get("sku")
         )
-
 
         final_barcode = (
             barcode.strip()
-            if barcode and barcode.strip()
-            else old_barcode
+            if barcode and str(barcode).strip()
+            else old_data.get("barcode")
         )
 
-
+        final_min_stock = (
+            int(minimum_stock)
+            if minimum_stock is not None
+            else int(old_data.get("minimum_stock", 0))
+        )
 
         payload = {
 
-
             "name":
-            name,
-
+            str(name).strip(),
 
             "sku":
             final_sku,
 
-
             "barcode":
             final_barcode,
-
 
             "purchase_price":
             float(purchase_price),
 
-
             "selling_price":
             float(selling_price),
 
-
             "minimum_stock":
-            int(minimum_stock),
-
+            final_min_stock,
 
             "unit":
-            unit,
-
+            str(unit).strip() if unit else "pcs",
 
             "notes":
             notes,
 
-
             "is_active":
             bool(is_active),
 
-
         }
 
+        print("ERP UPDATE PAYLOAD =", payload)
 
+        # --------------------------------------------------------------
+        # UPDATE PRODUCT
+        # --------------------------------------------------------------
 
         result = (
-
             client
-
             .table("products")
-
             .update(payload)
-
-            .eq(
-                "id",
-                int(product_id)
-            )
-
+            .eq("id", int(product_id))
             .execute()
-
         )
 
+        print("ERP UPDATE RESULT =", result.data)
 
+        # --------------------------------------------------------------
+        # VERIFY UPDATE
+        # --------------------------------------------------------------
+
+        verify = (
+            client
+            .table("products")
+            .select("id, sku, barcode, minimum_stock")
+            .eq("id", int(product_id))
+            .single()
+            .execute()
+        )
+
+        verify_data = verify.data or {}
+
+        print("ERP VERIFY =", verify_data)
 
         return {
-
-            "success":
-            True,
-
-            "data":
-            result.data
-
+            "success": True,
+            "message": "Product updated successfully",
+            "data": verify_data
         }
-
-
 
     except Exception as e:
 
+        print("ERP UPDATE ERROR =", e)
 
         return {
-
-            "success":
-            False,
-
-            "message":
-            str(e)
-
+            "success": False,
+            "message": str(e)
         }
 
 # ==============================================================================
