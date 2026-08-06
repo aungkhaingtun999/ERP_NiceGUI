@@ -79,7 +79,7 @@ from erp_core import (
     refund_sale_rpc,
 
     stock_adjustment_rpc,
-    # (update_product_rpc ကို ဤနေရာမှ ဖယ်ရှားပြီးပါပြီ)
+    # update_product_rpc removed from here
 
 
     # ------------------------------------------------------------------
@@ -235,14 +235,77 @@ def generate_payment_qr(
 
 
 # ==============================================================================
-# CUSTOM UPDATE PRODUCT FUNCTION (Added)
+# CUSTOM UPDATE PRODUCT FUNCTION
 # ==============================================================================
 
-def update_product_rcp(...):
-    # လိုအပ်သော logic ကို ဤနေရာတွင် ထည့်သွင်းရန်
-    pass
+def update_product_rpc(
+    product_id,
+    name,
+    sku,
+    barcode,
+    purchase_price,
+    selling_price,
+    minimum_stock,
+    unit,
+    notes,
+    is_active=True
+):
+
+    try:
+
+        client = db()
+
+        payload = {
+
+            "name": name,
+
+            "sku": sku,
+
+            "barcode": barcode,
+
+            "purchase_price": float(purchase_price),
+
+            "selling_price": float(selling_price),
+
+            "minimum_stock": int(minimum_stock),
+
+            "unit": unit,
+
+            "notes": notes,
+
+            "is_active": bool(is_active),
+
+        }
 
 
+        result = (
+            client
+            .table("products")
+            .update(payload)
+            .eq("id", int(product_id))
+            .execute()
+        )
+
+
+        return {
+
+            "success": True,
+
+            "data": result.data
+
+        }
+
+
+    except Exception as e:
+
+
+        return {
+
+            "success": False,
+
+            "message": str(e)
+
+        }
 # ==============================================================================
 # PUBLIC EXPORTS
 # ==============================================================================
@@ -310,7 +373,7 @@ __all__ = [
     "refund_sale_rpc",
 
     "stock_adjustment_rpc",
-    "update_product_rpc", # __all__ ထဲတွင် ဆက်လက် ထည့်သွင်းထားသည်
+    "update_product_rpc",
 
 
 
@@ -347,6 +410,7 @@ __all__ = [
     "verify_payment",
     "reject_payment",
     "get_pending_payments",
+    "update_product_rpc",
 
     # ------------------------------------------------------------------
     # HELPERS
