@@ -19,9 +19,14 @@ This module only re-exports ERP Core APIs.
 # ==============================================================================
 # ERP CORE IMPORT
 # ==============================================================================
-
 from erp_core import (
 
+    ...
+
+    update_product_rpc,
+
+    ...
+)
     # ------------------------------------------------------------------
     # DATABASE
     # ------------------------------------------------------------------
@@ -234,152 +239,9 @@ def generate_payment_qr(
     )
 
 
-# ==============================================================================
-# CUSTOM UPDATE PRODUCT FUNCTION
+#  RESULT =", result.data)
 
-# ==============================================================================
-# CUSTOM UPDATE PRODUCT FUNCTION (FIXED)
-# ==============================================================================
-
-def update_product_rpc(
-    product_id,
-    name,
-    sku,
-    barcode,
-    purchase_price,
-    selling_price,
-    minimum_stock,
-    unit,
-    notes,
-    is_active=True
-):
-
-    try:
-
-        client = db()
-
-        # --------------------------------------------------------------
-        # LOAD EXISTING PRODUCT
-        # --------------------------------------------------------------
-
-        old_result = (
-            client
-            .table("products")
-            .select("id, sku, barcode, minimum_stock")
-            .eq("id", int(product_id))
-            .single()
-            .execute()
-        )
-
-        old_data = old_result.data
-
-        if not old_data:
-            return {
-                "success": False,
-                "message": f"Product ID {product_id} not found"
-            }
-
-        # --------------------------------------------------------------
-        # KEEP OLD VALUE IF INPUT EMPTY
-        # --------------------------------------------------------------
-
-        final_sku = (
-            sku.strip()
-            if sku and str(sku).strip()
-            else old_data.get("sku")
-        )
-
-        final_barcode = (
-            barcode.strip()
-            if barcode and str(barcode).strip()
-            else old_data.get("barcode")
-        )
-
-        final_min_stock = (
-            int(minimum_stock)
-            if minimum_stock is not None
-            else int(old_data.get("minimum_stock", 0))
-        )
-
-        payload = {
-
-            "name":
-            str(name).strip(),
-
-            "sku":
-            final_sku,
-
-            "barcode":
-            final_barcode,
-
-            "purchase_price":
-            float(purchase_price or 0),
-
-            "selling_price":
-             float(selling_price or 0),
-            "minimum_stock":
-            final_min_stock,
-
-            "unit":
-            str(unit).strip() if unit else "pcs",
-
-            "notes":
-            notes,
-
-            "is_active":
-            bool(is_active),
-
-        }
-
-        print("ERP UPDATE PAYLOAD =", payload)
-
-        # --------------------------------------------------------------
-        # UPDATE PRODUCT
-        # --------------------------------------------------------------
-        print("UPDATE PRODUCT ID =", product_id)
-
-        print("UPDATE PAYLOAD =", payload)
-        result = (
-            client
-            .table("products")
-            .update(payload)
-            .eq("id", int(product_id))
-            .execute()
-        )
-        print("UPDATE RESULT =", result.data)
-        print("ERP UPDATE RESULT =", result.data)
-
-        # --------------------------------------------------------------
-        # VERIFY UPDATE
-        # --------------------------------------------------------------
-
-        verify = (
-            client
-            .table("products")
-            .select("id, sku, barcode, minimum_stock")
-            .eq("id", int(product_id))
-            .single()
-            .execute()
-        )
-
-        verify_data = verify.data or {}
-
-        print("ERP VERIFY =", verify_data)
-
-        return {
-            "success": True,
-            "message": "Product updated successfully",
-            "data": verify_data
-        }
-
-    except Exception as e:
-
-        print("ERP UPDATE ERROR =", e)
-
-        return {
-            "success": False,
-            "message": str(e)
-        }
+        # ----------}
 
 # ==============================================================================
 # PUBLIC EXPORTS
