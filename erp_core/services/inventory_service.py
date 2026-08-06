@@ -205,15 +205,45 @@ class InventoryService:
     def get_stock_adjustments(self, warehouse_id: int) -> List[Dict]:
         try:
             result = (
-                self.client.table("stock_adjustments")
-                .select("*")
+                self.client
+                .table("stock_adjustments")
+                .select("""
+                    id,
+                    product_id,
+                    warehouse_id,
+                    adjustment_type,
+                    qty,
+                    reason,
+                    status,
+                    requested_by,
+                    approved_by,
+                    approved_at,
+                    created_at,
+                    products (
+                        name
+                    )
+                """)
                 .eq("warehouse_id", int(warehouse_id))
+                .order("created_at", desc=True)
                 .execute()
             )
-            return result.data or []
+
+            rows = result.data or []
+
+            # Normalize product name for UI
+            for row in rows:
+                row["product_name"] = (
+                    row.get("products", {})
+                    .get("name", "Unknown")
+                )
+
+            return rows
 
         except Exception as e:
-            log_error(message="Stock adjustment history loading failed", exception=e)
+            log_error(
+                message="Stock adjustment history loading failed",
+                exception=e
+            )
             return []
 
     # ==========================================================================
@@ -270,10 +300,6 @@ class InventoryService:
                 "message": str(e),
             }
 
-
-# ==============================================================================
-# Export
-# ==============================================================================
     # ==========================================================================
     # MOBILE INVENTORY v3
     # CREATE PRODUCT + OPENING STOCK
@@ -286,16 +312,11 @@ class InventoryService:
         warehouse_id: int = None,
         created_by: Any = None,
     ):
-
         try:
-
             # Duplicate barcode check
-
             barcode = product_data.get("barcode")
 
-
             if barcode:
-
                 existing = (
                     self.client
                     .table("products")
@@ -304,25 +325,15 @@ class InventoryService:
                     .execute()
                 )
 
-
                 if existing.data:
-
                     return {
                         "success": False,
                         "message": "Barcode already exists"
                     }
 
-
-
             # Product create
-
             product_data["stock"] = opening_stock
-
-            product_data.setdefault(
-                "is_active",
-                True
-            )
-
+            product_data.setdefault("is_active", True)
 
             result = (
                 self.client
@@ -331,17 +342,11 @@ class InventoryService:
                 .execute()
             )
 
-
             product = result.data[0]
-
             product_id = product["id"]
 
-
-
             # Opening Stock Log
-
             if opening_stock > 0:
-
                 self.create_inventory_log(
                     product_id=product_id,
                     quantity=opening_stock,
@@ -350,28 +355,20 @@ class InventoryService:
                     created_by=created_by
                 )
 
-
-
             return {
                 "success": True,
                 "data": product
             }
 
-
-
         except Exception as e:
-
             log_error(
                 message="Mobile product creation failed",
                 exception=e
             )
-
             return {
                 "success": False,
                 "message": str(e)
             }
-
-
 
     # ==========================================================================
     # MOBILE INVENTORY LOG
@@ -385,31 +382,25 @@ class InventoryService:
         warehouse_id=None,
         created_by=None
     ):
-
         payload = {
-
             "product_id": product_id,
-
             "reference_type": "OPENING",
-
             "quantity": quantity,
-
             "balance_after": balance_after,
-
-            "remarks":
-            "Mobile Inventory Opening Stock",
-
+            "remarks": "Mobile Inventory Opening Stock",
             "warehouse_id": warehouse_id,
-
             "created_by": created_by
-
         }
-
 
         return (
             self.client
             .table("inventory_logs")
             .insert(payload)
             .execute()
-            )
+        )
+
+
+# ==============================================================================
+# Export
+# ==============================================================================
 __all__ = ["InventoryService"]
