@@ -1,14 +1,13 @@
 # ==============================================================================
 # pages/2_Inventory.py
-# ERP ENTERPRISE PRODUCT MASTER v5.0
-# MOBILE INVENTORY EDITION
+# ERP ENTERPRISE PRODUCT MASTER v5.1
+# MOBILE INVENTORY + MAKER CHECKER APPROVAL EDITION
 # ==============================================================================
 
 
 import time
 
 import streamlit as st
-import pandas as pd
 
 
 # ==============================================================================
@@ -55,12 +54,13 @@ def run():
 
 
     st.title(
-        "🏭 Enterprise Product Master v5.0"
+        "🏭 Enterprise Product Master v5.1"
     )
 
     st.caption(
-        "ERP Inventory Control Center | Mobile Ready"
+        "ERP Inventory Control Center | Mobile Ready | Maker Checker Enabled"
     )
+
 
 
     # ==========================================================================
@@ -146,11 +146,12 @@ def run():
 
 
     # ==========================================================================
-    # BARCODE SEARCH AREA
+    # MOBILE BARCODE SEARCH
     # ==========================================================================
 
 
     st.divider()
+
 
     st.subheader(
         "📷 Mobile Barcode Search"
@@ -181,6 +182,7 @@ def run():
 
         st.write("")
 
+
         if st.button(
             "Clear",
             use_container_width=True
@@ -198,13 +200,13 @@ def run():
 
 
 
+    search = barcode_input.strip()
+
+
+
     # ==========================================================================
     # PRODUCT LOAD
     # ==========================================================================
-
-
-    search = barcode_input.strip()
-
 
 
     try:
@@ -253,11 +255,15 @@ def run():
 
     )
 
+
+
     # ==========================================================================
     # TAB 1 - PRODUCT MASTER
     # ==========================================================================
 
+
     with tab1:
+
 
         st.subheader(
             "📋 Product Master"
@@ -266,7 +272,9 @@ def run():
 
         if products:
 
-            show_table(products)
+            show_table(
+                products
+            )
 
         else:
 
@@ -280,23 +288,31 @@ def run():
     # TAB 2 - ADD PRODUCT
     # ==========================================================================
 
+
     with tab2:
+
 
         st.subheader(
             "➕ Add New Product"
         )
 
 
+
         with st.form(
+
             "add_product_form",
+
             clear_on_submit=True
+
         ):
 
 
             c1, c2 = st.columns(2)
 
 
+
             with c1:
+
 
                 name = st.text_input(
                     "Product Name *"
@@ -309,26 +325,38 @@ def run():
 
 
                 purchase_price = st.number_input(
+
                     "Purchase Cost",
+
                     min_value=0.0,
+
                     value=0.0
+
                 )
 
 
                 minimum_stock = st.number_input(
+
                     "Minimum Stock",
+
                     min_value=0,
+
                     value=5
+
                 )
 
 
 
             with c2:
 
+
                 barcode = st.text_input(
+
                     "Barcode",
+
                     value=
                     st.session_state.inventory_barcode
+
                 )
 
 
@@ -337,9 +365,13 @@ def run():
                     "Unit",
 
                     [
+
                         "pcs",
+
                         "kg",
+
                         "box"
+
                     ]
 
                 )
@@ -357,12 +389,13 @@ def run():
 
 
 
-            # ==============================================================
-            # PRICING ENGINE PREVIEW
-            # ==============================================================
+            # --------------------------------------------------------------
+            # PRICING PREVIEW
+            # --------------------------------------------------------------
 
 
             preview = {}
+
 
 
             if purchase_price > 0:
@@ -371,7 +404,9 @@ def run():
                 try:
 
                     preview = (
+
                         pricing_service
+
                         .calculate_selling_price(
 
                             cost=
@@ -380,6 +415,7 @@ def run():
                             product_id=None
 
                         )
+
                     )
 
 
@@ -409,8 +445,11 @@ Source:
 
                 except Exception as e:
 
+
                     st.warning(
+
                         f"Pricing Preview Error : {e}"
+
                     )
 
 
@@ -486,6 +525,7 @@ Source:
 
                             {
 
+
                                 "p_data":
                                 payload,
 
@@ -512,8 +552,11 @@ Source:
 
 
                     if isinstance(
+
                         result,
+
                         list
+
                     ):
 
                         result = result[0]
@@ -521,7 +564,9 @@ Source:
 
 
                     if result.get(
+
                         "success"
+
                     ):
 
 
@@ -568,7 +613,6 @@ Source:
                         )
 
 
-
                 except Exception as e:
 
 
@@ -582,7 +626,9 @@ Source:
     # TAB 3 - EDIT PRODUCT
     # ==========================================================================
 
+
     with tab3:
+
 
         st.subheader(
             "✏️ Edit Product Master"
@@ -590,6 +636,7 @@ Source:
 
 
         if not products:
+
 
             st.info(
                 "No product available"
@@ -614,13 +661,12 @@ Source:
 
                 "Select Product",
 
-                list(
-                    product_map.keys()
-                ),
+                list(product_map.keys()),
 
                 key="edit_product_select"
 
             )
+
 
 
             selected_product = product_map[
@@ -685,7 +731,6 @@ Source:
                     )
 
 
-
                     minimum_stock = st.number_input(
 
                         "Minimum Stock",
@@ -738,18 +783,19 @@ Source:
                     unit_options = [
 
                         "pcs",
+
                         "kg",
+
                         "box"
 
                     ]
 
 
-                    current_unit = (
+                    current_unit = selected_product.get(
 
-                        selected_product.get(
-                            "unit",
-                            "pcs"
-                        )
+                        "unit",
+
+                        "pcs"
 
                     )
 
@@ -765,7 +811,9 @@ Source:
                         unit_options.index(
                             current_unit
                         )
+
                         if current_unit in unit_options
+
                         else 0
 
                     )
@@ -834,26 +882,21 @@ Source:
 
 
 
-                        if result.get(
-                            "success"
-                        ):
+                        if result.get("success"):
 
 
                             st.success(
-
                                 "✅ Product Updated"
-
                             )
-
 
                             CacheManager.bump(
                                 "product_version"
                             )
 
-
                             time.sleep(1)
 
                             st.rerun()
+
 
 
                         else:
@@ -862,11 +905,8 @@ Source:
                             st.error(
 
                                 result.get(
-
                                     "message",
-
                                     "Update Failed"
-
                                 )
 
                             )
@@ -876,182 +916,421 @@ Source:
 
 
                         st.error(
-
                             f"Update Error : {e}"
-
                         )
 
 
 
 
+    # ==========================================================================
+    # TAB 4 - STOCK ADJUSTMENT + MAKER CHECKER
+    # ==========================================================================
 
-# ==============================================================================
-# TAB 4 - ENTERPRISE STOCK ADJUSTMENT + MAKER CHECKER WORKFLOW
-# ==============================================================================
 
     with tab4:
 
-    st.subheader("🔧 Enterprise Stock Adjustment")
 
-    if not products:
-        st.warning("No products available.")
-
-    else:
-
-        product_map = {
-            f"{p.get('id')} | {p.get('name')}": p
-            for p in products
-        }
-
-        selected_name = st.selectbox(
-            "📦 Select Product",
-            list(product_map.keys()),
-            key="stock_adjust_product"
+        st.subheader(
+            "🔧 Enterprise Stock Adjustment"
         )
 
-        selected_product = product_map[selected_name]
 
-        product_id = int(selected_product.get("id"))
 
-        current_qty = (
-            selected_product.get("available_qty")
-            or selected_product.get("qty")
-            or selected_product.get("stock")
-            or 0
-        )
+        if not products:
 
-        st.info(
-            f"""
-📦 Product: {selected_product.get('name')}
 
-🏭 Warehouse: {selected_wh_name}
+            st.warning(
+                "No products available"
+            )
 
-📊 Current Stock: {current_qty}
-"""
-        )
 
-        adjustment_type = st.selectbox(
-            "Adjustment Type",
-            ["DAMAGE", "COUNT_CORRECTION", "MANUAL_IN", "MANUAL_OUT"]
-        )
+        else:
 
-        qty = st.number_input(
-            "Quantity (+/-)",
-            value=0,
-            step=1
-        )
 
-        reason = st.text_input(
-            "Reason",
-            value="Manual Adjustment"
-        )
+            product_map = {
 
-        if st.button(
-            "💾 Submit Adjustment",
-            use_container_width=True
-        ):
+                f"{p.get('id')} | {p.get('name')}":
+                p
 
-            if qty == 0:
-                st.warning("Quantity cannot be zero")
-                st.stop()
+                for p in products
 
-            try:
+            }
 
-                result = inventory_service.adjust_stock(
-                    product_id=product_id,
-                    warehouse_id=int(selected_wh_id),
-                    quantity=int(qty),
-                    reason=reason,
-                    created_by=st.session_state.get("user_id"),
-                    unit_cost=float(selected_product.get("purchase_price", 0))
+
+
+            selected_name = st.selectbox(
+
+                "📦 Select Product",
+
+                list(product_map.keys()),
+
+                key="stock_adjust_product"
+
+            )
+
+
+
+            selected_product = product_map[
+                selected_name
+            ]
+
+
+
+            product_id = int(
+
+                selected_product.get(
+                    "id"
                 )
 
-                if result.get("success"):
+            )
 
-                    st.success("✅ Adjustment Submitted (PENDING)")
 
-                    st.cache_data.clear()
 
-                    time.sleep(1)
+            current_qty = (
 
-                    st.rerun()
+                selected_product.get(
+                    "available_qty"
+                )
 
-                else:
+                or
 
-                    st.error(result.get("message", "Adjustment Failed"))
+                selected_product.get(
+                    "qty"
+                )
 
-            except Exception as e:
+                or
 
-                st.error(f"Adjustment Error : {e}")
+                selected_product.get(
+                    "stock"
+                )
+
+                or 0
+
+            )
+
+
+
+            st.info(
+
+f"""
+📦 Product:
+{selected_product.get('name')}
+
+
+🏭 Warehouse:
+{selected_wh_name}
+
+
+📊 Current Stock:
+{current_qty}
+"""
+
+            )
+
+
+
+            adjustment_type = st.selectbox(
+
+                "Adjustment Type",
+
+                [
+
+                    "DAMAGE",
+
+                    "COUNT_CORRECTION",
+
+                    "MANUAL_IN",
+
+                    "MANUAL_OUT"
+
+                ]
+
+            )
+
+
+
+            qty = st.number_input(
+
+                "Quantity (+/-)",
+
+                value=0,
+
+                step=1
+
+            )
+
+
+
+            reason = st.text_input(
+
+                "Reason",
+
+                value="Manual Adjustment"
+
+            )
+
+
+
+            if st.button(
+
+                "💾 Submit Adjustment",
+
+                use_container_width=True
+
+            ):
+
+
+                if qty == 0:
+
+
+                    st.warning(
+                        "Quantity cannot be zero"
+                    )
+
+                    st.stop()
+
+
+
+                try:
+
+
+                    result = inventory_service.adjust_stock(
+
+                        product_id=product_id,
+
+                        warehouse_id=int(selected_wh_id),
+
+                        quantity=int(qty),
+
+                        reason=reason,
+
+                        created_by=
+
+                        st.session_state.get(
+                            "user_id"
+                        ),
+
+                        unit_cost=float(
+
+                            selected_product.get(
+
+                                "purchase_price",
+
+                                0
+
+                            )
+
+                        )
+
+                    )
+
+
+
+                    if result.get("success"):
+
+
+                        st.success(
+
+                            "✅ Adjustment Submitted (PENDING)"
+
+                        )
+
+
+                        st.cache_data.clear()
+
+                        time.sleep(1)
+
+                        st.rerun()
+
+
+
+                    else:
+
+
+                        st.error(
+
+                            result.get(
+
+                                "message",
+
+                                "Adjustment Failed"
+
+                            )
+
+                        )
+
+
+
+                except Exception as e:
+
+
+                    st.error(
+
+                        f"Adjustment Error : {e}"
+
+                    )
+
+
+
+        # ----------------------------------------------------------------------
+        # APPROVAL QUEUE
+        # ----------------------------------------------------------------------
+
 
         st.divider()
 
-        st.subheader("⏳ Pending Approvals")
+
+        st.subheader(
+            "⏳ Pending Approval Queue"
+        )
+
+
 
         try:
 
+
             history = inventory_service.get_stock_adjustments(
+
                 warehouse_id=int(selected_wh_id)
+
             )
+
+
 
             current_user = str(
-                st.session_state.get("user_id", "")
+
+                st.session_state.get(
+                    "user_id",
+                    ""
+                )
+
             )
 
+
+
             pending_rows = [
-                h for h in history
-                if str(h.get("status", "")).upper() == "PENDING"
+
+                x for x in history
+
+                if str(
+
+                    x.get(
+                        "status",
+                        ""
+
+                    )
+
+                ).upper() == "PENDING"
+
             ]
+
+
 
             if not pending_rows:
 
-                st.success("No pending stock adjustments")
+
+                st.success(
+                    "No pending adjustments"
+                )
+
+
 
             else:
 
+
                 for row in pending_rows:
+
 
                     with st.container(border=True):
 
-                        st.write(f"**ID:** {row.get('id')}")
-                        st.write(f"**Qty:** {row.get('qty')}")
-                        st.write(f"**Reason:** {row.get('reason')}")
-                        st.write(f"**Requested:** {row.get('created_at')}")
-                        st.write(f"**Requested By:** {row.get('requested_by')}")
-                        st.write(f"**Status:** {row.get('status')}")
-                        st.write("---")
 
-                        maker_user = str(
-                            row.get("requested_by", "")
+                        st.write(
+
+                            f"ID: {row.get('id')}"
+
                         )
 
-                        col1, col2 = st.columns(2)
+                        st.write(
 
-                        with col1:
+                            f"Qty: {row.get('qty')}"
 
-                            if current_user == maker_user:
+                        )
+
+                        st.write(
+
+                            f"Reason: {row.get('reason')}"
+
+                        )
+
+                        st.write(
+
+                            f"Requested By: {row.get('requested_by')}"
+
+                        )
+
+
+
+                        maker = str(
+
+                            row.get(
+                                "requested_by",
+                                ""
+                            )
+
+                        )
+
+
+
+                        c1, c2 = st.columns(2)
+
+
+
+                        with c1:
+
+
+                            if current_user == maker:
+
 
                                 st.caption(
-                                    "🚫 Maker cannot approve own request"
+
+                                    "🚫 Maker cannot approve"
+
                                 )
+
 
                             else:
 
+
                                 if st.button(
-                                    f"✅ Approve #{row.get('id')}",
-                                    key=f"approve_{row.get('id')}",
-                                    use_container_width=True
+
+                                    "✅ Approve",
+
+                                    key=f"approve_{row.get('id')}"
+
                                 ):
 
-                                    res = inventory_service.approve_stock_adjustment(
-                                        adjustment_id=int(row.get("id")),
+
+                                    result = inventory_service.approve_stock_adjustment(
+
+                                        adjustment_id=int(
+
+                                            row.get("id")
+
+                                        ),
+
                                         manager_id=current_user
+
                                     )
 
-                                    if res.get("success"):
+
+
+                                    if result.get("success"):
+
 
                                         st.success(
-                                            f"Adjustment #{row.get('id')} approved"
+
+                                            "Approved Successfully"
+
                                         )
 
                                         st.cache_data.clear()
@@ -1060,71 +1339,95 @@ Source:
 
                                         st.rerun()
 
+
                                     else:
 
+
                                         st.error(
-                                            res.get("message", "Approve failed")
+
+                                            result.get(
+
+                                                "message",
+
+                                                "Approve Failed"
+
+                                            )
+
                                         )
 
-                        with col2:
+
+
+                        with c2:
+
 
                             if st.button(
-                                f"❌ Cancel #{row.get('id')}",
-                                key=f"cancel_{row.get('id')}",
-                                use_container_width=True
+
+                                "❌ Cancel",
+
+                                key=f"cancel_{row.get('id')}"
+
                             ):
 
-                                cancel_res = (
-                                    db()
-                                    .rpc(
-                                        "cancel_stock_adjustment_rpc",
-                                        {
-                                            "p_adjustment_id": int(row.get("id")),
-                                            "p_user_id": current_user
-                                        }
-                                    )
-                                    .execute()
+
+                                result = db().rpc(
+
+                                    "cancel_stock_adjustment_rpc",
+
+                                    {
+
+                                        "p_adjustment_id":
+                                        int(row.get("id")),
+
+                                        "p_user_id":
+                                        current_user
+
+                                    }
+
+                                ).execute()
+
+
+
+                                st.success(
+
+                                    "Cancelled"
+
                                 )
 
-                                cancel_data = cancel_res.data
+                                st.cache_data.clear()
 
-                                if isinstance(cancel_data, list):
-                                    cancel_data = cancel_data[0]
+                                time.sleep(1)
 
-                                if cancel_data.get("success"):
+                                st.rerun()
 
-                                    st.success(
-                                        f"Adjustment #{row.get('id')} cancelled"
-                                    )
 
-                                    st.cache_data.clear()
-
-                                    time.sleep(1)
-
-                                    st.rerun()
-
-                                else:
-
-                                    st.error(
-                                        cancel_data.get("message", "Cancel failed")
-                                    )
 
             st.divider()
 
-            st.subheader("📜 Adjustment History")
 
-            if history:
-                show_table(history)
-            else:
-                st.info("No adjustment history found")
+            st.subheader(
+                "📜 Adjustment History"
+            )
+
+
+            show_table(
+                history
+            )
+
+
 
         except Exception as e:
 
-            st.error(f"History Load Error : {e}")
-    
+
+            st.error(
+
+                f"Approval Load Error : {e}"
+
+            )
+
     # ==========================================================================
     # TAB 5 - ENTERPRISE INVENTORY DASHBOARD
     # ==========================================================================
+
 
     with tab5:
 
@@ -1144,7 +1447,9 @@ Source:
         # INVENTORY KPI
         # ----------------------------------------------------------------------
 
+
         st.divider()
+
 
         st.subheader(
             "🏭 Inventory KPI"
@@ -1250,6 +1555,7 @@ Source:
         # WAREHOUSE INVENTORY
         # ----------------------------------------------------------------------
 
+
         st.divider()
 
 
@@ -1262,8 +1568,11 @@ Source:
 
 
             warehouse_data = (
+
                 inventory_service
+
                 .get_warehouse_inventory_kpi()
+
             )
 
 
@@ -1272,7 +1581,9 @@ Source:
 
 
                 show_table(
+
                     warehouse_data
+
                 )
 
 
@@ -1289,7 +1600,9 @@ Source:
 
 
             st.error(
+
                 f"Warehouse KPI Error : {e}"
+
             )
 
 
@@ -1299,6 +1612,7 @@ Source:
         # FIFO VALUATION
         # ----------------------------------------------------------------------
 
+
         st.divider()
 
 
@@ -1307,21 +1621,26 @@ Source:
         )
 
 
-
         try:
 
 
             valuation = (
+
                 inventory_service
+
                 .get_inventory_valuation()
+
             )
+
 
 
             if valuation:
 
 
                 show_table(
+
                     valuation
+
                 )
 
 
@@ -1338,7 +1657,9 @@ Source:
 
 
             st.error(
+
                 f"FIFO Error : {e}"
+
             )
 
 
@@ -1348,6 +1669,7 @@ Source:
         # INVENTORY LOSS
         # ----------------------------------------------------------------------
 
+
         st.divider()
 
 
@@ -1356,13 +1678,15 @@ Source:
         )
 
 
-
         try:
 
 
             loss_data = (
+
                 inventory_service
+
                 .get_inventory_loss_report()
+
             )
 
 
@@ -1371,7 +1695,9 @@ Source:
 
 
                 show_table(
+
                     loss_data
+
                 )
 
 
@@ -1388,7 +1714,9 @@ Source:
 
 
             st.error(
+
                 f"Loss Analytics Error : {e}"
+
             )
 
 
@@ -1398,13 +1726,13 @@ Source:
         # STOCK CARD
         # ----------------------------------------------------------------------
 
+
         st.divider()
 
 
         st.subheader(
             "📜 Stock Card"
         )
-
 
 
         if products:
@@ -1414,6 +1742,7 @@ Source:
 
 
                 f"{p.get('id')} | {p.get('name')}":
+
                 p
 
 
@@ -1427,9 +1756,7 @@ Source:
 
                 "Select Product For Stock Card",
 
-                list(
-                    product_map.keys()
-                ),
+                list(product_map.keys()),
 
                 key="stock_card_product"
 
@@ -1438,7 +1765,9 @@ Source:
 
 
             stock_product = product_map[
+
                 stock_product_name
+
             ]
 
 
@@ -1447,14 +1776,14 @@ Source:
 
                 product_id=int(
 
-                    stock_product.get(
-                        "id"
-                    )
+                    stock_product.get("id")
 
                 ),
 
                 warehouse_id=int(
+
                     selected_wh_id
+
                 )
 
             )
@@ -1465,7 +1794,9 @@ Source:
 
 
                 show_table(
+
                     stock_card
+
                 )
 
 
@@ -1473,7 +1804,9 @@ Source:
 
 
                 st.info(
+
                     "No stock movement history"
+
                 )
 
 
@@ -1482,6 +1815,7 @@ Source:
         # ----------------------------------------------------------------------
         # HEALTH CHECK
         # ----------------------------------------------------------------------
+
 
         st.divider()
 
@@ -1498,15 +1832,20 @@ Source:
 
 
             st.json(
+
                 health
+
             )
+
 
 
         except Exception as e:
 
 
             st.error(
+
                 str(e)
+
             )
 
 
@@ -1518,5 +1857,6 @@ Source:
 
 
 if __name__ == "__main__":
+
 
     run()
