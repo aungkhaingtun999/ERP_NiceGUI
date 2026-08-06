@@ -204,6 +204,7 @@ class InventoryService:
 
     def get_stock_adjustments(self, warehouse_id: int) -> List[Dict]:
         try:
+
             result = (
                 self.client
                 .table("stock_adjustments")
@@ -218,32 +219,60 @@ class InventoryService:
                     requested_by,
                     approved_by,
                     approved_at,
-                    created_at,
-                    products (
-                        name
-                    )
+                    created_at
                 """)
-                .eq("warehouse_id", int(warehouse_id))
-                .order("created_at", desc=True)
+                .eq(
+                    "warehouse_id",
+                    int(warehouse_id)
+                )
+                .order(
+                    "created_at",
+                    desc=True
+                )
                 .execute()
             )
 
+
             rows = result.data or []
 
-            # Normalize product name for UI
+
             for row in rows:
-                row["product_name"] = (
-                    row.get("products", {})
-                    .get("name", "Unknown")
+
+                product = (
+                    self.client
+                    .table("products")
+                    .select("name")
+                    .eq(
+                        "id",
+                        row["product_id"]
+                    )
+                    .single()
+                    .execute()
                 )
+
+
+                row["product_name"] = (
+                    product.data.get("name")
+                    if product.data
+                    else "Unknown"
+                )
+
 
             return rows
 
+
         except Exception as e:
+
+            print(
+                "Adjustment Load Error:",
+                e
+            )
+
             log_error(
                 message="Stock adjustment history loading failed",
                 exception=e
             )
+
             return []
 
     # ==========================================================================
