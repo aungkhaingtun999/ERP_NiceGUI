@@ -126,6 +126,20 @@ class ProductRepository(BaseRepository):
                 )
 
 
+            if keyword:
+
+                keyword = str(keyword).strip()
+
+                query = (
+                    query
+                    .or_(
+                        f"products.name.ilike.%{keyword}%,"
+                        f"products.sku.ilike.%{keyword}%,"
+                        f"products.barcode.ilike.%{keyword}%"
+                    )
+                )
+
+
             result = (
                 query
                 .limit(limit)
@@ -715,3 +729,4 @@ class ProductRepository(BaseRepository):
 
 
             return None
+                
