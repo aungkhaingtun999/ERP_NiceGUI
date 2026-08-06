@@ -130,9 +130,14 @@ def get_inventory_view(
         for item in result.data or []:
 
 
-            product = item.get(
-                "products"
-            ) or {}
+            product = item.get("products") or {}
+
+if not product:
+    print(
+        "BROKEN STOCK LINK:",
+        item
+    )
+    continue
 
 
             warehouse = item.get(
