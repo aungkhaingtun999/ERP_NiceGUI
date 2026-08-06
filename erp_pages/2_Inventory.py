@@ -889,7 +889,7 @@ Source:
 # TAB 4 - ENTERPRISE STOCK ADJUSTMENT + MAKER CHECKER WORKFLOW
 # ==============================================================================
 
-with tab4:
+    with tab4:
 
     st.subheader("🔧 Enterprise Stock Adjustment")
 
