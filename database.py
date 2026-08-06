@@ -313,11 +313,10 @@ def update_product_rpc(
             final_barcode,
 
             "purchase_price":
-            float(purchase_price),
+            float(purchase_price or 0),
 
             "selling_price":
-            float(selling_price),
-
+             float(selling_price or 0),
             "minimum_stock":
             final_min_stock,
 
