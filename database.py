@@ -337,7 +337,9 @@ def update_product_rpc(
         # --------------------------------------------------------------
         # UPDATE PRODUCT
         # --------------------------------------------------------------
+        print("UPDATE PRODUCT ID =", product_id)
 
+        print("UPDATE PAYLOAD =", payload)
         result = (
             client
             .table("products")
@@ -345,7 +347,7 @@ def update_product_rpc(
             .eq("id", int(product_id))
             .execute()
         )
-
+        print("UPDATE RESULT =", result.data)
         print("ERP UPDATE RESULT =", result.data)
 
         # --------------------------------------------------------------
