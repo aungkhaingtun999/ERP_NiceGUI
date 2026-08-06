@@ -81,12 +81,13 @@ def get_inventory_view(warehouse_id=None, search=None, limit=100):
         for item in result.data or []:
             product = item.get("products") or {}
 
-if not product:
-    print(
-        "BROKEN STOCK LINK:",
-        item
-    )
-    continue
+            if not product:
+                print(
+                    "BROKEN STOCK LINK:",
+                    item
+                )
+                continue
+
             warehouse = item.get("warehouses") or {}
 
             row = {
