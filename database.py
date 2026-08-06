@@ -237,7 +237,6 @@ def generate_payment_qr(
 # ==============================================================================
 # CUSTOM UPDATE PRODUCT FUNCTION
 # ==============================================================================
-
 def update_product_rpc(
     product_id,
     name,
@@ -255,45 +254,126 @@ def update_product_rpc(
 
         client = db()
 
-        payload = {
 
-            "name": name,
+        # ==============================================================
+        # LOAD EXISTING SKU / BARCODE
+        # ==============================================================
 
-            "sku": sku,
-
-            "barcode": barcode,
-
-            "purchase_price": float(purchase_price),
-
-            "selling_price": float(selling_price),
-
-            "minimum_stock": int(minimum_stock),
-
-            "unit": unit,
-
-            "notes": notes,
-
-            "is_active": bool(is_active),
-
-        }
-
-
-        result = (
+        old_result = (
             client
             .table("products")
-            .update(payload)
-            .eq("id", int(product_id))
+            .select(
+                "sku, barcode"
+            )
+            .eq(
+                "id",
+                int(product_id)
+            )
+            .single()
             .execute()
         )
 
 
-        return {
+        old_data = old_result.data or {}
 
-            "success": True,
 
-            "data": result.data
+        old_sku = old_data.get("sku")
+
+        old_barcode = old_data.get("barcode")
+
+
+
+        # ==============================================================
+        # KEEP OLD VALUE IF INPUT EMPTY
+        # ==============================================================
+
+        final_sku = (
+            sku.strip()
+            if sku and sku.strip()
+            else old_sku
+        )
+
+
+        final_barcode = (
+            barcode.strip()
+            if barcode and barcode.strip()
+            else old_barcode
+        )
+
+
+
+        payload = {
+
+
+            "name":
+            name,
+
+
+            "sku":
+            final_sku,
+
+
+            "barcode":
+            final_barcode,
+
+
+            "purchase_price":
+            float(purchase_price),
+
+
+            "selling_price":
+            float(selling_price),
+
+
+            "minimum_stock":
+            int(minimum_stock),
+
+
+            "unit":
+            unit,
+
+
+            "notes":
+            notes,
+
+
+            "is_active":
+            bool(is_active),
+
 
         }
+
+
+
+        result = (
+
+            client
+
+            .table("products")
+
+            .update(payload)
+
+            .eq(
+                "id",
+                int(product_id)
+            )
+
+            .execute()
+
+        )
+
+
+
+        return {
+
+            "success":
+            True,
+
+            "data":
+            result.data
+
+        }
+
 
 
     except Exception as e:
@@ -301,11 +381,14 @@ def update_product_rpc(
 
         return {
 
-            "success": False,
+            "success":
+            False,
 
-            "message": str(e)
+            "message":
+            str(e)
 
         }
+
 # ==============================================================================
 # PUBLIC EXPORTS
 # ==============================================================================
