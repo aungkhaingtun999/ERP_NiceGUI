@@ -623,302 +623,173 @@ Source:
                     )
 
     # ==========================================================================
-    # TAB 3 - EDIT PRODUCT
     # ==========================================================================
+# TAB 3 - EDIT PRODUCT
+# ==========================================================================
 
+with tab3:
 
-    with tab3:
+    st.subheader(
+        "✏️ Edit Product Master"
+    )
 
+    # IMPORTANT:
+    # Reload fresh inventory data for edit form
+    # Do NOT reuse products variable from tab1
+    fresh_products = get_inventory_view(
+        warehouse_id=selected_wh_id,
+        search=None
+    )
 
-        st.subheader(
-            "✏️ Edit Product Master"
+    if not fresh_products:
+
+        st.info(
+            "No product available"
         )
 
+    else:
 
-        if not products:
+        product_map = {
 
+            f"{p.get('id')} | {p.get('name')}":
+            p
 
-            st.info(
-                "No product available"
-            )
+            for p in fresh_products
 
+        }
 
-        else:
+        selected_product_name = st.selectbox(
 
+            "Select Product",
 
-            product_map = {
+            list(product_map.keys()),
 
-                f"{p.get('id')} | {p.get('name')}":
-                p
+            key="edit_product_select"
 
-                for p in products
+        )
 
-            }
+        selected_product = product_map[
+            selected_product_name
+        ]
 
+        with st.form(
+            f"edit_product_{selected_product.get('id')}"
+        ):
 
+            c1, c2 = st.columns(2)
 
-            selected_product_name = st.selectbox(
+            with c1:
 
-                "Select Product",
-
-                list(product_map.keys()),
-
-                key="edit_product_select"
-
-            )
-
-
-
-            selected_product = product_map[
-                selected_product_name
-            ]
-
-
-
-            with st.form(
-
-                f"edit_product_{selected_product.get('id')}"
-
-            ):
-
-
-                c1, c2 = st.columns(2)
-
-
-
-                with c1:
-
-
-                    name = st.text_input(
-
-                        "Product Name",
-
-                        value=
-                        selected_product.get(
-                            "name",
-                            ""
-                        )
-
-                    )
-
-
-                    sku = st.text_input(
-
-                        "SKU",
-
-                        value=
-                        selected_product.get(
-                            "sku",
-                            ""
-                        )
-
-                    )
-
-
-                    purchase_price = st.number_input(
-
-                        "Purchase Cost",
-
-                        value=float(
-
-                            selected_product.get(
-                                "purchase_price",
-                                0
-                            )
-
-                        )
-
-                    )
-
-
-                    minimum_stock = st.number_input(
-
-                        "Minimum Stock",
-
-                        value=int(
-
-                            selected_product.get(
-                                "minimum_stock",
-                                0
-                            )
-
-                        )
-
-                    )
-
-
-
-                with c2:
-
-
-                    barcode = st.text_input(
-
-                        "Barcode",
-
-                        value=
-                        selected_product.get(
-                            "barcode",
-                            ""
-                        )
-
-                    )
-
-
-                    selling_price = st.number_input(
-
-                        "Selling Price",
-
-                        value=float(
-
-                            selected_product.get(
-                                "selling_price",
-                                0
-                            )
-
-                        )
-
-                    )
-
-
-                    unit_options = [
-
-                        "pcs",
-
-                        "kg",
-
-                        "box"
-
-                    ]
-
-
-                    current_unit = selected_product.get(
-
-                        "unit",
-
-                        "pcs"
-
-                    )
-
-
-                    unit = st.selectbox(
-
-                        "Unit",
-
-                        unit_options,
-
-                        index=
-
-                        unit_options.index(
-                            current_unit
-                        )
-
-                        if current_unit in unit_options
-
-                        else 0
-
-                    )
-
-
-
-                notes = st.text_area(
-
-                    "Notes",
-
-                    value=
-                    selected_product.get(
-                        "notes",
-                        ""
-                    )
-
+                name = st.text_input(
+                    "Product Name",
+                    value=selected_product.get("name", "")
                 )
 
-
-
-                update = st.form_submit_button(
-
-                    "💾 Update Product",
-
-                    use_container_width=True
-
+                sku = st.text_input(
+                    "SKU",
+                    value=selected_product.get("sku", "") or ""
                 )
 
+                purchase_price = st.number_input(
+                    "Purchase Cost",
+                    value=float(selected_product.get("purchase_price", 0) or 0)
+                )
 
+                minimum_stock = st.number_input(
+                    "Minimum Stock",
+                    value=int(selected_product.get("minimum_stock", 0) or 0)
+                )
 
-                if update:
+            with c2:
 
+                barcode = st.text_input(
+                    "Barcode",
+                    value=selected_product.get("barcode", "") or ""
+                )
 
-                    try:
+                selling_price = st.number_input(
+                    "Selling Price",
+                    value=float(selected_product.get("selling_price", 0) or 0)
+                )
 
+                unit_options = [
+                    "pcs",
+                    "kg",
+                    "box"
+                ]
 
-                        result = update_product_rpc(
+                current_unit = selected_product.get(
+                    "unit",
+                    "pcs"
+                )
 
-                            product_id=
-                            selected_product.get(
-                                "id"
-                            ),
+                unit = st.selectbox(
+                    "Unit",
+                    unit_options,
+                    index=unit_options.index(current_unit)
+                    if current_unit in unit_options else 0
+                )
 
-                            name=name,
+            notes = st.text_area(
+                "Notes",
+                value=selected_product.get("notes", "") or ""
+            )
 
-                            sku=sku,
+            update = st.form_submit_button(
+                "💾 Update Product",
+                use_container_width=True
+            )
 
-                            barcode=barcode,
+            if update:
 
-                            purchase_price=
-                            purchase_price,
+                try:
 
-                            selling_price=
-                            selling_price,
+                    result = update_product_rpc(
+                        product_id=selected_product.get("id"),
+                        name=name,
+                        sku=sku,
+                        barcode=barcode,
+                        purchase_price=purchase_price,
+                        selling_price=selling_price,
+                        minimum_stock=minimum_stock,
+                        unit=unit,
+                        notes=notes,
+                        is_active=True
+                    )
 
-                            minimum_stock=
-                            minimum_stock,
+                    if result.get("success"):
 
-                            unit=unit,
-
-                            notes=notes,
-
-                            is_active=True
-
+                        st.success(
+                            "✅ Product Updated"
                         )
 
+                        CacheManager.bump(
+                            "product_version"
+                        )
 
+                        st.cache_data.clear()
 
-                        if result.get("success"):
+                        time.sleep(1)
 
+                        st.rerun()
 
-                            st.success(
-                                "✅ Product Updated"
-                            )
-
-                            CacheManager.bump(
-                                "product_version"
-                            )
-
-                            time.sleep(1)
-
-                            st.rerun()
-
-
-
-                        else:
-
-
-                            st.error(
-
-                                result.get(
-                                    "message",
-                                    "Update Failed"
-                                )
-
-                            )
-
-
-                    except Exception as e:
-
+                    else:
 
                         st.error(
-                            f"Update Error : {e}"
+                            result.get(
+                                "message",
+                                "Update Failed"
+                            )
                         )
 
+                except Exception as e:
+
+                    st.error(
+                        f"Update Error : {e}"
+                    )
+
+                    
+                            
 
 
 
