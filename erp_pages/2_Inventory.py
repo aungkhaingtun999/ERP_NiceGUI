@@ -159,7 +159,7 @@ def run():
 
 
     col1, col2 = st.columns(
-        [4,1]
+        [4, 1]
     )
 
 
@@ -429,11 +429,11 @@ Cost:
 
 
 Markup:
-{preview.get('final_markup_percent',0)} %
+{preview.get('final_markup_percent', 0)} %
 
 
 Selling Price:
-{preview.get('selling_price',0):,.2f} MMK
+{preview.get('selling_price', 0):,.2f} MMK
 
 
 Source:
@@ -622,171 +622,170 @@ Source:
 
                     )
 
-# ==========================================================================
-# TAB 3 - EDIT PRODUCT
-# ==========================================================================
 
-with tab3:
 
-    st.subheader(
-        "✏️ Edit Product Master"
-    )
+    # ==========================================================================
+    # TAB 3 - EDIT PRODUCT
+    # ==========================================================================
 
-    # IMPORTANT: reload fresh inventory data for edit tab
-    fresh_products = get_inventory_view(
-        warehouse_id=selected_wh_id,
-        search=None
-    )
+    with tab3:
 
-    if not fresh_products:
-
-        st.info(
-            "No product available"
+        st.subheader(
+            "✏️ Edit Product Master"
         )
 
-    else:
-
-        product_map = {
-
-            f"{p.get('id')} | {p.get('name')}":
-            p
-
-            for p in fresh_products
-
-        }
-
-        selected_product_name = st.selectbox(
-
-            "Select Product",
-
-            list(product_map.keys()),
-
-            key="edit_product_select"
-
+        # IMPORTANT: reload fresh inventory data for edit tab
+        fresh_products = get_inventory_view(
+            warehouse_id=selected_wh_id,
+            search=None
         )
 
-        selected_product = product_map[
-            selected_product_name
-        ]
+        if not fresh_products:
 
-        with st.form(
-            f"edit_product_{selected_product.get('id')}"
-        ):
-
-            c1, c2 = st.columns(2)
-
-            with c1:
-
-                name = st.text_input(
-                    "Product Name",
-                    value=selected_product.get("name", "")
-                )
-
-                sku = st.text_input(
-                    "SKU",
-                    value=selected_product.get("sku", "") or ""
-                )
-
-                purchase_price = st.number_input(
-                    "Purchase Cost",
-                    value=float(selected_product.get("purchase_price", 0) or 0)
-                )
-
-                minimum_stock = st.number_input(
-                    "Minimum Stock",
-                    value=int(selected_product.get("minimum_stock", 0) or 0)
-                )
-
-            with c2:
-
-                barcode = st.text_input(
-                    "Barcode",
-                    value=selected_product.get("barcode", "") or ""
-                )
-
-                selling_price = st.number_input(
-                    "Selling Price",
-                    value=float(selected_product.get("selling_price", 0) or 0)
-                )
-
-                unit_options = [
-                    "pcs",
-                    "kg",
-                    "box"
-                ]
-
-                current_unit = selected_product.get(
-                    "unit",
-                    "pcs"
-                )
-
-                unit = st.selectbox(
-                    "Unit",
-                    unit_options,
-                    index=unit_options.index(current_unit)
-                    if current_unit in unit_options else 0
-                )
-
-            notes = st.text_area(
-                "Notes",
-                value=selected_product.get("notes", "") or ""
+            st.info(
+                "No product available"
             )
 
-            update = st.form_submit_button(
-                "💾 Update Product",
-                use_container_width=True
+        else:
+
+            product_map = {
+
+                f"{p.get('id')} | {p.get('name')}":
+                p
+
+                for p in fresh_products
+
+            }
+
+            selected_product_name = st.selectbox(
+
+                "Select Product",
+
+                list(product_map.keys()),
+
+                key="edit_product_select"
+
             )
 
-            if update:
+            selected_product = product_map[
+                selected_product_name
+            ]
 
-                try:
+            with st.form(
+                f"edit_product_{selected_product.get('id')}"
+            ):
 
-                    result = update_product_rpc(
-                        product_id=selected_product.get("id"),
-                        name=name,
-                        sku=sku,
-                        barcode=barcode,
-                        purchase_price=purchase_price,
-                        selling_price=selling_price,
-                        minimum_stock=minimum_stock,
-                        unit=unit,
-                        notes=notes,
-                        is_active=True
+                c1, c2 = st.columns(2)
+
+                with c1:
+
+                    name = st.text_input(
+                        "Product Name",
+                        value=selected_product.get("name", "")
                     )
 
-                    if result.get("success"):
+                    sku = st.text_input(
+                        "SKU",
+                        value=selected_product.get("sku", "") or ""
+                    )
 
-                        st.success(
-                            "✅ Product Updated"
+                    purchase_price = st.number_input(
+                        "Purchase Cost",
+                        value=float(selected_product.get("purchase_price", 0) or 0)
+                    )
+
+                    minimum_stock = st.number_input(
+                        "Minimum Stock",
+                        value=int(selected_product.get("minimum_stock", 0) or 0)
+                    )
+
+                with c2:
+
+                    barcode = st.text_input(
+                        "Barcode",
+                        value=selected_product.get("barcode", "") or ""
+                    )
+
+                    selling_price = st.number_input(
+                        "Selling Price",
+                        value=float(selected_product.get("selling_price", 0) or 0)
+                    )
+
+                    unit_options = [
+                        "pcs",
+                        "kg",
+                        "box"
+                    ]
+
+                    current_unit = selected_product.get(
+                        "unit",
+                        "pcs"
+                    )
+
+                    unit = st.selectbox(
+                        "Unit",
+                        unit_options,
+                        index=unit_options.index(current_unit)
+                        if current_unit in unit_options else 0
+                    )
+
+                notes = st.text_area(
+                    "Notes",
+                    value=selected_product.get("notes", "") or ""
+                )
+
+                update = st.form_submit_button(
+                    "💾 Update Product",
+                    use_container_width=True
+                )
+
+                if update:
+
+                    try:
+
+                        result = update_product_rpc(
+                            product_id=selected_product.get("id"),
+                            name=name,
+                            sku=sku,
+                            barcode=barcode,
+                            purchase_price=purchase_price,
+                            selling_price=selling_price,
+                            minimum_stock=minimum_stock,
+                            unit=unit,
+                            notes=notes,
+                            is_active=True
                         )
 
-                        CacheManager.bump(
-                            "product_version"
-                        )
+                        if result.get("success"):
 
-                        st.cache_data.clear()
+                            st.success(
+                                "✅ Product Updated"
+                            )
 
-                        time.sleep(1)
+                            CacheManager.bump(
+                                "product_version"
+                            )
 
-                        st.rerun()
+                            st.cache_data.clear()
 
-                    else:
+                            time.sleep(1)
+
+                            st.rerun()
+
+                        else:
+
+                            st.error(
+                                result.get(
+                                    "message",
+                                    "Update Failed"
+                                )
+                            )
+
+                    except Exception as e:
 
                         st.error(
-                            result.get(
-                                "message",
-                                "Update Failed"
-                            )
+                            f"Update Error : {e}"
                         )
-
-                except Exception as e:
-
-                    st.error(
-                        f"Update Error : {e}"
-                    )
-                    ==========================================================================
-
-                            
 
 
 
@@ -1279,6 +1278,8 @@ f"""
 
             )
 
+
+
     # ==========================================================================
     # TAB 5 - ENTERPRISE INVENTORY DASHBOARD
     # ==========================================================================
@@ -1378,7 +1379,7 @@ f"""
 
                     "💰 Inventory Value",
 
-                    f"{float(kpi.get('total_inventory_value',0)):,.0f} MMK"
+                    f"{float(kpi.get('total_inventory_value', 0)):,.0f} MMK"
 
                 )
 
