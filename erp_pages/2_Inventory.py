@@ -622,8 +622,7 @@ Source:
 
                     )
 
-    # ==========================================================================
-    # ==========================================================================
+# ==========================================================================
 # TAB 3 - EDIT PRODUCT
 # ==========================================================================
 
@@ -633,9 +632,7 @@ with tab3:
         "✏️ Edit Product Master"
     )
 
-    # IMPORTANT:
-    # Reload fresh inventory data for edit form
-    # Do NOT reuse products variable from tab1
+    # IMPORTANT: reload fresh inventory data for edit tab
     fresh_products = get_inventory_view(
         warehouse_id=selected_wh_id,
         search=None
@@ -787,8 +784,8 @@ with tab3:
                     st.error(
                         f"Update Error : {e}"
                     )
+                    ==========================================================================
 
-                    
                             
 
 
