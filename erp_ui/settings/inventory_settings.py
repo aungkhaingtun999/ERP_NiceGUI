@@ -148,10 +148,9 @@ def render_inventory_settings(
             )
 
 
-
-            notify_success(
+            st.session_state["inventory_setting_saved"] = (
             "📦 Inventory change request submitted for approval"
-          )
+            )
 
             st.rerun()
 
