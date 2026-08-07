@@ -34,6 +34,11 @@ from database import (
 )
 
 
+from erp_pages.inventory.warehouse import (
+    render_warehouse_selector
+)
+
+
 
 # ==============================================================================
 # PRODUCT MODULES
@@ -101,112 +106,20 @@ def initialize_session_state():
 
 
 
-# ==============================================================================
-# WAREHOUSE SELECTOR
-# ==============================================================================
+# --------------------------------------------------------------------------
+# Warehouse
+# --------------------------------------------------------------------------
 
+warehouses = get_warehouses()
 
-def render_mobile_warehouse():
 
+warehouse_id, warehouse_name = render_warehouse_selector(
+    warehouses
+)
 
 
-    st.subheader(
-        "🏭 Warehouse"
-    )
-
-
-
-    try:
-
-
-        warehouses = get_warehouses()
-
-
-
-        if not warehouses:
-
-
-            st.warning(
-                "No warehouse found"
-            )
-
-            return
-
-
-
-
-
-        warehouse_map = {
-
-
-            str(w.get("name")):
-
-            w.get("id")
-
-
-            for w in warehouses
-
-            if w.get("name")
-
-        }
-
-
-
-
-
-        if not warehouse_map:
-
-
-            st.warning(
-                "Warehouse data missing"
-            )
-
-            return
-
-
-
-
-
-        selected_name = st.selectbox(
-
-
-            "Select Warehouse",
-
-
-            list(
-                warehouse_map.keys()
-            ),
-
-
-            key=
-
-            "mobile_inventory_warehouse_selector"
-
-
-        )
-
-
-
-
-        st.session_state.mobile_warehouse_id = (
-
-            warehouse_map[selected_name]
-
-        )
-
-
-
-
-    except Exception as e:
-
-
-        st.error(
-
-            f"Warehouse Error : {e}"
-
-        )
-
-
+st.session_state.mobile_warehouse_id = warehouse_id
+                
 
 
 
