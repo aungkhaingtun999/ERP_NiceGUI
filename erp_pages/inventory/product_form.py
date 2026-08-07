@@ -1,18 +1,24 @@
 # ==============================================================================
-# PRODUCT FORM v12 STABLE
-# MOBILE INVENTORY NEW PRODUCT REGISTRATION
-# SAVE SUCCESS MESSAGE HOLD
+# ERP ENTERPRISE PRODUCT FORM v13
+#
+# Compatible:
+# - create_product_full RPC
+# - Owner First Pricing
+# - Warehouse Stock
 # ==============================================================================
+
 
 import streamlit as st
 
 
-from database import db
+from erp_core.context import CacheManager
+
 
 
 # ------------------------------------------------------------------------------
-# SHOW SAVE MESSAGE
+# SAVE MESSAGE
 # ------------------------------------------------------------------------------
+
 
 def show_saved_message():
 
@@ -26,11 +32,19 @@ def show_saved_message():
 
 
 
+
+
 # ------------------------------------------------------------------------------
-# RENDER FORM
+# NEW PRODUCT FORM
 # ------------------------------------------------------------------------------
 
-def render_new_product_form(barcode=None):
+
+def render_new_product_form(
+    db_client,
+    pricing_service,
+    warehouse_id,
+    barcode=None
+):
 
 
     show_saved_message()
@@ -39,6 +53,7 @@ def render_new_product_form(barcode=None):
     st.subheader(
         "🆕 New Product Registration"
     )
+
 
 
     name = st.text_input(
@@ -57,6 +72,7 @@ def render_new_product_form(barcode=None):
     )
 
 
+
     purchase_price = st.number_input(
         "Purchase Price",
         min_value=0.0,
@@ -64,18 +80,32 @@ def render_new_product_form(barcode=None):
     )
 
 
-    selling_price = st.number_input(
-        "Selling Price",
+
+    owner_price = st.number_input(
+        "👑 Owner Selling Price",
         min_value=0.0,
         step=100.0
     )
 
 
-    stock = st.number_input(
+
+    opening_stock = st.number_input(
         "Opening Stock",
         min_value=0,
         step=1
     )
+
+
+
+    unit = st.selectbox(
+        "Unit",
+        [
+            "pcs",
+            "kg",
+            "box"
+        ]
+    )
+
 
 
 
@@ -85,7 +115,9 @@ def render_new_product_form(barcode=None):
     ):
 
 
+
         if not name:
+
 
             st.warning(
                 "Please enter product name"
@@ -94,47 +126,169 @@ def render_new_product_form(barcode=None):
             return
 
 
-        data = {
-
-            "name": name,
-
-            "barcode": barcode_value,
-
-            "sku": sku,
-
-            "purchase_price": purchase_price,
-
-            "selling_price": selling_price,
-
-            "stock": stock
-
-        }
-
-
 
         try:
 
 
-            client = db()
 
-            result = (
-            client
-            .table("products")
-            .insert(data)
-            .execute()
-)
+            # --------------------------------------------------
+            # PRICE ENGINE
+            # --------------------------------------------------
 
 
+            if owner_price > 0:
 
-            if result.data:
+
+                final_price = owner_price
+
+                price_source = "OWNER_PRICE"
 
 
-                st.session_state.product_saved_message = (
-                    "✅ Product saved successfully!"
+            else:
+
+
+                preview = (
+                    pricing_service
+                    .calculate_selling_price(
+                        cost=purchase_price,
+                        product_id=None
+                    )
                 )
 
 
-                st.session_state.barcode_value = barcode_value
+                final_price = preview.get(
+                    "selling_price",
+                    purchase_price
+                )
+
+
+                price_source = preview.get(
+                    "markup_source",
+                    "DEFAULT"
+                )
+
+
+
+
+
+            payload = {
+
+
+                "name":
+                name,
+
+
+                "barcode":
+                barcode_value,
+
+
+                "sku":
+                sku,
+
+
+                "purchase_price":
+                purchase_price,
+
+
+                "selling_price":
+                final_price,
+
+
+                "owner_selling_price":
+                owner_price if owner_price > 0 else None,
+
+
+                "final_selling_price":
+                final_price,
+
+
+                "price_source":
+                price_source,
+
+
+                "unit":
+                unit,
+
+
+                "category_id":
+                1
+
+
+            }
+
+
+
+
+            response = (
+
+                db_client
+
+                .rpc(
+
+                    "create_product_full",
+
+                    {
+
+
+                        "p_data":
+                        payload,
+
+
+                        "p_warehouse_id":
+                        int(warehouse_id),
+
+
+                        "p_initial_qty":
+                        int(opening_stock)
+
+                    }
+
+                )
+
+                .execute()
+
+            )
+
+
+
+
+            result = response.data
+
+
+
+            if isinstance(
+                result,
+                list
+            ):
+
+                result=result[0]
+
+
+
+
+            if result.get(
+                "success"
+            ):
+
+
+                st.session_state.product_saved_message = (
+
+                    "✅ Product saved successfully!"
+
+                )
+
+
+                CacheManager.bump(
+                    "inventory_version"
+                )
+
+
+                CacheManager.bump(
+                    "product_version"
+                )
+
+
+                st.cache_data.clear()
 
 
                 st.rerun()
@@ -143,9 +297,16 @@ def render_new_product_form(barcode=None):
 
             else:
 
+
                 st.error(
-                    "❌ Product save failed"
+
+                    result.get(
+                        "message",
+                        "Save failed"
+                    )
+
                 )
+
 
 
         except Exception as e:
