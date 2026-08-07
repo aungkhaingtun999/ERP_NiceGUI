@@ -1,27 +1,12 @@
 # ==============================================================================
-# erp_pages/2_Inventory.py
-# ERP ENTERPRISE INVENTORY ROUTER v1.0
-#
-# Inventory modules separated architecture
-#
+# pages/2_Inventory.py
+# ERP ENTERPRISE INVENTORY ENTRY
 # ==============================================================================
 
-
-import streamlit as st
-
-
-from erp_pages.inventory.page import (
-    run_inventory_page
-)
-
-
-
-def run():
-
-    run_inventory_page()
-
+from erp_pages.inventory.page import run
 
 
 if __name__ == "__main__":
-
+    run()
+else:
     run()
