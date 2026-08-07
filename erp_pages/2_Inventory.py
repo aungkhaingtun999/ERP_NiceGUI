@@ -403,20 +403,17 @@ def run():
 
                 try:
 
-                    preview = (
+                    price = pricing_service.calculate_price(
+                    product_id=selected_product.get("id") if 'selected_product' in locals() else None,
+                    base_price=purchase_price
+)
 
-                        pricing_service
+                    preview = {
+                    "selling_price": float(price),
+                   "final_markup_percent": pricing_service.get_setting("DEFAULT_MARKUP_PERCENT") or 20,
+                   "markup_source": "DEFAULT"
+}
 
-                        .calculate_selling_price(
-
-                            cost=
-                            purchase_price,
-
-                            product_id=None
-
-                        )
-
-                    )
 
 
                     st.info(
