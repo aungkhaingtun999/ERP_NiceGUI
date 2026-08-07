@@ -141,24 +141,19 @@ def render_inventory_settings(
 
 
             SettingsService.request_change(
-
-                "AUTO_REORDER",
-
-                str(auto_reorder),
-
-                "Change auto reorder setting",
-
-                user["id"]
-
+            "AUTO_REORDER",
+            auto_reorder,
+            "Change auto reorder setting",
+             user["id"]
             )
 
 
 
             notify_success(
+            "📦 Inventory change request submitted for approval"
+          )
 
-                "📦 Inventory change request submitted for approval"
-
-            )
+            st.rerun()
 
 
 
