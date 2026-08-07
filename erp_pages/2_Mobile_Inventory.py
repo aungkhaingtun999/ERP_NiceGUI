@@ -486,13 +486,20 @@ def run():
     initialize_session_state()
 
 
-
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Warehouse
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    warehouses = get_warehouses()
+    
+    selected_wh_id, selected_wh_name = render_warehouse_selector(
+        warehouses,
+        key="mobile_inventory_warehouse_selector"
+    )
+    
+    st.session_state.mobile_warehouse_id = selected_wh_id
+    
 
-
-    render_warehouse_selector()
+    
 
 
 
