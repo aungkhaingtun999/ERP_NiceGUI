@@ -46,7 +46,35 @@ from .settings_service import (
 
 
 class PricingService:
+    # ==========================================================================
+    # SIMPLE PRICE CALCULATION (COMPATIBILITY METHOD)
+    # ==========================================================================
 
+    def calculate_selling_price(
+        self,
+        cost,
+        product_id=None
+    ):
+
+        markup = float(
+            self.get_setting(
+                "DEFAULT_MARKUP_PERCENT"
+            ) or 20
+        )
+
+        cost = float(cost or 0)
+
+        selling_price = round(
+            cost + (cost * markup / 100),
+            2
+        )
+
+        return {
+            "selling_price": selling_price,
+            "final_markup_percent": markup,
+            "markup_source": "DEFAULT"
+        }
+        
 
 
     # ==========================================================================
