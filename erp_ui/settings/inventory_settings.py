@@ -1,9 +1,20 @@
 # ==============================================================================
 # erp_ui/settings/inventory_settings.py
-# ERP INVENTORY SETTINGS COMPONENT
+# ERP INVENTORY SETTINGS COMPONENT v2.0
 #
 # Approval Workflow:
-# Maker -> settings_change_requests -> Checker Approval
+#
+# Maker
+#   |
+#   ↓
+# settings_change_requests
+#   |
+#   ↓
+# Checker Approval
+#   |
+#   ↓
+# settings table update
+#
 # ==============================================================================
 
 
@@ -27,6 +38,8 @@ from utils.notification import (
 
 
 
+
+
 # ==============================================================================
 # INVENTORY SETTINGS UI
 # ==============================================================================
@@ -38,29 +51,61 @@ def render_inventory_settings(
 ):
 
 
+    # --------------------------------------------------------------------------
+    # SHOW SUCCESS MESSAGE AFTER RERUN
+    # --------------------------------------------------------------------------
+
+    if "inventory_setting_saved" in st.session_state:
+
+
+        notify_success(
+
+            st.session_state.inventory_setting_saved
+
+        )
+
+
+        del st.session_state.inventory_setting_saved
+
+
+
+
+
     st.subheader(
         "📦 Inventory Rules"
     )
 
 
 
-    # --------------------------------------------------------------------------
+
+
+    # ==========================================================================
     # MINIMUM STOCK ALERT
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+
 
     minimum_stock_value = settings.get(
+
         "MIN_STOCK_ALERT",
+
         0
+
     )
+
 
 
     try:
 
+
         minimum_stock_value = float(
+
             minimum_stock_value
+
         )
 
+
     except Exception:
+
 
         minimum_stock_value = 0
 
@@ -76,15 +121,19 @@ def render_inventory_settings(
 
         value=minimum_stock_value,
 
-        step=1.0
+        step=1.0,
+
+        key="inventory_min_stock_alert"
 
     )
 
 
 
-    # --------------------------------------------------------------------------
+
+
+    # ==========================================================================
     # AUTO REORDER
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     auto_reorder = st.toggle(
@@ -99,9 +148,13 @@ def render_inventory_settings(
 
             False
 
-        )
+        ),
+
+        key="inventory_auto_reorder"
 
     )
+
+
 
 
 
@@ -109,21 +162,30 @@ def render_inventory_settings(
 
 
 
-    # --------------------------------------------------------------------------
+
+
+    # ==========================================================================
     # SUBMIT CHANGE REQUEST
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
 
     if st.button(
 
         "📨 Submit Inventory Change Request",
 
-        use_container_width=True
+        use_container_width=True,
+
+        key="submit_inventory_settings_request"
 
     ):
 
 
         try:
+
+
+            # --------------------------------------------------------------
+            # MIN STOCK REQUEST
+            # --------------------------------------------------------------
 
 
             SettingsService.request_change(
@@ -140,19 +202,45 @@ def render_inventory_settings(
 
 
 
+
+
+            # --------------------------------------------------------------
+            # AUTO REORDER REQUEST
+            # --------------------------------------------------------------
+
+
             SettingsService.request_change(
-            "AUTO_REORDER",
-            auto_reorder,
-            "Change auto reorder setting",
-             user["id"]
+
+                "AUTO_REORDER",
+
+                auto_reorder,
+
+                "Change auto reorder setting",
+
+                user["id"]
+
             )
 
 
-            st.session_state["inventory_setting_saved"] = (
-            "📦 Inventory change request submitted for approval"
+
+
+
+            # --------------------------------------------------------------
+            # HOLD MESSAGE
+            # --------------------------------------------------------------
+
+
+            st.session_state.inventory_setting_saved = (
+
+                "📦 Inventory change request submitted for approval"
+
             )
+
+
 
             st.rerun()
+
+
 
 
 
