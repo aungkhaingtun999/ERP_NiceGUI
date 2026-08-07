@@ -1,37 +1,78 @@
 # ==============================================================================
-# MOBILE INVENTORY PRODUCT SEARCH ENGINE v4
+# MOBILE INVENTORY PRODUCT SEARCH ENGINE v5
+#
 # Barcode + SKU + Warehouse Stock
+# Owner First Pricing Compatible
+#
 # ==============================================================================
+
 
 from database import db
 
 
-def search_product(keyword):
+
+
+def search_product(
+
+    keyword,
+
+    warehouse_id=None
+
+):
+
 
     if not keyword:
+
         return None
 
 
-    keyword = str(keyword).strip()
+
+    keyword = str(
+        keyword
+    ).strip()
+
 
 
     try:
 
+
         client = db()
 
 
-        response = (
+
+        query = (
+
             client
-            .table("products")
+
+            .table(
+                "products"
+            )
+
             .select(
                 """
                 id,
                 name,
                 barcode,
                 sku,
+
                 purchase_price,
+
                 selling_price,
-                stock,
+
+                owner_selling_price,
+
+                final_selling_price,
+
+                price_source,
+
+                owner_price_locked,
+
+                markup_percent,
+
+                unit,
+
+                is_active,
+
                 warehouse_stock(
                     warehouse_id,
                     qty,
@@ -39,50 +80,134 @@ def search_product(keyword):
                 )
                 """
             )
+
             .or_(
                 f"barcode.eq.{keyword},sku.eq.{keyword}"
             )
+
+        )
+
+
+
+        result = (
+            query
             .execute()
         )
 
 
-        products = response.data
+
+        products = result.data or []
+
 
 
         if not products:
+
             return None
+
+
 
 
         product = products[0]
 
 
-        # Warehouse stock priority
-        warehouse_stock = product.get(
+
+
+        # ----------------------------------------------------------------------
+        # WAREHOUSE STOCK
+        # ----------------------------------------------------------------------
+
+
+        warehouse_rows = product.get(
             "warehouse_stock",
             []
         )
 
 
-        if warehouse_stock:
 
-            total_qty = sum(
-                int(
-                    w.get("available_qty",0)
+        if warehouse_id is not None:
+
+
+            warehouse_rows = [
+
+                w
+
+                for w in warehouse_rows
+
+                if w.get(
+                    "warehouse_id"
                 )
-                for w in warehouse_stock
+                ==
+                int(
+                    warehouse_id
+                )
+
+            ]
+
+
+
+
+        available_qty = sum(
+
+            float(
+                w.get(
+                    "available_qty",
+                    0
+                )
+                or 0
             )
 
-            product["stock"] = total_qty
+            for w in warehouse_rows
+
+        )
+
+
+
+        product["stock"] = available_qty
+
+
+
+
+        # ----------------------------------------------------------------------
+        # FINAL DISPLAY PRICE
+        # ----------------------------------------------------------------------
+
+
+        product["display_price"] = (
+
+            product.get(
+                "final_selling_price"
+            )
+
+            or
+
+            product.get(
+                "owner_selling_price"
+            )
+
+            or
+
+            product.get(
+                "selling_price"
+            )
+
+            or 0
+
+        )
+
 
 
         return product
 
 
+
+
     except Exception as e:
+
 
         print(
             "Product Search Error:",
             e
         )
+
 
         return None
