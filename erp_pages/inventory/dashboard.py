@@ -407,7 +407,9 @@ def render_inventory_dashboard(
 
             selected_product = product_map[selected_name]
 
-
+        if not warehouse_id:
+            st.warning("Please select warehouse first")
+            return
 
             stock_card = inventory_service.get_stock_card(
 
