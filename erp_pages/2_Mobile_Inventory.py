@@ -99,6 +99,20 @@ def initialize_session_state():
 
 
             st.session_state[key] = value
+initialize_session_state()
+
+# ------------------------------------------------------------------------------
+# Warehouse
+# ------------------------------------------------------------------------------
+warehouses = get_warehouses()
+
+selected_wh_id, selected_wh_name = render_warehouse_selector(
+    warehouses
+)
+
+st.session_state.mobile_warehouse_id = selected_wh_id
+
+st.divider()
 
 
 
