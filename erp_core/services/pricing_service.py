@@ -1,25 +1,44 @@
 # ==============================================================================
 # erp_core/services/pricing_service.py
-# ERP ENTERPRISE PRICING ENGINE v6.0 FINAL
+# ERP ENTERPRISE PRICING ENGINE v7.0
 #
-# Settings Controlled Pricing Engine
+# SETTINGS CONTROLLED PRICING ENGINE
 #
-# Flow:
+# Priority:
 #
+# OWNER_FIRST
+#
+# Owner Selling Price
+#        ↓
 # Product Markup
 #        ↓
 # Category Markup
 #        ↓
-# Global Markup
+# Global / Default Markup
 #
 # ==============================================================================
 
-from decimal import Decimal, ROUND_HALF_UP
-import time
 
-from ..base_repo import log_error
-from ..config import Tables
-from .settings_service import SettingsService
+from decimal import (
+    Decimal,
+    ROUND_HALF_UP
+)
+
+
+from ..base_repo import (
+    log_error
+)
+
+
+from ..config import (
+    Tables
+)
+
+
+from .settings_service import (
+    SettingsService
+)
+
 
 
 # ==============================================================================
@@ -29,229 +48,548 @@ from .settings_service import SettingsService
 
 class PricingService:
 
+
     # ==========================================================================
     # INIT
     # ==========================================================================
 
-    def __init__(self, client):
+
+    def __init__(
+        self,
+        client
+    ):
+
+
         self.client = client
-        self.settings_service = SettingsService(client)
-        self.cache = {}
-        self.cache_time = 0
-        self.cache_ttl = 300
+
+
+        self.settings_service = SettingsService(
+            client
+        )
+
+
 
     # ==========================================================================
-    # SAFE QUERY
+    # QUERY
     # ==========================================================================
 
-    def query(self, table, select="*", filters=None):
+
+    def query(
+        self,
+        table,
+        select="*",
+        filters=None
+    ):
+
+
         try:
-            q = self.client.table(table).select(select)
+
+
+            q = (
+
+                self.client
+
+                .table(table)
+
+                .select(select)
+
+            )
+
 
             if filters:
-                for key, value in filters.items():
-                    q = q.eq(key, value)
+
+                for key,value in filters.items():
+
+                    q = q.eq(
+                        key,
+                        value
+                    )
+
+
 
             result = q.execute()
+
+
             return result.data or []
 
+
+
         except Exception as e:
-            log_error(message=f"Pricing query failed {table}", exception=e)
+
+
+            log_error(
+
+                message=f"Pricing query failed {table}",
+
+                exception=e
+
+            )
+
+
             return []
+
+
+
+
 
     # ==========================================================================
     # SETTINGS
     # ==========================================================================
 
-    def get_setting(self, key):
-        return self.settings_service.get_setting(key)
+
+    def get_setting(
+        self,
+        key,
+        default=None
+    ):
+
+
+        try:
+
+
+            value = self.settings_service.get_setting(
+                key
+            )
+
+
+            if value is None:
+
+                return default
+
+
+            return value
+
+
+
+        except Exception:
+
+
+            return default
+
+
+
+
+
+
+    # ==========================================================================
+    # GET PRODUCT
+    # ==========================================================================
+
+
+    def get_product(
+        self,
+        product_id
+    ):
+
+
+        rows = self.query(
+
+            Tables.PRODUCTS,
+
+            """
+            id,
+            name,
+
+            purchase_price,
+            selling_price,
+
+            owner_selling_price,
+            final_selling_price,
+
+            price_source,
+            owner_price_locked,
+
+            markup_percent,
+            category_id
+
+            """,
+
+            {
+                "id":product_id
+            }
+
+        )
+
+
+        if rows:
+
+            return rows[0]
+
+
+        return {}
+
+
+
+
+
 
     # ==========================================================================
     # PRODUCT MARKUP
     # ==========================================================================
 
-    def get_product_markup(self, product_id):
-        try:
-            rows = self.query(
-                Tables.PRODUCTS,
-                """
-                id,
-                name,
-                markup_percent,
-                category_id,
-                owner_price
-                """,
-                {"id": product_id},
-            )
 
-            if rows:
-                return rows[0]
+    def get_product_markup(
+        self,
+        product_id
+    ):
 
-        except Exception as e:
-            log_error(message="Product markup load failed", exception=e)
+
+        product = self.get_product(
+            product_id
+        )
+
 
         return {
-            "id": product_id,
-            "name": "",
-            "markup_percent": None,
-            "category_id": None,
-            "owner_price": None,
+
+            "markup_percent":
+            product.get(
+                "markup_percent"
+            ),
+
+            "category_id":
+            product.get(
+                "category_id"
+            )
+
         }
+
+
+
+
+
 
     # ==========================================================================
     # CATEGORY MARKUP
     # ==========================================================================
 
-    def get_category_markup(self, category_id):
-        if not category_id:
-            return {"name": None, "markup_percent": None}
 
-        try:
-            rows = self.query(
-                Tables.CATEGORIES,
-                """
-                name,
-                markup_percent
-                """,
-                {"id": category_id},
-            )
-
-            if rows:
-                return rows[0]
-
-        except Exception as e:
-            log_error(message="Category markup load failed", exception=e)
-
-        return {"name": None, "markup_percent": None}
-
-    # ==========================================================================
-    # GLOBAL MARKUP & FINAL PRICE CALCULATION
-    # ==========================================================================
-
-    def get_global_markup(self):
-        try:
-            global_markup = self.get_setting("global_markup_percent")
-            if global_markup is not None:
-                return Decimal(str(global_markup))
-        except Exception as e:
-            log_error(message="Global markup load failed", exception=e)
-        return Decimal("0.00")
-
-    def calculate_price(self, product_id, base_price):
-        try:
-            base_decimal = Decimal(str(base_price))
-
-            # 1. Product Markup
-            product_data = self.get_product_markup(product_id)
-            markup = product_data.get("markup_percent")
-
-            # 2. Category Markup (if product markup is not set)
-            if markup is None and product_data.get("category_id"):
-                category_data = self.get_category_markup(product_data["category_id"])
-                markup = category_data.get("markup_percent")
-
-            # 3. Global Markup (if both product and category markups are not set)
-            if markup is None:
-                markup = self.get_global_markup()
-
-            markup_decimal = Decimal(str(markup))
-
-            # Final Price Calculation using ROUND_HALF_UP
-            final_price = base_decimal * (
-                Decimal("1") + (markup_decimal / Decimal("100"))
-            )
-            return final_price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-        except Exception as e:
-            log_error(
-                message=f"Price calculation failed for product {product_id}",
-                exception=e,
-            )
-            return Decimal(str(base_price))
-
-    # ==========================================================================
-    # SIMPLE PRICE CALCULATION (COMPATIBILITY METHOD)
-    # ==========================================================================
-
-    def calculate_selling_price(
+    def get_category_markup(
         self,
-        cost,
-        product_id=None
+        category_id
     ):
 
-        cost = Decimal(str(cost or 0))
 
-        method = str(
-            self.get_setting(
-                "PRICING_METHOD"
-            )
-            or "MARKUP"
-        ).upper()
+        if not category_id:
 
-        # ==================================================
-        # OWNER PRICE FIRST
-        # ==================================================
+            return None
 
-        if method == "OWNER_FIRST" and product_id:
 
-            product = self.get_product_markup(
-                product_id
-            )
 
-            owner_price = product.get(
-                "owner_price"
-            )
+        rows = self.query(
 
-            if owner_price not in (
-                None,
-                "",
-                0
-            ):
+            Tables.CATEGORIES,
 
-                return {
+            """
+            markup_percent
+            """,
 
-                    "selling_price":
-                    float(owner_price),
+            {
+                "id":category_id
+            }
 
-                    "final_markup_percent":
-                    0,
-
-                    "markup_source":
-                    "OWNER_PRICE"
-
-                }
-
-        # ==================================================
-        # PRODUCT / CATEGORY / GLOBAL MARKUP
-        # ==================================================
-
-        result = self.calculate_price(
-            product_id,
-            cost
         )
 
-        final_price = float(result)
 
-        markup = round(
-            (
-                (final_price - float(cost))
-                /
-                float(cost)
+        if rows:
+
+            return rows[0].get(
+                "markup_percent"
+            )
+
+
+        return None
+
+
+
+
+
+    # ==========================================================================
+    # GLOBAL MARKUP
+    # ==========================================================================
+
+
+    def get_global_markup(self):
+
+
+        value = self.get_setting(
+
+            "DEFAULT_MARKUP_PERCENT",
+
+            0
+
+        )
+
+
+        return Decimal(
+            str(value)
+        )
+
+
+
+
+
+
+    # ==========================================================================
+    # PRICE CALCULATION
+    # ==========================================================================
+
+
+    def calculate_price(
+
+        self,
+
+        product_id,
+
+        base_price
+
+    ):
+
+
+        try:
+
+
+            base_price = Decimal(
+                str(base_price or 0)
+            )
+
+
+
+            method = str(
+
+                self.get_setting(
+
+                    "PRICING_METHOD",
+
+                    "OWNER_FIRST"
+
+                )
+
+            ).upper()
+
+
+
+            product = self.get_product(
+
+                product_id
+
+            )
+
+
+
+            # ==============================================================
+            # 1. OWNER PRICE
+            # ==============================================================
+
+
+            if method == "OWNER_FIRST":
+
+
+                owner_price = product.get(
+
+                    "owner_selling_price"
+
+                )
+
+
+
+                if owner_price not in (
+                    None,
+                    "",
+                    0
+                ):
+
+
+                    return {
+
+                        "selling_price":
+                        Decimal(str(owner_price))
+                        .quantize(
+                            Decimal("0.01")
+                        ),
+
+                        "final_markup_percent":
+                        0,
+
+                        "markup_source":
+                        "OWNER_PRICE"
+
+                    }
+
+
+
+
+
+            # ==============================================================
+            # 2. PRODUCT MARKUP
+            # ==============================================================
+
+
+            markup = product.get(
+
+                "markup_percent"
+
+            )
+
+
+            source = "PRODUCT"
+
+
+
+
+            # ==============================================================
+            # 3. CATEGORY MARKUP
+            # ==============================================================
+
+
+            if markup is None:
+
+
+                markup = self.get_category_markup(
+
+                    product.get(
+                        "category_id"
+                    )
+
+                )
+
+
+                source = "CATEGORY"
+
+
+
+
+            # ==============================================================
+            # 4. GLOBAL DEFAULT
+            # ==============================================================
+
+
+            if markup is None:
+
+
+                markup = self.get_global_markup()
+
+                source = "DEFAULT"
+
+
+
+
+
+            markup = Decimal(
+
+                str(markup or 0)
+
+            )
+
+
+
+            final_price = (
+
+                base_price
+
                 *
-                100
-            ),
-            2
-        ) if cost else 0
 
-        return {
+                (
 
-            "selling_price":
-            final_price,
+                    Decimal("1")
 
-            "final_markup_percent":
-            markup,
+                    +
 
-            "markup_source":
-            "MARKUP"
+                    markup / Decimal("100")
 
-        }
+                )
+
+            )
+
+
+
+            return {
+
+
+                "selling_price":
+
+                final_price.quantize(
+
+                    Decimal("0.01"),
+
+                    rounding=ROUND_HALF_UP
+
+                ),
+
+
+
+                "final_markup_percent":
+
+                float(markup),
+
+
+
+                "markup_source":
+
+                source
+
+
+            }
+
+
+
+
+
+        except Exception as e:
+
+
+            log_error(
+
+                message="Pricing calculation failed",
+
+                exception=e
+
+            )
+
+
+            return {
+
+
+                "selling_price":
+
+                Decimal(str(base_price or 0)),
+
+
+                "final_markup_percent":
+
+                0,
+
+
+                "markup_source":
+
+                "ERROR"
+
+            }
+
+
+
+
+
+    # ==========================================================================
+    # COMPATIBILITY METHOD
+    # Used by Inventory Preview
+    # ==========================================================================
+
+
+    def calculate_selling_price(
+
+        self,
+
+        cost,
+
+        product_id=None
+
+    ):
+
+
+        return self.calculate_price(
+
+            product_id,
+
+            cost
+
+        )
