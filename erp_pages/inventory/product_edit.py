@@ -24,11 +24,11 @@ from database import (
 # RENDER PRODUCT EDIT
 # ==============================================================================
 
-
 def render_product_edit(
-    warehouse_id,
-    warehouse_name,
+    warehouse_id=None,
+    warehouse_name=None
 ):
+
 
 
     st.subheader(
