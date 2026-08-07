@@ -105,20 +105,9 @@ def render_warehouse_selector(
 
 
     selected_name = st.selectbox(
-
-
-        "📍 Select Warehouse",
-
-
-        names,
-
-
-        key=
-
-        "inventory_selected_warehouse"
-
-
-
+    "📍 Select Warehouse",
+    warehouse_names,
+    key="inventory_main_warehouse_selector"
     )
 
 
