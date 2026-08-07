@@ -1,16 +1,12 @@
 # ==============================================================================
 # erp_pages/inventory/product_edit.py
-# ERP ENTERPRISE INVENTORY PRODUCT EDIT v1.0
-#
-# Product Master Update Component
+# ERP ENTERPRISE INVENTORY PRODUCT EDIT v1.1
 #
 # Owner Price Compatible
-#
 # ==============================================================================
 
 
 import time
-
 import streamlit as st
 
 
@@ -18,9 +14,9 @@ from erp_core.context import CacheManager
 
 
 from database import (
-    update_product_rpc
+    update_product_rpc,
+    get_inventory_view
 )
-
 
 
 
@@ -41,17 +37,15 @@ def render_product_edit(
 
 
 
+    # --------------------------------------------------------------------------
+    # LOAD PRODUCTS
+    # --------------------------------------------------------------------------
+
     try:
-
-
-        from database import (
-            get_inventory_view
-        )
-
 
         products = get_inventory_view(
 
-            warehouse_id=selected_wh_id,
+            warehouse_id=warehouse_id,
 
             search=None
 
@@ -60,11 +54,8 @@ def render_product_edit(
 
     except Exception as e:
 
-
         st.error(
-
             f"Product Load Error : {e}"
-
         )
 
         return
@@ -73,7 +64,6 @@ def render_product_edit(
 
 
     if not products:
-
 
         st.info(
             "No product available"
@@ -86,17 +76,12 @@ def render_product_edit(
 
     product_map = {
 
-
         f"{p.get('id')} | {p.get('name')}":
-
         p
-
 
         for p in products
 
-
     }
-
 
 
 
@@ -113,11 +98,8 @@ def render_product_edit(
 
 
     selected_product = product_map[
-
         selected_name
-
     ]
-
 
 
 
@@ -134,18 +116,14 @@ def render_product_edit(
 
 
 
-
         with col1:
-
 
 
             name = st.text_input(
 
                 "Product Name",
 
-                value=
-
-                selected_product.get(
+                value=selected_product.get(
                     "name",
                     ""
                 )
@@ -158,9 +136,7 @@ def render_product_edit(
 
                 "SKU",
 
-                value=
-
-                selected_product.get(
+                value=selected_product.get(
                     "sku",
                     ""
                 )
@@ -174,21 +150,13 @@ def render_product_edit(
                 "Purchase Cost",
 
                 value=float(
-
                     selected_product.get(
-
                         "purchase_price",
-
                         0
-
-                    )
-
-                    or 0
-
+                    ) or 0
                 )
 
             )
-
 
 
 
@@ -197,45 +165,29 @@ def render_product_edit(
                 "Minimum Stock",
 
                 value=int(
-
                     selected_product.get(
-
                         "minimum_stock",
-
                         0
-
-                    )
-
-                    or 0
-
+                    ) or 0
                 )
 
             )
-
-
 
 
 
         with col2:
 
 
-
             barcode = st.text_input(
 
                 "Barcode",
 
-                value=
-
-                selected_product.get(
-
+                value=selected_product.get(
                     "barcode",
-
                     ""
-
                 )
 
             )
-
 
 
 
@@ -244,22 +196,13 @@ def render_product_edit(
                 "Selling Price",
 
                 value=float(
-
                     selected_product.get(
-
                         "selling_price",
-
                         0
-
-                    )
-
-                    or 0
-
+                    ) or 0
                 )
 
             )
-
-
 
 
 
@@ -268,78 +211,41 @@ def render_product_edit(
                 "👑 Owner Price (Main)",
 
                 value=float(
-
                     selected_product.get(
-
                         "owner_selling_price",
-
                         0
-
-                    )
-
-                    or 0
-
+                    ) or 0
                 )
 
             )
 
 
+
+            unit_list = [
+                "pcs",
+                "kg",
+                "box"
+            ]
+
+
+            current_unit = selected_product.get(
+                "unit",
+                "pcs"
+            )
 
 
             unit = st.selectbox(
 
                 "Unit",
 
-                [
-
-                    "pcs",
-
-                    "kg",
-
-                    "box"
-
-                ],
+                unit_list,
 
                 index=
-
-                [
-
-                    "pcs",
-
-                    "kg",
-
-                    "box"
-
-                ].index(
-
-                    selected_product.get(
-
-                        "unit",
-
-                        "pcs"
-
-                    )
-
-                )
-
-                if selected_product.get(
-
-                    "unit"
-
-                ) in [
-
-                    "pcs",
-
-                    "kg",
-
-                    "box"
-
-                ]
-
+                unit_list.index(current_unit)
+                if current_unit in unit_list
                 else 0
 
             )
-
 
 
 
@@ -348,38 +254,23 @@ def render_product_edit(
 
             "Notes",
 
-            value=
-
-            selected_product.get(
-
+            value=selected_product.get(
                 "notes",
-
                 ""
-
-            )
+            ) or ""
 
         )
 
 
 
-
-
         if selected_product.get(
-
             "owner_price_locked",
-
             False
-
         ):
 
-
             st.warning(
-
                 "🔒 Owner Price Locked"
-
             )
-
-
 
 
 
@@ -393,69 +284,34 @@ def render_product_edit(
 
 
 
-
-
-
         if update:
 
 
             try:
 
 
-
                 result = update_product_rpc(
 
                     product_id=
-
                     selected_product.get(
-
                         "id"
-
                     ),
-
-
 
                     name=name,
 
-
-
                     sku=sku,
-
-
 
                     barcode=barcode,
 
+                    purchase_price=purchase_price,
 
+                    selling_price=selling_price,
 
-                    purchase_price=
+                    minimum_stock=minimum_stock,
 
-                    purchase_price,
+                    unit=unit,
 
-
-
-                    selling_price=
-
-                    selling_price,
-
-
-
-                    minimum_stock=
-
-                    minimum_stock,
-
-
-
-                    unit=
-
-                    unit,
-
-
-
-                    notes=
-
-                    notes,
-
-
+                    notes=notes,
 
                     is_active=True
 
@@ -463,48 +319,31 @@ def render_product_edit(
 
 
 
-
-
-                if result.get(
-
-                    "success"
-
-                ):
+                if result.get("success"):
 
 
                     st.success(
-
                         "✅ Product Updated Successfully"
-
                     )
 
 
-
                     CacheManager.bump(
-
                         "inventory_version"
-
                     )
 
 
                     CacheManager.bump(
-
                         "product_version"
-
                     )
-
 
 
                     st.cache_data.clear()
 
 
-
                     time.sleep(1)
 
 
-
                     st.rerun()
-
 
 
 
@@ -514,16 +353,11 @@ def render_product_edit(
                     st.error(
 
                         result.get(
-
                             "message",
-
                             "Update Failed"
-
                         )
 
                     )
-
-
 
 
 
@@ -531,7 +365,5 @@ def render_product_edit(
 
 
                 st.error(
-
                     f"Update Error : {e}"
-
                 )
