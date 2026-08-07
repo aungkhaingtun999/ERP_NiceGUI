@@ -1,15 +1,15 @@
 # ==============================================================================
 # erp_core/repositories/product_repository.py
-# ERP ENTERPRISE PRODUCT REPOSITORY v31.0
+# ERP ENTERPRISE PRODUCT REPOSITORY v31
 #
-# Owner Price + Dynamic Pricing Ready
+# OWNER FIRST PRICING READY
 #
 # Supabase
-#       ↓
+#     ↓
 # Repository
-#       ↓
+#     ↓
 # Loader
-#       ↓
+#     ↓
 # POS / Inventory / Sales
 #
 # ==============================================================================
@@ -21,7 +21,6 @@ from typing import (
     Any,
     Optional
 )
-
 
 
 from ..base_repo import (
@@ -42,7 +41,6 @@ from ..config import (
 
 
 
-
 # ==============================================================================
 # PRODUCT REPOSITORY
 # ==============================================================================
@@ -52,35 +50,29 @@ class ProductRepository(BaseRepository):
 
 
     """
-    ERP Product Database Layer
+    ERP Product Database Operations
 
-    Supports:
+    Pricing Priority:
 
-    - Warehouse Stock
-    - Owner Price
-    - Product Markup
-    - Dynamic Selling Price
-    - POS Search
+    1. Owner Selling Price
+    2. Product Markup
+    3. Category Markup
+    4. Global Markup
 
     """
 
 
 
     # ==========================================================================
-    # INVENTORY MASTER PRODUCTS
+    # INVENTORY MASTER VIEW
     # ==========================================================================
 
 
     def get_inventory_products(
-
         self,
-
         warehouse_id=None,
-
         keyword=None,
-
         limit=100
-
     ):
 
 
@@ -98,7 +90,6 @@ class ProductRepository(BaseRepository):
                 .select(
 
                     """
-
                     warehouse_id,
 
                     qty,
@@ -121,14 +112,18 @@ class ProductRepository(BaseRepository):
 
                         purchase_price,
 
+
                         selling_price,
 
 
                         owner_selling_price,
 
+
                         final_selling_price,
 
+
                         price_source,
+
 
                         owner_price_locked,
 
@@ -136,11 +131,17 @@ class ProductRepository(BaseRepository):
                         markup_percent,
 
 
+                        category_id,
+
+
                         minimum_stock,
+
 
                         unit,
 
+
                         notes,
+
 
                         is_active
 
@@ -163,6 +164,11 @@ class ProductRepository(BaseRepository):
 
 
 
+            # --------------------------------------------------------------
+            # WAREHOUSE FILTER
+            # --------------------------------------------------------------
+
+
             if warehouse_id is not None:
 
 
@@ -180,6 +186,12 @@ class ProductRepository(BaseRepository):
 
                 )
 
+
+
+
+            # --------------------------------------------------------------
+            # SEARCH
+            # --------------------------------------------------------------
 
 
             if keyword:
@@ -209,11 +221,14 @@ class ProductRepository(BaseRepository):
 
 
 
+
             result = (
 
                 query
 
-                .limit(limit)
+                .limit(
+                    limit
+                )
 
                 .execute()
 
@@ -225,18 +240,19 @@ class ProductRepository(BaseRepository):
 
 
 
-            for row in result.data or []:
+            for item in result.data or []:
 
 
-                product = row.get(
-                    "products"
-                ) or {}
+                product = (
+                    item.get("products")
+                    or {}
+                )
 
 
-
-                warehouse = row.get(
-                    "warehouses"
-                ) or {}
+                warehouse = (
+                    item.get("warehouses")
+                    or {}
+                )
 
 
 
@@ -275,6 +291,8 @@ class ProductRepository(BaseRepository):
 
 
 
+                    # COST
+
                     "purchase_price":
 
                     product.get(
@@ -282,6 +300,8 @@ class ProductRepository(BaseRepository):
                     ),
 
 
+
+                    # OLD PRICE
 
                     "selling_price":
 
@@ -291,10 +311,7 @@ class ProductRepository(BaseRepository):
 
 
 
-                    # ==============================
-                    # OWNER PRICE SYSTEM
-                    # ==============================
-
+                    # OWNER PRICE
 
                     "owner_selling_price":
 
@@ -303,6 +320,8 @@ class ProductRepository(BaseRepository):
                     ),
 
 
+
+                    # FINAL PRICE FROM ENGINE
 
                     "final_selling_price":
 
@@ -336,6 +355,14 @@ class ProductRepository(BaseRepository):
 
 
 
+                    "category_id":
+
+                    product.get(
+                        "category_id"
+                    ),
+
+
+
                     "minimum_stock":
 
                     product.get(
@@ -360,9 +387,19 @@ class ProductRepository(BaseRepository):
 
 
 
+                    "is_active":
+
+                    product.get(
+                        "is_active"
+                    ),
+
+
+
+                    # WAREHOUSE
+
                     "warehouse_id":
 
-                    row.get(
+                    item.get(
                         "warehouse_id"
                     ),
 
@@ -378,7 +415,7 @@ class ProductRepository(BaseRepository):
 
                     "qty":
 
-                    row.get(
+                    item.get(
                         "qty"
                     ),
 
@@ -386,7 +423,7 @@ class ProductRepository(BaseRepository):
 
                     "reserved_qty":
 
-                    row.get(
+                    item.get(
                         "reserved_qty"
                     ),
 
@@ -394,7 +431,7 @@ class ProductRepository(BaseRepository):
 
                     "available_qty":
 
-                    row.get(
+                    item.get(
                         "available_qty"
                     )
 
@@ -406,13 +443,13 @@ class ProductRepository(BaseRepository):
 
 
 
-
         except Exception as e:
 
 
             log_error(
 
-                message="Inventory product load failed",
+                message=
+                "Inventory product load failed",
 
                 exception=e
 
@@ -452,7 +489,13 @@ class ProductRepository(BaseRepository):
 
                 )
 
-                .select("*")
+                .select(
+
+                    """
+                    *
+                    """
+
+                )
 
             )
 
@@ -494,6 +537,7 @@ class ProductRepository(BaseRepository):
             )
 
 
+
             return result.data or []
 
 
@@ -503,7 +547,9 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message="Product get_products failed",
+                message=
+
+                "Product get_products failed",
 
                 exception=e
 
@@ -516,11 +562,8 @@ class ProductRepository(BaseRepository):
 
 
 
-
-
     # ==========================================================================
     # GET SINGLE PRODUCT
-    # Pricing Engine Source
     # ==========================================================================
 
 
@@ -542,51 +585,13 @@ class ProductRepository(BaseRepository):
 
                 .table(
 
-                    TABLE_PRODUCTS
+                    TABLE_PRODUCT_VIEW
 
                 )
 
                 .select(
 
-                    """
-
-                    id,
-
-                    name,
-
-                    sku,
-
-                    barcode,
-
-
-                    purchase_price,
-
-                    selling_price,
-
-
-                    owner_selling_price,
-
-                    final_selling_price,
-
-                    price_source,
-
-                    owner_price_locked,
-
-
-                    markup_percent,
-
-                    category_id,
-
-
-                    minimum_stock,
-
-                    unit,
-
-                    notes,
-
-                    is_active
-
-                    """
+                    "*"
 
                 )
 
@@ -614,7 +619,9 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message="Product get_product failed",
+                message=
+
+                "Product get_product failed",
 
                 exception=e
 
@@ -622,8 +629,6 @@ class ProductRepository(BaseRepository):
 
 
             return None
-
-
 
 
 
@@ -659,7 +664,11 @@ class ProductRepository(BaseRepository):
 
                 )
 
-                .select("*")
+                .select(
+
+                    "*"
+
+                )
 
             )
 
@@ -720,7 +729,6 @@ class ProductRepository(BaseRepository):
             )
 
 
-
             return result.data or []
 
 
@@ -730,7 +738,9 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message="Product search failed",
+                message=
+
+                "Product search failed",
 
                 exception=e
 
@@ -738,8 +748,6 @@ class ProductRepository(BaseRepository):
 
 
             return []
-
-
 
 
 
@@ -775,7 +783,11 @@ class ProductRepository(BaseRepository):
 
                 )
 
-                .select("*")
+                .select(
+
+                    "*"
+
+                )
 
                 .eq(
 
@@ -828,7 +840,9 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message="Barcode lookup failed",
+                message=
+
+                "Barcode lookup failed",
 
                 exception=e
 
@@ -836,7 +850,6 @@ class ProductRepository(BaseRepository):
 
 
             return None
-
 
 
 
@@ -872,7 +885,11 @@ class ProductRepository(BaseRepository):
 
                 )
 
-                .select("*")
+                .select(
+
+                    "*"
+
+                )
 
                 .eq(
 
@@ -925,7 +942,9 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message="SKU lookup failed",
+                message=
+
+                "SKU lookup failed",
 
                 exception=e
 
