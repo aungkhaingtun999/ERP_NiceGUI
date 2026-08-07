@@ -93,18 +93,26 @@ class ProductRepository(BaseRepository):
                     reserved_qty,
                     available_qty,
 
-                    products(
-                        id,
-                        name,
-                        sku,
-                        barcode,
-                        purchase_price,
-                        selling_price,
-                        minimum_stock,
-                        unit,
-                        notes,
-                        is_active
-                    ),
+                 products(
+                    id,
+                    name,
+                    sku,
+                    barcode,
+
+                    purchase_price,
+                    selling_price,
+                    owner_selling_price,
+                    final_selling_price,
+                    price_source,
+                    owner_price_locked,
+
+                    markup_percent,
+
+                    minimum_stock,
+                    unit,
+                    notes,
+                    is_active
+                 )
 
                     warehouses(
                         id,
@@ -178,6 +186,20 @@ class ProductRepository(BaseRepository):
 
                     "minimum_stock":
                     p.get("minimum_stock"),
+                    "owner_selling_price":
+                    p.get("owner_selling_price"),
+
+                    "final_selling_price":
+                     p.get("final_selling_price"),
+
+                    "price_source":
+                     p.get("price_source"),
+
+                    "owner_price_locked":
+                     p.get("owner_price_locked"),
+
+                    "markup_percent":
+                     p.get("markup_percent"),
 
                     "unit":
                     p.get("unit"),
