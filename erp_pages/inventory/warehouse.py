@@ -1,9 +1,10 @@
 # ==============================================================================
 # erp_pages/inventory/warehouse.py
-# ERP ENTERPRISE INVENTORY WAREHOUSE SELECTOR v1.0
+# ERP ENTERPRISE WAREHOUSE SELECTOR v2.0 FINAL
 #
 # Responsibilities:
 # - Warehouse Dropdown
+# - Session Memory
 # - Active Warehouse Selection
 #
 # ==============================================================================
@@ -14,15 +15,9 @@ import streamlit as st
 
 
 
-
 # ==============================================================================
-# erp_pages/inventory/warehouse.py
-# ERP ENTERPRISE WAREHOUSE SELECTOR v1.1
+# RENDER WAREHOUSE SELECTOR
 # ==============================================================================
-
-
-import streamlit as st
-
 
 
 def render_warehouse_selector(
@@ -32,86 +27,20 @@ def render_warehouse_selector(
 
     if not warehouses:
 
+
         st.error(
             "No warehouse available"
         )
 
-        return None, None
-
-
-
-    # --------------------------------------------------
-    # CREATE NAME LIST
-    # --------------------------------------------------
-
-    warehouse_names = [
-
-        w.get("name")
-
-        for w in warehouses
-
-        if w.get("name")
-
-    ]
-
-
-
-    if not warehouse_names:
-
-        st.error(
-            "Warehouse name missing"
-        )
 
         return None, None
 
-
-
-    # --------------------------------------------------
-    # SELECT BOX
-    # --------------------------------------------------
-
-    selected_name = st.selectbox(
-
-        "📍 Select Warehouse",
-
-        warehouse_names,
-
-        key="inventory_main_warehouse_selector"
-
-    )
-
-
-
-    # --------------------------------------------------
-    # FIND ID
-    # --------------------------------------------------
-
-    warehouse_map = {
-
-        w.get("name"):
-        w.get("id")
-
-        for w in warehouses
-
-    }
-
-
-
-    selected_id = warehouse_map.get(
-        selected_name
-    )
-
-
-    return (
-        selected_id,
-        selected_name
-    )
 
 
 
 
     # --------------------------------------------------------------------------
-    # CREATE MAP
+    # MAP
     # --------------------------------------------------------------------------
 
 
@@ -119,9 +48,7 @@ def render_warehouse_selector(
 
 
         str(
-
             w.get("name")
-
         ):
 
         w.get("id")
@@ -129,13 +56,27 @@ def render_warehouse_selector(
 
         for w in warehouses
 
+        if w.get("name")
 
     }
 
 
 
+    if not warehouse_map:
 
-    names = list(
+
+        st.error(
+            "Warehouse name missing"
+        )
+
+
+        return None, None
+
+
+
+
+
+    warehouse_names = list(
 
         warehouse_map.keys()
 
@@ -146,7 +87,7 @@ def render_warehouse_selector(
 
 
     # --------------------------------------------------------------------------
-    # SESSION MEMORY
+    # SESSION DEFAULT
     # --------------------------------------------------------------------------
 
 
@@ -159,7 +100,9 @@ def render_warehouse_selector(
     ):
 
 
-        st.session_state.inventory_selected_warehouse = names[0]
+        st.session_state.inventory_selected_warehouse = (
+            warehouse_names[0]
+        )
 
 
 
@@ -172,10 +115,38 @@ def render_warehouse_selector(
 
 
     selected_name = st.selectbox(
-    "📍 Select Warehouse",
-    warehouse_names,
-    key="inventory_main_warehouse_selector"
+
+        "📍 Select Warehouse",
+
+        warehouse_names,
+
+        index=
+
+        warehouse_names.index(
+
+            st.session_state.inventory_selected_warehouse
+
+        )
+
+        if st.session_state.inventory_selected_warehouse in warehouse_names
+
+        else 0,
+
+
+        key="inventory_main_warehouse_selector"
+
     )
+
+
+
+
+
+    # --------------------------------------------------------------------------
+    # SAVE SESSION
+    # --------------------------------------------------------------------------
+
+
+    st.session_state.inventory_selected_warehouse = selected_name
 
 
 
