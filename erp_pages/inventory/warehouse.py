@@ -1,23 +1,18 @@
+#erp_pages/inventory/warehouse.py
+
 # ==============================================================================
 # erp_pages/inventory/warehouse.py
-# ERP ENTERPRISE WAREHOUSE SELECTOR CLEAN v2.0
+# ERP ENTERPRISE CENTRAL WAREHOUSE SELECTOR
 # ==============================================================================
 
 import streamlit as st
 
 
-
 def render_warehouse_selector(warehouses):
 
-
     if not warehouses:
-
-        st.error(
-            "No warehouse available"
-        )
-
+        st.error("No warehouse available")
         return None, None
-
 
 
     warehouse_map = {
@@ -30,7 +25,6 @@ def render_warehouse_selector(warehouses):
         if w.get("name")
 
     }
-
 
 
     if not warehouse_map:
@@ -49,16 +43,14 @@ def render_warehouse_selector(warehouses):
 
 
 
-    current = st.session_state.get(
-        "inventory_selected_warehouse",
-        warehouse_names[0]
-    )
+    if (
+        "erp_selected_warehouse"
+        not in st.session_state
+    ):
 
-
-
-    if current not in warehouse_names:
-
-        current = warehouse_names[0]
+        st.session_state.erp_selected_warehouse = (
+            warehouse_names[0]
+        )
 
 
 
@@ -68,15 +60,18 @@ def render_warehouse_selector(warehouses):
 
         warehouse_names,
 
-        index=warehouse_names.index(current),
+        index=
+        warehouse_names.index(
+            st.session_state.erp_selected_warehouse
+        ),
 
-        key="inventory_product_master_warehouse_selector"
+        key="erp_global_warehouse_selector"
 
     )
 
 
 
-    st.session_state.inventory_selected_warehouse = selected_name
+    st.session_state.erp_selected_warehouse = selected_name
 
 
 
