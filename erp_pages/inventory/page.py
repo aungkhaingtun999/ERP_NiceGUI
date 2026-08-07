@@ -174,3 +174,12 @@ def run_inventory_page():
         render_inventory_dashboard(
             warehouse_id=selected_wh_id
         )
+
+# ==============================================================================
+# LEGACY PAGE ENTRY
+# Compatible with erp_pages/2_Inventory.py
+# ==============================================================================
+
+def run():
+
+    return run_inventory_page()
