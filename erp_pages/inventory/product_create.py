@@ -141,73 +141,34 @@ def render_product_create(
 
 
 
-        # ======================================================================
-        # PRICING PREVIEW
-        # ======================================================================
+# ====================================================================== # --------------------------------------------------------------
+# PRICING PREVIEW
+# --------------------------------------------------------------
 
+preview = {}
 
-        preview = {}
+if purchase_price > 0:
 
+    try:
 
-        if purchase_price > 0:
+        preview = pricing_service.calculate_selling_price(
+            cost=purchase_price,
+            product_id=None
+        )
 
-
-            try:
-
-
-                result = pricing_service.calculate_selling_price(
-
-                    cost=purchase_price,
-
-                    product_id=None,
-
-                    owner_price=owner_price
-
-                )
-
-
-                preview = result
-
-
-
-                st.info(
-
-f"""
+        st.info(f"""
 💰 Pricing Preview
 
+Cost: {purchase_price:,.2f} MMK
+Markup: {preview.get('final_markup_percent', 0)} %
+Selling Price: {preview.get('selling_price', 0):,.2f} MMK
+Source: {preview.get('markup_source')}
+""")
 
-Cost:
-{purchase_price:,.2f} MMK
+    except Exception as e:
 
-
-Owner Price:
-{owner_price:,.2f} MMK
-
-
-Selling Price:
-{preview.get("selling_price",0):,.2f} MMK
-
-
-Markup:
-{preview.get("final_markup_percent",0)} %
-
-
-Source:
-{preview.get("markup_source")}
-"""
-
-                )
-
-
-            except Exception as e:
-
-
-                st.warning(
-
-                    f"Pricing Preview Error : {e}"
-
-                )
-
+        st.warning(f"Pricing Preview Error : {e}")
+        
 
 
 
