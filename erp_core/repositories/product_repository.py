@@ -1,15 +1,15 @@
 # ==============================================================================
 # erp_core/repositories/product_repository.py
-# ERP ENTERPRISE PRODUCT REPOSITORY v30.1 FINAL
+# ERP ENTERPRISE PRODUCT REPOSITORY v31.0
 #
-# Database Layer
+# Owner Price + Dynamic Pricing Ready
 #
 # Supabase
-#     ↓
+#       ↓
 # Repository
-#     ↓
+#       ↓
 # Loader
-#     ↓
+#       ↓
 # POS / Inventory / Sales
 #
 # ==============================================================================
@@ -33,11 +33,13 @@ from .base_repository import (
     BaseRepository
 )
 
+
 from ..config import (
     TABLE_PRODUCT_VIEW,
     TABLE_PRODUCTS,
     TABLE_WAREHOUSE_STOCK
 )
+
 
 
 
@@ -50,190 +52,374 @@ class ProductRepository(BaseRepository):
 
 
     """
-    ERP Product Database Operations
+    ERP Product Database Layer
 
-    Source:
+    Supports:
 
-    pos_products_view
-
-    Contains:
-
-    - Product Info
-    - Pricing Engine Result
     - Warehouse Stock
-    - Available Quantity
+    - Owner Price
+    - Product Markup
+    - Dynamic Selling Price
+    - POS Search
 
     """
 
+
+
     # ==========================================================================
-    # INVENTORY MASTER VIEW
+    # INVENTORY MASTER PRODUCTS
     # ==========================================================================
+
 
     def get_inventory_products(
+
         self,
+
         warehouse_id=None,
+
         keyword=None,
+
         limit=100
+
     ):
 
+
         try:
+
 
             query = (
 
                 self.client
 
                 .table(
-                    "warehouse_stock"
+                    TABLE_WAREHOUSE_STOCK
                 )
 
                 .select(
+
                     """
+
                     warehouse_id,
+
                     qty,
+
                     reserved_qty,
+
                     available_qty,
 
-                 products(
-                    id,
-                    name,
-                    sku,
-                    barcode,
 
-                    purchase_price,
-                    selling_price,
-                    owner_selling_price,
-                    final_selling_price,
-                    price_source,
-                    owner_price_locked,
+                    products(
 
-                    markup_percent,
+                        id,
 
-                    minimum_stock,
-                    unit,
-                    notes,
-                    is_active
-                 )
+                        name,
+
+                        sku,
+
+                        barcode,
+
+
+                        purchase_price,
+
+                        selling_price,
+
+
+                        owner_selling_price,
+
+                        final_selling_price,
+
+                        price_source,
+
+                        owner_price_locked,
+
+
+                        markup_percent,
+
+
+                        minimum_stock,
+
+                        unit,
+
+                        notes,
+
+                        is_active
+
+                    ),
+
 
                     warehouses(
+
                         id,
+
                         name
+
                     )
+
                     """
+
                 )
 
             )
+
 
 
             if warehouse_id is not None:
 
+
                 query = (
-                    query.eq(
+
+                    query
+
+                    .eq(
+
                         "warehouse_id",
+
                         int(warehouse_id)
+
                     )
+
                 )
+
 
 
             if keyword:
 
-                keyword = str(keyword).strip()
+
+                keyword = str(
+                    keyword
+                ).strip()
+
+
 
                 query = (
+
                     query
+
                     .or_(
+
                         f"products.name.ilike.%{keyword}%,"
+
                         f"products.sku.ilike.%{keyword}%,"
+
                         f"products.barcode.ilike.%{keyword}%"
+
                     )
+
                 )
 
 
+
             result = (
+
                 query
+
                 .limit(limit)
+
                 .execute()
+
             )
+
 
 
             rows = []
 
 
-            for x in result.data or []:
 
-                p = x.get("products") or {}
-                w = x.get("warehouses") or {}
+            for row in result.data or []:
+
+
+                product = row.get(
+                    "products"
+                ) or {}
+
+
+
+                warehouse = row.get(
+                    "warehouses"
+                ) or {}
+
 
 
                 rows.append({
 
+
                     "id":
-                    p.get("id"),
+
+                    product.get(
+                        "id"
+                    ),
+
+
 
                     "name":
-                    p.get("name"),
+
+                    product.get(
+                        "name"
+                    ),
+
+
 
                     "sku":
-                    p.get("sku"),
+
+                    product.get(
+                        "sku"
+                    ),
+
+
 
                     "barcode":
-                    p.get("barcode"),
+
+                    product.get(
+                        "barcode"
+                    ),
+
+
 
                     "purchase_price":
-                    p.get("purchase_price"),
+
+                    product.get(
+                        "purchase_price"
+                    ),
+
+
 
                     "selling_price":
-                    p.get("selling_price"),
 
-                    "minimum_stock":
-                    p.get("minimum_stock"),
+                    product.get(
+                        "selling_price"
+                    ),
+
+
+
+                    # ==============================
+                    # OWNER PRICE SYSTEM
+                    # ==============================
+
+
                     "owner_selling_price":
-                    p.get("owner_selling_price"),
+
+                    product.get(
+                        "owner_selling_price"
+                    ),
+
+
 
                     "final_selling_price":
-                     p.get("final_selling_price"),
+
+                    product.get(
+                        "final_selling_price"
+                    ),
+
+
 
                     "price_source":
-                     p.get("price_source"),
+
+                    product.get(
+                        "price_source"
+                    ),
+
+
 
                     "owner_price_locked":
-                     p.get("owner_price_locked"),
+
+                    product.get(
+                        "owner_price_locked"
+                    ),
+
+
 
                     "markup_percent":
-                     p.get("markup_percent"),
+
+                    product.get(
+                        "markup_percent"
+                    ),
+
+
+
+                    "minimum_stock":
+
+                    product.get(
+                        "minimum_stock"
+                    ),
+
+
 
                     "unit":
-                    p.get("unit"),
+
+                    product.get(
+                        "unit"
+                    ),
+
+
+
+                    "notes":
+
+                    product.get(
+                        "notes"
+                    ),
+
+
 
                     "warehouse_id":
-                    x.get("warehouse_id"),
+
+                    row.get(
+                        "warehouse_id"
+                    ),
+
+
 
                     "warehouse":
-                    w.get("name"),
+
+                    warehouse.get(
+                        "name"
+                    ),
+
+
 
                     "qty":
-                    x.get("qty"),
+
+                    row.get(
+                        "qty"
+                    ),
+
+
 
                     "reserved_qty":
-                    x.get("reserved_qty"),
+
+                    row.get(
+                        "reserved_qty"
+                    ),
+
+
 
                     "available_qty":
-                    x.get("available_qty"),
+
+                    row.get(
+                        "available_qty"
+                    )
 
                 })
+
 
 
             return rows
 
 
+
+
         except Exception as e:
 
+
             log_error(
+
                 message="Inventory product load failed",
+
                 exception=e
+
             )
 
-            return []
 
+            return []
 
     # ==========================================================================
     # GET PRODUCTS
@@ -272,7 +458,6 @@ class ProductRepository(BaseRepository):
 
 
 
-
             if warehouse_id is not None:
 
 
@@ -289,8 +474,6 @@ class ProductRepository(BaseRepository):
                     )
 
                 )
-
-
 
 
 
@@ -311,10 +494,7 @@ class ProductRepository(BaseRepository):
             )
 
 
-
-
             return result.data or []
-
 
 
 
@@ -323,9 +503,7 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message=
-
-                "Product get_products failed",
+                message="Product get_products failed",
 
                 exception=e
 
@@ -342,6 +520,7 @@ class ProductRepository(BaseRepository):
 
     # ==========================================================================
     # GET SINGLE PRODUCT
+    # Pricing Engine Source
     # ==========================================================================
 
 
@@ -363,11 +542,53 @@ class ProductRepository(BaseRepository):
 
                 .table(
 
-                    TABLE_PRODUCT_VIEW
+                    TABLE_PRODUCTS
 
                 )
 
-                .select("*")
+                .select(
+
+                    """
+
+                    id,
+
+                    name,
+
+                    sku,
+
+                    barcode,
+
+
+                    purchase_price,
+
+                    selling_price,
+
+
+                    owner_selling_price,
+
+                    final_selling_price,
+
+                    price_source,
+
+                    owner_price_locked,
+
+
+                    markup_percent,
+
+                    category_id,
+
+
+                    minimum_stock,
+
+                    unit,
+
+                    notes,
+
+                    is_active
+
+                    """
+
+                )
 
                 .eq(
 
@@ -384,10 +605,7 @@ class ProductRepository(BaseRepository):
             )
 
 
-
             return result.data
-
-
 
 
 
@@ -396,9 +614,7 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message=
-
-                "Product get_product failed",
+                message="Product get_product failed",
 
                 exception=e
 
@@ -406,6 +622,7 @@ class ProductRepository(BaseRepository):
 
 
             return None
+
 
 
 
@@ -429,9 +646,7 @@ class ProductRepository(BaseRepository):
     ) -> List[Dict[str, Any]]:
 
 
-
         try:
-
 
 
             query = (
@@ -447,8 +662,6 @@ class ProductRepository(BaseRepository):
                 .select("*")
 
             )
-
-
 
 
 
@@ -471,17 +684,11 @@ class ProductRepository(BaseRepository):
 
 
 
-
-
-
             if keyword:
 
 
-
                 keyword = str(
-
                     keyword
-
                 ).strip()
 
 
@@ -504,9 +711,6 @@ class ProductRepository(BaseRepository):
 
 
 
-
-
-
             result = (
 
                 query
@@ -517,12 +721,7 @@ class ProductRepository(BaseRepository):
 
 
 
-
-
             return result.data or []
-
-
-
 
 
 
@@ -531,9 +730,7 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message=
-
-                "Product search failed",
+                message="Product search failed",
 
                 exception=e
 
@@ -541,6 +738,7 @@ class ProductRepository(BaseRepository):
 
 
             return []
+
 
 
 
@@ -591,7 +789,6 @@ class ProductRepository(BaseRepository):
 
 
 
-
             if warehouse_id is not None:
 
 
@@ -611,8 +808,6 @@ class ProductRepository(BaseRepository):
 
 
 
-
-
             result = (
 
                 query
@@ -624,10 +819,7 @@ class ProductRepository(BaseRepository):
             )
 
 
-
-
             return result.data
-
 
 
 
@@ -636,9 +828,7 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message=
-
-                "Barcode lookup failed",
+                message="Barcode lookup failed",
 
                 exception=e
 
@@ -646,6 +836,7 @@ class ProductRepository(BaseRepository):
 
 
             return None
+
 
 
 
@@ -695,7 +886,6 @@ class ProductRepository(BaseRepository):
 
 
 
-
             if warehouse_id is not None:
 
 
@@ -715,8 +905,6 @@ class ProductRepository(BaseRepository):
 
 
 
-
-
             result = (
 
                 query
@@ -728,11 +916,7 @@ class ProductRepository(BaseRepository):
             )
 
 
-
-
             return result.data
-
-
 
 
 
@@ -741,9 +925,7 @@ class ProductRepository(BaseRepository):
 
             log_error(
 
-                message=
-
-                "SKU lookup failed",
+                message="SKU lookup failed",
 
                 exception=e
 
@@ -751,4 +933,3 @@ class ProductRepository(BaseRepository):
 
 
             return None
-                
