@@ -479,7 +479,7 @@ def run():
     # --------------------------------------------------------------------------
 
 
-    render_mobile_warehouse()
+    render_warehouse_selector()
 
 
 
