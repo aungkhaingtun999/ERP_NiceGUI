@@ -1,40 +1,54 @@
 # ==============================================================================
 # 2_Mobile_Inventory.py
-# MOBILE INVENTORY v15 ENTERPRISE
-# WEBRTC BARCODE SCANNER + SEARCH + PRODUCT REGISTRATION
+# MOBILE INVENTORY ENTERPRISE v1.0
+#
+# ZXING PRIMARY BARCODE SCANNER
+# PRODUCT SEARCH
+# PRODUCT REGISTRATION
+#
 # ==============================================================================
 
 
 import streamlit as st
 
 
+
 # ==============================================================================
-# MOBILE SCANNER
+# SCANNER
 # ==============================================================================
 
-from erp_components.mobile_scanner.scanner import (
-    mobile_scanner
+
+from erp_pages.inventory.zxing_scanner import (
+    zxing_scanner
 )
 
-
-# ==============================================================================
-# PRODUCT MODULES
-# ==============================================================================
-
-from erp_pages.inventory.product_search import (
-    search_product
-)
-
-import erp_pages.inventory.product_form as product_form
 
 
 # ==============================================================================
 # DATABASE
 # ==============================================================================
 
+
 from database import (
     get_warehouses
 )
+
+
+
+# ==============================================================================
+# PRODUCT MODULES
+# ==============================================================================
+
+
+from erp_pages.inventory.product_search import (
+    search_product
+)
+
+
+
+import erp_pages.inventory.product_form as product_form
+
+
 
 
 
@@ -45,22 +59,39 @@ from database import (
 
 def initialize_session_state():
 
+
     defaults = {
 
-        "barcode_value": "",
 
-        "product": None,
+        "mobile_barcode":
 
-        "camera_on": False,
+        "",
 
-        "warehouse_id": None,
+
+        "mobile_product":
+
+        None,
+
+
+        "mobile_warehouse_id":
+
+        None,
+
+
+        "mobile_scanner_active":
+
+        False,
+
 
     }
 
 
+
     for key, value in defaults.items():
 
+
         if key not in st.session_state:
+
 
             st.session_state[key] = value
 
@@ -68,77 +99,21 @@ def initialize_session_state():
 
 
 
-# ==============================================================================
-# PRODUCT SEARCH
-# ==============================================================================
-
-
-def load_product(barcode):
-
-
-    barcode = str(barcode).strip()
-
-
-    if not barcode:
-
-        return
-
-
-
-    try:
-
-        product = search_product(
-            barcode
-        )
-
-
-        st.session_state.product = product
-
-
-
-    except Exception as e:
-
-
-        st.error(
-            f"Product Search Error : {e}"
-        )
-
-
-        st.session_state.product = None
-
-
-
 
 
 # ==============================================================================
-# CLEAR
+# WAREHOUSE SELECTOR
 # ==============================================================================
 
 
-def clear_inventory():
+def render_mobile_warehouse():
 
-
-    st.session_state.barcode_value = ""
-
-    st.session_state.product = None
-
-    st.session_state.camera_on = False
-
-
-
-
-
-# ==============================================================================
-# WAREHOUSE
-# ==============================================================================
-
-
-def render_warehouse_selector():
 
 
     st.subheader(
         "🏭 Warehouse"
     )
+
 
 
     try:
@@ -148,97 +123,530 @@ def render_warehouse_selector():
 
 
 
-        if warehouses:
-
-
-            warehouse_map = {
-
-
-                w.get("name"):
-                w.get("id")
-
-
-                for w in warehouses
-
-            }
-
-
-
-            selected = st.selectbox(
-
-                "Select Warehouse",
-
-                list(
-                    warehouse_map.keys()
-                )
-
-            )
-
-
-
-            st.session_state.warehouse_id = (
-
-                warehouse_map[selected]
-
-            )
-
-
-
-        else:
+        if not warehouses:
 
 
             st.warning(
                 "No warehouse found"
             )
 
+            return
+
+
+
+
+
+        warehouse_map = {
+
+
+            str(w.get("name")):
+
+            w.get("id")
+
+
+            for w in warehouses
+
+            if w.get("name")
+
+        }
+
+
+
+
+
+        if not warehouse_map:
+
+
+            st.warning(
+                "Warehouse data missing"
+            )
+
+            return
+
+
+
+
+
+        selected_name = st.selectbox(
+
+
+            "Select Warehouse",
+
+
+            list(
+                warehouse_map.keys()
+            ),
+
+
+            key=
+
+            "mobile_inventory_warehouse_selector"
+
+
+        )
+
+
+
+
+        st.session_state.mobile_warehouse_id = (
+
+            warehouse_map[selected_name]
+
+        )
+
+
 
 
     except Exception as e:
 
 
-        st.warning(
+        st.error(
+
             f"Warehouse Error : {e}"
+
         )
 
 
 
 
 
+
+
 # ==============================================================================
-# SCANNER
+# BARCODE SEARCH
 # ==============================================================================
 
 
-def handle_scanner():
+def load_product_by_barcode(barcode):
 
 
-    if st.session_state.camera_on:
+    if not barcode:
+
+
+        return
+
+
+
+
+    try:
+
+
+        product = search_product(
+
+            barcode
+
+        )
+
+
+
+        st.session_state.mobile_product = product
+
+
+
+
+    except Exception as e:
+
+
+        st.error(
+
+            f"Product Search Error : {e}"
+
+        )
+
+        st.session_state.mobile_product = None
+
+
+
+
+
+
+
+# ==============================================================================
+# SCANNER HANDLER
+# ==============================================================================
+
+
+def handle_zxing_scan():
+
+
+
+    barcode = zxing_scanner()
+
+
+
+    if barcode:
+
+
+
+        if barcode != st.session_state.mobile_barcode:
+
+
+
+            st.session_state.mobile_barcode = barcode
+
+
+
+            load_product_by_barcode(
+
+                barcode
+
+            )
+
+
+
+            st.rerun()
+
+# ==============================================================================
+# PRODUCT RESULT VIEW
+# ==============================================================================
+
+
+def render_product_view():
+
+
+    product = st.session_state.get(
+        "mobile_product"
+    )
+
+
+    barcode = st.session_state.get(
+        "mobile_barcode",
+        ""
+    )
+
+
+
+    # --------------------------------------------------------------------------
+    # PRODUCT FOUND
+    # --------------------------------------------------------------------------
+
+
+    if product:
+
+
+        st.divider()
+
+
+        st.subheader(
+            "📦 Product Found"
+        )
+
+
+
+        col1, col2 = st.columns(2)
+
+
+
+        with col1:
+
+
+            st.write(
+                f"**Name:** {product.get('name','N/A')}"
+            )
+
+
+            st.write(
+                f"**Barcode:** {product.get('barcode','N/A')}"
+            )
+
+
+            st.write(
+                f"**SKU:** {product.get('sku','N/A')}"
+            )
+
+
+
+        with col2:
+
+
+            st.write(
+
+                f"**Stock:** {product.get('stock',0)}"
+
+            )
+
+
+            st.write(
+
+                f"**Selling Price:** "
+                f"{float(product.get('selling_price',0) or 0):,.2f} MMK"
+
+            )
+
 
 
         st.success(
-            "📷 Scanner Ready"
+            "✅ Product loaded successfully"
         )
 
 
-        scanned = mobile_scanner()
+
+
+    # --------------------------------------------------------------------------
+    # NOT FOUND
+    # --------------------------------------------------------------------------
+
+
+    elif barcode:
+
+
+        st.divider()
+
+
+        st.warning(
+            "Product not found"
+        )
+
+
+        st.info(
+            "You can register this barcode as a new product."
+        )
 
 
 
-        if scanned:
 
 
-            if scanned != st.session_state.barcode_value:
+    else:
 
 
-                st.session_state.barcode_value = scanned
+        st.info(
+            "📷 Scan barcode or enter SKU"
+        )
 
 
-                load_product(
-                    scanned
-                )
 
 
-                st.rerun()
+
+
+
+
+# ==============================================================================
+# MANUAL BARCODE INPUT
+# ==============================================================================
+
+
+def render_manual_search():
+
+
+    barcode = st.text_input(
+
+        "⌨️ Barcode / SKU",
+
+        value=
+
+        st.session_state.get(
+            "mobile_barcode",
+            ""
+        ),
+
+        key="mobile_manual_barcode"
+
+    )
+
+
+
+    if barcode != st.session_state.mobile_barcode:
+
+
+        st.session_state.mobile_barcode = barcode
+
+
+
+        if barcode:
+
+
+            load_product_by_barcode(
+                barcode
+            )
+
+
+        else:
+
+
+            st.session_state.mobile_product = None
+
+
+
+        st.rerun()
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CLEAR FUNCTION
+# ==============================================================================
+
+
+def clear_mobile_inventory():
+
+
+    st.session_state.mobile_barcode = ""
+
+    st.session_state.mobile_product = None
+
+    st.session_state.mobile_scanner_active = False
+
+# ==============================================================================
+# NEW PRODUCT REGISTRATION
+# ==============================================================================
+
+
+def render_new_product():
+
+
+    product = st.session_state.get(
+        "mobile_product"
+    )
+
+
+    barcode = st.session_state.get(
+        "mobile_barcode",
+        ""
+    )
+
+
+
+    if product:
+
+        return
+
+
+
+    if barcode:
+
+
+        st.divider()
+
+
+        st.subheader(
+            "➕ Register New Product"
+        )
+
+
+        product_form.render_new_product_form(
+
+            barcode
+
+        )
+
+
+
+
+
+
+# ==============================================================================
+# MAIN MOBILE INVENTORY PAGE
+# ==============================================================================
+
+
+def run():
+
+
+    st.title(
+        "📦 Mobile Inventory Enterprise"
+    )
+
+
+    st.caption(
+        "ZXING Primary Scanner | Barcode + SKU Search | Product Registration"
+    )
+
+
+
+    initialize_session_state()
+
+
+
+    # --------------------------------------------------------------------------
+    # Warehouse
+    # --------------------------------------------------------------------------
+
+
+    render_mobile_warehouse()
+
+
+
+    st.divider()
+
+
+
+    # --------------------------------------------------------------------------
+    # CONTROL BUTTONS
+    # --------------------------------------------------------------------------
+
+
+    col1, col2 = st.columns(2)
+
+
+
+    with col1:
+
+
+        if st.button(
+
+            "📷 Start Scanner",
+
+            use_container_width=True,
+
+            key="mobile_start_scanner"
+
+        ):
+
+
+            st.session_state.mobile_scanner_active = True
+
+
+
+            st.rerun()
+
+
+
+
+    with col2:
+
+
+        if st.button(
+
+            "🧹 Clear",
+
+            use_container_width=True,
+
+            key="mobile_clear"
+
+        ):
+
+
+            clear_mobile_inventory()
+
+
+            st.rerun()
+
+
+
+
+
+    st.divider()
+
+
+
+    # --------------------------------------------------------------------------
+    # ZXING CAMERA
+    # --------------------------------------------------------------------------
+
+
+    if st.session_state.mobile_scanner_active:
+
+
+        st.success(
+            "📷 Scanner Active"
+        )
+
+
+        handle_zxing_scan()
 
 
 
@@ -253,306 +661,6 @@ def handle_scanner():
 
 
 
-# ==============================================================================
-# MAIN APP
-# ==============================================================================
-
-
-def run():
-
-
-    st.title(
-        "📦 Mobile Inventory v15"
-    )
-
-
-    st.caption(
-        "📷 WebRTC Barcode Scanner + Product Management"
-    )
-
-
-
-    initialize_session_state()
-
-
-
-    # Warehouse
-
-    render_warehouse_selector()
-
-
-    st.divider()
-
-
-
-    # Buttons
-
-
-    col1, col2 = st.columns(2)
-
-
-
-    with col1:
-
-
-        if st.button(
-
-            "📷 Start Scanner",
-
-            use_container_width=True
-
-        ):
-
-
-            st.session_state.camera_on = True
-
-            st.rerun()
-
-
-
-    with col2:
-
-
-        if st.button(
-
-            "🧹 Clear",
-
-            use_container_width=True
-
-        ):
-
-
-            clear_inventory()
-
-            st.rerun()
-
-
-
-    st.divider()
-
-
-
-    # Scanner
-
-    handle_scanner()
-
-
-
-    st.divider()
-
-
-
-    # Manual Input
-
-
-    barcode_input = st.text_input(
-
-        "📷 Barcode / SKU",
-
-        value=
-        st.session_state.barcode_value,
-
-        key="mobile_barcode_input"
-
-    )
-
-
-
-    if barcode_input != st.session_state.barcode_value:
-
-
-        st.session_state.barcode_value = barcode_input
-
-
-
-        if barcode_input:
-
-            load_product(
-                barcode_input
-            )
-
-        else:
-
-            st.session_state.product = None
-
-
-
-        st.rerun()
-
-    # ==========================================================================
-    # PRODUCT VIEW
-    # ==========================================================================
-
-
-def render_product_view():
-
-
-    product = st.session_state.product
-
-    barcode = st.session_state.barcode_value
-
-
-
-    if product:
-
-
-        st.divider()
-
-
-        st.subheader(
-            "📦 Product Found"
-        )
-
-
-        st.write(
-            f"**Name:** {product.get('name','N/A')}"
-        )
-
-
-        st.write(
-            f"**Barcode:** {product.get('barcode','N/A')}"
-        )
-
-
-        st.write(
-            f"**SKU:** {product.get('sku','N/A')}"
-        )
-
-
-        st.write(
-            f"**Stock:** {product.get('stock',0)}"
-        )
-
-
-        st.write(
-            f"**Selling Price:** {product.get('selling_price',0)} MMK"
-        )
-
-
-
-    elif barcode:
-
-
-        st.divider()
-
-
-        st.subheader(
-            "🆕 New Product Registration"
-        )
-
-
-        product_form.render_new_product_form(
-
-            barcode
-
-        )
-
-
-
-    else:
-
-
-        st.info(
-            "Scan barcode or enter SKU"
-        )
-
-
-
-
-
-# ==============================================================================
-# COMPLETE RUNNER
-# ==============================================================================
-
-
-def run():
-
-
-    st.title(
-        "📦 Mobile Inventory v15"
-    )
-
-
-    st.caption(
-        "📷 WebRTC Barcode Scanner + Search + Product Registration"
-    )
-
-
-
-    initialize_session_state()
-
-
-
-    render_warehouse_selector()
-
-
-
-    st.divider()
-
-
-
-    # --------------------------------------------------------------------------
-    # BUTTONS
-    # --------------------------------------------------------------------------
-
-
-    col1, col2 = st.columns(2)
-
-
-
-    with col1:
-
-
-        if st.button(
-
-            "📷 Start Scanner",
-
-            use_container_width=True,
-
-            key="start_mobile_scanner"
-
-        ):
-
-
-            st.session_state.camera_on = True
-
-            st.rerun()
-
-
-
-    with col2:
-
-
-        if st.button(
-
-            "🧹 Clear",
-
-            use_container_width=True,
-
-            key="clear_mobile_inventory"
-
-        ):
-
-
-            clear_inventory()
-
-            st.rerun()
-
-
-
-    st.divider()
-
-
-
-    # --------------------------------------------------------------------------
-    # CAMERA
-    # --------------------------------------------------------------------------
-
-
-    handle_scanner()
-
-
-
     st.divider()
 
 
@@ -562,46 +670,16 @@ def run():
     # --------------------------------------------------------------------------
 
 
-    barcode_input = st.text_input(
-
-        "📷 Barcode / SKU",
-
-        value=st.session_state.barcode_value,
-
-        key="manual_barcode_input"
-
-    )
+    render_manual_search()
 
 
 
-    if barcode_input != st.session_state.barcode_value:
-
-
-        st.session_state.barcode_value = barcode_input
-
-
-
-        if barcode_input:
-
-
-            load_product(
-                barcode_input
-            )
-
-
-        else:
-
-
-            st.session_state.product = None
-
-
-
-        st.rerun()
+    st.divider()
 
 
 
     # --------------------------------------------------------------------------
-    # PRODUCT RESULT
+    # RESULT
     # --------------------------------------------------------------------------
 
 
@@ -609,13 +687,25 @@ def run():
 
 
 
+    # --------------------------------------------------------------------------
+    # NEW PRODUCT
+    # --------------------------------------------------------------------------
+
+
+    render_new_product()
+
+
+
+
+
 
 
 # ==============================================================================
-# ENTRY POINT
+# STREAMLIT ENTRY
 # ==============================================================================
 
 
 if __name__ == "__main__":
+
 
     run()
