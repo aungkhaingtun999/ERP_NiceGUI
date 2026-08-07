@@ -29,7 +29,10 @@ from database import (
 # ==============================================================================
 
 
-def render_product_edit(products, selected_wh_id=None):
+def render_product_edit(
+    warehouse_id,
+    warehouse_name,
+):
 
 
     st.subheader(
