@@ -70,7 +70,7 @@ def render_warehouse_selector(warehouses):
 
         index=warehouse_names.index(current),
 
-        key="erp_inventory_warehouse_selector"
+        key="inventory_product_master_warehouse_selector"
 
     )
 
