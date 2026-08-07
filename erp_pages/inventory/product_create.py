@@ -10,9 +10,9 @@ from erp_core.context import CacheManager
 # ==============================================================================
 
 def render_product_create(
-    selected_wh_id,
-    selected_wh_name,
-    pricing_service
+    db_client,
+    pricing_service,
+    warehouse_id,
 ):
 
     st.subheader("➕ Add New Product")
