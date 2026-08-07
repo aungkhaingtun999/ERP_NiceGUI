@@ -86,7 +86,10 @@ def run_inventory_page():
 
         st.stop()
 
-    selected_wh_id, selected_wh_name = render_warehouse_selector(warehouses)
+    selected_wh_id, selected_wh_name = render_warehouse_selector(
+    warehouses,
+    key="inventory_warehouse_selector"
+    )
 
     # --------------------------------------------------------------------------
     # PRODUCT LOAD
