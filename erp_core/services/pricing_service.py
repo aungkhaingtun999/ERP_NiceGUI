@@ -30,105 +30,6 @@ from .settings_service import SettingsService
 class PricingService:
 
     # ==========================================================================
-    # SIMPLE PRICE CALCULATION (COMPATIBILITY METHOD)
-    # ==========================================================================
-
-        def calculate_selling_price(
-        self,
-        cost,
-        product_id=None
-    ):
-
-        cost = Decimal(str(cost or 0))
-
-
-        method = str(
-            self.get_setting(
-                "PRICING_METHOD"
-            )
-            or "MARKUP"
-        ).upper()
-
-
-
-        # ==================================================
-        # OWNER PRICE FIRST
-        # ==================================================
-
-        if method == "OWNER_FIRST" and product_id:
-
-
-            product = self.get_product_markup(
-                product_id
-            )
-
-
-            owner_price = product.get(
-                "owner_price"
-            )
-
-
-            if owner_price not in (
-                None,
-                "",
-                0
-            ):
-
-                return {
-
-                    "selling_price":
-                    float(owner_price),
-
-                    "final_markup_percent":
-                    0,
-
-                    "markup_source":
-                    "OWNER_PRICE"
-
-                }
-
-
-
-
-        # ==================================================
-        # PRODUCT / CATEGORY / GLOBAL MARKUP
-        # ==================================================
-
-        result = self.calculate_price(
-            product_id,
-            cost
-        )
-
-
-        final_price = float(result)
-
-
-        markup = round(
-            (
-                (final_price - float(cost))
-                /
-                float(cost)
-                *
-                100
-            ),
-            2
-        ) if cost else 0
-
-
-
-        return {
-
-            "selling_price":
-            final_price,
-
-            "final_markup_percent":
-            markup,
-
-            "markup_source":
-            "MARKUP"
-
-        }
-    # ==========================================================================
     # INIT
     # ==========================================================================
 
@@ -177,7 +78,8 @@ class PricingService:
                 id,
                 name,
                 markup_percent,
-                category_id
+                category_id,
+                owner_price
                 """,
                 {"id": product_id},
             )
@@ -193,6 +95,7 @@ class PricingService:
             "name": "",
             "markup_percent": None,
             "category_id": None,
+            "owner_price": None,
         }
 
     # ==========================================================================
@@ -265,3 +168,90 @@ class PricingService:
                 exception=e,
             )
             return Decimal(str(base_price))
+
+    # ==========================================================================
+    # SIMPLE PRICE CALCULATION (COMPATIBILITY METHOD)
+    # ==========================================================================
+
+    def calculate_selling_price(
+        self,
+        cost,
+        product_id=None
+    ):
+
+        cost = Decimal(str(cost or 0))
+
+        method = str(
+            self.get_setting(
+                "PRICING_METHOD"
+            )
+            or "MARKUP"
+        ).upper()
+
+        # ==================================================
+        # OWNER PRICE FIRST
+        # ==================================================
+
+        if method == "OWNER_FIRST" and product_id:
+
+            product = self.get_product_markup(
+                product_id
+            )
+
+            owner_price = product.get(
+                "owner_price"
+            )
+
+            if owner_price not in (
+                None,
+                "",
+                0
+            ):
+
+                return {
+
+                    "selling_price":
+                    float(owner_price),
+
+                    "final_markup_percent":
+                    0,
+
+                    "markup_source":
+                    "OWNER_PRICE"
+
+                }
+
+        # ==================================================
+        # PRODUCT / CATEGORY / GLOBAL MARKUP
+        # ==================================================
+
+        result = self.calculate_price(
+            product_id,
+            cost
+        )
+
+        final_price = float(result)
+
+        markup = round(
+            (
+                (final_price - float(cost))
+                /
+                float(cost)
+                *
+                100
+            ),
+            2
+        ) if cost else 0
+
+        return {
+
+            "selling_price":
+            final_price,
+
+            "final_markup_percent":
+            markup,
+
+            "markup_source":
+            "MARKUP"
+
+        }
