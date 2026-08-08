@@ -399,53 +399,98 @@ class PricingService:
 
 
     # ==========================================================================
-    # FINAL PRICE CALCULATION
+    # SIMPLE COMPATIBILITY METHOD
     #
-    # OWNER FIRST ENGINE
+    # Used by:
+    # - pages/2_Inventory.py
+    # - tests/test_pricing_engine.py
     #
+    # Contract:
+    # - Returns float selling price
+    # - Supports product_id
+    # - Supports category_id
+    # - Rejects negative cost
+    # - Zero cost returns 0
     # ==========================================================================
 
-
-    def calculate_price(
-
+    def calculate_selling_price(
         self,
-
-        product_id,
-
-        base_price,
-
+        cost,
+        product_id=None,
+        category_id=None,
         product=None
-
     ):
 
+        # ----------------------------------------------------------------------
+        # VALIDATE COST
+        # ----------------------------------------------------------------------
 
-        try:
+        cost_decimal = safe_decimal(cost)
 
+        if cost_decimal < 0:
 
-            cost = safe_decimal(
-                base_price
+            raise ValueError(
+                "Cost cannot be negative."
             )
 
+        # ----------------------------------------------------------------------
+        # LOAD PRODUCT
+        # ----------------------------------------------------------------------
 
+        if product is None and product_id is not None:
 
-            # --------------------------------------------------------------
-            # LOAD PRODUCT DATA
-            # --------------------------------------------------------------
+            product = self.get_product_markup(
+                product_id
+            )
 
+        product = product or {}
 
-            if product is None and product_id:
+        # ----------------------------------------------------------------------
+        # CATEGORY ID
+        #
+        # If product already contains category_id, use it.
+        # Explicit category_id has priority when supplied.
+        # ----------------------------------------------------------------------
 
+        if category_id is not None:
 
-                product = self.get_product_markup(
+            product = dict(product)
 
-                    product_id
+            product["category_id"] = category_id
 
-                )
+        # ----------------------------------------------------------------------
+        # ZERO COST
+        # ----------------------------------------------------------------------
 
+        if cost_decimal == 0:
 
+            return 0.0
 
-            product = product or {}
+        # ----------------------------------------------------------------------
+        # CALCULATE
+        # ----------------------------------------------------------------------
 
+        result = self.calculate_price(
+            product_id=product_id,
+            base_price=cost_decimal,
+            product=product
+        )
+
+        # ----------------------------------------------------------------------
+        # RETURN ONLY SELLING PRICE
+        #
+        # calculate_price() internally keeps:
+        # - price
+        # - markup
+        # - source
+        #
+        # Compatibility method returns only float.
+        # ----------------------------------------------------------------------
+
+        return float(
+            result["price"]
+        )
+        
 
 
             # --------------------------------------------------------------
