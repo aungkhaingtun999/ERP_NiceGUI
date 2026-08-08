@@ -170,16 +170,50 @@ def render_product_create(
                     result = (
                         pricing_service
                         .calculate_selling_price(
-                            cost=purchase_price,
-                            product_id=None
+                        cost=purchase_price,
+                        product_id=None
                         )
-                    )
+                )
 
+# ------------------------------------------------------------------
+# PRICING SERVICE RESPONSE NORMALIZATION
+#
+# PricingService may return:
+#   1. dict
+#   2. numeric selling price
+# ------------------------------------------------------------------
 
-                    preview = result
+if isinstance(result, dict):
 
+    preview = result
 
+elif isinstance(result, (int, float)):
 
+    calculated_price = float(result)
+
+    markup_percent = (
+        ((calculated_price - purchase_price)
+         / purchase_price) * 100
+        if purchase_price > 0
+        else 0
+    )
+
+    preview = {
+        "selling_price":
+            calculated_price,
+
+        "final_markup_percent":
+            markup_percent,
+
+        "markup_source":
+            "PRICING_SERVICE"
+    }
+
+else:
+
+    raise ValueError(
+        "Invalid pricing service response."
+    )
 
                 st.info(
 f"""
