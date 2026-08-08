@@ -1,7 +1,6 @@
 # ==============================================================================
 # tests/test_pricing_engine.py
-#
-# ERP ENTERPRISE PRICING ENGINE TEST v1.1
+# ERP ENTERPRISE PRICING ENGINE TEST v2.0 CLEAN
 # ==============================================================================
 
 import sys
@@ -31,16 +30,18 @@ class MockPricingService(PricingService):
 
     def __init__(self):
 
+        # Do not call super().__init__()
+
         self.settings = {
             "PRICING_METHOD": "MARKUP",
-            "PRICING_PRIORITY": "PRODUCT_FIRST",
-            "ENABLE_PRODUCT_MARKUP": "True",
-            "ENABLE_CATEGORY_MARKUP": "True",
             "DEFAULT_MARKUP_PERCENT": "40",
         }
 
         self.product_markups = {
-            1: 50
+            1: {
+                "markup_percent": 50,
+                "category_id": 10
+            }
         }
 
         self.category_markups = {
@@ -51,10 +52,13 @@ class MockPricingService(PricingService):
         return self.settings.get(key, default)
 
     def get_product_markup(self, product_id):
-        return self.product_markups.get(product_id)
+        return self.product_markups.get(product_id, {})
 
     def get_category_markup(self, category_id):
         return self.category_markups.get(category_id)
+
+    def get_global_markup(self):
+        return 40
 
 
 # ==============================================================================
@@ -67,7 +71,7 @@ def test_global_markup():
 
     price = service.calculate_selling_price(cost=1000)
 
-    assert price == 1400
+    assert price == 1400.0
 
 
 # ==============================================================================
@@ -85,7 +89,7 @@ def test_product_markup_priority():
     )
 
     # Product markup 50% should win
-    assert price == 1500
+    assert price == 1500.0
 
 
 # ==============================================================================
@@ -96,14 +100,12 @@ def test_category_markup():
 
     service = MockPricingService()
 
-    service.settings["ENABLE_PRODUCT_MARKUP"] = "False"
-
     price = service.calculate_selling_price(
         cost=1000,
         category_id=10
     )
 
-    assert price == 1300
+    assert price == 1300.0
 
 
 # ==============================================================================
@@ -114,12 +116,9 @@ def test_default_markup():
 
     service = MockPricingService()
 
-    service.settings["ENABLE_PRODUCT_MARKUP"] = "False"
-    service.settings["ENABLE_CATEGORY_MARKUP"] = "False"
-
     price = service.calculate_selling_price(cost=2000)
 
-    assert price == 2800
+    assert price == 2800.0
 
 
 # ==============================================================================
@@ -169,9 +168,12 @@ def test_owner_price_lock():
 
     service = MockPricingService()
 
-    locked_price = service.calculate_selling_price(
+    price = service.calculate_selling_price(
         cost=1000,
-        owner_locked_price=999
+        product={
+            "owner_selling_price": 999,
+            "owner_price_locked": True
+        }
     )
 
-    assert locked_price == 999
+    assert price == 999.0
