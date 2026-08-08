@@ -243,117 +243,115 @@ class InventoryService:
             )
             return {"success": False, "message": str(e)}
 
-# ==========================================================================
-# FEFO BATCH LOADER
-#
-# Returns only batches with:
-# - positive quantity
-# - expiry date
-#
-# IMPORTANT:
-# - No stock is changed.
-# - Database ordering is used when supported.
-# - Final FEFO ordering is enforced again in get_fefo_issue_plan().
-# ==========================================================================
+    # ==========================================================================
+    # FEFO BATCH LOADER
+    #
+    # Returns only batches with:
+    # - positive quantity
+    # - expiry date
+    #
+    # IMPORTANT:
+    # - No stock is changed.
+    # - Final FEFO ordering is enforced in Python.
+    # ==========================================================================
 
-def get_fefo_batches(
-    self,
-    product_id: int,
-    warehouse_id: int
-) -> List[Dict]:
+    def get_fefo_batches(
+        self,
+        product_id: int,
+        warehouse_id: int
+    ) -> List[Dict]:
 
-    try:
+        try:
 
-        result = (
-            self.client
-            .table("inventory_batches")
-            .select("""
-                id,
-                product_id,
-                warehouse_id,
-                batch_no,
-                manufacturing_date,
-                expiry_date,
-                quantity,
-                unit_cost
-            """)
-            .eq(
-                "product_id",
-                int(product_id)
+            result = (
+                self.client
+                .table("inventory_batches")
+                .select("""
+                    id,
+                    product_id,
+                    warehouse_id,
+                    batch_no,
+                    manufacturing_date,
+                    expiry_date,
+                    quantity,
+                    unit_cost
+                """)
+                .eq(
+                    "product_id",
+                    int(product_id)
+                )
+                .eq(
+                    "warehouse_id",
+                    int(warehouse_id)
+                )
+                .gt(
+                    "quantity",
+                    0
+                )
+                .order(
+                    "expiry_date",
+                    desc=False
+                )
+                .order(
+                    "id",
+                    desc=False
+                )
+                .execute()
             )
-            .eq(
-                "warehouse_id",
-                int(warehouse_id)
+
+            rows = result.data or []
+
+            # --------------------------------------------------------------
+            # Remove batches without expiry date
+            # --------------------------------------------------------------
+
+            rows = [
+                row
+                for row in rows
+                if row.get("expiry_date") not in (None, "")
+            ]
+
+            # --------------------------------------------------------------
+            # Enforce FEFO ordering at service level
+            # Earliest expiry first
+            # ID = deterministic tie breaker
+            # --------------------------------------------------------------
+
+            rows.sort(
+                key=lambda row: (
+                    row.get("expiry_date") or "",
+                    int(row.get("id", 0) or 0),
+                )
             )
-            .gt(
-                "quantity",
-                0
+
+            return rows
+
+        except Exception as e:
+
+            log_error(
+                message="FEFO batch loading failed.",
+                exception=e
             )
-            .order(
-                "expiry_date",
-                desc=False
-            )
-            .order(
-                "id",
-                desc=False
-            )
-            .execute()
-        )
 
-        rows = result.data or []
-
-        # ------------------------------------------------------------------
-        # Remove batches without expiry date.
-        #
-        # This avoids using Supabase .not_.is_() here and also keeps
-        # the method compatible with lightweight test mocks.
-        # ------------------------------------------------------------------
-
-        rows = [
-            row
-            for row in rows
-            if row.get("expiry_date") not in (None, "")
-        ]
-
-        # ------------------------------------------------------------------
-        # Enforce FEFO order at Python/service level.
-        #
-        # Earliest expiry first.
-        # ID is deterministic tie-breaker.
-        # ------------------------------------------------------------------
-
-        rows.sort(
-            key=lambda row: (
-                row.get("expiry_date") or "",
-                int(row.get("id", 0) or 0),
-            )
-        )
-
-        return rows
-
-    except Exception as e:
-
-        log_error(
-            message="FEFO batch loading failed.",
-            exception=e
-        )
-
-        return []
+            return []
 
     # ==========================================================================
     # FEFO ISSUE PLAN
     #
     # Example:
     #
-    # Batch 001 = 50
-    # Batch 002 = 80
-    # Requested = 60
+    # Batch 001 = 50 @ 1000
+    # Batch 002 = 80 @ 1050
+    # Request   = 60
     #
-    # Result:
+    # Allocation:
     # Batch 001 = 50
     # Batch 002 = 10
     #
-    # This method DOES NOT update database stock.
+    # Total COGS = 60,500
+    #
+    # IMPORTANT:
+    # This method DOES NOT deduct stock.
     # ==========================================================================
 
     def get_fefo_issue_plan(
@@ -362,63 +360,117 @@ def get_fefo_batches(
         warehouse_id: int,
         issue_quantity: float
     ) -> Dict[str, Any]:
+
         try:
+
             requested_qty = float(issue_quantity)
 
             if requested_qty <= 0:
+
                 return {
                     "success": False,
-                    "message": "Issue quantity must be greater than zero."
+                    "method": "FEFO",
+                    "message": "Issue quantity must be greater than zero.",
+                    "product_id": int(product_id),
+                    "warehouse_id": int(warehouse_id),
+                    "requested_qty": requested_qty,
+                    "allocated_qty": 0,
+                    "shortage_qty": requested_qty,
+                    "total_cost": 0,
+                    "allocations": [],
                 }
 
             # --------------------------------------------------------------
-            # PRODUCT SETTINGS
+            # PRODUCT BATCH SETTINGS
             # --------------------------------------------------------------
-            settings = self.get_product_batch_settings(product_id)
+
+            settings = self.get_product_batch_settings(
+                product_id
+            )
 
             if not settings.get("success"):
-                return settings
 
-            track_batches = settings.get("track_batches", False)
-            track_expiry = settings.get("track_expiry", False)
+                return {
+                    "success": False,
+                    "method": "FEFO",
+                    "message": settings.get(
+                        "message",
+                        "Unable to load product batch settings."
+                    ),
+                    "product_id": int(product_id),
+                    "warehouse_id": int(warehouse_id),
+                    "requested_qty": requested_qty,
+                    "allocated_qty": 0,
+                    "shortage_qty": requested_qty,
+                    "total_cost": 0,
+                    "allocations": [],
+                }
+
+            track_batches = bool(
+                settings.get("track_batches", False)
+            )
+
+            track_expiry = bool(
+                settings.get("track_expiry", False)
+            )
 
             # --------------------------------------------------------------
-            # FEFO ONLY WHEN BOTH ARE ENABLED
+            # BATCH TRACKING CHECK
             # --------------------------------------------------------------
+
             if not track_batches:
+
                 return {
                     "success": False,
                     "method": "SIMPLE_OR_FIFO",
-                    "message": "Product is not configured for batch tracking.",
+                    "message": (
+                        "Product is not configured "
+                        "for batch tracking."
+                    ),
                     "product_id": int(product_id),
                     "warehouse_id": int(warehouse_id),
                     "requested_qty": requested_qty,
+                    "allocated_qty": 0,
+                    "shortage_qty": requested_qty,
+                    "total_cost": 0,
                     "allocations": [],
                 }
 
+            # --------------------------------------------------------------
+            # EXPIRY TRACKING CHECK
+            # --------------------------------------------------------------
+
             if not track_expiry:
+
                 return {
                     "success": False,
                     "method": "BATCH_FIFO",
-                    "message": "Product has batch tracking but expiry tracking is disabled.",
+                    "message": (
+                        "Product has batch tracking but "
+                        "expiry tracking is disabled."
+                    ),
                     "product_id": int(product_id),
                     "warehouse_id": int(warehouse_id),
                     "requested_qty": requested_qty,
+                    "allocated_qty": 0,
+                    "shortage_qty": requested_qty,
+                    "total_cost": 0,
                     "allocations": [],
                 }
 
             # --------------------------------------------------------------
-            # LOAD FEFO BATCHES
+            # LOAD BATCHES
             # --------------------------------------------------------------
+
             batches = self.get_fefo_batches(
                 product_id=product_id,
                 warehouse_id=warehouse_id
             )
-            
-            # --------------------------------------------------------------------------
-            # ENFORCE FEFO ORDER AT SERVICE LEVEL
-            # --------------------------------------------------------------------------
-            
+
+            # --------------------------------------------------------------
+            # FINAL FEFO SORT
+            # --------------------------------------------------------------
+
             batches = sorted(
                 batches,
                 key=lambda batch: (
@@ -427,71 +479,164 @@ def get_fefo_batches(
                     int(batch.get("id", 0) or 0),
                 )
             )
-            
+
             if not batches:
+
                 return {
                     "success": False,
                     "method": "FEFO",
-                    "message": "No available FEFO batches found.",
+                    "message": (
+                        "No available FEFO batches found."
+                    ),
                     "product_id": int(product_id),
                     "warehouse_id": int(warehouse_id),
                     "requested_qty": requested_qty,
+                    "allocated_qty": 0,
+                    "shortage_qty": requested_qty,
+                    "total_cost": 0,
                     "allocations": [],
                 }
 
             # --------------------------------------------------------------
-            # ALLOCATE
+            # ALLOCATION
             # --------------------------------------------------------------
+
             remaining_qty = requested_qty
+
             allocations = []
+
             total_cost = 0.0
 
             for batch in batches:
+
                 if remaining_qty <= 0:
                     break
 
-                available_qty = float(batch.get("quantity", 0) or 0)
+                available_qty = float(
+                    batch.get("quantity", 0) or 0
+                )
+
                 if available_qty <= 0:
                     continue
 
-                issue_qty = min(available_qty, remaining_qty)
-                unit_cost = float(batch.get("unit_cost", 0) or 0)
-                line_cost = issue_qty * unit_cost
+                issue_qty = min(
+                    available_qty,
+                    remaining_qty
+                )
+
+                unit_cost = float(
+                    batch.get("unit_cost", 0) or 0
+                )
+
+                line_cost = (
+                    issue_qty * unit_cost
+                )
 
                 allocations.append({
+
                     "batch_id": batch.get("id"),
+
                     "batch_no": batch.get("batch_no"),
-                    "manufacturing_date": batch.get("manufacturing_date"),
-                    "expiry_date": batch.get("expiry_date"),
-                    "available_qty": available_qty,
-                    "issue_qty": issue_qty,
-                    "remaining_qty": available_qty - issue_qty,
-                    "unit_cost": unit_cost,
-                    "line_cost": line_cost,
+
+                    "manufacturing_date":
+                        batch.get("manufacturing_date"),
+
+                    "expiry_date":
+                        batch.get("expiry_date"),
+
+                    "available_qty":
+                        available_qty,
+
+                    "issue_qty":
+                        issue_qty,
+
+                    "remaining_qty":
+                        available_qty - issue_qty,
+
+                    "unit_cost":
+                        unit_cost,
+
+                    "line_cost":
+                        line_cost,
                 })
 
                 total_cost += line_cost
+
                 remaining_qty -= issue_qty
+
+            # --------------------------------------------------------------
+            # FINAL QUANTITIES
+            # --------------------------------------------------------------
+
+            allocated_qty = (
+                requested_qty - remaining_qty
+            )
+
+            shortage_qty = max(
+                remaining_qty,
+                0
+            )
 
             # --------------------------------------------------------------
             # INSUFFICIENT STOCK
             # --------------------------------------------------------------
-            allocated_qty = requested_qty - remaining_qty
 
-            if remaining_qty > 0:
+            if shortage_qty > 0:
+
                 return {
                     "success": False,
                     "method": "FEFO",
-                    "message": "Insufficient FEFO batch stock.",
+                    "message": (
+                        "Insufficient FEFO batch stock."
+                    ),
                     "product_id": int(product_id),
                     "warehouse_id": int(warehouse_id),
                     "requested_qty": requested_qty,
                     "allocated_qty": allocated_qty,
-                    "shortage_qty": remaining_qty,
+                    "shortage_qty": shortage_qty,
                     "total_cost": total_cost,
                     "allocations": allocations,
                 }
 
+            # --------------------------------------------------------------
+            # SUCCESS
+            # --------------------------------------------------------------
+
+            return {
+                "success": True,
+                "method": "FEFO",
+                "product_id": int(product_id),
+                "warehouse_id": int(warehouse_id),
+                "requested_qty": requested_qty,
+                "allocated_qty": allocated_qty,
+                "shortage_qty": 0,
+                "total_cost": total_cost,
+                "allocations": allocations,
+            }
+
+        except Exception as e:
+
+            log_error(
+                message="FEFO issue plan calculation failed.",
+                exception=e
+            )
+
+            return {
+                "success": False,
+                "method": "FEFO",
+                "message": str(e),
+                "product_id": int(product_id),
+                "warehouse_id": int(warehouse_id),
+                "requested_qty": float(
+                    issue_quantity
+                ),
+                "allocated_qty": 0,
+                "shortage_qty": float(
+                    issue_quantity
+                ),
+                "total_cost": 0,
+                "allocations": [],
+            }
             # --------------------------------------------------------------
             # SUCCESS
             # --------------------------------------------------------------
