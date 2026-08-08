@@ -362,7 +362,20 @@ class InventoryService:
                 product_id=product_id,
                 warehouse_id=warehouse_id
             )
-
+            
+            # --------------------------------------------------------------------------
+            # ENFORCE FEFO ORDER AT SERVICE LEVEL
+            # --------------------------------------------------------------------------
+            
+            batches = sorted(
+                batches,
+                key=lambda batch: (
+                    batch.get("expiry_date") is None,
+                    batch.get("expiry_date") or "",
+                    int(batch.get("id", 0) or 0),
+                )
+            )
+            
             if not batches:
                 return {
                     "success": False,
