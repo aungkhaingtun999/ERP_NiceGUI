@@ -206,10 +206,20 @@ class InventoryService:
 
     # ==========================================================================
     # BATCH / EXPIRY CONFIGURATION
+    #
+    # Test-safe version:
+    # - Supabase normally returns a dict for .single()
+    # - Lightweight test mocks may return a list
+    # - Normalize both formats before using .get()
     # ==========================================================================
 
-    def get_product_batch_settings(self, product_id: int) -> Dict[str, Any]:
+    def get_product_batch_settings(
+        self,
+        product_id: int
+    ) -> Dict[str, Any]:
+
         try:
+
             result = (
                 self.client
                 .table("products")
@@ -220,28 +230,77 @@ class InventoryService:
                     track_expiry,
                     shelf_life_days
                 """)
-                .eq("id", int(product_id))
+                .eq(
+                    "id",
+                    int(product_id)
+                )
                 .single()
                 .execute()
             )
 
-            data = result.data or {}
+            # ------------------------------------------------------------------
+            # NORMALIZE RESPONSE
+            #
+            # Supabase:
+            #     data = {...}
+            #
+            # Test mock:
+            #     data = [{...}]
+            # ------------------------------------------------------------------
+
+            data = result.data
+
+            if isinstance(data, list):
+
+                if not data:
+                    return {
+                        "success": False,
+                        "message": "Product batch settings not found.",
+                        "product_id": int(product_id),
+                    }
+
+                data = data[0]
+
+            if not isinstance(data, dict):
+
+                return {
+                    "success": False,
+                    "message": "Invalid product batch settings response.",
+                    "product_id": int(product_id),
+                }
+
+            # ------------------------------------------------------------------
+            # NORMAL RESULT
+            # ------------------------------------------------------------------
 
             return {
                 "success": True,
                 "product_id": data.get("id"),
                 "product_name": data.get("name"),
-                "track_batches": bool(data.get("track_batches", False)),
-                "track_expiry": bool(data.get("track_expiry", False)),
-                "shelf_life_days": data.get("shelf_life_days", 0),
+                "track_batches": bool(
+                    data.get("track_batches", False)
+                ),
+                "track_expiry": bool(
+                    data.get("track_expiry", False)
+                ),
+                "shelf_life_days": data.get(
+                    "shelf_life_days",
+                    0
+                ),
             }
 
         except Exception as e:
+
             log_error(
                 message="Product batch settings load failed.",
                 exception=e
             )
-            return {"success": False, "message": str(e)}
+
+            return {
+                "success": False,
+                "message": str(e),
+                "product_id": int(product_id),
+            }
 
     # ==========================================================================
     # FEFO BATCH LOADER
