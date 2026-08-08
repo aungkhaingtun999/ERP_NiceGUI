@@ -1,0 +1,62 @@
+CREATE TABLE IF NOT EXISTS public.categories (
+    id bigint NOT NULL,
+    name text NOT NULL,
+    description text,
+    created_at timestamp with time zone,
+    category_code text,
+    is_active boolean NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    markup_percent numeric,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.products (
+    id bigint NOT NULL,
+    name text NOT NULL,
+    price numeric NOT NULL,
+    stock integer NOT NULL,
+    created_at timestamp with time zone,
+    barcode text,
+    sku text,
+    category_id bigint,
+    purchase_price numeric NOT NULL,
+    selling_price numeric,
+    minimum_stock integer NOT NULL,
+    unit text NOT NULL,
+    image_url text,
+    notes text,
+    is_active boolean NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    short_name text,
+    brand_id bigint,
+    supplier_id bigint,
+    wholesale_price numeric,
+    vip_price numeric,
+    member_price numeric,
+    tax_rate numeric,
+    discount_allowed boolean,
+    reorder_level integer,
+    markup_percent numeric,
+    owner_selling_price numeric,
+    price_source character varying(50),
+    final_selling_price numeric,
+    owner_price_locked boolean,
+    track_batches boolean,
+    track_expiry boolean,
+    shelf_life_days integer,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.customers (
+    id bigint NOT NULL,
+    customer_code text,
+    full_name text NOT NULL,
+    phone text,
+    email text,
+    address text,
+    loyalty_points integer NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone,
+    updated_at timestamp with time zone,
+    PRIMARY KEY (id)
+);
