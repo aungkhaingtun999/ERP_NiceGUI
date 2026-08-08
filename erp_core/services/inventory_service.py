@@ -243,50 +243,102 @@ class InventoryService:
             )
             return {"success": False, "message": str(e)}
 
-    # ==========================================================================
-    # FEFO BATCH LOADER
-    #
-    # Returns only batches that can participate in FEFO.
-    #
-    # IMPORTANT:
-    # - No stock is changed here.
-    # - Expiry date is the primary ordering rule.
-    # - id is used as deterministic tie-breaker.
-    # ==========================================================================
+# ==========================================================================
+# FEFO BATCH LOADER
+#
+# Returns only batches with:
+# - positive quantity
+# - expiry date
+#
+# IMPORTANT:
+# - No stock is changed.
+# - Database ordering is used when supported.
+# - Final FEFO ordering is enforced again in get_fefo_issue_plan().
+# ==========================================================================
 
-    def get_fefo_batches(
-        self, product_id: int, warehouse_id: int
-    ) -> List[Dict]:
-        try:
-            result = (
-                self.client
-                .table("inventory_batches")
-                .select("""
-                    id,
-                    product_id,
-                    warehouse_id,
-                    batch_no,
-                    manufacturing_date,
-                    expiry_date,
-                    quantity,
-                    unit_cost
-                """)
-                .eq("product_id", int(product_id))
-                .eq("warehouse_id", int(warehouse_id))
-                .gt("quantity", 0)
-                .not_.is_("expiry_date", "null")
-                .order("expiry_date", desc=False)
-                .order("id", desc=False)
-                .execute()
-            )
-            return result.data or []
+def get_fefo_batches(
+    self,
+    product_id: int,
+    warehouse_id: int
+) -> List[Dict]:
 
-        except Exception as e:
-            log_error(
-                message="FEFO batch loading failed.",
-                exception=e
+    try:
+
+        result = (
+            self.client
+            .table("inventory_batches")
+            .select("""
+                id,
+                product_id,
+                warehouse_id,
+                batch_no,
+                manufacturing_date,
+                expiry_date,
+                quantity,
+                unit_cost
+            """)
+            .eq(
+                "product_id",
+                int(product_id)
             )
-            return []
+            .eq(
+                "warehouse_id",
+                int(warehouse_id)
+            )
+            .gt(
+                "quantity",
+                0
+            )
+            .order(
+                "expiry_date",
+                desc=False
+            )
+            .order(
+                "id",
+                desc=False
+            )
+            .execute()
+        )
+
+        rows = result.data or []
+
+        # ------------------------------------------------------------------
+        # Remove batches without expiry date.
+        #
+        # This avoids using Supabase .not_.is_() here and also keeps
+        # the method compatible with lightweight test mocks.
+        # ------------------------------------------------------------------
+
+        rows = [
+            row
+            for row in rows
+            if row.get("expiry_date") not in (None, "")
+        ]
+
+        # ------------------------------------------------------------------
+        # Enforce FEFO order at Python/service level.
+        #
+        # Earliest expiry first.
+        # ID is deterministic tie-breaker.
+        # ------------------------------------------------------------------
+
+        rows.sort(
+            key=lambda row: (
+                row.get("expiry_date") or "",
+                int(row.get("id", 0) or 0),
+            )
+        )
+
+        return rows
+
+    except Exception as e:
+
+        log_error(
+            message="FEFO batch loading failed.",
+            exception=e
+        )
+
+        return []
 
     # ==========================================================================
     # FEFO ISSUE PLAN
