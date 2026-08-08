@@ -355,7 +355,7 @@ class PricingService:
                 "price": safe_decimal(base_price),
                 "markup": Decimal("0"),
                 "source": "ERROR"
-        }
+            }
 
 # ==============================================================================
 # EXPORT
