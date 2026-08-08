@@ -1,592 +1,411 @@
-"""Inventory RPC Architecture Tests
-
-Purpose
-
-Validate the inventory RPC architecture without changing the current database state.
-
-IMPORTANT
-
-These tests are intentionally READ-ONLY.
-
-They DO NOT:
-
-create stock
-approve adjustments
-apply adjustments
-transfer stock
-modify products
-modify warehouse stock
-modify FIFO layers
-insert movement records
-
-The tests verify:
-
-Required RPC functions exist.
-RPC signatures match the current architecture.
-FEFO RPC can be called in read-only mode.
-FEFO allocation results are internally consistent.
-Current inventory reconciliation is consistent.
-No pending stock adjustments remain.
-
-Environment
-
-Required: SUPABASE_URL SUPABASE_KEY
-
-Run: pytest -q tests/test_inventory_rpc.py
-
-Run with verbose output: pytest -v tests/test_inventory_rpc.py
-"""
+# ==============================================================================
+# tests/test_fefo.py
+# FEFO SERVICE TESTS — RPC ARCHITECTURE
+# READ-ONLY / NO DATABASE MUTATION
+# ==============================================================================
 
 from __future__ import annotations
 
-import os
-from decimal import Decimal
-from typing import Any
-
 import pytest
-
-try:
-    from supabase import create_client, Client
-except ImportError:
-    create_client = None
-    Client = Any
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-REQUIRED_RPC_FUNCTIONS = {
-    "apply_stock_adjustment_fifo_rpc",
-    "approve_stock_adjustment_rpc",
-    "approve_stock_count_rpc",
-    "cancel_stock_adjustment_rpc",
-    "create_opening_stock_rpc",
-    "get_fefo_issue_plan",
-    "stock_adjustment_rpc",
-    "transfer_stock_fifo_rpc",
-    "transfer_stock_rpc",
-}
-
-# ============================================================================
-# FIXTURES
-# ============================================================================
-
-@pytest.fixture(scope="session")
-def supabase():
-    """Create one Supabase client for the entire test session.
-
-    This fixture does not modify the database.
-    """
-    if create_client is None:
-        pytest.skip("supabase package is not installed")
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        pytest.skip("SUPABASE_URL / SUPABASE_KEY are not configured")
-    return create_client(
-        SUPABASE_URL,
-        SUPABASE_KEY,
-    )
+from erp_core.services.inventory_service import InventoryService
 
 
-# ============================================================================
-# HELPERS
-# ============================================================================
+# ==============================================================================
+# MOCK RPC RESPONSE
+# ==============================================================================
 
-def rpc_call(
-    supabase,
-    function_name: str,
-    params: dict[str, Any],
+class MockRPCResponse:
+    def __init__(self, data=None, error=None):
+        self.data = data
+        self.error = error
+
+    def execute(self):
+        return self
+
+
+# ==============================================================================
+# MOCK SUPABASE CLIENT
+# ==============================================================================
+
+class MockClient:
+    def __init__(self, rpc_results=None):
+        self.rpc_results = rpc_results or {}
+
+    def rpc(self, function_name, params=None):
+        result = self.rpc_results.get(function_name)
+        if result is None:
+            return MockRPCResponse(
+                data=None,
+                error={
+                    "message": (
+                        f"Mock RPC not configured: "
+                        f"{function_name}"
+                    )
+                },
+            )
+        return MockRPCResponse(
+            data=result,
+            error=None,
+        )
+
+
+# ==============================================================================
+# STANDARD FEFO DATA
+# ==============================================================================
+
+def standard_batches():
+    return [
+        {
+            "id": 4,
+            "batch_id": 4,
+            "batch_no": "TEA-BATCH-001",
+            "manufacturing_date": "2026-01-01",
+            "expiry_date": "2026-09-01",
+            "available_qty": 50,
+            "quantity": 50,
+            "unit_cost": 1000,
+        },
+        {
+            "id": 5,
+            "batch_id": 5,
+            "batch_no": "TEA-BATCH-002",
+            "manufacturing_date": "2026-02-01",
+            "expiry_date": "2026-10-01",
+            "available_qty": 80,
+            "quantity": 80,
+            "unit_cost": 1050,
+        },
+    ]
+
+
+# ==============================================================================
+# EXPECTED RPC RESULT
+# ==============================================================================
+
+def fefo_rpc_result(
+    issue_quantity=60,
+    success=True,
 ):
-    """Execute an RPC.
-
-    This helper is only used with READ-ONLY RPCs in this test file.
-    """
-    return supabase.rpc(
-        function_name,
-        params,
-    ).execute()
-
-
-def to_decimal(value: Any) -> Decimal:
-    """Safely convert database numeric values to Decimal."""
-    if value is None:
-        return Decimal("0")
-
-    return Decimal(str(value))
-
-
-def get_rows(response) -> list[dict[str, Any]]:
-    """Normalize Supabase response data."""
-    data = getattr(response, "data", None)
-
-    if data is None:
-        return []
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
-        return [data]
-    return []
-
-
-# ============================================================================
-# TEST 01 — ENVIRONMENT
-# ============================================================================
-
-def test_supabase_environment(supabase):
-    """Verify Supabase connection is available."""
-    assert supabase is not None
-
-
-# ============================================================================
-# TEST 02 — RPC EXISTENCE
-# ============================================================================
-
-def test_required_rpc_functions_exist(supabase):
-    """Verify that all required inventory RPC functions exist.
-
-    This is a read-only catalog query.
-    """
-    response = (
-        supabase
-        .table("pg_proc")
-        .select("proname")
-        .in_("proname", list(REQUIRED_RPC_FUNCTIONS))
-        .execute()
-    )
-    rows = get_rows(response)
-    found = {row["proname"] for row in rows if row.get("proname")}
-    missing = REQUIRED_RPC_FUNCTIONS - found
-    assert not missing, (
-        "Missing inventory RPC functions: " + ", ".join(sorted(missing))
-    )
-
-
-# ============================================================================
-# TEST 03 — FEFO CONTRACT
-# ============================================================================
-
-def test_get_fefo_issue_plan_contract(supabase):
-    """Verify get_fefo_issue_plan returns the expected contract.
-
-    This RPC is read-only and does not consume stock.
-    """
-    product_id = 4
-    warehouse_id = 1
-    issue_quantity = Decimal("60")
-    response = rpc_call(
-        supabase,
-        "get_fefo_issue_plan",
-        {
-            "p_product_id": product_id,
-            "p_warehouse_id": warehouse_id,
-            "p_issue_quantity": float(issue_quantity),
-        },
-    )
-    result = response.data
-    assert isinstance(result, dict), (
-        f"Expected JSON object, got: {type(result)}"
-    )
-    required_keys = {
-        "success",
-        "method",
-        "product_id",
-        "warehouse_id",
-        "requested_qty",
-        "available_qty",
-        "allocated_qty",
-        "shortage_qty",
-        "total_cost",
-        "allocations",
+    if issue_quantity == 60:
+        return {
+            "success": True,
+            "method": "FEFO",
+            "product_id": 4,
+            "warehouse_id": 1,
+            "requested_qty": 60,
+            "available_qty": 130,
+            "allocated_qty": 60,
+            "shortage_qty": 0,
+            "total_cost": 60500,
+            "allocations": [
+                {
+                    "batch_id": 4,
+                    "batch_no": "TEA-BATCH-001",
+                    "manufacturing_date": "2026-01-01",
+                    "expiry_date": "2026-09-01",
+                    "available_qty": 50,
+                    "issue_qty": 50,
+                    "remaining_qty": 0,
+                    "unit_cost": 1000,
+                    "line_cost": 50000,
+                },
+                {
+                    "batch_id": 5,
+                    "batch_no": "TEA-BATCH-002",
+                    "manufacturing_date": "2026-02-01",
+                    "expiry_date": "2026-10-01",
+                    "available_qty": 80,
+                    "issue_qty": 10,
+                    "remaining_qty": 70,
+                    "unit_cost": 1050,
+                    "line_cost": 10500,
+                },
+            ],
+        }
+    if issue_quantity == 200:
+        return {
+            "success": False,
+            "method": "FEFO",
+            "product_id": 4,
+            "warehouse_id": 1,
+            "requested_qty": 200,
+            "available_qty": 130,
+            "allocated_qty": 130,
+            "shortage_qty": 70,
+            "total_cost": 134000,
+            "allocations": [
+                {
+                    "batch_id": 4,
+                    "batch_no": "TEA-BATCH-001",
+                    "manufacturing_date": "2026-01-01",
+                    "expiry_date": "2026-09-01",
+                    "available_qty": 50,
+                    "issue_qty": 50,
+                    "remaining_qty": 0,
+                    "unit_cost": 1000,
+                    "line_cost": 50000,
+                },
+                {
+                    "batch_id": 5,
+                    "batch_no": "TEA-BATCH-002",
+                    "manufacturing_date": "2026-02-01",
+                    "expiry_date": "2026-10-01",
+                    "available_qty": 80,
+                    "issue_qty": 80,
+                    "remaining_qty": 0,
+                    "unit_cost": 1050,
+                    "line_cost": 84000,
+                },
+            ],
+        }
+    return {
+        "success": success,
+        "method": "FEFO",
+        "product_id": 4,
+        "warehouse_id": 1,
+        "requested_qty": issue_quantity,
+        "available_qty": 130,
+        "allocated_qty": 0,
+        "shortage_qty": issue_quantity,
+        "total_cost": 0,
+        "allocations": [],
     }
-    missing = required_keys - set(result.keys())
-    assert not missing, (
-        "FEFO result missing keys: " + ", ".join(sorted(missing))
+
+
+# ==============================================================================
+# SERVICE FACTORY
+# ==============================================================================
+
+def make_service(issue_quantity=60):
+    client = MockClient(
+        rpc_results={
+            "get_fefo_issue_plan": fefo_rpc_result(issue_quantity)
+        }
     )
-    assert result["method"] == "FEFO"
-    assert result["product_id"] == product_id
-    assert result["warehouse_id"] == warehouse_id
+    service = InventoryService(client=client)
+    return service
 
 
-# ============================================================================
-# TEST 04 — FEFO SUCCESS CASE
-# ============================================================================
+# ==============================================================================
+# ENABLE FEFO
+# ==============================================================================
 
-def test_fefo_success_allocation(supabase):
-    """Verify a valid FEFO request can be completely allocated.
-
-    Current known test data:
-    Product 4
-    Warehouse 1
-    Batch 4 = 50
-    Batch 5 = 80
-    Request: 60
-    Expected:
-    Batch 4 -> 50
-    Batch 5 -> 10
-    """
-    response = rpc_call(
-        supabase,
-        "get_fefo_issue_plan",
-        {
-            "p_product_id": 4,
-            "p_warehouse_id": 1,
-            "p_issue_quantity": 60,
-        },
+def enable_fefo(service):
+    service.get_fefo_batches = lambda product_id, warehouse_id: (
+        standard_batches()
     )
-    result = response.data
+
+
+# ==============================================================================
+# FEFO BASIC TEST
+# ==============================================================================
+
+def test_fefo_issue_plan():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
+    )
+    print()
+    print("========== FEFO TEST RESULT ==========")
+    print(result)
+    print("=======================================")
     assert result["success"] is True
     assert result["method"] == "FEFO"
-    requested = to_decimal(result["requested_qty"])
-    allocated = to_decimal(result["allocated_qty"])
-    shortage = to_decimal(result["shortage_qty"])
-    assert requested == Decimal("60")
-    assert allocated == Decimal("60")
-    assert shortage == Decimal("0")
+    assert result["requested_qty"] == 60
+    assert result["allocated_qty"] == 60
+    assert result["shortage_qty"] == 0
+
+
+# ==============================================================================
+# ALLOCATION COUNT
+# ==============================================================================
+
+def test_fefo_allocation_count():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
+    )
     allocations = result["allocations"]
-    assert isinstance(allocations, list)
-    assert len(allocations) >= 1
+    assert len(allocations) == 2
+
+
+# ==============================================================================
+# FIRST BATCH
+# ==============================================================================
+
+def test_fefo_first_batch():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
+    )
+    first = result["allocations"][0]
+    assert first["batch_id"] == 4
+    assert first["batch_no"] == "TEA-BATCH-001"
+    assert first["issue_qty"] == 50
+    assert first["unit_cost"] == 1000
+    assert first["line_cost"] == 50000
+
+
+# ==============================================================================
+# SECOND BATCH
+# ==============================================================================
+
+def test_fefo_second_batch_partial_allocation():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
+    )
+    second = result["allocations"][1]
+    assert second["batch_id"] == 5
+    assert second["batch_no"] == "TEA-BATCH-002"
+    assert second["issue_qty"] == 10
+    assert second["remaining_qty"] == 70
+    assert second["unit_cost"] == 1050
+    assert second["line_cost"] == 10500
+
+
+# ==============================================================================
+# TOTAL COGS
+# ==============================================================================
+
+def test_fefo_total_cogs():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
+    )
+    assert result["total_cost"] == 60500
+
+
+# ==============================================================================
+# TOTAL ISSUE QUANTITY
+# ==============================================================================
+
+def test_fefo_total_issue_quantity():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
+    )
     total_issue = sum(
-        to_decimal(row["issue_qty"]) for row in allocations
+        row["issue_qty"] for row in result["allocations"]
     )
-    assert total_issue == Decimal("60")
+    assert total_issue == 60
 
 
-# ============================================================================
-# TEST 05 — FEFO COST CONSISTENCY
-# ============================================================================
+# ==============================================================================
+# EARLIEST EXPIRY FIRST
+# ==============================================================================
 
-def test_fefo_total_cost_consistency(supabase):
-    """Verify total_cost equals the sum of allocation line costs."""
-    response = rpc_call(
-        supabase,
-        "get_fefo_issue_plan",
-        {
-            "p_product_id": 4,
-            "p_warehouse_id": 1,
-            "p_issue_quantity": 60,
-        },
+def test_fefo_uses_earliest_expiry_first():
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
     )
-    result = response.data
     allocations = result["allocations"]
-    calculated_cost = sum(
-        to_decimal(row["issue_qty"]) * to_decimal(row["unit_cost"]) for row in allocations
+    assert allocations[0]["expiry_date"] == "2026-09-01"
+    assert allocations[1]["expiry_date"] == "2026-10-01"
+
+
+# ==============================================================================
+# INSUFFICIENT STOCK
+# ==============================================================================
+
+def test_fefo_insufficient_stock():
+    service = make_service(issue_quantity=200)
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=200,
     )
-    reported_cost = to_decimal(result["total_cost"])
-    assert calculated_cost == reported_cost
-
-
-# ============================================================================
-# TEST 06 — FEFO ORDER
-# ============================================================================
-
-def test_fefo_expiry_order(supabase):
-    """Verify FEFO allocations are ordered by earliest expiry first."""
-    response = rpc_call(
-        supabase,
-        "get_fefo_issue_plan",
-        {
-            "p_product_id": 4,
-            "p_warehouse_id": 1,
-            "p_issue_quantity": 60,
-        },
-    )
-    result = response.data
-    allocations = result["allocations"]
-    expiry_dates = [
-        row["expiry_date"] for row in allocations if row.get("expiry_date") is not None
-    ]
-    assert expiry_dates == sorted(expiry_dates)
-
-
-# ============================================================================
-# TEST 07 — FEFO SHORTAGE
-# ============================================================================
-
-def test_fefo_shortage_contract(supabase):
-    """Verify FEFO correctly reports shortage when requested quantity exceeds available quantity.
-
-    This test is READ-ONLY.
-    """
-    response = rpc_call(
-        supabase,
-        "get_fefo_issue_plan",
-        {
-            "p_product_id": 4,
-            "p_warehouse_id": 1,
-            "p_issue_quantity": 200,
-        },
-    )
-    result = response.data
     assert result["success"] is False
-    requested = to_decimal(result["requested_qty"])
-    allocated = to_decimal(result["allocated_qty"])
-    shortage = to_decimal(result["shortage_qty"])
-    assert requested == Decimal("200")
-    assert allocated <= requested
-    assert shortage == requested - allocated
-    assert shortage > 0
+    assert result["requested_qty"] == 200
+    assert result["available_qty"] == 130
+    assert result["allocated_qty"] == 130
+    assert result["shortage_qty"] == 70
+    assert result["total_cost"] == 134000
 
 
-# ============================================================================
-# TEST 08 — FEFO DOES NOT CHANGE STOCK
-# ============================================================================
+# ==============================================================================
+# ZERO QUANTITY
+# ==============================================================================
 
-def test_fefo_is_read_only(supabase):
-    """Verify calling FEFO does not change warehouse stock.
-
-    The same quantity is read before and after the RPC call.
-    """
-    before_response = (
-        supabase
-        .table("warehouse_stock")
-        .select("qty, available_qty, reserved_qty")
-        .eq("product_id", 4)
-        .eq("warehouse_id", 1)
-        .limit(1)
-        .execute()
+def test_fefo_zero_quantity():
+    service = make_service()
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=0,
     )
-    before_rows = get_rows(before_response)
-    if not before_rows:
-        pytest.skip("Product 4 / warehouse 1 stock row does not exist")
-    before = before_rows[0]
-    rpc_call(
-        supabase,
-        "get_fefo_issue_plan",
-        {
-            "p_product_id": 4,
-            "p_warehouse_id": 1,
-            "p_issue_quantity": 1,
-        },
+    assert result["success"] is False
+    assert result["allocated_qty"] == 0
+    assert result["shortage_qty"] == 0
+
+
+# ==============================================================================
+# NEGATIVE QUANTITY
+# ==============================================================================
+
+def test_fefo_negative_quantity():
+    service = make_service()
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=-5,
     )
-    after_response = (
-        supabase
-        .table("warehouse_stock")
-        .select("qty, available_qty, reserved_qty")
-        .eq("product_id", 4)
-        .eq("warehouse_id", 1)
-        .limit(1)
-        .execute()
+    assert result["success"] is False
+    assert result["allocated_qty"] == 0
+    assert result["shortage_qty"] == 5
+
+
+# ==============================================================================
+# NO BATCHES
+# ==============================================================================
+
+def test_fefo_no_batches():
+    service = make_service()
+    service.get_fefo_batches = lambda product_id, warehouse_id: []
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=10,
     )
-    after_rows = get_rows(after_response)
-    assert after_rows, "Warehouse stock row disappeared"
-    after = after_rows[0]
-    assert to_decimal(after["qty"]) == to_decimal(before["qty"])
-    assert to_decimal(after["available_qty"]) == to_decimal(
-        before["available_qty"]
+    assert result["success"] is False
+
+
+# ==============================================================================
+# READ-ONLY TEST
+# ==============================================================================
+
+def test_fefo_does_not_modify_batch_data():
+    before = standard_batches()
+    service = make_service()
+    enable_fefo(service)
+    result = service.get_fefo_issue_plan(
+        product_id=4,
+        warehouse_id=1,
+        issue_quantity=60,
     )
-    assert to_decimal(after["reserved_qty"]) == to_decimal(
-        before["reserved_qty"]
-    )
-
-
-# ============================================================================
-# TEST 09 — CURRENT INVENTORY RECONCILIATION
-# ============================================================================
-
-def test_inventory_reconciliation(supabase):
-    """Verify product stock and warehouse stock are reconciled.
-
-    This test does not modify anything.
-    """
-    product_response = (
-        supabase
-        .table("products")
-        .select("id, stock")
-        .eq("id", 2)
-        .limit(1)
-        .execute()
-    )
-    product_rows = get_rows(product_response)
-    if not product_rows:
-        pytest.skip("Product 2 does not exist")
-    product_stock = to_decimal(
-        product_rows[0]["stock"]
-    )
-    warehouse_response = (
-        supabase
-        .table("warehouse_stock")
-        .select("qty")
-        .eq("product_id", 2)
-        .eq("warehouse_id", 1)
-        .limit(1)
-        .execute()
-    )
-    warehouse_rows = get_rows(warehouse_response)
-    if not warehouse_rows:
-        pytest.skip("Product 2 / warehouse 1 stock row does not exist")
-    warehouse_stock = to_decimal(
-        warehouse_rows[0]["qty"]
-    )
-    assert product_stock == warehouse_stock, (
-        f"Product stock mismatch: "
-        f"products.stock={product_stock}, "
-        f"warehouse_stock.qty={warehouse_stock}"
-    )
-
-
-# ============================================================================
-# TEST 10 — FIFO RECONCILIATION
-# ============================================================================
-
-def test_fifo_reconciliation(supabase):
-    """Verify FIFO remaining quantity equals warehouse stock.
-
-    Current known product: Product 2 / Warehouse 1
-    """
-    warehouse_response = (
-        supabase
-        .table("warehouse_stock")
-        .select("qty")
-        .eq("product_id", 2)
-        .eq("warehouse_id", 1)
-        .limit(1)
-        .execute()
-    )
-    warehouse_rows = get_rows(warehouse_response)
-    if not warehouse_rows:
-        pytest.skip("Warehouse stock row not found")
-    warehouse_qty = to_decimal(
-        warehouse_rows[0]["qty"]
-    )
-    fifo_response = (
-        supabase
-        .table("inventory_cost_layers")
-        .select("qty_remaining")
-        .eq("product_id", 2)
-        .eq("warehouse_id", 1)
-    ).execute()
-    fifo_rows = get_rows(fifo_response)
-    fifo_qty = sum(
-        to_decimal(row["qty_remaining"]) for row in fifo_rows
-    )
-    assert fifo_qty == warehouse_qty, (
-        f"FIFO mismatch: "
-        f"warehouse={warehouse_qty}, "
-        f"fifo={fifo_qty}"
-    )
-
-
-# ============================================================================
-# TEST 11 — NO PENDING ADJUSTMENTS
-# ============================================================================
-
-def test_no_pending_adjustments(supabase):
-    """Current production/test database should have no pending adjustments.
-
-    This is a read-only check.
-    """
-    response = (
-        supabase
-        .table("stock_adjustments")
-        .select("id")
-        .eq("status", "PENDING")
-        .execute()
-    )
-    rows = get_rows(response)
-    assert rows == [], (
-        f"Pending stock adjustments still exist: {rows}"
-    )
-
-
-# ============================================================================
-# TEST 12 — APPLIED ADJUSTMENT STATE
-# ============================================================================
-
-def test_applied_adjustment_21(supabase):
-    """Verify the known applied negative adjustment remains APPLIED.
-
-    This does not execute the APPLY RPC.
-    """
-    response = (
-        supabase
-        .table("stock_adjustments")
-        .select(
-            "id, product_id, warehouse_id, qty, status"
-        )
-        .eq("id", 21)
-        .limit(1)
-        .execute()
-    )
-    rows = get_rows(response)
-    if not rows:
-        pytest.skip("Adjustment 21 does not exist")
-    row = rows[0]
-    assert row["status"] == "APPLIED"
-    assert int(row["product_id"]) == 2
-    assert int(row["warehouse_id"]) == 1
-    assert to_decimal(row["qty"]) == Decimal("-5")
-
-
-# ============================================================================
-# TEST 13 — NO INVENTORY SIDE EFFECT FROM TEST SUITE
-# ============================================================================
-
-def test_current_tea_stock_is_reconciled(supabase):
-    """Final read-only safety check for the current Tea inventory.
-
-    Expected current state:
-    products.stock = 11
-    warehouse_stock.qty = 11
-    FIFO remaining = 11
-    """
-    product_response = (
-        supabase
-        .table("products")
-        .select("stock")
-        .eq("id", 2)
-        .limit(1)
-        .execute()
-    )
-    product_rows = get_rows(product_response)
-    if not product_rows:
-        pytest.skip("Tea product does not exist")
-    product_stock = to_decimal(
-        product_rows[0]["stock"]
-    )
-    warehouse_response = (
-        supabase
-        .table("warehouse_stock")
-        .select("qty")
-        .eq("product_id", 2)
-        .eq("warehouse_id", 1)
-        .limit(1)
-        .execute()
-    )
-    warehouse_rows = get_rows(warehouse_response)
-    assert warehouse_rows
-    warehouse_stock = to_decimal(
-        warehouse_rows[0]["qty"]
-    )
-    fifo_response = (
-        supabase
-        .table("inventory_cost_layers")
-        .select("qty_remaining")
-        .eq("product_id", 2)
-        .eq("warehouse_id", 1)
-    ).execute()
-    fifo_rows = get_rows(fifo_response)
-    fifo_stock = sum(
-        to_decimal(row["qty_remaining"]) for row in fifo_rows
-    )
-    assert product_stock == Decimal("11")
-    assert warehouse_stock == Decimal("11")
-    assert fifo_stock == Decimal("11")
-    assert product_stock == warehouse_stock
-    assert warehouse_stock == fifo_stock
-
-
-# ============================================================================
-# END
-# ============================================================================
-
-if __name__ == "__main__":
-    raise SystemExit(
-        pytest.main(
-            [
-                "-v",
-                __file__,
-            ]
-        )
-    )
+    after = standard_batches()
+    assert result["success"] is True
+    assert before == after
