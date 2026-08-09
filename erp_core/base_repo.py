@@ -1,66 +1,173 @@
+
 # ==============================================================================
 # erp_core/base_repo.py
-# ERP ENTERPRISE BASE REPOSITORY v36.0
+# ERP ENTERPRISE BASE REPOSITORY v37.0
 #
-# NORMAL CLIENT
-# PRIVILEGED SERVER CLIENT
-# MAKER-CHECKER RPC SUPPORT
+# PURPOSE
+# ------------------------------------------------------------------------------
+# 1. Normal Supabase client
+# 2. Privileged server-side Supabase client
+# 3. Maker-Checker RPC support
+# 4. Common money / UUID / JSON helpers
+# 5. Database health check
+#
+# SECURITY
+# ------------------------------------------------------------------------------
+# SUPABASE_KEY
+#     -> Normal application client
+#
+# SUPABASE_SERVICE_ROLE_KEY
+#     -> Server-side privileged client ONLY
+#
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# NEVER expose SUPABASE_SERVICE_ROLE_KEY to:
+#     - browser JavaScript
+#     - Streamlit frontend
+#     - client-side components
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# STANDARD LIBRARY
 # ==============================================================================
 
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Callable
 import uuid
 
+
+# ==============================================================================
+# THIRD-PARTY
+# ==============================================================================
+
 import streamlit as st
 from supabase import create_client
 
-from .config import Tables, log_error
+
+# ==============================================================================
+# ERP CORE
+# ==============================================================================
+
+from .config import (
+    Tables,
+    log_error,
+)
 
 
 print("BASE_REPO START")
 
 
 # ==============================================================================
-# NORMAL SUPABASE CLIENT
+# SUPABASE NORMAL CLIENT
 # ==============================================================================
+#
+# Used for normal ERP operations.
+#
+# Examples:
+#     products
+#     warehouses
+#     customers
+#     suppliers
+#     reports
+#     normal RPCs
+#
+# ==============================================================================
+
 
 @st.cache_resource
 def get_supabase():
+    """
+    Return the normal Supabase client.
+
+    Uses:
+        SUPABASE_URL
+        SUPABASE_KEY
+
+    This client is intended for normal application operations.
+    """
 
     try:
 
+        supabase_url = st.secrets["SUPABASE_URL"]
+
+        supabase_key = st.secrets["SUPABASE_KEY"]
+
+        if not supabase_url:
+
+            raise RuntimeError(
+                "SUPABASE_URL is empty."
+            )
+
+        if not supabase_key:
+
+            raise RuntimeError(
+                "SUPABASE_KEY is empty."
+            )
+
         return create_client(
-            st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"]
+            supabase_url,
+            supabase_key,
         )
 
     except Exception as e:
 
         log_error(
             message="Supabase normal connection failed",
-            exception=e
+            exception=e,
         )
 
         raise
 
 
 # ==============================================================================
-# PRIVILEGED SERVER CLIENT
-#
-# IMPORTANT:
-# This function runs ONLY on Streamlit server.
-#
-# NEVER expose this key to browser JavaScript.
+# SUPABASE PRIVILEGED SERVER CLIENT
 # ==============================================================================
+#
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# This client uses SUPABASE_SERVICE_ROLE_KEY.
+#
+# It MUST remain server-side.
+#
+# It is intended for protected Maker-Checker RPC calls.
+#
+# Example:
+#
+#     privileged_db().rpc(
+#         "request_product_create_rpc",
+#         {...}
+#     ).execute()
+#
+# ==============================================================================
+
 
 @st.cache_resource
 def get_service_supabase():
+    """
+    Return the server-side privileged Supabase client.
+
+    Requires:
+        SUPABASE_URL
+        SUPABASE_SERVICE_ROLE_KEY
+
+    The service-role key must never be exposed to users.
+    """
 
     try:
+
+        supabase_url = st.secrets["SUPABASE_URL"]
 
         service_key = st.secrets.get(
             "SUPABASE_SERVICE_ROLE_KEY"
         )
+
+        if not supabase_url:
+
+            raise RuntimeError(
+                "SUPABASE_URL is empty."
+            )
 
         if not service_key:
 
@@ -70,34 +177,45 @@ def get_service_supabase():
             )
 
         return create_client(
-            st.secrets["SUPABASE_URL"],
-            service_key
+            supabase_url,
+            service_key,
         )
 
     except Exception as e:
 
         log_error(
             message="Supabase service connection failed",
-            exception=e
+            exception=e,
         )
 
         raise
 
 
 # ==============================================================================
-# NORMAL DATABASE
+# NORMAL DATABASE ACCESS
 # ==============================================================================
 
+
 def db():
+    """
+    Return the normal Supabase client.
+    """
 
     return get_supabase()
 
 
 # ==============================================================================
-# PRIVILEGED DATABASE
+# PRIVILEGED DATABASE ACCESS
 # ==============================================================================
 
+
 def privileged_db():
+    """
+    Return the server-side privileged Supabase client.
+
+    Use this ONLY when an operation intentionally requires
+    server-side privileged access.
+    """
 
     return get_service_supabase()
 
@@ -106,6 +224,7 @@ def privileged_db():
 # BACKWARD COMPATIBILITY
 # ==============================================================================
 
+
 get_connection = db
 
 
@@ -113,7 +232,11 @@ get_connection = db
 # MONEY
 # ==============================================================================
 
+
 def money(value):
+    """
+    Convert a value to Decimal with 2 decimal places.
+    """
 
     try:
 
@@ -121,7 +244,7 @@ def money(value):
             str(value)
         ).quantize(
             Decimal("0.01"),
-            rounding=ROUND_HALF_UP
+            rounding=ROUND_HALF_UP,
         )
 
     except Exception:
@@ -130,13 +253,24 @@ def money(value):
 
 
 def money_float(value):
+    """
+    Convert money value to float.
+    """
 
     return float(
         money(value)
     )
 
 
+# ==============================================================================
+# SAFE FLOAT
+# ==============================================================================
+
+
 def safe_float(value):
+    """
+    Safely convert value to float.
+    """
 
     try:
 
@@ -153,7 +287,17 @@ def safe_float(value):
 # UUID
 # ==============================================================================
 
-def validate_uuid(value) -> Optional[str]:
+
+def validate_uuid(
+    value,
+) -> Optional[str]:
+    """
+    Validate and normalize UUID.
+
+    Returns:
+        str UUID
+        None
+    """
 
     if not value:
 
@@ -176,29 +320,84 @@ def validate_uuid(value) -> Optional[str]:
 # JSON SERIALIZER
 # ==============================================================================
 
+
 def serialize_json(data):
+    """
+    Convert Decimal / UUID / nested structures
+    into JSON-compatible Python values.
+    """
 
-    if isinstance(data, Decimal):
+    # --------------------------------------------------------------------------
+    # Decimal
+    # --------------------------------------------------------------------------
 
-        return float(data)
+    if isinstance(
+        data,
+        Decimal,
+    ):
 
-    if isinstance(data, uuid.UUID):
+        return float(
+            data
+        )
 
-        return str(data)
+    # --------------------------------------------------------------------------
+    # UUID
+    # --------------------------------------------------------------------------
 
-    if isinstance(data, list):
+    if isinstance(
+        data,
+        uuid.UUID,
+    ):
+
+        return str(
+            data
+        )
+
+    # --------------------------------------------------------------------------
+    # List
+    # --------------------------------------------------------------------------
+
+    if isinstance(
+        data,
+        list,
+    ):
 
         return [
-            serialize_json(x)
-            for x in data
+            serialize_json(item)
+            for item in data
         ]
 
-    if isinstance(data, dict):
+    # --------------------------------------------------------------------------
+    # Tuple
+    # --------------------------------------------------------------------------
+
+    if isinstance(
+        data,
+        tuple,
+    ):
+
+        return [
+            serialize_json(item)
+            for item in data
+        ]
+
+    # --------------------------------------------------------------------------
+    # Dictionary
+    # --------------------------------------------------------------------------
+
+    if isinstance(
+        data,
+        dict,
+    ):
 
         return {
-            k: serialize_json(v)
-            for k, v in data.items()
+            key: serialize_json(value)
+            for key, value in data.items()
         }
+
+    # --------------------------------------------------------------------------
+    # Other
+    # --------------------------------------------------------------------------
 
     return data
 
@@ -207,10 +406,18 @@ def serialize_json(data):
 # SAFE EXECUTE
 # ==============================================================================
 
+
 def safe_execute(
     func: Callable,
-    error_message="Database Error"
+    error_message="Database Error",
 ):
+    """
+    Execute a database operation safely.
+
+    Returns:
+        function result
+        None on exception
+    """
 
     try:
 
@@ -220,7 +427,7 @@ def safe_execute(
 
         log_error(
             message=error_message,
-            exception=e
+            exception=e,
         )
 
         return None
@@ -230,20 +437,30 @@ def safe_execute(
 # DATABASE HEALTH
 # ==============================================================================
 
+
 class DatabaseHealth:
+    """
+    Simple database health checker.
+    """
 
     @staticmethod
     def check():
 
         try:
 
-            db().table(
-                Tables.PRODUCTS
-            ).select(
-                "id"
-            ).limit(
-                1
-            ).execute()
+            (
+                db()
+                .table(
+                    Tables.PRODUCTS
+                )
+                .select(
+                    "id"
+                )
+                .limit(
+                    1
+                )
+                .execute()
+            )
 
             return True
 
@@ -251,10 +468,15 @@ class DatabaseHealth:
 
             log_error(
                 message="Database health failed",
-                exception=e
+                exception=e,
             )
 
             return False
+
+
+# ==============================================================================
+# DATABASE HEALTH FUNCTION
+# ==============================================================================
 
 
 def database_health_check():
@@ -263,41 +485,74 @@ def database_health_check():
 
 
 # ==============================================================================
-# EXPORT
+# PUBLIC EXPORTS
 # ==============================================================================
+
 
 __all__ = [
 
-    # Normal
+    # --------------------------------------------------------------------------
+    # Normal database
+    # --------------------------------------------------------------------------
+
     "db",
     "get_supabase",
     "get_connection",
 
-    # Privileged
+    # --------------------------------------------------------------------------
+    # Privileged database
+    # --------------------------------------------------------------------------
+
     "privileged_db",
     "get_service_supabase",
 
+    # --------------------------------------------------------------------------
     # Money
+    # --------------------------------------------------------------------------
+
     "money",
     "money_float",
     "safe_float",
 
+    # --------------------------------------------------------------------------
     # UUID
+    # --------------------------------------------------------------------------
+
     "validate_uuid",
 
+    # --------------------------------------------------------------------------
     # JSON
+    # --------------------------------------------------------------------------
+
     "serialize_json",
 
-    # Execute
+    # --------------------------------------------------------------------------
+    # Safe execute
+    # --------------------------------------------------------------------------
+
     "safe_execute",
 
-    # Health
+    # --------------------------------------------------------------------------
+    # Database health
+    # --------------------------------------------------------------------------
+
     "DatabaseHealth",
     "database_health_check",
 
+    # --------------------------------------------------------------------------
     # Logging
+    # --------------------------------------------------------------------------
+
     "log_error",
 ]
 
 
-print("BASE_REPO READY v36.0")
+# ==============================================================================
+# READY
+# ==============================================================================
+
+
+print(
+    "BASE_REPO READY v37.0"
+)
+
