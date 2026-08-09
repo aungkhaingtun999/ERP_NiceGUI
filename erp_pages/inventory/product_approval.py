@@ -3,6 +3,7 @@
 # ERP ENTERPRISE PRODUCT APPROVAL QUEUE v1.0
 # ==============================================================================
 
+import time
 import streamlit as st
 
 from erp_core import privileged_db
@@ -91,21 +92,21 @@ def render_product_approval_queue():
                 ):
 
                     try:
-response = (
-    client
-    .table('product_create_requests')
-    .select(
-        '''
-        *,
-        requester:users!product_create_requests_requested_by_fkey(
-            username
-        )
-        '''
-    )
-    .eq('status', 'PENDING')
-    .order('id', desc=True)
-    .execute()
-)
+                        response = (
+                            client
+                            .table('product_create_requests')
+                            .select(
+                                '''
+                                *,
+                                requester:users!product_create_requests_requested_by_fkey(
+                                    username
+                                )
+                                '''
+                            )
+                            .eq('status', 'PENDING')
+                            .order('id', desc=True)
+                            .execute()
+                        )
 
                         result = response.data
 
@@ -138,6 +139,9 @@ response = (
                                 f'Approved: {product.get("name", "Product")}',
                                 icon='✅'
                             )
+
+                            # Toast ၃ စက္ကန့်ပြသရန် ဆိုင်းငံ့ခြင်း
+                            time.sleep(3)
 
                             st.info(
                                 f'''
@@ -174,6 +178,9 @@ Stock, batch and FIFO cost layer were created successfully.
 
                             st.toast(message, icon='❌')
 
+                            # Toast ၃ စက္ကန့်ပြသရန် ဆိုင်းငံ့ခြင်း
+                            time.sleep(3)
+
                             # Maker trying to approve own request
                             if (
                                 'maker' in message.lower()
@@ -190,6 +197,7 @@ Stock, batch and FIFO cost layer were created successfully.
                         st.error(f'❌ Approve failed : {e}')
 
                         st.toast('Approval failed', icon='❌')
+                        time.sleep(3)
 
             with b2:
                 if st.button(
@@ -211,9 +219,13 @@ Stock, batch and FIFO cost layer were created successfully.
                         )
 
                         st.success(f'Rejected Request #{req["id"]}')
+                        st.toast(f'Rejected Request #{req["id"]}', icon='❌')
+                        time.sleep(3)
                         st.rerun()
 
                     except Exception as e:
                         st.error(f'Reject failed : {e}')
+                        st.toast('Reject failed', icon='❌')
+                        time.sleep(3)
 
             st.markdown('---')
