@@ -578,54 +578,64 @@ def render_product_approval_queue():
                                 else None
                             )
 
-                        # ------------------------------------------------------
-                        # INVALID RESPONSE
-                        # ------------------------------------------------------
+# ------------------------------------------------------
+# INVALID RESPONSE
+# ------------------------------------------------------
 
-                        if not isinstance(
-                            result,
-                            dict,
-                        ):
+if not isinstance(result, dict):
 
-                            st.error(
-                                "❌ APPROVAL FAILED"
-                            )
+    st.error(
+        "❌ APPROVAL FAILED — Invalid RPC Response"
+    )
 
-                            st.code(
-                                str(result)
-                            )
+    st.warning(
+        "Database returned an unexpected response."
+    )
 
-                            continue
+    with st.expander("🔎 Technical Response"):
 
-                        # ------------------------------------------------------
-                        # RPC FAILURE
-                        # ------------------------------------------------------
+        st.code(
+            repr(result)
+        )
 
-                        if not result.get(
-                            "success"
-                        ):
+    continue
 
-                            st.error(
-                                "❌ APPROVAL FAILED"
-                            )
 
-                            st.warning(
-                                f"Reason: "
-                                f"{result.get(
-                                    'message',
-                                    'Unknown error'
-                                )}"
-                            )
+# ------------------------------------------------------
+# RPC FAILURE
+# ------------------------------------------------------
 
-                            with st.expander(
-                                "🔎 RPC Response"
-                            ):
+if not result.get("success", False):
 
-                                st.json(
-                                    result
-                                )
+    error_message = result.get(
+        "message",
+        "Unknown approval error."
+    )
 
-                            continue
+    error_status = result.get(
+        "status",
+        "ERROR"
+    )
+
+    st.error(
+        "❌ APPROVAL FAILED"
+    )
+
+    st.warning(
+        f"Status: {error_status}"
+    )
+
+    st.error(
+        f"Reason: {error_message}"
+    )
+
+    with st.expander(
+        "🔎 RPC Response Details"
+    ):
+
+        st.json(result)
+
+    continue
 
                         # ======================================================
                         # SUCCESS
