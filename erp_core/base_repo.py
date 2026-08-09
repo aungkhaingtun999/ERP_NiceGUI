@@ -16,7 +16,7 @@
 # SUPABASE_KEY
 #     -> Normal application client
 #
-# SUPABASE_SERVICE_ROLE_KEY
+# SUPABASE_KEY
 #     -> Server-side privileged client ONLY
 #
 # IMPORTANT
