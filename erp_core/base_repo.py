@@ -1,3 +1,4 @@
+
 # ==============================================================================
 # erp_core/base_repo.py
 # ERP ENTERPRISE BASE REPOSITORY v35.0
@@ -120,7 +121,10 @@ def privileged_db():
     return get_service_supabase()
 
 
-# Backward compatibility
+# ==============================================================================
+# BACKWARD COMPATIBILITY
+# ==============================================================================
+
 get_connection = db
 
 
@@ -193,22 +197,34 @@ def validate_uuid(value) -> Optional[str]:
 
 def serialize_json(data):
 
-    if isinstance(data, Decimal):
+    if isinstance(
+        data,
+        Decimal
+    ):
 
         return float(data)
 
-    if isinstance(data, uuid.UUID):
+    if isinstance(
+        data,
+        uuid.UUID
+    ):
 
         return str(data)
 
-    if isinstance(data, list):
+    if isinstance(
+        data,
+        list
+    ):
 
         return [
             serialize_json(x)
             for x in data
         ]
 
-    if isinstance(data, dict):
+    if isinstance(
+        data,
+        dict
+    ):
 
         return {
             k: serialize_json(v)
@@ -310,7 +326,9 @@ __all__ = [
 
     # Logging
     "log_error",
+
 ]
 
 
 print("BASE_REPO READY v35.0")
+
