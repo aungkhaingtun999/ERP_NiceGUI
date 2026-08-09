@@ -1,23 +1,10 @@
-
 # ==============================================================================
 # erp_core/base_repo.py
-# ERP ENTERPRISE BASE REPOSITORY v35.0
+# ERP ENTERPRISE BASE REPOSITORY v36.0
 #
-# PURPOSE
-# ------------------------------------------------------------------------------
-# 1. Normal database client
-# 2. Server-side privileged client for protected Maker/Checker RPCs
-# 3. Never expose service_role key to browser/client code
-#
-# MAKER-CHECKER
-# ------------------------------------------------------------------------------
-# request_product_create_rpc()
-# approve_product_create_rpc()
-#
-# are protected at PostgreSQL function level.
-#
-# create_product_full()
-# remains DIRECTLY UNAVAILABLE to authenticated users.
+# NORMAL CLIENT
+# PRIVILEGED SERVER CLIENT
+# MAKER-CHECKER RPC SUPPORT
 # ==============================================================================
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -34,9 +21,7 @@ print("BASE_REPO START")
 
 
 # ==============================================================================
-# SUPABASE NORMAL CLIENT
-# ------------------------------------------------------------------------------
-# Used by normal ERP operations.
+# NORMAL SUPABASE CLIENT
 # ==============================================================================
 
 @st.cache_resource
@@ -60,17 +45,12 @@ def get_supabase():
 
 
 # ==============================================================================
-# SUPABASE SERVER / PRIVILEGED CLIENT
-# ------------------------------------------------------------------------------
-# IMPORTANT
-# ------------------------------------------------------------------------------
-# This client is created ONLY on the Streamlit server.
+# PRIVILEGED SERVER CLIENT
 #
-# The service_role key must NEVER be sent to the browser.
+# IMPORTANT:
+# This function runs ONLY on Streamlit server.
 #
-# It is used for protected server-side RPC calls where the application
-# authenticates the user through public.users and PostgreSQL functions
-# perform the actual Maker/Checker authorization.
+# NEVER expose this key to browser JavaScript.
 # ==============================================================================
 
 @st.cache_resource
@@ -85,7 +65,8 @@ def get_service_supabase():
         if not service_key:
 
             raise RuntimeError(
-                "SUPABASE_SERVICE_ROLE_KEY is not configured."
+                "SUPABASE_SERVICE_ROLE_KEY is missing "
+                "from Streamlit Secrets."
             )
 
         return create_client(
@@ -197,34 +178,22 @@ def validate_uuid(value) -> Optional[str]:
 
 def serialize_json(data):
 
-    if isinstance(
-        data,
-        Decimal
-    ):
+    if isinstance(data, Decimal):
 
         return float(data)
 
-    if isinstance(
-        data,
-        uuid.UUID
-    ):
+    if isinstance(data, uuid.UUID):
 
         return str(data)
 
-    if isinstance(
-        data,
-        list
-    ):
+    if isinstance(data, list):
 
         return [
             serialize_json(x)
             for x in data
         ]
 
-    if isinstance(
-        data,
-        dict
-    ):
+    if isinstance(data, dict):
 
         return {
             k: serialize_json(v)
@@ -258,7 +227,7 @@ def safe_execute(
 
 
 # ==============================================================================
-# HEALTH CHECK
+# DATABASE HEALTH
 # ==============================================================================
 
 class DatabaseHealth:
@@ -299,12 +268,14 @@ def database_health_check():
 
 __all__ = [
 
-    # Database
+    # Normal
     "db",
-    "privileged_db",
     "get_supabase",
-    "get_service_supabase",
     "get_connection",
+
+    # Privileged
+    "privileged_db",
+    "get_service_supabase",
 
     # Money
     "money",
@@ -326,9 +297,7 @@ __all__ = [
 
     # Logging
     "log_error",
-
 ]
 
 
-print("BASE_REPO READY v35.0")
-
+print("BASE_REPO READY v36.0")
