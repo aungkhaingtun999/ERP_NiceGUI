@@ -150,8 +150,7 @@ def get_service_supabase():
 
     Requires:
         SUPABASE_URL
-        SUPABASE_SERVICE_ROLE_KEY
-
+        SUPABASE_KEY
     The service-role key must never be exposed to users.
     """
 
