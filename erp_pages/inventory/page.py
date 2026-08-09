@@ -15,7 +15,7 @@ from database import (
     get_inventory_view,
     get_warehouses
 )
-
+from .product_approval import render_product_approval_queue
 
 # ==============================================================================
 # CORE SERVICES
@@ -113,15 +113,15 @@ def run_inventory_page():
     # --------------------------------------------------------------------------
     # TABS
     # --------------------------------------------------------------------------
-
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        [
-            '📋 Product Master',
-            '➕ Add Product',
-            '✏️ Edit Product',
-            '🔧 Stock Adjustment',
-            '📊 Dashboard'
-        ]
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    [
+        '📋 Product Master',
+        '➕ Add Product',
+        '🟡 Approval Queue',
+        '✏️ Edit Product',
+        '🔧 Stock Adjustment',
+        '📊 Dashboard'
+    ]
     )
 
     # --------------------------------------------------------------------------
@@ -143,7 +143,13 @@ def run_inventory_page():
             pricing_service=pricing_service,
             warehouse_id=selected_wh_id
         )
+# --------------------------------------------------------------------------
+# TAB 3 : APPROVAL QUEUE
+# --------------------------------------------------------------------------
 
+with tab3:
+
+    render_product_approval_queue()
     # --------------------------------------------------------------------------
     # TAB 3 : EDIT PRODUCT
     # --------------------------------------------------------------------------
