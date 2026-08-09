@@ -1,19 +1,35 @@
 # ==============================================================================
 # erp_pages/inventory/product_approval.py
-# ERP ENTERPRISE PRODUCT APPROVAL QUEUE v2.0 CLEAN
+# ERP ENTERPRISE PRODUCT APPROVAL QUEUE v3.0 CLEAN
+#
+# MAKER-CHECKER
+# ------------------------------------------------------------------------------
+# Maker:
+#   - Can submit product creation request
+#   - Cannot approve own request
+#
+# Checker:
+#   - Admin
+#   - Manager
+#   - Must have inventory.adjust permission
+#
+# Cashier:
+#   - Cannot approve
 #
 # FEATURES
 # ------------------------------------------------------------------------------
-# 1. Pending Product Approval Queue
-# 2. Admin / Manager Checker Only
-# 3. Maker Cannot Approve Own Request
-# 4. UUID -> Username Display
-# 5. Clear SUCCESS / ERROR Notifications
-# 6. Toast Notifications
-# 7. 3-Second Success / Reject Display
-# 8. Approved By / Rejected By History
-# 9. Approval RPC uses p_checker_id
-# 10. Privileged Server Client
+# 1. Pending Approval Queue
+# 2. UUID -> Username
+# 3. Admin / Manager validation
+# 4. inventory.adjust permission validation
+# 5. Self-approval protection
+# 6. Correct approval RPC parameters
+# 7. Clear success notification
+# 8. Clear failure notification
+# 9. Toast notification
+# 10. Approved / Rejected history
+# 11. Product / Batch / Cost Layer result
+# 12. 3-second result display
 # ==============================================================================
 
 import time
@@ -25,23 +41,37 @@ from erp_core.context import CacheManager
 
 
 # ==============================================================================
-# HELPERS
+# CONSTANTS
+# ==============================================================================
+
+CHECKER_ROLE_IDS = {
+    1,  # Admin
+    2,  # Manager
+}
+
+CHECKER_ROLE_NAMES = {
+    "admin",
+    "manager",
+}
+
+INVENTORY_ADJUST_PERMISSION = "inventory.adjust"
+
+
+# ==============================================================================
+# USER NAME HELPER
 # ==============================================================================
 
 def _get_user_name(user_id, users_cache):
     """
-    Convert user UUID -> username.
-
-    Supports:
-        username
-        full_name
-        name
+    Convert UUID -> readable username.
     """
 
     if not user_id:
         return "Unknown User"
 
-    user = users_cache.get(str(user_id))
+    user = users_cache.get(
+        str(user_id)
+    )
 
     if not user:
         return str(user_id)
@@ -60,7 +90,7 @@ def _get_user_name(user_id, users_cache):
 
 def _load_users(client):
     """
-    Load users once for this page.
+    Load users once.
 
     Returns:
         {
@@ -85,7 +115,7 @@ def _load_users(client):
 
         users = response.data or []
 
-        result = {}
+        users_cache = {}
 
         for user in users:
 
@@ -93,17 +123,138 @@ def _load_users(client):
 
             if user_id:
 
-                result[str(user_id)] = user
+                users_cache[
+                    str(user_id)
+                ] = user
 
-        return result
+        return users_cache
 
     except Exception as e:
 
         st.warning(
-            f"⚠️ User name lookup failed: {e}"
+            "⚠️ User lookup failed: "
+            f"{e}"
         )
 
         return {}
+
+
+# ==============================================================================
+# CHECKER PERMISSION
+# ==============================================================================
+
+def _has_inventory_adjust_permission(
+    client,
+    role_id,
+):
+    """
+    Check whether role has inventory.adjust permission.
+    """
+
+    if not role_id:
+        return False
+
+    try:
+
+        response = (
+            client
+            .table("role_permissions")
+            .select(
+                "permission_id,permissions(permission_key)"
+            )
+            .eq(
+                "role_id",
+                int(role_id)
+            )
+            .execute()
+        )
+
+        rows = response.data or []
+
+        for row in rows:
+
+            permission = (
+                row.get("permissions")
+                or {}
+            )
+
+            permission_key = (
+                permission.get(
+                    "permission_key"
+                )
+            )
+
+            if permission_key == (
+                INVENTORY_ADJUST_PERMISSION
+            ):
+
+                return True
+
+        return False
+
+    except Exception:
+
+        # Do not silently grant permission.
+        return False
+
+
+# ==============================================================================
+# ROLE CHECK
+# ==============================================================================
+
+def _is_checker(
+    current_user,
+):
+    """
+    Admin / Manager only.
+    """
+
+    role_name = str(
+        current_user.get(
+            "role_name",
+            ""
+        )
+    ).strip().lower()
+
+    role_id = current_user.get(
+        "role_id"
+    )
+
+    if role_name in CHECKER_ROLE_NAMES:
+
+        return True
+
+    try:
+
+        if int(role_id) in CHECKER_ROLE_IDS:
+
+            return True
+
+    except Exception:
+
+        pass
+
+    return False
+
+
+# ==============================================================================
+# NORMALIZE RPC RESULT
+# ==============================================================================
+
+def _normalize_result(data):
+
+    if isinstance(
+        data,
+        list
+    ):
+
+        return (
+            data[0]
+            if data
+            else None
+        )
+
+    return data
 
 
 # ==============================================================================
@@ -120,7 +271,9 @@ def render_product_approval_queue():
     # CURRENT USER
     # ==========================================================================
 
-    current_user = st.session_state.get("user")
+    current_user = st.session_state.get(
+        "user"
+    )
 
     if not current_user:
 
@@ -141,13 +294,26 @@ def render_product_approval_queue():
 
         return
 
-    current_user_id = current_user.get("id")
+    current_user_id = current_user.get(
+        "id"
+    )
 
     current_username = (
         current_user.get("username")
         or current_user.get("full_name")
         or current_user.get("name")
         or "Unknown User"
+    )
+
+    current_role_name = str(
+        current_user.get(
+            "role_name",
+            ""
+        )
+    ).strip()
+
+    current_role_id = current_user.get(
+        "role_id"
     )
 
     if not current_user_id:
@@ -159,47 +325,31 @@ def render_product_approval_queue():
         return
 
     # ==========================================================================
-    # ROLE
+    # CHECKER ROLE
     # ==========================================================================
 
-    role_name = str(
-        current_user.get(
-            "role_name",
-            ""
-        )
-    ).strip().lower()
-
-    role_id = current_user.get(
-        "role_id"
-    )
-
-    # --------------------------------------------------------------------------
-    # Admin = 1
-    # Manager = 2
-    # --------------------------------------------------------------------------
-
-    is_checker = (
-        role_name in (
-            "admin",
-            "manager"
-        )
-        or role_id in (
-            1,
-            2
-        )
-    )
-
-    if not is_checker:
+    if not _is_checker(
+        current_user
+    ):
 
         st.info(
             "🔒 Approval Queue is available "
             "only to Admin / Manager."
         )
 
+        st.caption(
+            f"Current User: {current_username}"
+        )
+
+        st.caption(
+            f"Current Role: "
+            f"{current_role_name or 'Unknown'}"
+        )
+
         return
 
     # ==========================================================================
-    # PRIVILEGED DATABASE
+    # PRIVILEGED CLIENT
     # ==========================================================================
 
     try:
@@ -209,7 +359,47 @@ def render_product_approval_queue():
     except Exception as e:
 
         st.error(
-            f"❌ Privileged database connection failed: {e}"
+            "❌ Privileged database connection failed."
+        )
+
+        st.error(
+            str(e)
+        )
+
+        return
+
+    # ==========================================================================
+    # CHECK INVENTORY.ADJUST
+    # ==========================================================================
+
+    has_permission = (
+        _has_inventory_adjust_permission(
+            client,
+            current_role_id
+        )
+    )
+
+    if not has_permission:
+
+        st.error(
+            "🚫 APPROVAL ACCESS DENIED"
+        )
+
+        st.warning(
+            "Your role does not have "
+            "`inventory.adjust` permission."
+        )
+
+        st.info(
+            f"""
+**User:** {current_username}
+
+**Role:** {current_role_name}
+
+**Role ID:** {current_role_id}
+
+**Required Permission:** inventory.adjust
+"""
         )
 
         return
@@ -253,7 +443,11 @@ def render_product_approval_queue():
     except Exception as e:
 
         st.error(
-            f"❌ Failed to load approval queue: {e}"
+            "❌ Failed to load approval queue."
+        )
+
+        st.error(
+            str(e)
         )
 
         return
@@ -265,6 +459,26 @@ def render_product_approval_queue():
     pending_count = len(
         requests
     )
+
+    st.markdown(
+        f"""
+### 👤 Checker
+
+**User:** {current_username}
+
+**Role:** {current_role_name}
+
+**Permission:** ✅ inventory.adjust
+
+**Pending Requests:** 🟡 {pending_count}
+"""
+    )
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # NO REQUEST
+    # ==========================================================================
 
     if pending_count == 0:
 
@@ -278,8 +492,6 @@ def render_product_approval_queue():
         f"🟡 PENDING PRODUCT REQUESTS: "
         f"{pending_count}"
     )
-
-    st.markdown("---")
 
     # ==========================================================================
     # REQUEST LOOP
@@ -309,6 +521,20 @@ def render_product_approval_queue():
             )
         )
 
+        product_name = (
+            product.get(
+                "name",
+                "-"
+            )
+        )
+
+        sku = (
+            product.get(
+                "sku",
+                "-"
+            )
+        )
+
         # ======================================================================
         # REQUEST CARD
         # ======================================================================
@@ -318,19 +544,15 @@ def render_product_approval_queue():
         ):
 
             st.markdown(
-                f"### 📝 Product Request #{request_id}"
+                f"## 📝 Request #{request_id}"
             )
-
-            # ------------------------------------------------------------------
-            # STATUS
-            # ------------------------------------------------------------------
 
             st.warning(
                 "🟡 STATUS: PENDING — Approval Required"
             )
 
             # ------------------------------------------------------------------
-            # PRODUCT INFORMATION
+            # PRODUCT DETAILS
             # ------------------------------------------------------------------
 
             c1, c2 = st.columns(2)
@@ -339,12 +561,12 @@ def render_product_approval_queue():
 
                 st.write(
                     f"**Product:** "
-                    f"{product.get('name', '-')}"
+                    f"{product_name}"
                 )
 
                 st.write(
                     f"**SKU:** "
-                    f"{product.get('sku', '-')}"
+                    f"{sku}"
                 )
 
                 st.write(
@@ -415,6 +637,8 @@ def render_product_approval_queue():
                 f"""
 👤 **Requested By:** {requester_name}
 
+🆔 **Requester ID:** {requester_id or '-'}
+
 🕒 **Created At:** {req.get('created_at', '-')}
 """
             )
@@ -422,12 +646,17 @@ def render_product_approval_queue():
             st.markdown("---")
 
             # ==================================================================
-            # SELF APPROVAL PROTECTION
+            # SELF APPROVAL BLOCK
             # ==================================================================
 
             is_own_request = (
-                str(requester_id)
-                == str(current_user_id)
+                str(
+                    requester_id
+                )
+                ==
+                str(
+                    current_user_id
+                )
             )
 
             if is_own_request:
@@ -437,20 +666,27 @@ def render_product_approval_queue():
                 )
 
                 st.info(
-                    f"Maker '{requester_name}' သည် "
-                    f"မိမိတင်ထားသော Product Request ကို "
-                    f"မိမိကိုယ်တိုင် Approve မလုပ်နိုင်ပါ။"
+                    f"""
+Maker: **{requester_name}**
+
+Checker: **{current_username}**
+
+Maker နှင့် Checker တစ်ယောက်တည်းဖြစ်နေသောကြောင့်
+ဤ Request ကို Approve မလုပ်နိုင်ပါ။
+"""
                 )
 
                 st.caption(
                     "အခြား Admin / Manager တစ်ဦးကသာ "
-                    "Approve လုပ်ရပါမည်။"
+                    "Approve လုပ်နိုင်ပါသည်။"
                 )
+
+                st.markdown("---")
 
                 continue
 
             # ==================================================================
-            # APPROVE / REJECT BUTTONS
+            # BUTTONS
             # ==================================================================
 
             b1, b2 = st.columns(2)
@@ -461,28 +697,19 @@ def render_product_approval_queue():
 
             with b1:
 
-                approve_key = (
-                    f"approve_product_{request_id}"
-                )
-
                 if st.button(
                     "✅ APPROVE REQUEST",
-                    key=approve_key,
+                    key=(
+                        f"approve_product_"
+                        f"{request_id}"
+                    ),
                     use_container_width=True
                 ):
 
                     try:
 
                         # ------------------------------------------------------
-                        # CALL APPROVAL RPC
-                        #
-                        # IMPORTANT:
-                        # RPC signature:
-                        #
-                        # approve_product_create_rpc(
-                        #     p_request_id bigint,
-                        #     p_checker_id uuid
-                        # )
+                        # RPC
                         # ------------------------------------------------------
 
                         response = (
@@ -491,7 +718,9 @@ def render_product_approval_queue():
                                 "approve_product_create_rpc",
                                 {
                                     "p_request_id":
-                                        int(request_id),
+                                        int(
+                                            request_id
+                                        ),
 
                                     "p_checker_id":
                                         str(
@@ -502,22 +731,9 @@ def render_product_approval_queue():
                             .execute()
                         )
 
-                        result = response.data
-
-                        # ------------------------------------------------------
-                        # NORMALIZE RESPONSE
-                        # ------------------------------------------------------
-
-                        if isinstance(
-                            result,
-                            list
-                        ):
-
-                            result = (
-                                result[0]
-                                if result
-                                else None
-                            )
+                        result = _normalize_result(
+                            response.data
+                        )
 
                         # ------------------------------------------------------
                         # INVALID RESPONSE
@@ -546,35 +762,11 @@ def render_product_approval_queue():
                             "success"
                         ):
 
-                            approved_request_id = (
-                                result.get(
-                                    "request_id",
-                                    request_id
-                                )
-                            )
-
-                            product_id = result.get(
-                                "product_id"
-                            )
-
-                            batch_id = result.get(
-                                "batch_id"
-                            )
-
-                            cost_layer_id = result.get(
-                                "cost_layer_id"
-                            )
-
-                            approved_by_name = (
-                                current_username
-                            )
-
                             # --------------------------------------------------
-                            # SAVE APPROVAL HISTORY
-                            #
-                            # RPC already performs the actual approval.
-                            # This update records the checker identity.
+                            # APPROVAL HISTORY
                             # --------------------------------------------------
+
+                            history_saved = True
 
                             try:
 
@@ -591,7 +783,7 @@ def render_product_approval_queue():
                                                 ),
 
                                             "approved_at":
-                                                "now()",
+                                                None
                                         }
                                     )
                                     .eq(
@@ -601,18 +793,41 @@ def render_product_approval_queue():
                                     .execute()
                                 )
 
-                            except Exception as history_error:
+                            except Exception:
 
-                                # Do NOT turn a successful approval
-                                # into a failed approval.
-                                st.warning(
-                                    "⚠️ Approval succeeded, "
-                                    "but approval history could not "
-                                    f"be saved: {history_error}"
-                                )
+                                history_saved = False
 
                             # --------------------------------------------------
-                            # MAIN SUCCESS NOTIFICATION
+                            # RESULT DATA
+                            # --------------------------------------------------
+
+                            approved_request_id = (
+                                result.get(
+                                    "request_id",
+                                    request_id
+                                )
+                            )
+
+                            product_id = (
+                                result.get(
+                                    "product_id"
+                                )
+                            )
+
+                            batch_id = (
+                                result.get(
+                                    "batch_id"
+                                )
+                            )
+
+                            cost_layer_id = (
+                                result.get(
+                                    "cost_layer_id"
+                                )
+                            )
+
+                            # --------------------------------------------------
+                            # SUCCESS NOTIFICATION
                             # --------------------------------------------------
 
                             st.success(
@@ -631,13 +846,13 @@ def render_product_approval_queue():
 
 **Request ID:** #{approved_request_id}
 
-**Product:** {product.get('name', '-')}
+**Product:** {product_name}
 
-**SKU:** {product.get('sku', '-')}
+**SKU:** {sku}
 
 **Requested By:** {requester_name}
 
-**Approved By:** {approved_by_name}
+**Approved By:** {current_username}
 
 **Status:** APPROVED
 
@@ -649,9 +864,23 @@ def render_product_approval_queue():
 
 **Opening Qty:** {req.get('initial_qty', 0)}
 
+**Checker Role:** {current_role_name}
+
+**Maker-Checker:** {'✅ YES' if result.get('maker_checker') else '—'}
+
+**Stock Changed:** {'✅ YES' if result.get('stock_changed') else '—'}
+
 ✅ Product creation has been authorized.
 """
                             )
+
+                            if not history_saved:
+
+                                st.warning(
+                                    "⚠️ Approval succeeded, "
+                                    "but approval history could not "
+                                    "be saved."
+                                )
 
                             # --------------------------------------------------
                             # CACHE
@@ -668,7 +897,7 @@ def render_product_approval_queue():
                             st.cache_data.clear()
 
                             # --------------------------------------------------
-                            # 3 SECOND NOTIFICATION DISPLAY
+                            # 3 SECOND NOTIFICATION
                             # --------------------------------------------------
 
                             time.sleep(
@@ -683,14 +912,18 @@ def render_product_approval_queue():
 
                         else:
 
-                            message = result.get(
-                                "message",
-                                "Approval failed."
+                            message = (
+                                result.get(
+                                    "message",
+                                    "Approval failed."
+                                )
                             )
 
-                            status = result.get(
-                                "status",
-                                "ERROR"
+                            status = (
+                                result.get(
+                                    "status",
+                                    "ERROR"
+                                )
                             )
 
                             st.error(
@@ -738,21 +971,16 @@ def render_product_approval_queue():
 
             with b2:
 
-                reject_key = (
-                    f"reject_product_{request_id}"
-                )
-
                 if st.button(
                     "❌ REJECT REQUEST",
-                    key=reject_key,
+                    key=(
+                        f"reject_product_"
+                        f"{request_id}"
+                    ),
                     use_container_width=True
                 ):
 
                     try:
-
-                        # ------------------------------------------------------
-                        # REJECT
-                        # ------------------------------------------------------
 
                         (
                             client
@@ -770,7 +998,7 @@ def render_product_approval_queue():
                                         ),
 
                                     "rejected_at":
-                                        "now()",
+                                        None,
                                 }
                             )
                             .eq(
@@ -781,7 +1009,7 @@ def render_product_approval_queue():
                         )
 
                         # ------------------------------------------------------
-                        # REJECT SUCCESS NOTIFICATION
+                        # SUCCESS NOTIFICATION
                         # ------------------------------------------------------
 
                         st.success(
@@ -800,9 +1028,9 @@ def render_product_approval_queue():
 
 **Request ID:** #{request_id}
 
-**Product:** {product.get('name', '-')}
+**Product:** {product_name}
 
-**SKU:** {product.get('sku', '-')}
+**SKU:** {sku}
 
 **Requested By:** {requester_name}
 
