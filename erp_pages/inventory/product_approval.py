@@ -83,35 +83,111 @@ def render_product_approval_queue():
 
             b1, b2 = st.columns(2)
 
-            with b1:
-                if st.button(
-                    '✅ Approve',
-                    key=f'approve_{req["id"]}',
-                    use_container_width=True
+with b1:
+
+    if st.button(
+        '✅ Approve',
+        key=f'approve_{req["id"]}',
+        use_container_width=True
+    ):
+
+        try:
+
+            response = (
+                client
+                .rpc(
+                    'approve_product_create_rpc',
+                    {
+                        'p_request_id': req['id'],
+                        'p_checker_id': current_user['id']
+                    }
+                )
+                .execute()
+            )
+
+            result = response.data
+
+            # --------------------------------------------------------------
+            # Normalize RPC response
+            # --------------------------------------------------------------
+
+            if isinstance(result, list):
+
+                result = result[0] if result else {}
+
+            if not isinstance(result, dict):
+
+                result = {
+                    'success': False,
+                    'message': 'Invalid approval response.'
+                }
+
+            # --------------------------------------------------------------
+            # SUCCESS
+            # --------------------------------------------------------------
+
+            if result.get('success'):
+
+                st.success(
+                    f'✅ Product request #{req["id"]} approved successfully.'
+                )
+
+                st.toast(
+                    f'Approved: {product.get("name", "Product")}',
+                    icon='✅'
+                )
+
+                st.info(
+                    f'''
+**Product:** {product.get("name", "-")}
+
+**SKU:** {product.get("sku", "-")}
+
+**Opening Stock:** {req.get("initial_qty", 0)}
+
+**Approved By:** {current_user.get("username", "Checker")}
+
+Stock, batch and FIFO cost layer were created successfully.
+'''
+                )
+
+                CacheManager.bump('product_version')
+                CacheManager.bump('inventory_version')
+                st.cache_data.clear()
+
+                st.rerun()
+
+            # --------------------------------------------------------------
+            # FAILURE / DENIED
+            # --------------------------------------------------------------
+
+            else:
+
+                message = result.get(
+                    'message',
+                    'Approval failed.'
+                )
+
+                st.error(f'❌ {message}')
+
+                st.toast(message, icon='❌')
+
+                # Maker trying to approve own request
+                if (
+                    'maker' in message.lower()
+                    or 'own request' in message.lower()
+                    or 'same user' in message.lower()
                 ):
-                    try:
-                        (
-                            client
-                            .rpc(
-                                'approve_product_create_rpc',
-                                {
-                                    'p_request_id': req['id'],
-                                    'p_checker_id': current_user['id']
-                                }
-                            )
-                            .execute()
-                        )
 
-                        st.success(f'Approved Request #{req["id"]}')
+                    st.warning(
+                        '⚠️ Maker cannot approve their own request.'
+                    )
 
-                        CacheManager.bump('product_version')
-                        CacheManager.bump('inventory_version')
-                        st.cache_data.clear()
+        except Exception as e:
 
-                        st.rerun()
+            st.error(f'❌ Approve failed : {e}')
 
-                    except Exception as e:
-                        st.error(f'Approve failed : {e}')
+            st.toast('Approval failed', icon='❌')
 
             with b2:
                 if st.button(
