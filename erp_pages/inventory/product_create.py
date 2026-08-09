@@ -7,7 +7,7 @@
 import time
 import streamlit as st
 
-from erp_core.context import CacheManager, get_current_user
+from erp_core.context import CacheManager
 
 
 # ==============================================================================
