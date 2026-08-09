@@ -38,79 +38,53 @@ from erp_core.context import CacheManager
 # ==============================================================================
 
 def _load_users(client):
-    """
-    Load users using only confirmed columns.
-
-    Confirmed users columns:
-        id
-        username
-        role_id
-        is_active
-
-    IMPORTANT:
-        Do NOT query users.name.
-        Do NOT query users.full_name.
-    """
 
     try:
-
         response = (
             client
             .table("users")
-            .select(
-                "id,username,role_id,is_active"
-            )
+            .select("id,username,full_name,is_active")
             .execute()
         )
 
-        rows = response.data or []
+        users = response.data or []
 
-        cache = {}
+        result = {}
 
-        for row in rows:
+        for user in users:
 
-            user_id = row.get("id")
+            user_id = user.get("id")
 
             if user_id:
+                result[str(user_id)] = user
 
-                cache[
-                    str(user_id)
-                ] = row
-
-        return cache
+        return result
 
     except Exception as e:
 
         st.warning(
-            f"⚠️ User lookup failed: {e}"
+            f"⚠️ User name lookup failed: {e}"
         )
 
         return {}
-
 
 # ==============================================================================
 # USERNAME
 # ==============================================================================
 
-def _username(
-    user_id,
-    users_cache,
-):
+def _get_user_name(user_id, users_cache):
 
     if not user_id:
+        return "Unknown User"
 
-        return "—"
-
-    user = users_cache.get(
-        str(user_id)
-    )
+    user = users_cache.get(str(user_id))
 
     if not user:
-
         return str(user_id)
 
     return (
         user.get("username")
+        or user.get("full_name")
         or str(user_id)
     )
 
