@@ -592,131 +592,131 @@ with b1:
                         repr(result)
                     )
 
-                continue
+                
 
             # ----------------------------------------------------------
-            # RPC FAILURE
-            # ----------------------------------------------------------
+# INVALID RESPONSE
+# ----------------------------------------------------------
 
-            if not result.get(
-                "success",
-                False,
-            ):
+if not isinstance(result, dict):
 
-                error_message = result.get(
-                    "message",
-                    "Unknown approval error.",
-                )
+    st.error(
+        "❌ APPROVAL FAILED"
+    )
 
-                error_status = result.get(
-                    "status",
-                    "ERROR",
-                )
+    st.code(
+        str(result)
+    )
 
-                st.error(
-                    "❌ APPROVAL FAILED"
-                )
+else:
 
-                st.warning(
-                    f"Status: {error_status}"
-                )
+    # ------------------------------------------------------
+    # RPC FAILURE
+    # ------------------------------------------------------
 
-                st.error(
-                    f"Reason: {error_message}"
-                )
+    if not result.get(
+        "success",
+        False,
+    ):
 
-                with st.expander(
-                    "🔎 RPC Response Details"
-                ):
+        error_message = result.get(
+            "message",
+            "Unknown approval error.",
+        )
 
-                    st.json(result)
+        error_status = result.get(
+            "status",
+            "ERROR",
+        )
 
-                continue
+        st.error(
+            "❌ APPROVAL FAILED"
+        )
 
-            # ----------------------------------------------------------
-            # APPROVAL SUCCESS
-            # ----------------------------------------------------------
+        st.warning(
+            f"Status: {error_status}"
+        )
 
-            approved_request_id = result.get(
-                "request_id",
-                request_id,
-            )
+        st.error(
+            f"Reason: {error_message}"
+        )
 
-            product_name = product.get(
-                "name",
-                "-",
-            )
+        with st.expander(
+            "🔎 RPC Response Details"
+        ):
 
-            st.success(
-                "🎉 PRODUCT REQUEST APPROVED SUCCESSFULLY!"
-            )
+            st.json(result)
 
-            st.toast(
-                "✅ Product approval successful!",
-                icon="✅",
-            )
+    else:
 
-            st.info(
-                f"""
+        # --------------------------------------------------
+        # APPROVAL SUCCESS
+        # --------------------------------------------------
+
+        approved_request_id = result.get(
+            "request_id",
+            request_id,
+        )
+
+        st.success(
+            "🎉 PRODUCT REQUEST APPROVED SUCCESSFULLY!"
+        )
+
+        st.toast(
+            "✅ Product approval successful!",
+            icon="✅",
+        )
+
+        st.info(
+            f"""
 🎉 APPROVAL COMPLETED
 
-Request ID     : #{approved_request_id}
-Product        : {product_name}
-SKU            : {product.get("sku", "-")}
-Requested By   : {requester_name}
-Approved By    : {current_username}
-Status         : APPROVED
+Request ID : #{approved_request_id}
+Product    : {product.get("name", "-")}
+SKU        : {product.get("sku", "-")}
+
+Requested By : {requester_name}
+Approved By  : {current_username}
+
+Status : APPROVED
 
 ✅ Product creation has been authorized.
 """
-            )
+        )
 
-            # ----------------------------------------------------------
-            # CACHE REFRESH
-            # ----------------------------------------------------------
+        # --------------------------------------------------
+        # CACHE REFRESH
+        # --------------------------------------------------
 
-            CacheManager.bump(
-                "product_version"
-            )
+        CacheManager.bump(
+            "product_version"
+        )
 
-            CacheManager.bump(
-                "inventory_version"
-            )
+        CacheManager.bump(
+            "inventory_version"
+        )
 
-            st.cache_data.clear()
+        st.cache_data.clear()
 
-            # ----------------------------------------------------------
-            # SHORT DELAY FOR NOTIFICATION
-            # ----------------------------------------------------------
+        # --------------------------------------------------
+        # KEEP SUCCESS NOTIFICATION VISIBLE
+        # --------------------------------------------------
 
-            import time
+        st.session_state[
+            "product_approval_success"
+        ] = (
+            f"✅ Request #{approved_request_id} "
+            f"approved successfully by "
+            f"{current_username}."
+        )
 
-            time.sleep(2)
+        import time
 
-            st.rerun()
+        time.sleep(2)
 
-        # --------------------------------------------------------------
-        # DATABASE / RPC EXCEPTION
-        # --------------------------------------------------------------
+        st.rerun()
 
-        except Exception as e:
-
-            st.error(
-                "❌ APPROVAL FAILED — Database / RPC Error"
-            )
-
-            st.error(
-                str(e)
-            )
-
-            with st.expander(
-                "🔎 Technical Error Details"
-            ):
-
-                st.code(
-                    repr(e)
-                )
-
+            
             # ------------------------------------------------------------------
             # REJECT
             # ------------------------------------------------------------------
