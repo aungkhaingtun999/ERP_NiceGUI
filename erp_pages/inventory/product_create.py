@@ -22,11 +22,11 @@ def render_product_create(
 
     st.subheader('➕ Add New Product')
 
-    current_user = get_current_user()
+    current_user = st.session_state.get('user')
 
     if not current_user:
-        st.error('❌ Login session not found.')
-        st.stop()
+    st.error('❌ Login session not found.')
+    st.stop()
 
     with st.form('add_product_form', clear_on_submit=True):
 
