@@ -206,19 +206,24 @@ try:
 
     from .loaders.warehouse_loader import (
         get_default_warehouse_id,
-        get_warehouses,
+        get_warehouses
     )
 
-except Exception:
+except Exception as e:
+
+    log_error(
+        message="Warehouse loader import failed",
+        exception=e
+    )
 
     def get_default_warehouse_id():
+
         return None
 
 
     def get_warehouses():
+
         return []
-
-
 # ==============================================================================
 # RECEIPT
 # ==============================================================================
