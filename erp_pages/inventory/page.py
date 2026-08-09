@@ -1,37 +1,24 @@
 # ==============================================================================
 # erp_pages/inventory/page.py
-# ERP ENTERPRISE INVENTORY PAGE CONTROLLER v1.1 FINAL
+# ERP ENTERPRISE INVENTORY PAGE CONTROLLER v1.2 CLEAN
+# Approval Queue Enabled
 # ==============================================================================
 
 import streamlit as st
 
-
-# ==============================================================================
-# DATABASE
-# ==============================================================================
-
 from database import (
     db,
     get_inventory_view,
-    get_warehouses
+    get_warehouses,
 )
-from .product_approval import render_product_approval_queue
-
-# ==============================================================================
-# CORE SERVICES
-# ==============================================================================
 
 from erp_core.services.inventory_service import InventoryService
 from erp_core.services.pricing_service import PricingService
 
-
-# ==============================================================================
-# MODULES
-# ==============================================================================
-
 from .warehouse import render_warehouse_selector
 from .product_master import render_product_master
 from .product_create import render_product_create
+from .product_approval import render_product_approval_queue
 from .product_edit import render_product_edit
 from .stock_adjustment import render_stock_adjustment
 from .dashboard import render_inventory_dashboard
@@ -54,6 +41,7 @@ def run_inventory_page():
     # --------------------------------------------------------------------------
 
     if 'inventory_barcode' not in st.session_state:
+
         st.session_state.inventory_barcode = ''
 
     # --------------------------------------------------------------------------
@@ -87,8 +75,8 @@ def run_inventory_page():
         st.stop()
 
     selected_wh_id, selected_wh_name = render_warehouse_selector(
-    warehouses,
-    key="inventory_warehouse_selector"
+        warehouses,
+        key='inventory_warehouse_selector'
     )
 
     # --------------------------------------------------------------------------
@@ -113,79 +101,90 @@ def run_inventory_page():
     # --------------------------------------------------------------------------
     # TABS
     # --------------------------------------------------------------------------
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-    [
-        '📋 Product Master',
-        '➕ Add Product',
-        '🟡 Approval Queue',
-        '✏️ Edit Product',
-        '🔧 Stock Adjustment',
-        '📊 Dashboard'
-    ]
+
+    (
+        tab_master,
+        tab_add,
+        tab_approval,
+        tab_edit,
+        tab_adjust,
+        tab_dashboard
+    ) = st.tabs(
+        [
+            '📋 Product Master',
+            '➕ Add Product',
+            '🟡 Approval Queue',
+            '✏️ Edit Product',
+            '🔧 Stock Adjustment',
+            '📊 Dashboard',
+        ]
     )
 
     # --------------------------------------------------------------------------
-    # TAB 1 : PRODUCT MASTER
+    # PRODUCT MASTER
     # --------------------------------------------------------------------------
 
-    with tab1:
+    with tab_master:
 
         render_product_master(products)
 
     # --------------------------------------------------------------------------
-    # TAB 2 : CREATE PRODUCT
+    # ADD PRODUCT REQUEST
     # --------------------------------------------------------------------------
 
-    with tab2:
+    with tab_add:
 
         render_product_create(
             db_client=client,
             pricing_service=pricing_service,
-            warehouse_id=selected_wh_id
+            warehouse_id=selected_wh_id,
         )
-# --------------------------------------------------------------------------
-# TAB 3 : APPROVAL QUEUE
-# --------------------------------------------------------------------------
 
-with tab3:
-
-    render_product_approval_queue()
     # --------------------------------------------------------------------------
-    # TAB 3 : EDIT PRODUCT
+    # APPROVAL QUEUE
     # --------------------------------------------------------------------------
 
-    with tab3:
+    with tab_approval:
+
+        render_product_approval_queue()
+
+    # --------------------------------------------------------------------------
+    # EDIT PRODUCT
+    # --------------------------------------------------------------------------
+
+    with tab_edit:
 
         render_product_edit(
             warehouse_id=selected_wh_id,
-            warehouse_name=selected_wh_name
+            warehouse_name=selected_wh_name,
         )
 
     # --------------------------------------------------------------------------
-    # TAB 4 : STOCK ADJUSTMENT
+    # STOCK ADJUSTMENT
     # --------------------------------------------------------------------------
 
-    with tab4:
+    with tab_adjust:
 
         render_stock_adjustment(
             products=products,
             warehouse_id=selected_wh_id,
             warehouse_name=selected_wh_name,
-            inventory_service=inventory_service
+            inventory_service=inventory_service,
         )
 
     # --------------------------------------------------------------------------
-    # TAB 5 : DASHBOARD
+    # DASHBOARD
     # --------------------------------------------------------------------------
 
-    with tab5:
+    with tab_dashboard:
 
         render_inventory_dashboard(
             warehouse_id=selected_wh_id
         )
 
+
 # ==============================================================================
-# LEGACY PAGE ENTRY
+# LEGACY ENTRY
 # Compatible with erp_pages/2_Inventory.py
 # ==============================================================================
 
