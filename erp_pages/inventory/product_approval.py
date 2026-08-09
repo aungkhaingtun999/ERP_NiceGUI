@@ -25,17 +25,20 @@ def render_product_approval_queue():
 
         return
 
-    role_name = str(
-        current_user.get('role_name', '')
-    ).lower()
+# --------------------------------------------------------------------------
+# ROLE CHECK
+# --------------------------------------------------------------------------
 
-    if role_name not in ['admin', 'manager']:
+role_id = current_user.get('role_id')
 
-        st.info(
-            'Approval queue is visible only to Admin or Manager.'
-        )
+if role_id not in [1, 2]:
 
-        return
+    st.info(
+        'Approval queue is visible only to Admin or Manager.'
+    )
+
+    return
+        
 
     client = privileged_db()
 
