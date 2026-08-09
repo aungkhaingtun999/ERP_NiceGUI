@@ -84,33 +84,40 @@ def render_product_approval_queue():
             b1, b2 = st.columns(2)
 
             with b1:
-                if st.button(
-                    '✅ Approve',
-                    key=f'approve_{req["id"]}',
-                    use_container_width=True
-                ):
-                    try:
-                        result = (
-                            client
-                            .rpc(
-                                'approve_product_create_rpc',
-                                {
-                                    'p_request_id': req['id'],
-                                    'p_approved_by': current_user['id']
-                                }
-                            )
-                            .execute()
-                        )
 
-                        st.success(f'Approved Request #{req["id"]}')
+    if st.button(
+        '✅ Approve',
+        key=f'approve_{req["id"]}',
+        use_container_width=True
+    ):
 
-                        CacheManager.bump('product_version')
-                        CacheManager.bump('inventory_version')
-                        st.cache_data.clear()
-                        st.rerun()
+        try:
 
-                    except Exception as e:
-                        st.error(f'Approve failed : {e}')
+            (
+                client
+                .rpc(
+                    'approve_product_create_rpc',
+                    {
+                        'p_request_id': req['id'],
+                        'p_checker_id': current_user['id']
+                    }
+                )
+                .execute()
+            )
+
+            st.success(
+                f'Approved Request #{req["id"]}'
+            )
+
+            CacheManager.bump('product_version')
+            CacheManager.bump('inventory_version')
+            st.cache_data.clear()
+
+            st.rerun()
+
+        except Exception as e:
+
+            st.error(f'Approve failed : {e}')
 
             with b2:
                 if st.button(
