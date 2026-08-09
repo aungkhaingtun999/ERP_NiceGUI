@@ -1,4 +1,4 @@
-```python
+
 # ==============================================================================
 # erp_pages/inventory/product_create.py
 # ERP ENTERPRISE INVENTORY PRODUCT CREATE v2.1 CLEAN
