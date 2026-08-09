@@ -91,18 +91,21 @@ def render_product_approval_queue():
                 ):
 
                     try:
-
-                        response = (
-                            client
-                            .rpc(
-                                'approve_product_create_rpc',
-                                {
-                                    'p_request_id': req['id'],
-                                    'p_checker_id': current_user['id']
-                                }
-                            )
-                            .execute()
-                        )
+response = (
+    client
+    .table('product_create_requests')
+    .select(
+        '''
+        *,
+        requester:users!product_create_requests_requested_by_fkey(
+            username
+        )
+        '''
+    )
+    .eq('status', 'PENDING')
+    .order('id', desc=True)
+    .execute()
+)
 
                         result = response.data
 
