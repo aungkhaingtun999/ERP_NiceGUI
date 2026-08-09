@@ -13,7 +13,7 @@ import time
 import streamlit as st
  
 from erp_core.context import CacheManager
- 
+from erp_core import privileged_db 
  
 # ==============================================================================
 # PRODUCT CREATE
@@ -376,38 +376,21 @@ Selling Price:
                 # inventory_cost_layers
                 #
                 # are created ONLY after Admin / Manager approval.
-                # ==============================================================
- 
-                response = (
-                    db_client
-                    .rpc(
-                        "request_product_create_rpc",
-                        {
-                            "p_product_data":
-                                payload,
- 
-                            "p_warehouse_id":
-                                int(
-                                    warehouse_id
-                                ),
- 
-                            "p_initial_qty":
-                                int(
-                                    initial_qty
-                                ),
- 
-                            "p_reason":
-                                (
-                                    "Product creation "
-                                    "request from Inventory UI"
-                                ),
- 
-                            "p_requested_by":
-                                current_user_id,
-                        },
-                    )
-                    .execute()
-                )
+                # ============================================================
+response = (
+    privileged_db()
+    .rpc(
+        "request_product_create_rpc",
+        {
+            "p_product_data": payload,
+            "p_warehouse_id": int(warehouse_id),
+            "p_initial_qty": int(initial_qty),
+            "p_reason": "Product creation request from Inventory UI",
+            "p_requested_by": current_user["id"],
+        },
+    )
+    .execute()
+)
  
  
                 # ==============================================================
