@@ -159,7 +159,7 @@ def get_service_supabase():
         supabase_url = st.secrets["SUPABASE_URL"]
 
         service_key = st.secrets.get(
-            "SUPABASE_SERVICE_ROLE_KEY"
+            "SUPABASE_KEY"
         )
 
         if not supabase_url:
@@ -171,7 +171,7 @@ def get_service_supabase():
         if not service_key:
 
             raise RuntimeError(
-                "SUPABASE_SERVICE_ROLE_KEY is missing "
+                "SUPABASE_KEY is missing "
                 "from Streamlit Secrets."
             )
 
