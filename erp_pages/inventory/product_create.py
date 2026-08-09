@@ -534,4 +534,4 @@ Admin or Manager approval is required.
 __all__ = [
     "render_product_create"
 ]
-```
+
