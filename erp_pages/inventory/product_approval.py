@@ -37,10 +37,10 @@ if role_id not in [1, 2]:
         'Approval queue is visible only to Admin or Manager.'
     )
 
-return
+    return
         
 
-    client = privileged_db()
+        client = privileged_db()
 
     try:
 
