@@ -83,62 +83,61 @@ def render_product_approval_queue():
 
             b1, b2 = st.columns(2)
 
-with b1:
+            with b1:
+                if st.button(
+                    '✅ Approve',
+                    key=f'approve_{req["id"]}',
+                    use_container_width=True
+                ):
 
-    if st.button(
-        '✅ Approve',
-        key=f'approve_{req["id"]}',
-        use_container_width=True
-    ):
+                    try:
 
-        try:
+                        response = (
+                            client
+                            .rpc(
+                                'approve_product_create_rpc',
+                                {
+                                    'p_request_id': req['id'],
+                                    'p_checker_id': current_user['id']
+                                }
+                            )
+                            .execute()
+                        )
 
-            response = (
-                client
-                .rpc(
-                    'approve_product_create_rpc',
-                    {
-                        'p_request_id': req['id'],
-                        'p_checker_id': current_user['id']
-                    }
-                )
-                .execute()
-            )
+                        result = response.data
 
-            result = response.data
+                        # --------------------------------------------------------------
+                        # Normalize RPC response
+                        # --------------------------------------------------------------
 
-            # --------------------------------------------------------------
-            # Normalize RPC response
-            # --------------------------------------------------------------
+                        if isinstance(result, list):
 
-            if isinstance(result, list):
+                            result = result[0] if result else {}
 
-                result = result[0] if result else {}
+                        if not isinstance(result, dict):
 
-            if not isinstance(result, dict):
+                            result = {
+                                'success': False,
+                                'message': 'Invalid approval response.'
+                            }
 
-                result = {
-                    'success': False,
-                    'message': 'Invalid approval response.'
-                }
+                        # --------------------------------------------------------------
+                        # SUCCESS
+                        # --------------------------------------------------------------
 
-            # --------------------------------------------------------------
-            # SUCCESS
-            # --------------------------------------------------------------
+                        if result.get('success'):
 
-            if result.get('success'):
+                            st.success(
+                                f'✅ Product request #{req["id"]} approved successfully.'
+                            )
 
-                st.success(
-                    f'✅ Product request #{req["id"]} approved successfully.'
-                )
+                            st.toast(
+                                f'Approved: {product.get("name", "Product")}',
+                                icon='✅'
+                            )
 
-                st.toast(
-                    f'Approved: {product.get("name", "Product")}',
-                    icon='✅'
-                )
-
-                st.info(
-                    f'''
+                            st.info(
+                                f'''
 **Product:** {product.get("name", "-")}
 
 **SKU:** {product.get("sku", "-")}
@@ -149,45 +148,45 @@ with b1:
 
 Stock, batch and FIFO cost layer were created successfully.
 '''
-                )
+                            )
 
-                CacheManager.bump('product_version')
-                CacheManager.bump('inventory_version')
-                st.cache_data.clear()
+                            CacheManager.bump('product_version')
+                            CacheManager.bump('inventory_version')
+                            st.cache_data.clear()
 
-                st.rerun()
+                            st.rerun()
 
-            # --------------------------------------------------------------
-            # FAILURE / DENIED
-            # --------------------------------------------------------------
+                        # --------------------------------------------------------------
+                        # FAILURE / DENIED
+                        # --------------------------------------------------------------
 
-            else:
+                        else:
 
-                message = result.get(
-                    'message',
-                    'Approval failed.'
-                )
+                            message = result.get(
+                                'message',
+                                'Approval failed.'
+                            )
 
-                st.error(f'❌ {message}')
+                            st.error(f'❌ {message}')
 
-                st.toast(message, icon='❌')
+                            st.toast(message, icon='❌')
 
-                # Maker trying to approve own request
-                if (
-                    'maker' in message.lower()
-                    or 'own request' in message.lower()
-                    or 'same user' in message.lower()
-                ):
+                            # Maker trying to approve own request
+                            if (
+                                'maker' in message.lower()
+                                or 'own request' in message.lower()
+                                or 'same user' in message.lower()
+                            ):
 
-                    st.warning(
-                        '⚠️ Maker cannot approve their own request.'
-                    )
+                                st.warning(
+                                    '⚠️ Maker cannot approve their own request.'
+                                )
 
-        except Exception as e:
+                    except Exception as e:
 
-            st.error(f'❌ Approve failed : {e}')
+                        st.error(f'❌ Approve failed : {e}')
 
-            st.toast('Approval failed', icon='❌')
+                        st.toast('Approval failed', icon='❌')
 
             with b2:
                 if st.button(
