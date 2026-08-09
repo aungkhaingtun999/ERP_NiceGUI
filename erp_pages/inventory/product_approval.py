@@ -5,31 +5,24 @@
 # MAKER-CHECKER
 # ------------------------------------------------------------------------------
 # Maker:
-#   - Can submit product creation request
-#   - Cannot approve own request
+#   Any authorized user can create a product request.
 #
 # Checker:
-#   - Admin
-#   - Manager
-#   - Must have inventory.adjust permission
+#   Admin   = role_id 1
+#   Manager = role_id 2
 #
 # Cashier:
-#   - Cannot approve
+#   role_id 3 -> cannot approve
 #
-# FEATURES
-# ------------------------------------------------------------------------------
-# 1. Pending Approval Queue
-# 2. UUID -> Username
-# 3. Admin / Manager validation
-# 4. inventory.adjust permission validation
-# 5. Self-approval protection
-# 6. Correct approval RPC parameters
-# 7. Clear success notification
-# 8. Clear failure notification
-# 9. Toast notification
-# 10. Approved / Rejected history
-# 11. Product / Batch / Cost Layer result
-# 12. 3-second result display
+# Rules:
+#   1. Maker cannot approve own request
+#   2. Another Admin / Manager can approve
+#   3. Approval is performed by approve_product_create_rpc
+#   4. approved_by / approved_at are stored by RPC
+#   5. Username is resolved from users.username
+#   6. No users.name dependency
+#   7. Clear success / failure notifications
+#   8. Approval history displayed
 # ==============================================================================
 
 import time
@@ -41,65 +34,22 @@ from erp_core.context import CacheManager
 
 
 # ==============================================================================
-# CONSTANTS
-# ==============================================================================
-
-CHECKER_ROLE_IDS = {
-    1,  # Admin
-    2,  # Manager
-}
-
-CHECKER_ROLE_NAMES = {
-    "admin",
-    "manager",
-}
-
-INVENTORY_ADJUST_PERMISSION = "inventory.adjust"
-
-
-# ==============================================================================
-# USER NAME HELPER
-# ==============================================================================
-
-def _get_user_name(user_id, users_cache):
-    """
-    Convert UUID -> readable username.
-    """
-
-    if not user_id:
-        return "Unknown User"
-
-    user = users_cache.get(
-        str(user_id)
-    )
-
-    if not user:
-        return str(user_id)
-
-    return (
-        user.get("username")
-        or user.get("full_name")
-        or user.get("name")
-        or str(user_id)
-    )
-
-
-# ==============================================================================
-# LOAD USERS
+# USER CACHE
 # ==============================================================================
 
 def _load_users(client):
     """
-    Load users once.
+    Load users using only confirmed columns.
 
-    Returns:
-        {
-            "uuid": {
-                "id": "...",
-                "username": "...",
-                ...
-            }
-        }
+    Confirmed users columns:
+        id
+        username
+        role_id
+        is_active
+
+    IMPORTANT:
+        Do NOT query users.name.
+        Do NOT query users.full_name.
     """
 
     try:
@@ -108,171 +58,133 @@ def _load_users(client):
             client
             .table("users")
             .select(
-                "id,username,full_name,name,is_active"
-            )
-            .execute()
-        )
-
-        users = response.data or []
-
-        users_cache = {}
-
-        for user in users:
-
-            user_id = user.get("id")
-
-            if user_id:
-
-                users_cache[
-                    str(user_id)
-                ] = user
-
-        return users_cache
-
-    except Exception as e:
-
-        st.warning(
-            "⚠️ User lookup failed: "
-            f"{e}"
-        )
-
-        return {}
-
-
-# ==============================================================================
-# CHECKER PERMISSION
-# ==============================================================================
-
-def _has_inventory_adjust_permission(
-    client,
-    role_id,
-):
-    """
-    Check whether role has inventory.adjust permission.
-    """
-
-    if not role_id:
-        return False
-
-    try:
-
-        response = (
-            client
-            .table("role_permissions")
-            .select(
-                "permission_id,permissions(permission_key)"
-            )
-            .eq(
-                "role_id",
-                int(role_id)
+                "id,username,role_id,is_active"
             )
             .execute()
         )
 
         rows = response.data or []
 
+        cache = {}
+
         for row in rows:
 
-            permission = (
-                row.get("permissions")
-                or {}
-            )
+            user_id = row.get("id")
 
-            permission_key = (
-                permission.get(
-                    "permission_key"
-                )
-            )
+            if user_id:
 
-            if permission_key == (
-                INVENTORY_ADJUST_PERMISSION
-            ):
+                cache[
+                    str(user_id)
+                ] = row
 
-                return True
+        return cache
 
-        return False
+    except Exception as e:
 
-    except Exception:
+        st.warning(
+            f"⚠️ User lookup failed: {e}"
+        )
 
-        # Do not silently grant permission.
-        return False
+        return {}
 
 
 # ==============================================================================
-# ROLE CHECK
+# USERNAME
 # ==============================================================================
 
-def _is_checker(
-    current_user,
+def _username(
+    user_id,
+    users_cache,
 ):
-    """
-    Admin / Manager only.
-    """
+
+    if not user_id:
+
+        return "—"
+
+    user = users_cache.get(
+        str(user_id)
+    )
+
+    if not user:
+
+        return str(user_id)
+
+    return (
+        user.get("username")
+        or str(user_id)
+    )
+
+
+# ==============================================================================
+# ROLE
+# ==============================================================================
+
+def _is_checker(user):
+
+    if not isinstance(
+        user,
+        dict,
+    ):
+
+        return False
+
+    role_id = user.get(
+        "role_id"
+    )
 
     role_name = str(
-        current_user.get(
+        user.get(
             "role_name",
             ""
         )
     ).strip().lower()
 
-    role_id = current_user.get(
-        "role_id"
+    return (
+        role_id in (1, 2)
+        or role_name in (
+            "admin",
+            "manager",
+        )
     )
 
-    if role_name in CHECKER_ROLE_NAMES:
 
-        return True
+# ==============================================================================
+# MONEY
+# ==============================================================================
+
+def _money(value):
 
     try:
 
-        if int(role_id) in CHECKER_ROLE_IDS:
-
-            return True
+        return f"{float(value or 0):,.2f} MMK"
 
     except Exception:
 
-        pass
-
-    return False
+        return "0.00 MMK"
 
 
 # ==============================================================================
-# NORMALIZE RPC RESULT
-# ==============================================================================
-
-def _normalize_result(data):
-
-    if isinstance(
-        data,
-        list
-    ):
-
-        return (
-            data[0]
-            if data
-            else None
-        )
-
-    return data
-
-
-# ==============================================================================
-# APPROVAL QUEUE
+# PRODUCT APPROVAL QUEUE
 # ==============================================================================
 
 def render_product_approval_queue():
 
     st.subheader(
-        "🟡 Product Approval Queue"
+        "🟡 Product Approval Center"
+    )
+
+    st.caption(
+        "Maker → Checker → Product Creation"
     )
 
     # ==========================================================================
     # CURRENT USER
     # ==========================================================================
 
-    current_user = st.session_state.get(
-        "user"
+    current_user = (
+        st.session_state.get(
+            "user"
+        )
     )
 
     if not current_user:
@@ -285,7 +197,7 @@ def render_product_approval_queue():
 
     if not isinstance(
         current_user,
-        dict
+        dict,
     ):
 
         st.error(
@@ -294,26 +206,36 @@ def render_product_approval_queue():
 
         return
 
-    current_user_id = current_user.get(
-        "id"
+    current_user_id = (
+        current_user.get("id")
     )
 
     current_username = (
-        current_user.get("username")
-        or current_user.get("full_name")
-        or current_user.get("name")
-        or "Unknown User"
+        current_user.get(
+            "username"
+        )
+        or "Unknown"
     )
 
-    current_role_name = str(
+    current_role_id = (
         current_user.get(
-            "role_name",
-            ""
+            "role_id"
         )
-    ).strip()
+    )
 
-    current_role_id = current_user.get(
-        "role_id"
+    current_role_name = (
+        current_user.get(
+            "role_name"
+        )
+        or (
+            "Admin"
+            if current_role_id == 1
+            else "Manager"
+            if current_role_id == 2
+            else "Cashier"
+            if current_role_id == 3
+            else "Unknown"
+        )
     )
 
     if not current_user_id:
@@ -325,7 +247,7 @@ def render_product_approval_queue():
         return
 
     # ==========================================================================
-    # CHECKER ROLE
+    # CHECKER ACCESS
     # ==========================================================================
 
     if not _is_checker(
@@ -333,23 +255,19 @@ def render_product_approval_queue():
     ):
 
         st.info(
-            "🔒 Approval Queue is available "
+            "🔒 Approval Center is available "
             "only to Admin / Manager."
         )
 
         st.caption(
-            f"Current User: {current_username}"
-        )
-
-        st.caption(
-            f"Current Role: "
-            f"{current_role_name or 'Unknown'}"
+            f"Current User: {current_username} "
+            f"| Role: {current_role_name}"
         )
 
         return
 
     # ==========================================================================
-    # PRIVILEGED CLIENT
+    # SERVER CLIENT
     # ==========================================================================
 
     try:
@@ -362,50 +280,14 @@ def render_product_approval_queue():
             "❌ Privileged database connection failed."
         )
 
-        st.error(
-            str(e)
+        st.code(
+            repr(e)
         )
 
         return
 
     # ==========================================================================
-    # CHECK INVENTORY.ADJUST
-    # ==========================================================================
-
-    has_permission = (
-        _has_inventory_adjust_permission(
-            client,
-            current_role_id
-        )
-    )
-
-    if not has_permission:
-
-        st.error(
-            "🚫 APPROVAL ACCESS DENIED"
-        )
-
-        st.warning(
-            "Your role does not have "
-            "`inventory.adjust` permission."
-        )
-
-        st.info(
-            f"""
-**User:** {current_username}
-
-**Role:** {current_role_name}
-
-**Role ID:** {current_role_id}
-
-**Required Permission:** inventory.adjust
-"""
-        )
-
-        return
-
-    # ==========================================================================
-    # LOAD USERS
+    # USERS
     # ==========================================================================
 
     users_cache = _load_users(
@@ -413,12 +295,21 @@ def render_product_approval_queue():
     )
 
     # ==========================================================================
-    # LOAD PENDING REQUESTS
+    # CURRENT USER HEADER
+    # ==========================================================================
+
+    st.info(
+        f"👤 Checker: **{current_username}**  "
+        f"| Role: **{current_role_name}**"
+    )
+
+    # ==========================================================================
+    # PENDING REQUESTS
     # ==========================================================================
 
     try:
 
-        response = (
+        pending_response = (
             client
             .table(
                 "product_create_requests"
@@ -435,50 +326,36 @@ def render_product_approval_queue():
             .execute()
         )
 
-        requests = (
-            response.data
+        pending_requests = (
+            pending_response.data
             or []
         )
 
     except Exception as e:
 
         st.error(
-            "❌ Failed to load approval queue."
+            "❌ Failed to load pending requests."
         )
 
-        st.error(
-            str(e)
+        st.code(
+            repr(e)
         )
 
         return
 
-    # ==========================================================================
-    # HEADER
-    # ==========================================================================
-
     pending_count = len(
-        requests
+        pending_requests
     )
+
+    # ==========================================================================
+    # PENDING HEADER
+    # ==========================================================================
 
     st.markdown(
         f"""
-### 👤 Checker
-
-**User:** {current_username}
-
-**Role:** {current_role_name}
-
-**Permission:** ✅ inventory.adjust
-
-**Pending Requests:** 🟡 {pending_count}
+### 🟡 Pending Product Requests: **{pending_count}**
 """
     )
-
-    st.markdown("---")
-
-    # ==========================================================================
-    # NO REQUEST
-    # ==========================================================================
 
     if pending_count == 0:
 
@@ -486,18 +363,11 @@ def render_product_approval_queue():
             "✅ No pending product requests."
         )
 
-        return
-
-    st.warning(
-        f"🟡 PENDING PRODUCT REQUESTS: "
-        f"{pending_count}"
-    )
-
     # ==========================================================================
-    # REQUEST LOOP
+    # PENDING REQUEST CARDS
     # ==========================================================================
 
-    for req in requests:
+    for req in pending_requests:
 
         request_id = req.get(
             "id"
@@ -514,29 +384,68 @@ def render_product_approval_queue():
             "requested_by"
         )
 
-        requester_name = (
-            _get_user_name(
-                requester_id,
-                users_cache
-            )
+        requester_name = _username(
+            requester_id,
+            users_cache,
         )
 
-        product_name = (
-            product.get(
-                "name",
-                "-"
-            )
+        product_name = product.get(
+            "name",
+            "-"
         )
 
-        sku = (
-            product.get(
-                "sku",
-                "-"
-            )
+        sku = product.get(
+            "sku",
+            "-"
+        )
+
+        barcode = product.get(
+            "barcode",
+            "-"
+        )
+
+        unit = product.get(
+            "unit",
+            "-"
+        )
+
+        initial_qty = req.get(
+            "initial_qty",
+            0
+        )
+
+        warehouse_id = req.get(
+            "warehouse_id",
+            "-"
+        )
+
+        purchase_price = product.get(
+            "purchase_price",
+            0
+        )
+
+        selling_price = product.get(
+            "selling_price",
+            0
+        )
+
+        created_at = req.get(
+            "created_at",
+            "-"
         )
 
         # ======================================================================
-        # REQUEST CARD
+        # SELF APPROVAL
+        # ======================================================================
+
+        is_own_request = (
+            str(requester_id)
+            ==
+            str(current_user_id)
+        )
+
+        # ======================================================================
+        # CARD
         # ======================================================================
 
         with st.container(
@@ -544,102 +453,71 @@ def render_product_approval_queue():
         ):
 
             st.markdown(
-                f"## 📝 Request #{request_id}"
+                f"""
+## 📝 Request #{request_id}
+"""
             )
 
             st.warning(
-                "🟡 STATUS: PENDING — Approval Required"
+                "🟡 PENDING — Approval Required"
             )
 
             # ------------------------------------------------------------------
-            # PRODUCT DETAILS
+            # PRODUCT
             # ------------------------------------------------------------------
 
-            c1, c2 = st.columns(2)
+            c1, c2 = st.columns(
+                2
+            )
 
             with c1:
 
                 st.write(
-                    f"**Product:** "
-                    f"{product_name}"
+                    f"**Product:** {product_name}"
                 )
 
                 st.write(
-                    f"**SKU:** "
-                    f"{sku}"
+                    f"**SKU:** {sku}"
                 )
 
                 st.write(
-                    f"**Barcode:** "
-                    f"{product.get('barcode', '-')}"
+                    f"**Barcode:** {barcode}"
                 )
 
                 st.write(
-                    f"**Unit:** "
-                    f"{product.get('unit', '-')}"
+                    f"**Unit:** {unit}"
                 )
 
             with c2:
 
                 st.write(
-                    f"**Opening Qty:** "
-                    f"{req.get('initial_qty', 0)}"
+                    f"**Opening Qty:** {initial_qty}"
                 )
-
-                try:
-
-                    purchase_price = float(
-                        product.get(
-                            "purchase_price",
-                            0
-                        )
-                        or 0
-                    )
-
-                except Exception:
-
-                    purchase_price = 0.0
-
-                try:
-
-                    selling_price = float(
-                        product.get(
-                            "selling_price",
-                            0
-                        )
-                        or 0
-                    )
-
-                except Exception:
-
-                    selling_price = 0.0
 
                 st.write(
                     f"**Purchase Price:** "
-                    f"{purchase_price:,.2f} MMK"
+                    f"{_money(purchase_price)}"
                 )
 
                 st.write(
                     f"**Selling Price:** "
-                    f"{selling_price:,.2f} MMK"
+                    f"{_money(selling_price)}"
                 )
 
                 st.write(
-                    f"**Warehouse:** "
-                    f"{req.get('warehouse_id', '-')}"
+                    f"**Warehouse:** {warehouse_id}"
                 )
 
             # ------------------------------------------------------------------
-            # REQUESTER
+            # MAKER
             # ------------------------------------------------------------------
 
             st.markdown(
                 f"""
-👤 **Requested By:** {requester_name}
+### 👤 Maker Information
 
-🆔 **Requester ID:** {requester_id or '-'}
-
-🕒 **Created At:** {req.get('created_at', '-')}
+**Requested By:** `{requester_name}`  
+**Created At:** `{created_at}`
 """
             )
 
@@ -649,68 +527,50 @@ def render_product_approval_queue():
             # SELF APPROVAL BLOCK
             # ==================================================================
 
-            is_own_request = (
-                str(
-                    requester_id
-                )
-                ==
-                str(
-                    current_user_id
-                )
-            )
-
             if is_own_request:
 
                 st.error(
                     "🚫 SELF-APPROVAL BLOCKED"
                 )
 
-                st.info(
-                    f"""
-Maker: **{requester_name}**
-
-Checker: **{current_username}**
-
-Maker နှင့် Checker တစ်ယောက်တည်းဖြစ်နေသောကြောင့်
-ဤ Request ကို Approve မလုပ်နိုင်ပါ။
-"""
+                st.warning(
+                    f"Maker **{requester_name}** သည် "
+                    "မိမိတင်ထားသော Request ကို "
+                    "Approve မလုပ်နိုင်ပါ။"
                 )
 
                 st.caption(
-                    "အခြား Admin / Manager တစ်ဦးကသာ "
-                    "Approve လုပ်နိုင်ပါသည်။"
+                    "➡️ အခြား Admin / Manager တစ်ဦးက "
+                    "Approve လုပ်ရပါမည်။"
                 )
-
-                st.markdown("---")
 
                 continue
 
             # ==================================================================
-            # BUTTONS
+            # APPROVE / REJECT
             # ==================================================================
 
-            b1, b2 = st.columns(2)
+            b1, b2 = st.columns(
+                2
+            )
 
-            # ==================================================================
+            # ------------------------------------------------------------------
             # APPROVE
-            # ==================================================================
+            # ------------------------------------------------------------------
 
             with b1:
 
                 if st.button(
-                    "✅ APPROVE REQUEST",
-                    key=(
-                        f"approve_product_"
-                        f"{request_id}"
-                    ),
-                    use_container_width=True
+                    "✅ APPROVE",
+                    key=f"approve_{request_id}",
+                    use_container_width=True,
                 ):
 
                     try:
 
-                        # ------------------------------------------------------
-                        # RPC
-                        # ------------------------------------------------------
+                        st.info(
+                            f"⏳ Approving Request #{request_id}..."
+                        )
 
                         response = (
                             client
@@ -726,14 +586,23 @@ Maker နှင့် Checker တစ်ယောက်တည်းဖြစ်�
                                         str(
                                             current_user_id
                                         ),
-                                }
+                                },
                             )
                             .execute()
                         )
 
-                        result = _normalize_result(
-                            response.data
-                        )
+                        result = response.data
+
+                        if isinstance(
+                            result,
+                            list,
+                        ):
+
+                            result = (
+                                result[0]
+                                if result
+                                else None
+                            )
 
                         # ------------------------------------------------------
                         # INVALID RESPONSE
@@ -741,7 +610,7 @@ Maker နှင့် Checker တစ်ယောက်တည်းဖြစ်�
 
                         if not isinstance(
                             result,
-                            dict
+                            dict,
                         ):
 
                             st.error(
@@ -754,258 +623,60 @@ Maker နှင့် Checker တစ်ယောက်တည်းဖြစ်�
 
                             continue
 
-                        # ======================================================
-                        # SUCCESS
-                        # ======================================================
+                        # ------------------------------------------------------
+                        # RPC FAILURE
+                        # ------------------------------------------------------
 
-                        if result.get(
+                        if not result.get(
                             "success"
                         ):
-
-                            # --------------------------------------------------
-                            # APPROVAL HISTORY
-                            # --------------------------------------------------
-
-                            history_saved = True
-
-                            try:
-
-                                (
-                                    client
-                                    .table(
-                                        "product_create_requests"
-                                    )
-                                    .update(
-                                        {
-                                            "approved_by":
-                                                str(
-                                                    current_user_id
-                                                ),
-
-                                            "approved_at":
-                                                None
-                                        }
-                                    )
-                                    .eq(
-                                        "id",
-                                        request_id
-                                    )
-                                    .execute()
-                                )
-
-                            except Exception:
-
-                                history_saved = False
-
-                            # --------------------------------------------------
-                            # RESULT DATA
-                            # --------------------------------------------------
-
-                            approved_request_id = (
-                                result.get(
-                                    "request_id",
-                                    request_id
-                                )
-                            )
-
-                            product_id = (
-                                result.get(
-                                    "product_id"
-                                )
-                            )
-
-                            batch_id = (
-                                result.get(
-                                    "batch_id"
-                                )
-                            )
-
-                            cost_layer_id = (
-                                result.get(
-                                    "cost_layer_id"
-                                )
-                            )
-
-                            # --------------------------------------------------
-                            # SUCCESS NOTIFICATION
-                            # --------------------------------------------------
-
-                            st.success(
-                                "🎉 PRODUCT REQUEST "
-                                "APPROVED SUCCESSFULLY!"
-                            )
-
-                            st.toast(
-                                "✅ Product approval successful!",
-                                icon="✅"
-                            )
-
-                            st.info(
-                                f"""
-🎉 **APPROVAL COMPLETED**
-
-**Request ID:** #{approved_request_id}
-
-**Product:** {product_name}
-
-**SKU:** {sku}
-
-**Requested By:** {requester_name}
-
-**Approved By:** {current_username}
-
-**Status:** APPROVED
-
-**Product ID:** {product_id or '-'}
-
-**Batch ID:** {batch_id or '-'}
-
-**Cost Layer ID:** {cost_layer_id or '-'}
-
-**Opening Qty:** {req.get('initial_qty', 0)}
-
-**Checker Role:** {current_role_name}
-
-**Maker-Checker:** {'✅ YES' if result.get('maker_checker') else '—'}
-
-**Stock Changed:** {'✅ YES' if result.get('stock_changed') else '—'}
-
-✅ Product creation has been authorized.
-"""
-                            )
-
-                            if not history_saved:
-
-                                st.warning(
-                                    "⚠️ Approval succeeded, "
-                                    "but approval history could not "
-                                    "be saved."
-                                )
-
-                            # --------------------------------------------------
-                            # CACHE
-                            # --------------------------------------------------
-
-                            CacheManager.bump(
-                                "product_version"
-                            )
-
-                            CacheManager.bump(
-                                "inventory_version"
-                            )
-
-                            st.cache_data.clear()
-
-                            # --------------------------------------------------
-                            # 3 SECOND NOTIFICATION
-                            # --------------------------------------------------
-
-                            time.sleep(
-                                3.0
-                            )
-
-                            st.rerun()
-
-                        # ======================================================
-                        # FAILURE
-                        # ======================================================
-
-                        else:
-
-                            message = (
-                                result.get(
-                                    "message",
-                                    "Approval failed."
-                                )
-                            )
-
-                            status = (
-                                result.get(
-                                    "status",
-                                    "ERROR"
-                                )
-                            )
 
                             st.error(
                                 "❌ APPROVAL FAILED"
                             )
 
                             st.warning(
-                                f"Status: **{status}**"
-                            )
-
-                            st.error(
-                                message
+                                f"Reason: "
+                                f"{result.get(
+                                    'message',
+                                    'Unknown error'
+                                )}"
                             )
 
                             with st.expander(
-                                "🔎 Approval Response Details"
+                                "🔎 RPC Response"
                             ):
 
                                 st.json(
                                     result
                                 )
 
-                    except Exception as e:
+                            continue
 
-                        st.error(
-                            "❌ APPROVAL FAILED — "
-                            "Database / RPC Error"
+                        # ======================================================
+                        # SUCCESS
+                        # ======================================================
+
+                        approved_request_id = (
+                            result.get(
+                                "request_id",
+                                request_id,
+                            )
                         )
 
-                        st.error(
-                            str(e)
+                        product_id = result.get(
+                            "product_id",
+                            "-"
                         )
 
-                        with st.expander(
-                            "🔎 Technical Error Details"
-                        ):
+                        batch_id = result.get(
+                            "batch_id",
+                            "-"
+                        )
 
-                            st.code(
-                                repr(e)
-                            )
-
-            # ==================================================================
-            # REJECT
-            # ==================================================================
-
-            with b2:
-
-                if st.button(
-                    "❌ REJECT REQUEST",
-                    key=(
-                        f"reject_product_"
-                        f"{request_id}"
-                    ),
-                    use_container_width=True
-                ):
-
-                    try:
-
-                        (
-                            client
-                            .table(
-                                "product_create_requests"
-                            )
-                            .update(
-                                {
-                                    "status":
-                                        "REJECTED",
-
-                                    "rejected_by":
-                                        str(
-                                            current_user_id
-                                        ),
-
-                                    "rejected_at":
-                                        None,
-                                }
-                            )
-                            .eq(
-                                "id",
-                                request_id
-                            )
-                            .execute()
+                        cost_layer_id = result.get(
+                            "cost_layer_id",
+                            "-"
                         )
 
                         # ------------------------------------------------------
@@ -1013,34 +684,37 @@ Maker နှင့် Checker တစ်ယောက်တည်းဖြစ်�
                         # ------------------------------------------------------
 
                         st.success(
-                            f"❌ Request #{request_id} "
-                            "REJECTED successfully."
+                            "🎉🎉 APPROVAL SUCCESSFUL!"
                         )
 
                         st.toast(
-                            "Request rejected.",
-                            icon="❌"
+                            "✅ Product approved successfully!",
+                            icon="✅"
+                        )
+
+                        st.markdown(
+                            f"""
+# 🎉 Product Request Approved
+
+| Field | Value |
+|---|---|
+| Request ID | **#{approved_request_id}** |
+| Product | **{product_name}** |
+| SKU | **{sku}** |
+| Requested By | **{requester_name}** |
+| Approved By | **{current_username}** |
+| Checker Role | **{current_role_name}** |
+| Status | **APPROVED** |
+| Product ID | **{product_id}** |
+| Batch ID | **{batch_id}** |
+| Cost Layer ID | **{cost_layer_id}** |
+| Opening Stock | **{initial_qty}** |
+"""
                         )
 
                         st.info(
-                            f"""
-❌ **PRODUCT REQUEST REJECTED**
-
-**Request ID:** #{request_id}
-
-**Product:** {product_name}
-
-**SKU:** {sku}
-
-**Requested By:** {requester_name}
-
-**Rejected By:** {current_username}
-
-**Status:** REJECTED
-
-⚠️ Product, stock, batch and cost layer
-were NOT created.
-"""
+                            "✅ Product + Warehouse Stock + "
+                            "Batch + Cost Layer were created."
                         )
 
                         # ------------------------------------------------------
@@ -1058,11 +732,123 @@ were NOT created.
                         st.cache_data.clear()
 
                         # ------------------------------------------------------
-                        # 3 SECOND DISPLAY
+                        # KEEP SUCCESS MESSAGE
                         # ------------------------------------------------------
 
+                        st.session_state[
+                            "approval_success_message"
+                        ] = (
+                            f"✅ Request #{approved_request_id} "
+                            f"approved by {current_username}."
+                        )
+
                         time.sleep(
-                            3.0
+                            2
+                        )
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            "❌ APPROVAL FAILED — "
+                            "DATABASE / RPC ERROR"
+                        )
+
+                        st.error(
+                            str(e)
+                        )
+
+                        with st.expander(
+                            "🔎 Technical Details"
+                        ):
+
+                            st.code(
+                                repr(e)
+                            )
+
+            # ------------------------------------------------------------------
+            # REJECT
+            # ------------------------------------------------------------------
+
+            with b2:
+
+                if st.button(
+                    "❌ REJECT",
+                    key=f"reject_{request_id}",
+                    use_container_width=True,
+                ):
+
+                    try:
+
+                        response = (
+                            client
+                            .table(
+                                "product_create_requests"
+                            )
+                            .update(
+                                {
+                                    "status":
+                                        "REJECTED"
+                                }
+                            )
+                            .eq(
+                                "id",
+                                request_id
+                            )
+                            .execute()
+                        )
+
+                        rows = (
+                            response.data
+                            or []
+                        )
+
+                        if not rows:
+
+                            st.error(
+                                "❌ REJECT FAILED"
+                            )
+
+                            st.warning(
+                                "No database row was updated."
+                            )
+
+                            continue
+
+                        # ------------------------------------------------------
+                        # SUCCESS
+                        # ------------------------------------------------------
+
+                        st.success(
+                            f"❌ Request #{request_id} "
+                            "REJECTED SUCCESSFULLY!"
+                        )
+
+                        st.toast(
+                            "❌ Product request rejected.",
+                            icon="❌"
+                        )
+
+                        st.session_state[
+                            "approval_reject_message"
+                        ] = (
+                            f"❌ Request #{request_id} "
+                            f"rejected by {current_username}."
+                        )
+
+                        CacheManager.bump(
+                            "product_version"
+                        )
+
+                        CacheManager.bump(
+                            "inventory_version"
+                        )
+
+                        st.cache_data.clear()
+
+                        time.sleep(
+                            2
                         )
 
                         st.rerun()
@@ -1077,4 +863,198 @@ were NOT created.
                             str(e)
                         )
 
+                        with st.expander(
+                            "🔎 Reject Technical Details"
+                        ):
+
+                            st.code(
+                                repr(e)
+                            )
+
+    # ==========================================================================
+    # PERSISTENT NOTIFICATIONS AFTER RERUN
+    # ==========================================================================
+
+    success_message = st.session_state.pop(
+        "approval_success_message",
+        None
+    )
+
+    if success_message:
+
+        st.success(
+            f"🎉 {success_message}"
+        )
+
+        st.toast(
+            success_message,
+            icon="✅"
+        )
+
+    reject_message = st.session_state.pop(
+        "approval_reject_message",
+        None
+    )
+
+    if reject_message:
+
+        st.error(
+            reject_message
+        )
+
+        st.toast(
+            reject_message,
+            icon="❌"
+        )
+
+    # ==========================================================================
+    # APPROVAL HISTORY
+    # ==========================================================================
+
+    st.markdown("---")
+
+    st.subheader(
+        "📜 Recent Product Approval History"
+    )
+
+    try:
+
+        history_response = (
+            client
+            .table(
+                "product_create_requests"
+            )
+            .select("*")
+            .in_(
+                "status",
+                [
+                    "APPROVED",
+                    "REJECTED",
+                ]
+            )
+            .order(
+                "id",
+                desc=True
+            )
+            .limit(
+                10
+            )
+            .execute()
+        )
+
+        history = (
+            history_response.data
+            or []
+        )
+
+    except Exception as e:
+
+        st.error(
+            "❌ Failed to load approval history."
+        )
+
+        st.code(
+            repr(e)
+        )
+
+        return
+
+    if not history:
+
+        st.info(
+            "No approval history yet."
+        )
+
+        return
+
+    # ==========================================================================
+    # HISTORY TABLE
+    # ==========================================================================
+
+    for row in history:
+
+        request_id = row.get(
+            "id"
+        )
+
+        product = (
+            row.get(
+                "product_data"
+            )
+            or {}
+        )
+
+        product_name = product.get(
+            "name",
+            "-"
+        )
+
+        sku = product.get(
+            "sku",
+            "-"
+        )
+
+        status = row.get(
+            "status",
+            "-"
+        )
+
+        requester_name = _username(
+            row.get(
+                "requested_by"
+            ),
+            users_cache,
+        )
+
+        approved_by = row.get(
+            "approved_by"
+        )
+
+        approved_name = _username(
+            approved_by,
+            users_cache,
+        )
+
+        approved_at = row.get(
+            "approved_at"
+        )
+
+        rejected_by = row.get(
+            "rejected_by"
+        )
+
+        rejected_name = _username(
+            rejected_by,
+            users_cache,
+        )
+
+        rejected_at = row.get(
+            "rejected_at"
+        )
+
+        st.markdown(
+            f"""
+### #{request_id} — {product_name}
+
+| Field | Value |
+|---|---|
+| SKU | **{sku}** |
+| Status | **{status}** |
+| Requested By | **{requester_name}** |
+| Approved By | **{approved_name if status == "APPROVED" else "—"}** |
+| Approved At | **{approved_at if status == "APPROVED" else "—"}** |
+| Rejected By | **{rejected_name if status == "REJECTED" else "—"}** |
+| Rejected At | **{rejected_at if status == "REJECTED" else "—"}** |
+"""
+        )
+
         st.markdown("---")
+
+
+# ==============================================================================
+# EXPORT
+# ==============================================================================
+
+__all__ = [
+    "render_product_approval_queue"
+]
