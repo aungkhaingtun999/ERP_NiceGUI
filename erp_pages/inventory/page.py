@@ -1,7 +1,11 @@
 # ==============================================================================
 # erp_pages/inventory/page.py
-# ERP ENTERPRISE INVENTORY PAGE CONTROLLER v1.2 CLEAN
-# Approval Queue Enabled
+#
+# ERP ENTERPRISE INVENTORY PAGE CONTROLLER v1.3
+#
+# ACTIVE TAB PERSISTENCE
+# ADD PRODUCT REQUEST STAYS ON ADD PRODUCT
+# MAKER CHECKER ENABLED
 # ==============================================================================
 
 import streamlit as st
@@ -25,146 +29,169 @@ from .dashboard import render_inventory_dashboard
 
 
 # ==============================================================================
+# TAB DEFINITIONS
+# ==============================================================================
+
+INVENTORY_TABS = [
+    "Product Master",
+    "Add Product",
+    "Approval Queue",
+    "Edit Product",
+    "Stock Adjustment",
+    "Dashboard",
+]
+
+INVENTORY_TAB_ICONS = [
+    "📋",
+    "➕",
+    "🟡",
+    "✏️",
+    "🔧",
+    "📊",
+]
+
+
+# ==============================================================================
+# TAB STATE
+# ==============================================================================
+
+def _get_active_tab():
+    if "inventory_active_tab" not in st.session_state:
+        st.session_state.inventory_active_tab = "Product Master"
+    return st.session_state.inventory_active_tab
+
+
+def _set_active_tab(tab_name):
+    if tab_name in INVENTORY_TABS:
+        st.session_state.inventory_active_tab = tab_name
+
+
+# ==============================================================================
+# TAB NAVIGATION
+# ==============================================================================
+
+def _render_tab_navigation():
+    active_tab = _get_active_tab()
+    labels = [
+        f"{icon} {name}"
+        for icon, name in zip(
+            INVENTORY_TAB_ICONS,
+            INVENTORY_TABS,
+        )
+    ]
+    current_index = INVENTORY_TABS.index(active_tab)
+    selected_label = st.radio(
+        "Inventory Section",
+        labels,
+        index=current_index,
+        horizontal=True,
+        key="inventory_tab_navigation",
+        label_visibility="collapsed",
+    )
+    selected_tab = INVENTORY_TABS[labels.index(selected_label)]
+    if selected_tab != active_tab:
+        _set_active_tab(selected_tab)
+        st.rerun()
+    return selected_tab
+
+
+# ==============================================================================
 # MAIN PAGE
 # ==============================================================================
 
 def run_inventory_page():
-
-    st.title('🏭 Enterprise Product Master')
-
-    st.caption(
-        'ERP Inventory Control Center | Mobile Ready | Maker Checker Enabled'
-    )
-
+    st.title("🏭 Enterprise Product Master")
+    st.caption("ERP Inventory Control Center | Mobile Ready | Maker Checker Enabled")
+    
     # --------------------------------------------------------------------------
     # SESSION
     # --------------------------------------------------------------------------
-
-    if 'inventory_barcode' not in st.session_state:
-
-        st.session_state.inventory_barcode = ''
+    if "inventory_barcode" not in st.session_state:
+        st.session_state.inventory_barcode = ""
+    if "inventory_active_tab" not in st.session_state:
+        st.session_state.inventory_active_tab = "Product Master"
 
     # --------------------------------------------------------------------------
     # SERVICES
     # --------------------------------------------------------------------------
-
     try:
-
         client = db()
-
         inventory_service = InventoryService(client)
-
         pricing_service = PricingService(client)
-
     except Exception as e:
-
-        st.error(f'ERP Service Connection Failed : {e}')
-
+        st.error(f"ERP Service Connection Failed : {e}")
         st.stop()
 
     # --------------------------------------------------------------------------
     # WAREHOUSE
     # --------------------------------------------------------------------------
-
     warehouses = get_warehouses()
-
     if not warehouses:
-
-        st.error('No active warehouses found')
-
+        st.error("No active warehouses found")
         st.stop()
-
+        
     selected_wh_id, selected_wh_name = render_warehouse_selector(
         warehouses,
-        key='inventory_warehouse_selector'
+        key="inventory_warehouse_selector",
     )
 
     # --------------------------------------------------------------------------
     # PRODUCT LOAD
     # --------------------------------------------------------------------------
-
-    barcode = st.session_state.get('inventory_barcode', '')
-
+    barcode = st.session_state.get(
+        "inventory_barcode",
+        "",
+    )
     try:
-
         products = get_inventory_view(
             warehouse_id=selected_wh_id,
-            search=barcode.strip()
+            search=barcode.strip(),
         )
-
     except Exception as e:
-
-        st.error(f'Product loading error : {e}')
-
+        st.error(f"Product loading error : {e}")
         products = []
 
     # --------------------------------------------------------------------------
-    # TABS
+    # NAVIGATION
     # --------------------------------------------------------------------------
+    active_tab = _render_tab_navigation()
+    st.markdown("---")
 
-    (
-        tab_master,
-        tab_add,
-        tab_approval,
-        tab_edit,
-        tab_adjust,
-        tab_dashboard
-    ) = st.tabs(
-        [
-            '📋 Product Master',
-            '➕ Add Product',
-            '🟡 Approval Queue',
-            '✏️ Edit Product',
-            '🔧 Stock Adjustment',
-            '📊 Dashboard',
-        ]
-    )
-
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # PRODUCT MASTER
-    # --------------------------------------------------------------------------
-
-    with tab_master:
-
+    # ==========================================================================
+    if active_tab == "Product Master":
         render_product_master(products)
 
-    # --------------------------------------------------------------------------
-    # ADD PRODUCT REQUEST
-    # --------------------------------------------------------------------------
-
-    with tab_add:
-
+    # ==========================================================================
+    # ADD PRODUCT
+    # ==========================================================================
+    elif active_tab == "Add Product":
         render_product_create(
             db_client=client,
             pricing_service=pricing_service,
             warehouse_id=selected_wh_id,
         )
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # APPROVAL QUEUE
-    # --------------------------------------------------------------------------
-
-    with tab_approval:
-
+    # ==========================================================================
+    elif active_tab == "Approval Queue":
         render_product_approval_queue()
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # EDIT PRODUCT
-    # --------------------------------------------------------------------------
-
-    with tab_edit:
-
+    # ==========================================================================
+    elif active_tab == "Edit Product":
         render_product_edit(
             warehouse_id=selected_wh_id,
             warehouse_name=selected_wh_name,
         )
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # STOCK ADJUSTMENT
-    # --------------------------------------------------------------------------
-
-    with tab_adjust:
-
+    # ==========================================================================
+    elif active_tab == "Stock Adjustment":
         render_stock_adjustment(
             products=products,
             warehouse_id=selected_wh_id,
@@ -172,15 +199,11 @@ def run_inventory_page():
             inventory_service=inventory_service,
         )
 
-    # --------------------------------------------------------------------------
+    # ==========================================================================
     # DASHBOARD
-    # --------------------------------------------------------------------------
-
-    with tab_dashboard:
-
-        render_inventory_dashboard(
-            warehouse_id=selected_wh_id
-        )
+    # ==========================================================================
+    elif active_tab == "Dashboard":
+        render_inventory_dashboard(warehouse_id=selected_wh_id)
 
 
 # ==============================================================================
@@ -189,5 +212,4 @@ def run_inventory_page():
 # ==============================================================================
 
 def run():
-
     return run_inventory_page()
