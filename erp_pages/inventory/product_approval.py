@@ -1,20 +1,13 @@
-==============================================================================
-
-erp_pages/inventory/product_approval.py
-
-ERP ENTERPRISE PRODUCT APPROVAL QUEUE v4.0
-
-LIST VIEW + SELECT → DETAIL → ACTION
-
-COMPLETE DATA VALIDATION
-
-MAKER-CHECKER
-
-SELF-APPROVAL PROTECTION
-
-MOBILE READY
-
-==============================================================================
+# ==============================================================================
+# erp_pages/inventory/product_approval.py
+# ERP ENTERPRISE PRODUCT APPROVAL QUEUE v4.0
+#
+# LIST VIEW + SELECT TO DETAIL TO ACTION
+# COMPLETE DATA VALIDATION
+# MAKER CHECKER
+# SELF APPROVAL PROTECTION
+# MOBILE READY
+# ==============================================================================
 
 import time
 import streamlit as st
