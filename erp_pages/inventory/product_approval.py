@@ -1,13 +1,13 @@
-# ==============================================================================
-# erp_pages/inventory/product_approval.py
-# ERP ENTERPRISE PRODUCT APPROVAL QUEUE v4.0
-#
-# LIST VIEW + SELECT TO DETAIL TO ACTION
-# COMPLETE DATA VALIDATION
-# MAKER CHECKER
-# SELF APPROVAL PROTECTION
-# MOBILE READY
-# ==============================================================================
+"""
+erp_pages/inventory/product_approval.py
+
+ERP ENTERPRISE PRODUCT APPROVAL QUEUE v4.0
+LIST VIEW + SELECT -> DETAIL -> ACTION
+COMPLETE DATA VALIDATION
+MAKER-CHECKER
+SELF-APPROVAL PROTECTION
+MOBILE READY
+"""
 
 import time
 import streamlit as st
@@ -15,11 +15,10 @@ import streamlit as st
 from erp_core import privileged_db
 from erp_core.context import CacheManager
 
-==============================================================================
 
-REQUIRED FIELD VALIDATION
-
-==============================================================================
+# ==============================================================================
+# REQUIRED FIELD VALIDATION
+# ==============================================================================
 
 def _validate_product_request(req):
     """
@@ -38,37 +37,27 @@ def _validate_product_request(req):
     product = req.get("product_data") or {}
     missing = []
 
-    # --------------------------------------------------------------------------
     # PRODUCT NAME
-    # --------------------------------------------------------------------------
     product_name = str(product.get("name") or "").strip()
     if not product_name:
         missing.append("Product Name")
 
-    # --------------------------------------------------------------------------
     # SKU
-    # --------------------------------------------------------------------------
     sku = str(product.get("sku") or "").strip()
     if not sku:
         missing.append("SKU")
 
-    # --------------------------------------------------------------------------
     # BARCODE
-    # --------------------------------------------------------------------------
     barcode = str(product.get("barcode") or "").strip()
     if not barcode or barcode.lower() in ("none", "null", "nan"):
         missing.append("Barcode")
 
-    # --------------------------------------------------------------------------
     # UNIT
-    # --------------------------------------------------------------------------
     unit = str(product.get("unit") or "").strip()
     if not unit:
         missing.append("Unit")
 
-    # --------------------------------------------------------------------------
     # OPENING QTY
-    # --------------------------------------------------------------------------
     try:
         opening_qty = float(req.get("initial_qty") or 0)
     except (TypeError, ValueError):
@@ -77,9 +66,7 @@ def _validate_product_request(req):
     if opening_qty <= 0:
         missing.append("Opening Qty (> 0)")
 
-    # --------------------------------------------------------------------------
     # PURCHASE PRICE
-    # --------------------------------------------------------------------------
     try:
         purchase_price = float(product.get("purchase_price") or 0)
     except (TypeError, ValueError):
@@ -88,9 +75,7 @@ def _validate_product_request(req):
     if purchase_price <= 0:
         missing.append("Purchase Price (> 0)")
 
-    # --------------------------------------------------------------------------
     # SELLING PRICE
-    # --------------------------------------------------------------------------
     try:
         selling_price = float(product.get("selling_price") or 0)
     except (TypeError, ValueError):
@@ -99,9 +84,7 @@ def _validate_product_request(req):
     if selling_price <= 0:
         missing.append("Selling Price (> 0)")
 
-    # --------------------------------------------------------------------------
     # WAREHOUSE
-    # --------------------------------------------------------------------------
     warehouse_id = req.get("warehouse_id")
     if warehouse_id in (None, "", 0, "0"):
         missing.append("Warehouse")
@@ -109,11 +92,9 @@ def _validate_product_request(req):
     return missing
 
 
-==============================================================================
-
-USER LOOKUP
-
-==============================================================================
+# ==============================================================================
+# USER LOOKUP
+# ==============================================================================
 
 def _get_user_name(user_id, users_cache):
     """Convert UUID -> username."""
@@ -145,11 +126,9 @@ def _load_users(client):
         return {}
 
 
-==============================================================================
-
-MONEY FORMAT
-
-==============================================================================
+# ==============================================================================
+# MONEY FORMAT
+# ==============================================================================
 
 def _money(value):
     try:
@@ -158,11 +137,9 @@ def _money(value):
         return "0.00 MMK"
 
 
-==============================================================================
-
-CACHE REFRESH
-
-==============================================================================
+# ==============================================================================
+# CACHE REFRESH
+# ==============================================================================
 
 def _refresh_inventory_cache():
     CacheManager.bump("product_version")
@@ -170,11 +147,9 @@ def _refresh_inventory_cache():
     st.cache_data.clear()
 
 
-==============================================================================
-
-NOTIFICATIONS
-
-==============================================================================
+# ==============================================================================
+# NOTIFICATIONS
+# ==============================================================================
 
 def _notify_error(message):
     st.error(f"❌ {message}")
@@ -200,11 +175,9 @@ def _notify_success(message):
         pass
 
 
-==============================================================================
-
-REQUEST SUMMARY
-
-==============================================================================
+# ==============================================================================
+# REQUEST SUMMARY
+# ==============================================================================
 
 def _request_status_label(request_valid):
     """Return compact status for list view."""
@@ -213,19 +186,15 @@ def _request_status_label(request_valid):
     return "🔴 INCOMPLETE"
 
 
-==============================================================================
-
-MAIN APPROVAL QUEUE
-
-==============================================================================
+# ==============================================================================
+# MAIN APPROVAL QUEUE
+# ==============================================================================
 
 def render_product_approval_queue():
     st.subheader("🟡 Product Approval Queue")
     st.caption("Select a request to view details and perform approval actions.")
 
-    # ==========================================================================
     # CURRENT USER
-    # ==========================================================================
     current_user = st.session_state.get("user")
     if not current_user:
         _notify_warning("Login required.")
@@ -244,9 +213,7 @@ def render_product_approval_queue():
         _notify_error("Current user ID is missing.")
         return
 
-    # ==========================================================================
     # ROLE CHECK
-    # ==========================================================================
     role_name = str(current_user.get("role_name", "")).strip().lower()
     role_id = current_user.get("role_id")
     is_checker = role_name in ("admin", "manager") or role_id in (1, 2)
@@ -255,9 +222,7 @@ def render_product_approval_queue():
         st.info("🔒 Approval Queue is available only to Admin / Manager.")
         return
 
-    # ==========================================================================
     # DATABASE
-    # ==========================================================================
     try:
         client = privileged_db()
     except Exception as e:
@@ -265,14 +230,10 @@ def render_product_approval_queue():
         st.exception(e)
         return
 
-    # ==========================================================================
     # USERS
-    # ==========================================================================
     users_cache = _load_users(client)
 
-    # ==========================================================================
     # LOAD PENDING REQUESTS
-    # ==========================================================================
     try:
         response = (
             client.table("product_create_requests")
@@ -287,9 +248,7 @@ def render_product_approval_queue():
         st.exception(e)
         return
 
-    # ==========================================================================
     # PENDING COUNT
-    # ==========================================================================
     pending_count = len(requests)
     if pending_count == 0:
         st.success("✅ No pending product requests.")
@@ -298,9 +257,7 @@ def render_product_approval_queue():
 
     st.markdown("---")
 
-    # ======================================================================
     # BUILD SELECT OPTIONS
-    # ======================================================================
     request_map = {}
     option_labels = []
     for req in requests:
@@ -324,9 +281,7 @@ def render_product_approval_queue():
         request_map[label] = req
         option_labels.append(label)
 
-    # ======================================================================
     # REQUEST SELECTOR
-    # ======================================================================
     st.markdown("### 📋 Pending Requests")
     if not option_labels:
         st.info("No requests available to select.")
@@ -351,17 +306,13 @@ def render_product_approval_queue():
             current_username=current_username,
         )
 
-    # ==========================================================================
     # APPROVAL HISTORY
-    # ==========================================================================
     _render_approval_history(client=client, users_cache=users_cache)
 
 
-==============================================================================
-
-SELECTED REQUEST DETAIL
-
-==============================================================================
+# ==============================================================================
+# SELECTED REQUEST DETAIL
+# ==============================================================================
 
 def _render_selected_request(
     client,
@@ -375,21 +326,15 @@ def _render_selected_request(
     requester_id = request.get("requested_by")
     requester_name = _get_user_name(requester_id, users_cache)
 
-    # ==========================================================================
     # VALIDATION
-    # ==========================================================================
     missing_fields = _validate_product_request(request)
     request_valid = len(missing_fields) == 0
 
-    # ==========================================================================
     # DETAIL PANEL
-    # ==========================================================================
     st.markdown("---")
     st.markdown(f"### 📝 Request #{request_id}")
 
-    # ==========================================================================
     # STATUS
-    # ==========================================================================
     if request_valid:
         st.success("🟢 STATUS: READY FOR CHECKER APPROVAL")
     else:
@@ -399,9 +344,7 @@ def _render_selected_request(
         for field in missing_fields:
             st.write(f"• ❌ {field}")
 
-    # ==========================================================================
     # PRODUCT DETAILS
-    # ==========================================================================
     with st.container(border=True):
         st.markdown("#### 📦 Product Information")
         c1, c2 = st.columns(2)
@@ -423,18 +366,14 @@ def _render_selected_request(
             warehouse_id = request.get("warehouse_id")
             st.write(f"**Warehouse:** {warehouse_id or '❌ NOT PROVIDED'}")
 
-    # ==========================================================================
     # REQUESTER
-    # ==========================================================================
     with st.container(border=True):
         st.markdown("#### 👤 Request Information")
         st.write(f"**Requested By:** `{requester_name}`")
         st.caption(f"Requested User ID: {requester_id}")
         st.write(f"**Created At:** {request.get('created_at', '-')}")
 
-    # ==========================================================================
     # SELF APPROVAL PROTECTION
-    # ==========================================================================
     is_own_request = str(requester_id) == str(current_user_id)
     if is_own_request:
         st.error("🚫 SELF-APPROVAL BLOCKED")
@@ -445,9 +384,7 @@ def _render_selected_request(
         _render_reject_button(client=client, request=request)
         return
 
-    # ==========================================================================
     # INVALID DATA
-    # ==========================================================================
     if not request_valid:
         st.error("🚫 APPROVAL DISABLED")
         st.info("This request cannot be approved until all required product data is complete.")
@@ -456,16 +393,11 @@ def _render_selected_request(
         _render_reject_button(client=client, request=request)
         return
 
-    # ==========================================================================
     # APPROVE / REJECT
-    # ==========================================================================
     st.markdown("---")
     st.markdown("#### ⚙️ Approval Action")
     b1, b2 = st.columns(2)
 
-    # ==========================================================================
-    # APPROVE
-    # ==========================================================================
     with b1:
         if st.button(
             "✅ APPROVE REQUEST",
@@ -480,9 +412,6 @@ def _render_selected_request(
                 requester_name=requester_name,
             )
 
-    # ==========================================================================
-    # REJECT
-    # ==========================================================================
     with b2:
         if st.button(
             "❌ REJECT REQUEST",
@@ -492,11 +421,9 @@ def _render_selected_request(
             _reject_request(client=client, request=request)
 
 
-==============================================================================
-
-APPROVE REQUEST
-
-==============================================================================
+# ==============================================================================
+# APPROVE REQUEST
+# ==============================================================================
 
 def _approve_request(
     client,
@@ -508,9 +435,7 @@ def _approve_request(
     request_id = request.get("id")
     product = request.get("product_data") or {}
 
-    # ==========================================================================
     # FINAL VALIDATION
-    # ==========================================================================
     latest_missing = _validate_product_request(request)
     if latest_missing:
         _notify_error("Approval blocked. Required product data is incomplete.")
@@ -519,9 +444,7 @@ def _approve_request(
                 st.write(f"❌ {field}")
         return
 
-    # ==========================================================================
     # RPC
-    # ==========================================================================
     try:
         response = (
             client.rpc(
@@ -537,17 +460,13 @@ def _approve_request(
         if isinstance(result, list):
             result = result[0] if result else None
 
-        # ======================================================================
         # INVALID RESPONSE
-        # ======================================================================
         if not isinstance(result, dict):
             _notify_error("APPROVAL FAILED")
             st.code(str(result))
             return
 
-        # ======================================================================
         # RPC FAILURE
-        # ======================================================================
         if not result.get("success", False):
             _notify_error("APPROVAL FAILED")
             st.warning(f"Status: {result.get('status', 'ERROR')}")
@@ -556,9 +475,7 @@ def _approve_request(
                 st.json(result)
             return
 
-        # ======================================================================
         # SUCCESS
-        # ======================================================================
         approved_request_id = result.get("request_id", request_id)
         product_id = result.get("product_id")
         _notify_success("Product request approved successfully!")
@@ -586,11 +503,9 @@ Status : APPROVED
         st.exception(e)
 
 
-==============================================================================
-
-REJECT BUTTON
-
-==============================================================================
+# ==============================================================================
+# REJECT BUTTON
+# ==============================================================================
 
 def _render_reject_button(client, request):
     request_id = request.get("id")
@@ -602,18 +517,16 @@ def _render_reject_button(client, request):
         _reject_request(client=client, request=request)
 
 
-==============================================================================
-
-REJECT REQUEST
-
-==============================================================================
+# ==============================================================================
+# REJECT REQUEST
+# ==============================================================================
 
 def _reject_request(client, request):
     request_id = request.get("id")
     try:
         user_info = st.session_state.get("user", {})
         user_id_val = user_info.get("id")
-        
+
         client.table("product_create_requests").update(
             {
                 "status": "REJECTED",
@@ -632,11 +545,9 @@ def _reject_request(client, request):
         st.exception(e)
 
 
-==============================================================================
-
-APPROVAL HISTORY
-
-==============================================================================
+# ==============================================================================
+# APPROVAL HISTORY
+# ==============================================================================
 
 def _render_approval_history(client, users_cache):
     st.markdown("---")
@@ -657,9 +568,6 @@ def _render_approval_history(client, users_cache):
             st.info("No approval history found.")
             return
 
-        # ======================================================================
-        # HISTORY AS COMPACT LIST
-        # ======================================================================
         history_labels = []
         history_map = {}
         for item in history:
@@ -673,9 +581,6 @@ def _render_approval_history(client, users_cache):
             history_labels.append(label)
             history_map[label] = item
 
-        # ======================================================================
-        # HISTORY SELECT
-        # ======================================================================
         selected_history_label = st.selectbox(
             "Select History Record",
             history_labels,
@@ -686,9 +591,6 @@ def _render_approval_history(client, users_cache):
         if not selected_history:
             return
 
-        # ======================================================================
-        # HISTORY DETAIL
-        # ======================================================================
         product_data = selected_history.get("product_data") or {}
         product_name = product_data.get("name") or "-"
         status = selected_history.get("status")
@@ -714,10 +616,8 @@ def _render_approval_history(client, users_cache):
         st.warning(f"⚠️ Approval history load failed: {e}")
 
 
-==============================================================================
-
-EXPORT
-
-==============================================================================
+# ==============================================================================
+# EXPORT
+# ==============================================================================
 
 __all__ = ["render_product_approval_queue"]
