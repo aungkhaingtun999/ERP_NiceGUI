@@ -421,11 +421,10 @@ def _generate_inventory_import_batch_no():
     return f"{prefix}{current_sequence:03d}"
 
 
-def _generate_inventory_import_batch():
-    """Callback executed by Generate Batch No button.
+def _on_click_generate_batch():
+    """Callback function to safely assign batch no to session state
 
-    IMPORTANT: This callback runs before the next widget rendering, so it is safe
-    to update session state here.
+    BEFORE the text_input widget is instantiated.
     """
     st.session_state["inventory_import_batch_no"] = (
         _generate_inventory_import_batch_no()
@@ -438,8 +437,10 @@ def _generate_inventory_import_batch():
 
 
 def _render_import_batch():
+    # Ensure session state exists BEFORE widget instantiation
     if "inventory_import_batch_no" not in st.session_state:
         st.session_state["inventory_import_batch_no"] = ""
+
     st.markdown("### 📦 Import Batch")
     col1, col2 = st.columns(
         [4, 1],
@@ -454,10 +455,10 @@ def _render_import_batch():
     with col2:
         st.button(
             "Generate Batch No",
-            key="generate_inventory_import_batch_no",
+            key="generate_inventory_import_batch_no_btn",
             type="secondary",
             use_container_width=True,
-            on_click=_generate_inventory_import_batch,
+            on_click=_on_click_generate_batch,
         )
     batch_no = (
         st.session_state.get("inventory_import_batch_no", "")
@@ -955,4 +956,3 @@ def render_product_import(warehouse_id=None):
         warehouse_id=warehouse_id,
         batch_no=batch_no,
     )
-
