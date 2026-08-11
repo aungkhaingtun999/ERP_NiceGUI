@@ -28,7 +28,7 @@ from .product_edit import render_product_edit
 from .inventory_import import render_inventory_import
 from .stock_adjustment import render_stock_adjustment
 from .dashboard import render_inventory_dashboard
-
+from .product_import import render_product_import
 
 # ==============================================================================
 # TAB DEFINITIONS
