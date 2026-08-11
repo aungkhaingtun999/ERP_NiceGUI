@@ -297,11 +297,16 @@ def run_inventory_page():
     #   Checker Approval
     #        ↓
     #   products
-    # ==========================================================================
+    # ==============================================================================
+# PRODUCT MASTER BULK IMPORT
+# ==============================================================================
 
-    elif active_tab == "Product Import":
+elif active_tab == "Product Import":
 
-        render_product_import()
+    render_product_import(
+        db_client=client,
+        warehouse_id=selected_wh_id,
+    )
 
 
     # ==========================================================================
