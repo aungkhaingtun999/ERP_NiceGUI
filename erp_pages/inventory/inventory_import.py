@@ -2,34 +2,55 @@
 # erp_pages/inventory/inventory_import.py
 #
 # ERP ENTERPRISE INVENTORY IN
-# Maker-Checker Inventory Import
+# BULK EXCEL / CSV IMPORT
 #
-# STEP 1
-# - Batch creation
-# - Inventory import line entry
-# - Submit to Maker-Checker
-# - No direct stock posting from UI
+# Maker Checker Workflow
 #
-# Database workflow:
-#
-# DRAFT
-#   ↓
+# Excel / CSV
+#      ↓
+# Local Validation
+#      ↓
+# Preview
+#      ↓
+# inventory_import_batches
+#      ↓
 # inventory_import_lines
-#   ↓
+#      ↓
 # submit_inventory_import_batch
-#   ↓
+#      ↓
 # PENDING
-#   ↓
-# approve_inventory_import_batch
-#   ↓
+#      ↓
+# Checker Approval
+#      ↓
 # POSTED
 #
+# IMPORTANT:
+# Uploading Excel/CSV NEVER posts stock directly.
 # ==============================================================================
 
+import io
 import time
+
+import pandas as pd
 import streamlit as st
 
 from database import db
+
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+IMPORT_COLUMNS = [
+    "SKU",
+    "Quantity",
+    "Unit Cost",
+    "Lot No",
+    "MFG Date",
+    "Expiry Date",
+    "Reference No",
+    "Supplier Code",
+]
 
 
 # ==============================================================================
@@ -41,11 +62,14 @@ def _init_state():
     defaults = {
         "inventory_import_batch_no": "",
         "inventory_import_remarks": "",
-        "inventory_import_warehouse": None,
-        "inventory_import_lines": [],
+        "inventory_import_file_data": None,
+        "inventory_import_file_name": "",
+        "inventory_import_preview": None,
+        "inventory_import_validated": False,
     }
 
     for key, value in defaults.items():
+
         if key not in st.session_state:
             st.session_state[key] = value
 
@@ -56,13 +80,36 @@ def _init_state():
 
 def _generate_batch_no():
 
-    ts = time.strftime("%Y%m%d-%H%M%S")
-
-    return f"INV-IN-{ts}"
+    return (
+        "INV-IN-"
+        + time.strftime("%Y%m%d-%H%M%S")
+    )
 
 
 # ==============================================================================
-# LOAD WAREHOUSES
+# CURRENT USER
+# ==============================================================================
+
+def _get_current_user_id():
+
+    possible_keys = [
+        "user_id",
+        "current_user_id",
+        "logged_in_user_id",
+    ]
+
+    for key in possible_keys:
+
+        value = st.session_state.get(key)
+
+        if value:
+            return value
+
+    return None
+
+
+# ==============================================================================
+# WAREHOUSES
 # ==============================================================================
 
 def _get_warehouses(client):
@@ -79,26 +126,572 @@ def _get_warehouses(client):
 
 
 # ==============================================================================
-# FIND PRODUCT
+# TEMPLATE DATA
 # ==============================================================================
 
-def _find_product(client, sku):
+def _template_dataframe():
 
-    sku = (sku or "").strip()
-
-    if not sku:
-        return None
-
-    response = (
-        client
-        .table("products")
-        .select("id,sku,name")
-        .eq("sku", sku)
-        .maybe_single()
-        .execute()
+    return pd.DataFrame(
+        [
+            {
+                "SKU": "TEA-001",
+                "Quantity": 50,
+                "Unit Cost": 2500,
+                "Lot No": "TEA-LOT-001",
+                "MFG Date": "2026-08-01",
+                "Expiry Date": "2027-08-01",
+                "Reference No": "PO-001",
+                "Supplier Code": "SUP-001",
+            },
+            {
+                "SKU": "COFFEE-001",
+                "Quantity": 25,
+                "Unit Cost": 5000,
+                "Lot No": "COF-LOT-001",
+                "MFG Date": "2026-08-05",
+                "Expiry Date": "2027-08-05",
+                "Reference No": "PO-002",
+                "Supplier Code": "SUP-002",
+            },
+        ],
+        columns=IMPORT_COLUMNS,
     )
 
-    return response.data
+
+# ==============================================================================
+# EXCEL TEMPLATE
+# ==============================================================================
+
+def _excel_template_bytes():
+
+    output = io.BytesIO()
+
+    df = _template_dataframe()
+
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl",
+    ) as writer:
+
+        df.to_excel(
+            writer,
+            index=False,
+            sheet_name="Inventory In",
+        )
+
+    output.seek(0)
+
+    return output.getvalue()
+
+
+# ==============================================================================
+# CSV TEMPLATE
+# ==============================================================================
+
+def _csv_template_bytes():
+
+    df = _template_dataframe()
+
+    return df.to_csv(
+        index=False
+    ).encode("utf-8-sig")
+
+
+# ==============================================================================
+# READ UPLOAD
+# ==============================================================================
+
+def _read_uploaded_file(uploaded_file):
+
+    filename = uploaded_file.name.lower()
+
+    file_bytes = uploaded_file.getvalue()
+
+    if filename.endswith(".xlsx"):
+
+        df = pd.read_excel(
+            io.BytesIO(file_bytes)
+        )
+
+    elif filename.endswith(".csv"):
+
+        df = pd.read_csv(
+            io.BytesIO(file_bytes)
+        )
+
+    else:
+
+        raise ValueError(
+            "Only .xlsx and .csv files are supported."
+        )
+
+    return df
+
+
+# ==============================================================================
+# NORMALIZE COLUMNS
+# ==============================================================================
+
+def _normalize_columns(df):
+
+    rename_map = {}
+
+    for column in df.columns:
+
+        normalized = (
+            str(column)
+            .strip()
+            .lower()
+            .replace("_", " ")
+        )
+
+        if normalized == "sku":
+            rename_map[column] = "SKU"
+
+        elif normalized in (
+            "quantity",
+            "qty",
+        ):
+            rename_map[column] = "Quantity"
+
+        elif normalized in (
+            "unit cost",
+            "cost",
+            "purchase price",
+        ):
+            rename_map[column] = "Unit Cost"
+
+        elif normalized in (
+            "lot no",
+            "lot number",
+            "lot",
+        ):
+            rename_map[column] = "Lot No"
+
+        elif normalized in (
+            "mfg date",
+            "manufacturing date",
+        ):
+            rename_map[column] = "MFG Date"
+
+        elif normalized in (
+            "expiry date",
+            "expiration date",
+            "expire date",
+        ):
+            rename_map[column] = "Expiry Date"
+
+        elif normalized in (
+            "reference no",
+            "reference number",
+            "ref no",
+        ):
+            rename_map[column] = "Reference No"
+
+        elif normalized in (
+            "supplier code",
+            "supplier",
+        ):
+            rename_map[column] = "Supplier Code"
+
+    df = df.rename(
+        columns=rename_map
+    )
+
+    return df
+
+
+# ==============================================================================
+# CLEAN DATAFRAME
+# ==============================================================================
+
+def _clean_dataframe(df):
+
+    df = _normalize_columns(df)
+
+    missing_columns = [
+        column
+        for column in IMPORT_COLUMNS
+        if column not in df.columns
+    ]
+
+    # Only SKU / Quantity / Unit Cost are mandatory.
+    # Other columns are optional.
+    mandatory_columns = [
+        "SKU",
+        "Quantity",
+        "Unit Cost",
+    ]
+
+    missing_mandatory = [
+        column
+        for column in mandatory_columns
+        if column not in df.columns
+    ]
+
+    if missing_mandatory:
+
+        raise ValueError(
+            "Missing required columns: "
+            + ", ".join(missing_mandatory)
+        )
+
+    for column in IMPORT_COLUMNS:
+
+        if column not in df.columns:
+
+            df[column] = None
+
+    df = df[
+        IMPORT_COLUMNS
+    ].copy()
+
+    # --------------------------------------------------------------------------
+    # Remove completely empty rows
+    # --------------------------------------------------------------------------
+
+    df = df.dropna(
+        how="all"
+    ).reset_index(
+        drop=True
+    )
+
+    # --------------------------------------------------------------------------
+    # SKU
+    # --------------------------------------------------------------------------
+
+    df["SKU"] = (
+        df["SKU"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    # --------------------------------------------------------------------------
+    # Numeric
+    # --------------------------------------------------------------------------
+
+    df["Quantity"] = pd.to_numeric(
+        df["Quantity"],
+        errors="coerce",
+    )
+
+    df["Unit Cost"] = pd.to_numeric(
+        df["Unit Cost"],
+        errors="coerce",
+    )
+
+    # --------------------------------------------------------------------------
+    # Text columns
+    # --------------------------------------------------------------------------
+
+    text_columns = [
+        "Lot No",
+        "Reference No",
+        "Supplier Code",
+    ]
+
+    for column in text_columns:
+
+        df[column] = (
+            df[column]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+    # --------------------------------------------------------------------------
+    # Dates
+    # --------------------------------------------------------------------------
+
+    df["MFG Date"] = pd.to_datetime(
+        df["MFG Date"],
+        errors="coerce",
+    )
+
+    df["Expiry Date"] = pd.to_datetime(
+        df["Expiry Date"],
+        errors="coerce",
+    )
+
+    return df
+
+
+# ==============================================================================
+# LOAD PRODUCTS
+# ==============================================================================
+
+def _load_products_by_sku(
+    client,
+    skus,
+):
+
+    clean_skus = sorted(
+        {
+            sku.strip()
+            for sku in skus
+            if sku and sku.strip()
+        }
+    )
+
+    if not clean_skus:
+
+        return {}
+
+    products = []
+
+    # Supabase IN query can handle chunks safely.
+    chunk_size = 100
+
+    for start in range(
+        0,
+        len(clean_skus),
+        chunk_size,
+    ):
+
+        chunk = clean_skus[
+            start:start + chunk_size
+        ]
+
+        response = (
+            client
+            .table("products")
+            .select("id,sku,name")
+            .in_("sku", chunk)
+            .execute()
+        )
+
+        products.extend(
+            response.data or []
+        )
+
+    return {
+        str(product["sku"]).strip(): product
+        for product in products
+        if product.get("sku") is not None
+    }
+
+
+# ==============================================================================
+# VALIDATE DATA
+# ==============================================================================
+
+def _validate_dataframe(
+    client,
+    df,
+    warehouse_id,
+):
+
+    df = df.copy()
+
+    df["Product ID"] = None
+    df["Product Name"] = ""
+    df["Status"] = "VALID"
+    df["Error"] = ""
+
+    # --------------------------------------------------------------------------
+    # Products
+    # --------------------------------------------------------------------------
+
+    product_map = _load_products_by_sku(
+        client,
+        df["SKU"].tolist(),
+    )
+
+    # --------------------------------------------------------------------------
+    # File duplicate detection
+    #
+    # Product + Warehouse + Lot
+    # --------------------------------------------------------------------------
+
+    seen_keys = set()
+
+    for index, row in df.iterrows():
+
+        errors = []
+
+        excel_line = index + 2
+
+        sku = str(
+            row["SKU"] or ""
+        ).strip()
+
+        lot_no = str(
+            row["Lot No"] or ""
+        ).strip()
+
+        qty = row["Quantity"]
+        unit_cost = row["Unit Cost"]
+
+        # ----------------------------------------------------------------------
+        # SKU
+        # ----------------------------------------------------------------------
+
+        if not sku:
+
+            errors.append(
+                "SKU is required."
+            )
+
+        elif sku not in product_map:
+
+            errors.append(
+                f"Product SKU not found: {sku}"
+            )
+
+        else:
+
+            product = product_map[sku]
+
+            df.at[
+                index,
+                "Product ID"
+            ] = product["id"]
+
+            df.at[
+                index,
+                "Product Name"
+            ] = product.get(
+                "name",
+                "",
+            )
+
+        # ----------------------------------------------------------------------
+        # Quantity
+        # ----------------------------------------------------------------------
+
+        if pd.isna(qty):
+
+            errors.append(
+                "Quantity is required."
+            )
+
+        else:
+
+            try:
+
+                qty_value = float(qty)
+
+                if qty_value <= 0:
+
+                    errors.append(
+                        "Quantity must be greater than zero."
+                    )
+
+            except Exception:
+
+                errors.append(
+                    "Invalid quantity."
+                )
+
+        # ----------------------------------------------------------------------
+        # Unit Cost
+        # ----------------------------------------------------------------------
+
+        if pd.isna(unit_cost):
+
+            errors.append(
+                "Unit Cost is required."
+            )
+
+        else:
+
+            try:
+
+                cost_value = float(
+                    unit_cost
+                )
+
+                if cost_value < 0:
+
+                    errors.append(
+                        "Unit Cost cannot be negative."
+                    )
+
+            except Exception:
+
+                errors.append(
+                    "Invalid Unit Cost."
+                )
+
+        # ----------------------------------------------------------------------
+        # Lot
+        # ----------------------------------------------------------------------
+
+        if not lot_no:
+
+            errors.append(
+                "Lot No is required."
+            )
+
+        # ----------------------------------------------------------------------
+        # Duplicate inside uploaded file
+        # ----------------------------------------------------------------------
+
+        duplicate_key = (
+            str(
+                df.at[index, "Product ID"]
+                or ""
+            ),
+            int(warehouse_id),
+            lot_no,
+        )
+
+        if duplicate_key in seen_keys:
+
+            errors.append(
+                "Duplicate PRODUCT / WAREHOUSE / LOT in import file."
+            )
+
+        else:
+
+            seen_keys.add(
+                duplicate_key
+            )
+
+        # ----------------------------------------------------------------------
+        # Date validation
+        # ----------------------------------------------------------------------
+
+        mfg_date = row["MFG Date"]
+        expiry_date = row["Expiry Date"]
+
+        if (
+            not pd.isna(mfg_date)
+            and not pd.isna(expiry_date)
+            and expiry_date < mfg_date
+        ):
+
+            errors.append(
+                "Expiry Date cannot be earlier than MFG Date."
+            )
+
+        # ----------------------------------------------------------------------
+        # Result
+        # ----------------------------------------------------------------------
+
+        if errors:
+
+            df.at[
+                index,
+                "Status"
+            ] = "ERROR"
+
+            df.at[
+                index,
+                "Error"
+            ] = " | ".join(
+                errors
+            )
+
+        else:
+
+            df.at[
+                index,
+                "Status"
+            ] = "VALID"
+
+    return df
 
 
 # ==============================================================================
@@ -110,7 +703,7 @@ def _create_batch(
     batch_no,
     warehouse_id,
     remarks,
-    user_id=None,
+    user_id,
 ):
 
     payload = {
@@ -127,7 +720,9 @@ def _create_batch(
 
     response = (
         client
-        .table("inventory_import_batches")
+        .table(
+            "inventory_import_batches"
+        )
         .insert(payload)
         .execute()
     )
@@ -135,64 +730,107 @@ def _create_batch(
     data = response.data or []
 
     if not data:
+
         raise RuntimeError(
-            "Inventory import batch creation failed."
+            "Unable to create inventory import batch."
         )
 
     return data[0]
 
 
 # ==============================================================================
-# ADD LINE
+# INSERT LINES
 # ==============================================================================
 
-def _add_line(
+def _insert_import_lines(
     client,
     batch_id,
-    line_no,
     warehouse_id,
-    sku,
-    product_id,
-    qty,
-    unit_cost,
-    lot_no,
+    valid_df,
 ):
 
-    payload = {
-        "batch_id": batch_id,
-        "line_no": line_no,
-        "warehouse_id": warehouse_id,
-        "sku": sku,
-        "product_id": product_id,
-        "qty": qty,
-        "unit_cost": unit_cost,
-        "lot_no": lot_no,
-        "is_valid": False,
-        "error_message": None,
-    }
+    payloads = []
 
-    response = (
-        client
-        .table("inventory_import_lines")
-        .insert(payload)
-        .execute()
-    )
+    for index, row in valid_df.iterrows():
 
-    data = response.data or []
+        def _date_value(value):
 
-    if not data:
-        raise RuntimeError(
-            "Inventory import line creation failed."
+            if pd.isna(value):
+                return None
+
+            return value.strftime(
+                "%Y-%m-%d"
+            )
+
+        payloads.append(
+            {
+                "batch_id": batch_id,
+                "line_no": int(index + 1),
+                "warehouse_id": warehouse_id,
+                "sku": str(row["SKU"]).strip(),
+                "product_id": int(row["Product ID"]),
+                "qty": float(row["Quantity"]),
+                "unit_cost": float(row["Unit Cost"]),
+                "lot_no": str(
+                    row["Lot No"]
+                ).strip()
+                or None,
+                "mfg_date": _date_value(
+                    row["MFG Date"]
+                ),
+                "expiry_date": _date_value(
+                    row["Expiry Date"]
+                ),
+                "reference_no": str(
+                    row["Reference No"]
+                ).strip()
+                or None,
+                "supplier_code": str(
+                    row["Supplier Code"]
+                ).strip()
+                or None,
+                "is_valid": False,
+                "error_message": None,
+            }
         )
 
-    return data[0]
+    if not payloads:
+
+        raise RuntimeError(
+            "No valid import lines found."
+        )
+
+    # Insert in chunks
+    chunk_size = 100
+
+    for start in range(
+        0,
+        len(payloads),
+        chunk_size,
+    ):
+
+        chunk = payloads[
+            start:start + chunk_size
+        ]
+
+        (
+            client
+            .table(
+                "inventory_import_lines"
+            )
+            .insert(chunk)
+            .execute()
+        )
 
 
 # ==============================================================================
-# SUBMIT BATCH
+# SUBMIT RPC
 # ==============================================================================
 
-def _submit_batch(client, batch_no):
+def _submit_batch(
+    client,
+    batch_no,
+):
 
     response = client.rpc(
         "submit_inventory_import_batch",
@@ -201,102 +839,194 @@ def _submit_batch(client, batch_no):
         },
     ).execute()
 
-    return response.data
+    result = response.data
+
+    if isinstance(result, list):
+
+        return (
+            result[0]
+            if result
+            else {}
+        )
+
+    return result or {}
 
 
 # ==============================================================================
-# MAIN UI
+# FORMAT PREVIEW
+# ==============================================================================
+
+def _preview_dataframe(df):
+
+    preview_columns = [
+        "SKU",
+        "Product Name",
+        "Quantity",
+        "Unit Cost",
+        "Lot No",
+        "MFG Date",
+        "Expiry Date",
+        "Reference No",
+        "Supplier Code",
+        "Status",
+        "Error",
+    ]
+
+    return df[
+        preview_columns
+    ].copy()
+
+
+# ==============================================================================
+# MAIN
 # ==============================================================================
 
 def render_inventory_import():
 
     _init_state()
 
-    st.subheader("📥 Inventory In")
-    st.caption(
-        "ERP Enterprise Inventory In | Maker-Checker Enabled"
+    st.subheader(
+        "📥 Inventory In"
     )
 
-    # --------------------------------------------------------------------------
+    st.caption(
+        "ERP Enterprise Inventory In | "
+        "Excel / CSV Bulk Import | "
+        "Maker-Checker Enabled"
+    )
+
+    # ==========================================================================
     # DATABASE
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
     try:
+
         client = db()
+
     except Exception as e:
+
         st.error(
             f"Database connection failed: {e}"
         )
+
         return
 
-    # --------------------------------------------------------------------------
-    # CURRENT USER
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # USER
+    # ==========================================================================
 
-    current_user = (
-        st.session_state.get("user_id")
-        or st.session_state.get("current_user_id")
-    )
+    current_user = _get_current_user_id()
 
-    # --------------------------------------------------------------------------
+    if not current_user:
+
+        st.warning(
+            "Current user session ID was not found. "
+            "Please login again."
+        )
+
+    # ==========================================================================
     # WAREHOUSE
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
     try:
-        warehouses = _get_warehouses(client)
+
+        warehouses = _get_warehouses(
+            client
+        )
+
     except Exception as e:
+
         st.error(
             f"Warehouse loading failed: {e}"
         )
+
         return
 
     if not warehouses:
+
         st.warning(
             "No warehouses found."
         )
+
         return
 
     warehouse_options = {
-        f"{w['id']} - {w.get('name', '')}": w["id"]
+        f"{w['id']} - {w.get('name', '')}":
+            w["id"]
         for w in warehouses
     }
 
     selected_warehouse_label = st.selectbox(
         "Destination Warehouse",
-        list(warehouse_options.keys()),
-        key="inventory_import_warehouse_select",
+        list(
+            warehouse_options.keys()
+        ),
+        key="inventory_import_warehouse",
     )
 
-    selected_warehouse_id = warehouse_options[
-        selected_warehouse_label
-    ]
+    selected_warehouse_id = (
+        warehouse_options[
+            selected_warehouse_label
+        ]
+    )
 
-    # --------------------------------------------------------------------------
-    # BATCH INFORMATION
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # BATCH
+    # ==========================================================================
 
-    st.markdown("### 1️⃣ Import Batch")
+    st.markdown(
+        "### 1️⃣ Import Batch"
+    )
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(
+        [2, 2]
+    )
 
     with col1:
 
         batch_no = st.text_input(
             "Batch No",
-            value=st.session_state.inventory_import_batch_no,
-            key="inventory_import_batch_no_input",
+            key="inventory_import_batch_no",
+            placeholder="INV-IN-20260811-001",
         )
 
-        if not batch_no.strip():
+        col_a, col_b = st.columns(
+            2
+        )
+
+        with col_a:
 
             if st.button(
                 "Generate Batch No",
-                key="inventory_import_generate_batch",
+                key="inventory_import_generate",
             ):
 
-                st.session_state.inventory_import_batch_no = (
-                    _generate_batch_no()
-                )
+                st.session_state[
+                    "inventory_import_batch_no"
+                ] = _generate_batch_no()
+
+                st.rerun()
+
+        with col_b:
+
+            if st.button(
+                "Clear",
+                key="inventory_import_clear",
+            ):
+
+                for key in [
+                    "inventory_import_batch_no",
+                    "inventory_import_remarks",
+                    "inventory_import_file_data",
+                    "inventory_import_file_name",
+                    "inventory_import_preview",
+                    "inventory_import_validated",
+                ]:
+
+                    st.session_state.pop(
+                        key,
+                        None,
+                    )
 
                 st.rerun()
 
@@ -304,169 +1034,268 @@ def render_inventory_import():
 
         remarks = st.text_input(
             "Remarks",
-            value=st.session_state.inventory_import_remarks,
-            key="inventory_import_remarks_input",
+            key="inventory_import_remarks",
+            placeholder="August stock receiving",
         )
 
-    # --------------------------------------------------------------------------
-    # LINE
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # TEMPLATE
+    # ==========================================================================
 
-    st.markdown("### 2️⃣ Stock In Line")
+    st.markdown(
+        "### 2️⃣ Excel / CSV Bulk Import"
+    )
 
-    col1, col2 = st.columns(2)
+    st.info(
+        "ရာချီ / ထောင်ချီသော ပစ္စည်းများကို "
+        "Excel သို့မဟုတ် CSV ဖြင့် တစ်ကြိမ်တည်းသွင်းနိုင်ပါတယ်။ "
+        "Upload လုပ်ရုံနဲ့ stock မတက်ပါ။ Checker approval ပြီးမှသာ POSTED ဖြစ်ပါမယ်။"
+    )
+
+    col1, col2 = st.columns(
+        2
+    )
 
     with col1:
 
-        sku = st.text_input(
-            "Product SKU",
-            key="inventory_import_sku",
-        )
-
-        qty = st.number_input(
-            "Quantity",
-            min_value=0.0,
-            step=1.0,
-            key="inventory_import_qty",
+        st.download_button(
+            label="📥 Download Excel Template",
+            data=_excel_template_bytes(),
+            file_name="inventory_in_template.xlsx",
+            mime=(
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
+            ),
+            key="inventory_import_excel_template",
         )
 
     with col2:
 
-        unit_cost = st.number_input(
-            "Unit Cost",
-            min_value=0.0,
-            step=100.0,
-            key="inventory_import_unit_cost",
+        st.download_button(
+            label="📥 Download CSV Template",
+            data=_csv_template_bytes(),
+            file_name="inventory_in_template.csv",
+            mime="text/csv",
+            key="inventory_import_csv_template",
         )
 
-        lot_no = st.text_input(
-            "Lot No",
-            key="inventory_import_lot_no",
-        )
+    # ==========================================================================
+    # FILE UPLOAD
+    # ==========================================================================
 
-    # --------------------------------------------------------------------------
-    # ADD LINE
-    # --------------------------------------------------------------------------
+    uploaded_file = st.file_uploader(
+        "Upload Excel / CSV",
+        type=[
+            "xlsx",
+            "csv",
+        ],
+        key="inventory_import_uploader",
+    )
 
-    if st.button(
-        "➕ Add Stock In Line",
-        type="primary",
-        key="inventory_import_add_line",
-    ):
+    if uploaded_file:
 
-        if not sku.strip():
-
-            st.error("SKU is required.")
-            return
-
-        if qty <= 0:
-
-            st.error("Quantity must be greater than zero.")
-            return
-
-        if unit_cost < 0:
-
-            st.error("Unit cost cannot be negative.")
-            return
-
-        try:
-
-            product = _find_product(
-                client,
-                sku,
+        if (
+            st.session_state.get(
+                "inventory_import_file_name"
             )
+            != uploaded_file.name
+        ):
 
-            if not product:
+            try:
+
+                raw_df = _read_uploaded_file(
+                    uploaded_file
+                )
+
+                clean_df = _clean_dataframe(
+                    raw_df
+                )
+
+                validated_df = _validate_dataframe(
+                    client,
+                    clean_df,
+                    selected_warehouse_id,
+                )
+
+                st.session_state[
+                    "inventory_import_preview"
+                ] = validated_df
+
+                st.session_state[
+                    "inventory_import_file_name"
+                ] = uploaded_file.name
+
+                st.session_state[
+                    "inventory_import_validated"
+                ] = True
+
+            except Exception as e:
+
+                st.session_state[
+                    "inventory_import_preview"
+                ] = None
+
+                st.session_state[
+                    "inventory_import_validated"
+                ] = False
 
                 st.error(
-                    f"Product not found for SKU: {sku}"
+                    f"File validation failed: {e}"
                 )
-                return
 
-            st.session_state.inventory_import_lines.append(
-                {
-                    "sku": sku.strip(),
-                    "product_id": product["id"],
-                    "product_name": product.get("name", ""),
-                    "qty": qty,
-                    "unit_cost": unit_cost,
-                    "lot_no": lot_no.strip() or None,
-                }
-            )
+    # ==========================================================================
+    # PREVIEW
+    # ==========================================================================
 
-            st.success(
-                f"Added: {product.get('name', sku)}"
-            )
+    preview_df = st.session_state.get(
+        "inventory_import_preview"
+    )
 
-            st.rerun()
+    if preview_df is not None:
 
-        except Exception as e:
-
-            st.error(
-                f"Unable to add line: {e}"
-            )
-
-    # --------------------------------------------------------------------------
-    # SHOW LINES
-    # --------------------------------------------------------------------------
-
-    lines = st.session_state.inventory_import_lines
-
-    if lines:
-
-        st.markdown("### 3️⃣ Import Lines")
-
-        for index, line in enumerate(lines, start=1):
-
-            c1, c2, c3, c4, c5 = st.columns(
-                [1, 2, 1, 1, 1]
-            )
-
-            c1.write(index)
-            c2.write(
-                f"{line['sku']} - {line['product_name']}"
-            )
-            c3.write(
-                f"Qty: {line['qty']}"
-            )
-            c4.write(
-                f"Cost: {line['unit_cost']}"
-            )
-            c5.write(
-                f"Lot: {line['lot_no'] or '-'}"
-            )
-
-    else:
-
-        st.info(
-            "No inventory lines added yet."
+        st.markdown(
+            "### 3️⃣ Import Preview"
         )
 
-    # --------------------------------------------------------------------------
-    # CREATE + SUBMIT
-    # --------------------------------------------------------------------------
+        total_lines = len(
+            preview_df
+        )
 
-    st.markdown("### 4️⃣ Submit for Approval")
+        valid_lines = int(
+            (
+                preview_df["Status"]
+                == "VALID"
+            ).sum()
+        )
+
+        error_lines = int(
+            (
+                preview_df["Status"]
+                == "ERROR"
+            ).sum()
+        )
+
+        c1, c2, c3 = st.columns(
+            3
+        )
+
+        c1.metric(
+            "Total Lines",
+            total_lines,
+        )
+
+        c2.metric(
+            "Valid Lines",
+            valid_lines,
+        )
+
+        c3.metric(
+            "Error Lines",
+            error_lines,
+        )
+
+        # ----------------------------------------------------------------------
+        # Error warning
+        # ----------------------------------------------------------------------
+
+        if error_lines > 0:
+
+            st.error(
+                f"{error_lines} line(s) contain errors. "
+                "Correct the Excel/CSV file and upload again."
+            )
+
+        else:
+
+            st.success(
+                f"All {valid_lines} lines passed local validation."
+            )
+
+        # ----------------------------------------------------------------------
+        # Preview table
+        # ----------------------------------------------------------------------
+
+        st.dataframe(
+            _preview_dataframe(
+                preview_df
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # ----------------------------------------------------------------------
+        # Download validation result
+        # ----------------------------------------------------------------------
+
+        validation_csv = (
+            preview_df
+            .to_csv(index=False)
+            .encode("utf-8-sig")
+        )
+
+        st.download_button(
+            "📥 Download Validation Result",
+            data=validation_csv,
+            file_name=(
+                "inventory_import_validation.csv"
+            ),
+            mime="text/csv",
+            key="inventory_import_validation_download",
+        )
+
+    # ==========================================================================
+    # SUBMIT
+    # ==========================================================================
+
+    st.markdown(
+        "### 4️⃣ Submit for Checker Approval"
+    )
+
+    can_submit = (
+        preview_df is not None
+        and len(preview_df) > 0
+        and int(
+            (
+                preview_df["Status"]
+                == "ERROR"
+            ).sum()
+        ) == 0
+        and bool(batch_no.strip())
+        and bool(current_user)
+    )
+
+    if not can_submit:
+
+        if preview_df is None:
+
+            st.info(
+                "Upload an Excel/CSV file first."
+            )
+
+        elif not batch_no.strip():
+
+            st.warning(
+                "Batch No is required."
+            )
+
+        elif not current_user:
+
+            st.warning(
+                "Current user is not available."
+            )
 
     if st.button(
-        "📤 Submit Inventory In",
+        "📤 Submit Inventory In for Approval",
         type="primary",
-        disabled=not bool(lines),
+        disabled=not can_submit,
         key="inventory_import_submit",
     ):
 
-        if not batch_no.strip():
-
-            st.error(
-                "Batch No is required."
-            )
-            return
-
         try:
 
-            # --------------------------------------------------------------
-            # CREATE DRAFT BATCH
-            # --------------------------------------------------------------
+            # ------------------------------------------------------------------
+            # CREATE DRAFT
+            # ------------------------------------------------------------------
 
             batch = _create_batch(
                 client=client,
@@ -478,73 +1307,62 @@ def render_inventory_import():
 
             batch_id = batch["id"]
 
-            # --------------------------------------------------------------
-            # INSERT LINES
-            # --------------------------------------------------------------
+            # ------------------------------------------------------------------
+            # INSERT VALID LINES
+            # ------------------------------------------------------------------
 
-            for index, line in enumerate(
-                lines,
-                start=1,
-            ):
+            _insert_import_lines(
+                client=client,
+                batch_id=batch_id,
+                warehouse_id=selected_warehouse_id,
+                valid_df=preview_df[
+                    preview_df["Status"]
+                    == "VALID"
+                ],
+            )
 
-                _add_line(
-                    client=client,
-                    batch_id=batch_id,
-                    line_no=index,
-                    warehouse_id=selected_warehouse_id,
-                    sku=line["sku"],
-                    product_id=line["product_id"],
-                    qty=line["qty"],
-                    unit_cost=line["unit_cost"],
-                    lot_no=line["lot_no"],
-                )
-
-            # --------------------------------------------------------------
-            # SUBMIT THROUGH VERIFIED RPC
-            # --------------------------------------------------------------
+            # ------------------------------------------------------------------
+            # SUBMIT RPC
+            # ------------------------------------------------------------------
 
             result = _submit_batch(
                 client,
                 batch_no.strip(),
             )
 
-            if isinstance(result, list):
-
-                result = (
-                    result[0]
-                    if result
-                    else {}
-                )
-
-            if not isinstance(result, dict):
-
-                st.error(
-                    f"Unexpected RPC response: {result}"
-                )
-                return
-
             if result.get("success"):
 
                 st.success(
-                    "Inventory In submitted successfully."
+                    "✅ Inventory In submitted successfully."
                 )
 
                 st.json(result)
 
-                st.session_state.inventory_import_lines = []
-                st.session_state.inventory_import_batch_no = ""
-                st.session_state.inventory_import_remarks = ""
-
                 st.info(
-                    "Batch is now waiting for Checker approval."
+                    "Maker Checker: PENDING → "
+                    "Checker Approval required."
                 )
+
+                # Clear form after successful submit
+
+                st.session_state[
+                    "inventory_import_preview"
+                ] = None
+
+                st.session_state[
+                    "inventory_import_file_name"
+                ] = ""
+
+                st.session_state[
+                    "inventory_import_validated"
+                ] = False
 
             else:
 
                 st.error(
                     result.get(
                         "message",
-                        "Inventory import submission failed.",
+                        "Inventory submission failed.",
                     )
                 )
 
@@ -556,13 +1374,30 @@ def render_inventory_import():
                 f"Inventory In submission failed: {e}"
             )
 
-    # --------------------------------------------------------------------------
-    # WORKFLOW INFO
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # WORKFLOW
+    # ==========================================================================
 
     st.markdown("---")
 
+    st.markdown(
+        """
+        **Inventory In Workflow**
+
+        `Excel / CSV`
+        → `Validate`
+        → `Preview`
+        → `DRAFT`
+        → `Submit`
+        → `PENDING`
+        → `Checker Approval`
+        → `POSTED`
+        → `warehouse_stock`
+        → `inventory_cost_layers`
+        → `stock_movements`
+        """
+    )
+
     st.caption(
-        "Maker → DRAFT → Submit → PENDING → "
-        "Checker Approval → POSTED → FIFO / Stock Movement"
+        "Maker cannot approve his own Inventory In batch."
     )
