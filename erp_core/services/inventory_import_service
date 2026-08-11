@@ -1,221 +1,292 @@
+# ==============================================================================
+# erp_core/services/inventory_import_service.py
+#
+# ERP ENTERPRISE INVENTORY IMPORT SERVICE v1.0
+#
+# Purpose:
+#   - Inventory In / Stock Import
+#   - Maker-Checker workflow
+#   - Batch creation
+#   - Batch line insertion
+#   - Submit / validation
+#   - Approval queue
+#   - RPC bridge
+#
+# Database RPCs already verified:
+#   submit_inventory_import_batch
+#   approve_inventory_import_batch
+#
+# ==============================================================================
+
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any
-import streamlit as st
-from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 class InventoryImportService:
     """
-    Service layer for Inventory Import (Stock In) maker-checker workflow.
-    Uses database RPC functions already tested in production:
-    - submit_inventory_import_batch(text)
-    - approve_inventory_import_batch(text)
+    Service layer for Inventory In / Stock Import.
+
+    This service does NOT directly post stock.
+
+    Stock posting must happen through the approved
+    Maker-Checker database RPC workflow.
     """
 
-    def __init__(self):
-        self.db = st.session_state.db
+    def __init__(self, client):
+        self.client = client
 
-    # =========================================================
-    # Batch Header
-    # =========================================================
+    # ==========================================================================
+    # INTERNAL
+    # ==========================================================================
+
+    def _table(self, table_name: str):
+        return self.client.table(table_name)
+
+    @staticmethod
+    def _unwrap_response(response):
+        if response is None:
+            return None
+
+        if hasattr(response, "data"):
+            return response.data
+
+        return response
+
+    # ==========================================================================
+    # CREATE BATCH
+    # ==========================================================================
+
     def create_batch(
         self,
         batch_no: str,
+        transaction_type: str,
         warehouse_to: int,
-        requested_by: str,
+        requested_by: Optional[str] = None,
         remarks: Optional[str] = None,
-        transaction_type: str = "STOCK_IN"
     ) -> Dict[str, Any]:
-        sql = """
-            INSERT INTO inventory_import_batches (
-                batch_no, transaction_type, status, warehouse_to, requested_by, remarks
-            ) VALUES (%s, %s, 'DRAFT', %s, %s, %s)
-            RETURNING id, batch_no, status
-        """
-        rows = self.db.query(
-            sql,
-            (
-                batch_no,
-                transaction_type,
-                warehouse_to,
-                requested_by,
-                remarks
-            )
-        )
-        if not rows:
-            return {
-                "success": False,
-                "message": "Failed to create batch."
-            }
-        return {
-            "success": True,
-            **rows[0]
+
+        payload = {
+            "batch_no": batch_no,
+            "transaction_type": transaction_type,
+            "status": "DRAFT",
+            "warehouse_to": warehouse_to,
+            "requested_by": requested_by,
+            "remarks": remarks,
+            "total_lines": 0,
+            "valid_lines": 0,
+            "error_lines": 0,
         }
 
-    # =========================================================
-    # Add Line
-    # =========================================================
+        response = (
+            self._table("inventory_import_batches")
+            .insert(payload)
+            .execute()
+        )
+
+        data = self._unwrap_response(response)
+
+        if not data:
+            raise RuntimeError("Failed to create inventory import batch.")
+
+        return data[0] if isinstance(data, list) else data
+
+    # ==========================================================================
+    # GET BATCH
+    # ==========================================================================
+
+    def get_batch(self, batch_id: int):
+        response = (
+            self._table("inventory_import_batches")
+            .select("*")
+            .eq("id", batch_id)
+            .maybe_single()
+            .execute()
+        )
+
+        return self._unwrap_response(response)
+
+    # ==========================================================================
+    # GET BATCH BY NUMBER
+    # ==========================================================================
+
+    def get_batch_by_no(self, batch_no: str):
+        response = (
+            self._table("inventory_import_batches")
+            .select("*")
+            .eq("batch_no", batch_no)
+            .maybe_single()
+            .execute()
+        )
+
+        return self._unwrap_response(response)
+
+    # ==========================================================================
+    # ADD LINE
+    # ==========================================================================
+
     def add_line(
         self,
         batch_id: int,
         line_no: int,
         warehouse_id: int,
         sku: str,
-        qty: float,
-        unit_cost: float,
-        lot_no: Optional[str] = None,
-        mfg_date: Optional[str] = None,
-        expiry_date: Optional[str] = None,
-        reference_no: Optional[str] = None,
-        supplier_code: Optional[str] = None
+        qty,
+        unit_cost=None,
+        lot_no=None,
+        product_id=None,
+        mfg_date=None,
+        expiry_date=None,
+        reference_no=None,
+        supplier_code=None,
     ) -> Dict[str, Any]:
-        sql = """
-            INSERT INTO inventory_import_lines (
-                batch_id, line_no, warehouse_id, sku, qty, unit_cost, 
-                lot_no, mfg_date, expiry_date, reference_no, supplier_code
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """
-        rows = self.db.query(
-            sql,
-            (
-                batch_id,
-                line_no,
-                warehouse_id,
-                sku,
-                qty,
-                unit_cost,
-                lot_no,
-                mfg_date,
-                expiry_date,
-                reference_no,
-                supplier_code
-            )
-        )
-        return {
-            "success": bool(rows),
-            "line_id": rows[0]["id"] if rows else None
+
+        payload = {
+            "batch_id": batch_id,
+            "line_no": line_no,
+            "warehouse_id": warehouse_id,
+            "sku": sku,
+            "product_id": product_id,
+            "qty": qty,
+            "unit_cost": unit_cost,
+            "lot_no": lot_no,
+            "mfg_date": mfg_date,
+            "expiry_date": expiry_date,
+            "reference_no": reference_no,
+            "supplier_code": supplier_code,
+            "is_valid": False,
+            "error_message": None,
         }
 
-    # =========================================================
-    # Get Batch Header
-    # =========================================================
-    def get_batch(self, batch_no: str):
-        sql = """
-            SELECT * FROM inventory_import_batches WHERE batch_no = %s
-        """
-        rows = self.db.query(sql, (batch_no,))
-        return rows[0] if rows else None
+        response = (
+            self._table("inventory_import_lines")
+            .insert(payload)
+            .execute()
+        )
 
-    # =========================================================
-    # Get Batch Lines
-    # =========================================================
-    def get_batch_lines(self, batch_no: str):
-        sql = """
-            SELECT l.id, l.line_no, l.warehouse_id, w.name AS warehouse_name, 
-                   l.sku, l.product_id, p.name AS product_name, l.qty, 
-                   l.unit_cost, l.lot_no, l.mfg_date, l.expiry_date, 
-                   l.is_valid, l.error_message 
-            FROM inventory_import_lines l 
-            JOIN inventory_import_batches b ON b.id = l.batch_id 
-            LEFT JOIN products p ON p.id = l.product_id 
-            LEFT JOIN warehouses w ON w.id = l.warehouse_id 
-            WHERE b.batch_no = %s 
-            ORDER BY l.line_no
-        """
-        return self.db.query(sql, (batch_no,))
+        data = self._unwrap_response(response)
 
-    # =========================================================
-    # Submit (Validate)
-    # =========================================================
+        if not data:
+            raise RuntimeError("Failed to create inventory import line.")
+
+        return data[0] if isinstance(data, list) else data
+
+    # ==========================================================================
+    # GET LINES
+    # ==========================================================================
+
+    def get_lines(self, batch_id: int) -> List[Dict[str, Any]]:
+        response = (
+            self._table("inventory_import_lines")
+            .select("*")
+            .eq("batch_id", batch_id)
+            .order("line_no")
+            .execute()
+        )
+
+        data = self._unwrap_response(response)
+
+        return data or []
+
+    # ==========================================================================
+    # DELETE DRAFT LINE
+    # ==========================================================================
+
+    def delete_line(self, line_id: int):
+        response = (
+            self._table("inventory_import_lines")
+            .delete()
+            .eq("id", line_id)
+            .execute()
+        )
+
+        return self._unwrap_response(response)
+
+    # ==========================================================================
+    # SUBMIT
+    # ==========================================================================
+
     def submit_batch(self, batch_no: str) -> Dict[str, Any]:
-        sql = """
-            SELECT public.submit_inventory_import_batch(%s) AS result
-        """
-        rows = self.db.query(sql, (batch_no,))
-        if not rows:
-            return {
-                "success": False,
-                "message": "No response from database."
-            }
-        return rows[0]["result"]
 
-    # =========================================================
-    # Approve (Post)
-    # =========================================================
-    def approve_batch(self, batch_no: str) -> Dict[str, Any]:
-        sql = """
-            SELECT public.approve_inventory_import_batch(%s) AS result
-        """
-        rows = self.db.query(sql, (batch_no,))
-        if not rows:
-            return {
-                "success": False,
-                "message": "No response from database."
-            }
-        return rows[0]["result"]
+        response = self.client.rpc(
+            "submit_inventory_import_batch",
+            {
+                "p_batch_no": batch_no,
+            },
+        ).execute()
 
-    # =========================================================
-    # Pending Queue
-    # =========================================================
-    def get_pending_batches(self):
-        sql = """
-            SELECT b.id, b.batch_no, b.transaction_type, b.status, 
-                   b.total_lines, b.valid_lines, b.error_lines, 
-                   b.requested_by, u.username AS requested_by_username, 
-                   w.name AS warehouse_name, b.remarks, b.created_at 
-            FROM inventory_import_batches b 
-            LEFT JOIN users u ON u.id = b.requested_by 
-            LEFT JOIN warehouses w ON w.id = b.warehouse_to 
-            WHERE upper(b.status) = 'PENDING' 
-            ORDER BY b.created_at ASC
-        """
-        return self.db.query(sql)
+        data = self._unwrap_response(response)
 
-    # =========================================================
-    # Draft Queue
-    # =========================================================
-    def get_draft_batches(self):
-        sql = """
-            SELECT b.id, b.batch_no, b.transaction_type, b.status, 
-                   b.total_lines, b.valid_lines, b.error_lines, 
-                   w.name AS warehouse_name, b.remarks, b.created_at 
-            FROM inventory_import_batches b 
-            LEFT JOIN warehouses w ON w.id = b.warehouse_to 
-            WHERE upper(b.status) = 'DRAFT' 
-            ORDER BY b.created_at DESC
-        """
-        return self.db.query(sql)
+        if isinstance(data, dict):
+            return data
 
-    # =========================================================
-    # Recent History
-    # =========================================================
-    def get_recent_batches(self, limit: int = 20):
-        sql = """
-            SELECT b.id, b.batch_no, b.transaction_type, b.status, 
-                   b.total_lines, b.valid_lines, b.error_lines, 
-                   w.name AS warehouse_name, u1.username AS requested_by, 
-                   u2.username AS approved_by, b.created_at, b.approved_at, b.posted_at 
-            FROM inventory_import_batches b 
-            LEFT JOIN warehouses w ON w.id = b.warehouse_to 
-            LEFT JOIN users u1 ON u1.id = b.requested_by 
-            LEFT JOIN users u2 ON u2.id = b.approved_by 
-            ORDER BY b.created_at DESC 
-            LIMIT %s
-        """
-        return self.db.query(sql, (limit,))
+        return {
+            "success": False,
+            "message": "Unexpected submit RPC response.",
+            "data": data,
+        }
 
-    # =========================================================
-    # Generate Next Batch Number
-    # =========================================================
-    def generate_batch_no(self, prefix: str = "INV") -> str:
-        sql = """
-            SELECT COUNT(*) + 1 AS seq 
-            FROM inventory_import_batches 
-            WHERE created_at::date = CURRENT_DATE
-        """
-        rows = self.db.query(sql)
-        seq = rows[0]["seq"] if rows else 1
-        today = datetime.now().strftime("%Y%m%d")
-        return f"{prefix}-{today}-{int(seq):04d}"
+    # ==========================================================================
+    # APPROVE
+    # ==========================================================================
+
+    def approve_batch(
+        self,
+        batch_id: int,
+        checker_id: str,
+    ) -> Dict[str, Any]:
+
+        response = self.client.rpc(
+            "approve_inventory_import_batch",
+            {
+                "p_batch_id": batch_id,
+                "p_checker_id": checker_id,
+            },
+        ).execute()
+
+        data = self._unwrap_response(response)
+
+        if isinstance(data, dict):
+            return data
+
+        return {
+            "success": False,
+            "message": "Unexpected approval RPC response.",
+            "data": data,
+        }
+
+    # ==========================================================================
+    # PENDING QUEUE
+    # ==========================================================================
+
+    def get_pending_batches(self) -> List[Dict[str, Any]]:
+
+        response = (
+            self._table("inventory_import_batches")
+            .select("*")
+            .eq("status", "PENDING")
+            .order("created_at", desc=False)
+            .execute()
+        )
+
+        data = self._unwrap_response(response)
+
+        return data or []
+
+    # ==========================================================================
+    # ALL BATCHES
+    # ==========================================================================
+
+    def get_batches(self, limit: int = 100):
+
+        response = (
+            self._table("inventory_import_batches")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+
+        data = self._unwrap_response(response)
+
+        return data or []
