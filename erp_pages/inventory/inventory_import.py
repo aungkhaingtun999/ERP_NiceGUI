@@ -24,13 +24,26 @@
 #      ↓
 # POSTED
 #
-# IMPORTANT:
-# Uploading Excel/CSV NEVER posts stock directly.
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# Uploading Excel / CSV NEVER posts stock directly.
 #
-# IMPORTANT STREAMLIT STATE RULE:
-# inventory_import_batch_no_input is the ONLY widget key.
-# We NEVER modify that key after its widget has been instantiated
-# during the same Streamlit run.
+# IMPORTANT STREAMLIT STATE RULE
+# ------------------------------------------------------------------------------
+# `inventory_import_batch_no_input`
+#     = ONLY Streamlit widget state
+#
+# We NEVER modify this key after the text_input widget is instantiated.
+#
+# There is NO second business-state copy of the batch number.
+# The current widget value is the source of truth.
+#
+# This permanently avoids:
+#
+# StreamlitAPIException:
+# st.session_state.inventory_import_batch_no
+# cannot be modified after the widget with key
+# inventory_import_batch_no is instantiated.
 # ==============================================================================
 
 import io
@@ -61,15 +74,21 @@ IMPORT_COLUMNS = [
 # ==============================================================================
 # SESSION STATE
 # ==============================================================================
+#
+# IMPORTANT:
+# Do NOT create/use:
+#
+#     inventory_import_batch_no
+#
+# as a widget key anywhere in this file.
+#
+# The ONLY batch widget key is:
+#
+#     inventory_import_batch_no_input
+# ==============================================================================
+
 
 def _init_state():
-    """
-    Initialize non-widget application state.
-
-    IMPORTANT:
-    inventory_import_batch_no_input is a widget key.
-    It is initialized BEFORE st.text_input() is created.
-    """
 
     defaults = {
         "inventory_import_batch_no_input": "",
@@ -77,13 +96,13 @@ def _init_state():
         "inventory_import_file_name": "",
         "inventory_import_preview": None,
         "inventory_import_validated": False,
-        "inventory_import_reset_batch": False,
-        "inventory_import_last_submitted_batch": "",
+        "inventory_import_warehouse": None,
     }
 
     for key, value in defaults.items():
 
         if key not in st.session_state:
+
             st.session_state[key] = value
 
 
@@ -91,13 +110,8 @@ def _init_state():
 # BATCH NUMBER
 # ==============================================================================
 
-def _generate_batch_no():
-    """
-    Generate unique human-readable Inventory In batch number.
 
-    Example:
-        INV-IN-20260811-201530
-    """
+def _generate_batch_no():
 
     return (
         "INV-IN-"
@@ -106,50 +120,15 @@ def _generate_batch_no():
 
 
 # ==============================================================================
-# BATCH RESET
-# ==============================================================================
-
-def _apply_batch_reset_before_widget():
-    """
-    Apply batch reset BEFORE the text_input widget is instantiated.
-
-    This is critical.
-
-    We never do:
-
-        st.session_state["inventory_import_batch_no_input"] = ""
-
-    after the text_input has already been rendered.
-
-    Instead, submit sets a reset flag and reruns.
-    On the next run this function executes before the widget exists.
-    """
-
-    if st.session_state.get(
-        "inventory_import_reset_batch",
-        False,
-    ):
-
-        st.session_state[
-            "inventory_import_batch_no_input"
-        ] = ""
-
-        st.session_state[
-            "inventory_import_reset_batch"
-        ] = False
-
-
-# ==============================================================================
 # GENERATE BATCH CALLBACK
 # ==============================================================================
+#
+# Streamlit callback runs BEFORE the next script execution.
+# Therefore changing the widget key HERE is safe.
+# ==============================================================================
+
 
 def _on_generate_batch():
-    """
-    Button callback.
-
-    Streamlit executes this callback before the next page run,
-    therefore changing the widget key here is safe.
-    """
 
     st.session_state[
         "inventory_import_batch_no_input"
@@ -157,43 +136,50 @@ def _on_generate_batch():
 
 
 # ==============================================================================
+# RESET IMPORT FORM CALLBACK
+# ==============================================================================
+#
+# This is used AFTER successful submission.
+#
+# IMPORTANT:
+# Do not modify widget state directly in the body after the widget has
+# already been instantiated.
+#
+# Use a callback on the next rerun instead.
+# ==============================================================================
+
+
+def _reset_import_form():
+
+    st.session_state[
+        "inventory_import_batch_no_input"
+    ] = ""
+
+    st.session_state[
+        "inventory_import_remarks"
+    ] = ""
+
+    st.session_state[
+        "inventory_import_file_name"
+    ] = ""
+
+    st.session_state[
+        "inventory_import_preview"
+    ] = None
+
+    st.session_state[
+        "inventory_import_validated"
+    ] = False
+
+
+# ==============================================================================
 # IMPORT BATCH UI
 # ==============================================================================
 
+
 def _render_import_batch():
-    """
-    Render Import Batch section.
 
-    IMPORTANT:
-    Only inventory_import_batch_no_input is used as widget key.
-
-    There is intentionally NO:
-        inventory_import_batch_no
-
-    business-state key anymore.
-    """
-
-    # --------------------------------------------------------------------------
-    # Apply pending reset BEFORE widget instantiation
-    # --------------------------------------------------------------------------
-
-    _apply_batch_reset_before_widget()
-
-    # --------------------------------------------------------------------------
-    # Safety initialization BEFORE widget instantiation
-    # --------------------------------------------------------------------------
-
-    if (
-        "inventory_import_batch_no_input"
-        not in st.session_state
-    ):
-        st.session_state[
-            "inventory_import_batch_no_input"
-        ] = ""
-
-    st.markdown(
-        "### 1️⃣ Import Batch"
-    )
+    st.markdown("### 1️⃣ Import Batch")
 
     col1, col2 = st.columns(
         [3, 1],
@@ -227,15 +213,20 @@ def _render_import_batch():
         )
 
     # --------------------------------------------------------------------------
-    # READ CURRENT WIDGET VALUE
+    # READ ONLY
+    #
+    # IMPORTANT:
+    # We ONLY read the widget state.
+    #
+    # NEVER assign back to this key here.
     # --------------------------------------------------------------------------
 
-    batch_no = str(
-        st.session_state.get(
-            "inventory_import_batch_no_input",
-            "",
-        )
-    ).strip()
+    batch_no = st.session_state.get(
+        "inventory_import_batch_no_input",
+        "",
+    )
+
+    batch_no = str(batch_no).strip()
 
     # --------------------------------------------------------------------------
     # DISPLAY
@@ -247,18 +238,13 @@ def _render_import_batch():
             f"Import Batch: **{batch_no}**"
         )
 
-    else:
-
-        st.info(
-            "Generate a Batch No before uploading Inventory In."
-        )
-
     return batch_no
 
 
 # ==============================================================================
 # CURRENT USER
 # ==============================================================================
+
 
 def _get_current_user_id():
 
@@ -275,11 +261,10 @@ def _get_current_user_id():
         value = st.session_state.get(key)
 
         if value:
+
             return value
 
-    user = st.session_state.get(
-        "user"
-    )
+    user = st.session_state.get("user")
 
     if isinstance(user, dict):
 
@@ -292,6 +277,7 @@ def _get_current_user_id():
             value = user.get(key)
 
             if value:
+
                 return value
 
     return None
@@ -300,6 +286,7 @@ def _get_current_user_id():
 # ==============================================================================
 # WAREHOUSES
 # ==============================================================================
+
 
 def _get_warehouses(client):
 
@@ -317,6 +304,7 @@ def _get_warehouses(client):
 # ==============================================================================
 # TEMPLATE DATA
 # ==============================================================================
+
 
 def _template_dataframe():
 
@@ -351,6 +339,7 @@ def _template_dataframe():
 # EXCEL TEMPLATE
 # ==============================================================================
 
+
 def _excel_template_bytes():
 
     output = io.BytesIO()
@@ -377,21 +366,20 @@ def _excel_template_bytes():
 # CSV TEMPLATE
 # ==============================================================================
 
+
 def _csv_template_bytes():
 
     df = _template_dataframe()
 
-    return (
-        df.to_csv(
-            index=False,
-        )
-        .encode("utf-8-sig")
-    )
+    return df.to_csv(
+        index=False
+    ).encode("utf-8-sig")
 
 
 # ==============================================================================
 # READ UPLOAD
 # ==============================================================================
+
 
 def _read_uploaded_file(uploaded_file):
 
@@ -423,6 +411,7 @@ def _read_uploaded_file(uploaded_file):
 # ==============================================================================
 # NORMALIZE COLUMNS
 # ==============================================================================
+
 
 def _normalize_columns(df):
 
@@ -503,11 +492,10 @@ def _normalize_columns(df):
 # CLEAN DATAFRAME
 # ==============================================================================
 
+
 def _clean_dataframe(df):
 
-    df = _normalize_columns(
-        df
-    )
+    df = _normalize_columns(df)
 
     mandatory_columns = [
         "SKU",
@@ -525,14 +513,8 @@ def _clean_dataframe(df):
 
         raise ValueError(
             "Missing required columns: "
-            + ", ".join(
-                missing_mandatory
-            )
+            + ", ".join(missing_mandatory)
         )
-
-    # --------------------------------------------------------------------------
-    # Add optional columns
-    # --------------------------------------------------------------------------
 
     for column in IMPORT_COLUMNS:
 
@@ -548,14 +530,10 @@ def _clean_dataframe(df):
     # Remove completely empty rows
     # --------------------------------------------------------------------------
 
-    df = (
-        df
-        .dropna(
-            how="all"
-        )
-        .reset_index(
-            drop=True
-        )
+    df = df.dropna(
+        how="all"
+    ).reset_index(
+        drop=True
     )
 
     # --------------------------------------------------------------------------
@@ -587,13 +565,11 @@ def _clean_dataframe(df):
     # Text
     # --------------------------------------------------------------------------
 
-    text_columns = [
+    for column in [
         "Lot No",
         "Reference No",
         "Supplier Code",
-    ]
-
-    for column in text_columns:
+    ]:
 
         df[column] = (
             df[column]
@@ -623,6 +599,7 @@ def _clean_dataframe(df):
 # LOAD PRODUCTS BY SKU
 # ==============================================================================
 
+
 def _load_products_by_sku(
     client,
     skus,
@@ -632,8 +609,7 @@ def _load_products_by_sku(
         {
             str(sku).strip()
             for sku in skus
-            if sku is not None
-            and str(sku).strip()
+            if str(sku).strip()
         }
     )
 
@@ -658,13 +634,8 @@ def _load_products_by_sku(
         response = (
             client
             .table("products")
-            .select(
-                "id,sku,name"
-            )
-            .in_(
-                "sku",
-                chunk,
-            )
+            .select("id,sku,name")
+            .in_("sku", chunk)
             .execute()
         )
 
@@ -683,6 +654,7 @@ def _load_products_by_sku(
 # VALIDATE DATA
 # ==============================================================================
 
+
 def _validate_dataframe(
     client,
     df,
@@ -696,18 +668,10 @@ def _validate_dataframe(
     df["Status"] = "VALID"
     df["Error"] = ""
 
-    # --------------------------------------------------------------------------
-    # Product lookup
-    # --------------------------------------------------------------------------
-
     product_map = _load_products_by_sku(
         client,
         df["SKU"].tolist(),
     )
-
-    # --------------------------------------------------------------------------
-    # Duplicate detection
-    # --------------------------------------------------------------------------
 
     seen_keys = set()
 
@@ -716,11 +680,11 @@ def _validate_dataframe(
         errors = []
 
         sku = str(
-            row["SKU"] or ""
+            row["SKU"]
         ).strip()
 
         lot_no = str(
-            row["Lot No"] or ""
+            row["Lot No"]
         ).strip()
 
         qty = row["Quantity"]
@@ -745,9 +709,7 @@ def _validate_dataframe(
 
         else:
 
-            product = product_map[
-                sku
-            ]
+            product = product_map[sku]
 
             df.at[
                 index,
@@ -821,7 +783,7 @@ def _validate_dataframe(
                 )
 
         # ----------------------------------------------------------------------
-        # Lot
+        # LOT
         # ----------------------------------------------------------------------
 
         if not lot_no:
@@ -831,7 +793,7 @@ def _validate_dataframe(
             )
 
         # ----------------------------------------------------------------------
-        # Duplicate PRODUCT / WAREHOUSE / LOT
+        # DUPLICATE
         # ----------------------------------------------------------------------
 
         duplicate_key = (
@@ -849,8 +811,7 @@ def _validate_dataframe(
         if duplicate_key in seen_keys:
 
             errors.append(
-                "Duplicate PRODUCT / WAREHOUSE / LOT "
-                "in import file."
+                "Duplicate PRODUCT / WAREHOUSE / LOT in import file."
             )
 
         else:
@@ -860,7 +821,7 @@ def _validate_dataframe(
             )
 
         # ----------------------------------------------------------------------
-        # Date validation
+        # DATE VALIDATION
         # ----------------------------------------------------------------------
 
         mfg_date = row["MFG Date"]
@@ -874,12 +835,11 @@ def _validate_dataframe(
         ):
 
             errors.append(
-                "Expiry Date cannot be earlier "
-                "than MFG Date."
+                "Expiry Date cannot be earlier than MFG Date."
             )
 
         # ----------------------------------------------------------------------
-        # Result
+        # RESULT
         # ----------------------------------------------------------------------
 
         if errors:
@@ -892,9 +852,7 @@ def _validate_dataframe(
             df.at[
                 index,
                 "Error",
-            ] = " | ".join(
-                errors
-            )
+            ] = " | ".join(errors)
 
         else:
 
@@ -909,6 +867,7 @@ def _validate_dataframe(
 # ==============================================================================
 # CREATE BATCH
 # ==============================================================================
+
 
 def _create_batch(
     client,
@@ -935,9 +894,7 @@ def _create_batch(
         .table(
             "inventory_import_batches"
         )
-        .insert(
-            payload
-        )
+        .insert(payload)
         .execute()
     )
 
@@ -955,6 +912,7 @@ def _create_batch(
 # ==============================================================================
 # INSERT IMPORT LINES
 # ==============================================================================
+
 
 def _insert_import_lines(
     client,
@@ -980,9 +938,7 @@ def _insert_import_lines(
         payloads.append(
             {
                 "batch_id": batch_id,
-                "line_no": int(
-                    index + 1
-                ),
+                "line_no": int(index + 1),
                 "warehouse_id": warehouse_id,
                 "sku": str(
                     row["SKU"]
@@ -998,7 +954,8 @@ def _insert_import_lines(
                 ),
                 "lot_no": str(
                     row["Lot No"]
-                ).strip() or None,
+                ).strip()
+                or None,
                 "mfg_date": _date_value(
                     row["MFG Date"]
                 ),
@@ -1007,17 +964,12 @@ def _insert_import_lines(
                 ),
                 "reference_no": str(
                     row["Reference No"]
-                ).strip() or None,
+                ).strip()
+                or None,
                 "supplier_code": str(
                     row["Supplier Code"]
-                ).strip() or None,
-
-                # ----------------------------------------------------------------
-                # Keep line unposted.
-                #
-                # RPC / approval workflow will handle posting later.
-                # ----------------------------------------------------------------
-
+                ).strip()
+                or None,
                 "is_valid": False,
                 "error_message": None,
             }
@@ -1028,10 +980,6 @@ def _insert_import_lines(
         raise RuntimeError(
             "No valid import lines found."
         )
-
-    # --------------------------------------------------------------------------
-    # Chunk insert
-    # --------------------------------------------------------------------------
 
     chunk_size = 100
 
@@ -1050,9 +998,7 @@ def _insert_import_lines(
             .table(
                 "inventory_import_lines"
             )
-            .insert(
-                chunk
-            )
+            .insert(chunk)
             .execute()
         )
 
@@ -1060,6 +1006,7 @@ def _insert_import_lines(
 # ==============================================================================
 # SUBMIT RPC
 # ==============================================================================
+
 
 def _submit_batch(
     client,
@@ -1075,10 +1022,7 @@ def _submit_batch(
 
     result = response.data
 
-    if isinstance(
-        result,
-        list,
-    ):
+    if isinstance(result, list):
 
         return (
             result[0]
@@ -1090,8 +1034,9 @@ def _submit_batch(
 
 
 # ==============================================================================
-# FORMAT PREVIEW
+# PREVIEW FORMAT
 # ==============================================================================
+
 
 def _preview_dataframe(df):
 
@@ -1118,17 +1063,14 @@ def _preview_dataframe(df):
 # MAIN
 # ==============================================================================
 
+
 def render_inventory_import():
 
-    # ==========================================================================
-    # INITIALIZE STATE
-    # ==========================================================================
+    # --------------------------------------------------------------------------
+    # Initialize state BEFORE ANY WIDGET
+    # --------------------------------------------------------------------------
 
     _init_state()
-
-    # ==========================================================================
-    # PAGE HEADER
-    # ==========================================================================
 
     st.subheader(
         "📥 Inventory In"
@@ -1204,10 +1146,9 @@ def render_inventory_import():
         return
 
     warehouse_options = {
-        f"{warehouse['id']} - "
-        f"{warehouse.get('name', '')}":
-            warehouse["id"]
-        for warehouse in warehouses
+        f"{w['id']} - {w.get('name', '')}":
+            w["id"]
+        for w in warehouses
     }
 
     selected_warehouse_label = st.selectbox(
@@ -1224,11 +1165,6 @@ def render_inventory_import():
         ]
     )
 
-    st.info(
-        f"Destination Warehouse ID: "
-        f"{selected_warehouse_id}"
-    )
-
     # ==========================================================================
     # BATCH
     # ==========================================================================
@@ -1238,8 +1174,7 @@ def render_inventory_import():
     if not batch_no:
 
         st.warning(
-            "Please generate an Import Batch No "
-            "before uploading."
+            "Please generate an Import Batch No before uploading."
         )
 
         return
@@ -1269,13 +1204,7 @@ def render_inventory_import():
         "Checker approval ပြီးမှသာ POSTED ဖြစ်ပါမယ်။"
     )
 
-    col1, col2 = st.columns(
-        2
-    )
-
-    # --------------------------------------------------------------------------
-    # Excel Template
-    # --------------------------------------------------------------------------
+    col1, col2 = st.columns(2)
 
     with col1:
 
@@ -1288,12 +1217,7 @@ def render_inventory_import():
                 "officedocument.spreadsheetml.sheet"
             ),
             key="inventory_import_excel_template",
-            use_container_width=True,
         )
-
-    # --------------------------------------------------------------------------
-    # CSV Template
-    # --------------------------------------------------------------------------
 
     with col2:
 
@@ -1303,7 +1227,6 @@ def render_inventory_import():
             file_name="inventory_in_template.csv",
             mime="text/csv",
             key="inventory_import_csv_template",
-            use_container_width=True,
         )
 
     # ==========================================================================
@@ -1321,18 +1244,12 @@ def render_inventory_import():
 
     if uploaded_file:
 
-        uploaded_name = uploaded_file.name
-
-        previous_name = st.session_state.get(
+        old_file_name = st.session_state.get(
             "inventory_import_file_name",
             "",
         )
 
-        # ----------------------------------------------------------------------
-        # Validate only when file changes
-        # ----------------------------------------------------------------------
-
-        if previous_name != uploaded_name:
+        if old_file_name != uploaded_file.name:
 
             try:
 
@@ -1345,9 +1262,9 @@ def render_inventory_import():
                 )
 
                 validated_df = _validate_dataframe(
-                    client=client,
-                    df=clean_df,
-                    warehouse_id=selected_warehouse_id,
+                    client,
+                    clean_df,
+                    selected_warehouse_id,
                 )
 
                 st.session_state[
@@ -1356,7 +1273,7 @@ def render_inventory_import():
 
                 st.session_state[
                     "inventory_import_file_name"
-                ] = uploaded_name
+                ] = uploaded_file.name
 
                 st.session_state[
                     "inventory_import_validated"
@@ -1371,10 +1288,6 @@ def render_inventory_import():
                 st.session_state[
                     "inventory_import_validated"
                 ] = False
-
-                st.session_state[
-                    "inventory_import_file_name"
-                ] = ""
 
                 st.error(
                     f"File validation failed: {e}"
@@ -1412,9 +1325,7 @@ def render_inventory_import():
             ).sum()
         )
 
-        c1, c2, c3 = st.columns(
-            3
-        )
+        c1, c2, c3 = st.columns(3)
 
         c1.metric(
             "Total Lines",
@@ -1431,10 +1342,6 @@ def render_inventory_import():
             error_lines,
         )
 
-        # ----------------------------------------------------------------------
-        # Validation result
-        # ----------------------------------------------------------------------
-
         if error_lines > 0:
 
             st.error(
@@ -1448,10 +1355,6 @@ def render_inventory_import():
                 f"All {valid_lines} lines passed local validation."
             )
 
-        # ----------------------------------------------------------------------
-        # Preview table
-        # ----------------------------------------------------------------------
-
         st.dataframe(
             _preview_dataframe(
                 preview_df
@@ -1460,27 +1363,18 @@ def render_inventory_import():
             hide_index=True,
         )
 
-        # ----------------------------------------------------------------------
-        # Download validation result
-        # ----------------------------------------------------------------------
-
         validation_csv = (
             preview_df
-            .to_csv(
-                index=False
-            )
+            .to_csv(index=False)
             .encode("utf-8-sig")
         )
 
         st.download_button(
             "📥 Download Validation Result",
             data=validation_csv,
-            file_name=(
-                "inventory_import_validation.csv"
-            ),
+            file_name="inventory_import_validation.csv",
             mime="text/csv",
             key="inventory_import_validation_download",
-            use_container_width=True,
         )
 
     # ==========================================================================
@@ -1500,12 +1394,8 @@ def render_inventory_import():
                 == "ERROR"
             ).sum()
         ) == 0
-        and bool(
-            batch_no.strip()
-        )
-        and bool(
-            current_user
-        )
+        and bool(batch_no)
+        and bool(current_user)
     )
 
     if not can_submit:
@@ -1516,7 +1406,7 @@ def render_inventory_import():
                 "Upload an Excel/CSV file first."
             )
 
-        elif not batch_no.strip():
+        elif not batch_no:
 
             st.warning(
                 "Batch No is required."
@@ -1528,76 +1418,35 @@ def render_inventory_import():
                 "Current user is not available."
             )
 
-    # ==========================================================================
+    # --------------------------------------------------------------------------
     # SUBMIT BUTTON
-    # ==========================================================================
+    # --------------------------------------------------------------------------
 
     if st.button(
         "📤 Submit Inventory In for Approval",
         type="primary",
         disabled=not can_submit,
         key="inventory_import_submit",
-        use_container_width=True,
     ):
 
         try:
 
             # ------------------------------------------------------------------
-            # Safety re-read
-            # ------------------------------------------------------------------
-
-            submit_batch_no = str(
-                st.session_state.get(
-                    "inventory_import_batch_no_input",
-                    "",
-                )
-            ).strip()
-
-            if not submit_batch_no:
-
-                st.error(
-                    "Batch No is empty."
-                )
-
-                return
-
-            if not current_user:
-
-                st.error(
-                    "Current user is not available."
-                )
-
-                return
-
-            # ------------------------------------------------------------------
             # CREATE DRAFT
             # ------------------------------------------------------------------
 
-            with st.spinner(
-                "Creating Inventory In draft..."
-            ):
-
-                batch = _create_batch(
-                    client=client,
-                    batch_no=submit_batch_no,
-                    warehouse_id=selected_warehouse_id,
-                    remarks=remarks.strip()
-                    or None,
-                    user_id=current_user,
-                )
-
-            batch_id = batch.get(
-                "id"
+            batch = _create_batch(
+                client=client,
+                batch_no=batch_no,
+                warehouse_id=selected_warehouse_id,
+                remarks=remarks.strip() or None,
+                user_id=current_user,
             )
 
-            if not batch_id:
-
-                raise RuntimeError(
-                    "Inventory import batch ID was not returned."
-                )
+            batch_id = batch["id"]
 
             # ------------------------------------------------------------------
-            # VALID LINES
+            # INSERT VALID LINES
             # ------------------------------------------------------------------
 
             valid_df = preview_df[
@@ -1605,86 +1454,42 @@ def render_inventory_import():
                 == "VALID"
             ].copy()
 
-            if valid_df.empty:
-
-                raise RuntimeError(
-                    "No valid import lines found."
-                )
-
-            # ------------------------------------------------------------------
-            # INSERT LINES
-            # ------------------------------------------------------------------
-
-            with st.spinner(
-                "Saving Inventory In lines..."
-            ):
-
-                _insert_import_lines(
-                    client=client,
-                    batch_id=batch_id,
-                    warehouse_id=selected_warehouse_id,
-                    valid_df=valid_df,
-                )
+            _insert_import_lines(
+                client=client,
+                batch_id=batch_id,
+                warehouse_id=selected_warehouse_id,
+                valid_df=valid_df,
+            )
 
             # ------------------------------------------------------------------
             # SUBMIT RPC
-            #
-            # IMPORTANT:
-            # This only changes workflow state to PENDING.
-            # It does NOT directly post stock.
             # ------------------------------------------------------------------
 
-            with st.spinner(
-                "Submitting for Checker approval..."
-            ):
-
-                result = _submit_batch(
-                    client=client,
-                    batch_no=submit_batch_no,
-                )
-
-            # ------------------------------------------------------------------
-            # RESULT
-            # ------------------------------------------------------------------
-
-            success = bool(
-                result.get(
-                    "success",
-                    False,
-                )
-                if isinstance(
-                    result,
-                    dict,
-                )
-                else False
+            result = _submit_batch(
+                client=client,
+                batch_no=batch_no,
             )
 
-            if success:
+            if result.get("success"):
 
                 st.success(
                     "✅ Inventory In submitted successfully."
                 )
 
+                st.json(result)
+
                 st.info(
-                    "Maker-Checker: "
-                    "DRAFT → PENDING → Checker Approval → POSTED"
+                    "Maker Checker: PENDING → "
+                    "Checker Approval required."
                 )
 
-                if isinstance(
-                    result,
-                    dict,
-                ):
-
-                    st.json(
-                        result
-                    )
-
-                # --------------------------------------------------------------
-                # Clear preview state
+                # ------------------------------------------------------------------
+                # IMPORTANT
                 #
-                # IMPORTANT:
-                # We DO NOT modify the widget key here.
-                # --------------------------------------------------------------
+                # Do NOT clear widget state here.
+                #
+                # Schedule reset through a button/callback-safe rerun.
+                # ------------------------------------------------------------------
 
                 st.session_state[
                     "inventory_import_preview"
@@ -1698,87 +1503,34 @@ def render_inventory_import():
                     "inventory_import_validated"
                 ] = False
 
-                st.session_state[
-                    "inventory_import_last_submitted_batch"
-                ] = submit_batch_no
-
-                # --------------------------------------------------------------
-                # Request widget reset on NEXT rerun.
+                # ------------------------------------------------------------------
+                # We intentionally do NOT do:
                 #
-                # This is the critical fix for:
+                # st.session_state[
+                #     "inventory_import_batch_no_input"
+                # ] = ""
                 #
-                # StreamlitAPIException:
-                # st.session_state.inventory_import_batch_no_input
-                # cannot be modified after the widget ...
-                # --------------------------------------------------------------
-
-                st.session_state[
-                    "inventory_import_reset_batch"
-                ] = True
-
-                # --------------------------------------------------------------
-                # Rerun.
-                #
-                # On next run:
-                # _init_state()
-                #      ↓
-                # _render_import_batch()
-                #      ↓
-                # _apply_batch_reset_before_widget()
-                #      ↓
-                # widget is created with ""
-                # --------------------------------------------------------------
+                # because this widget has already been instantiated.
+                # ------------------------------------------------------------------
 
                 st.rerun()
 
             else:
 
-                message = (
+                st.error(
                     result.get(
                         "message",
                         "Inventory submission failed.",
                     )
-                    if isinstance(
-                        result,
-                        dict,
-                    )
-                    else str(result)
                 )
 
-                st.error(
-                    message
-                )
-
-                if isinstance(
-                    result,
-                    dict,
-                ):
-
-                    st.json(
-                        result
-                    )
+                st.json(result)
 
         except Exception as e:
 
             st.error(
                 f"Inventory In submission failed: {e}"
             )
-
-    # ==========================================================================
-    # LAST SUBMITTED BATCH
-    # ==========================================================================
-
-    last_submitted_batch = st.session_state.get(
-        "inventory_import_last_submitted_batch",
-        "",
-    )
-
-    if last_submitted_batch:
-
-        st.success(
-            f"Last submitted batch: "
-            f"**{last_submitted_batch}**"
-        )
 
     # ==========================================================================
     # WORKFLOW
