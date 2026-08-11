@@ -2059,8 +2059,6 @@ def render_integrity(
 # PART 3 / 3
 # PRODUCT 360° — MAIN RENDER + COMPATIBILITY ENTRY
 # ==============================================================================
-
-
 # ==============================================================================
 # MAIN PRODUCT 360 RENDER
 # ==============================================================================
@@ -2070,13 +2068,22 @@ def render_product_360(
     product_id: int,
 ):
     """
-    Render complete Product 360°.
+    Main Product 360 renderer.
 
-    This function is the main internal renderer.
+    IMPORTANT:
+    Integrity calculation is intentionally performed locally here.
+    This avoids dependency on a separate get_integrity() function and
+    prevents NameError when this module is loaded through Inventory page.
     """
 
+    # --------------------------------------------------------------------------
+    # VALIDATE PRODUCT ID
+    # --------------------------------------------------------------------------
+
     try:
+
         product_id = int(product_id)
+
     except (
         TypeError,
         ValueError,
@@ -2124,20 +2131,122 @@ def render_product_360(
         product_id,
     )
 
-    # --------------------------------------------------------------------------
-    # INTEGRITY
-    # --------------------------------------------------------------------------
+    # ==========================================================================
+    # INVENTORY INTEGRITY
+    # ==========================================================================
+    #
+    # DO NOT CALL get_integrity() HERE.
+    #
+    # Calculate directly so Product 360 cannot fail because of a missing
+    # helper function.
+    # ==========================================================================
 
-    integrity = get_integrity(
-        product,
-        warehouse_rows,
-        batch_rows,
-        fifo_rows,
+    master_stock = to_decimal(
+        product.get("stock")
     )
 
+    warehouse_stock = Decimal("0")
+
+    for row in warehouse_rows:
+
+        warehouse_stock += to_decimal(
+            row.get("qty")
+        )
+
+    batch_remaining = Decimal("0")
+
+    for row in batch_rows:
+
+        batch_remaining += to_decimal(
+            row.get("qty_remaining")
+        )
+
+    fifo_remaining = Decimal("0")
+
+    for row in fifo_rows:
+
+        fifo_remaining += to_decimal(
+            row.get("qty_remaining")
+        )
+
+    integrity_warnings = []
+    integrity_passed = []
+
     # --------------------------------------------------------------------------
+    # WAREHOUSE vs FIFO
+    # --------------------------------------------------------------------------
+
+    if warehouse_stock == fifo_remaining:
+
+        integrity_passed.append(
+            "Warehouse stock matches FIFO remaining."
+        )
+
+    else:
+
+        integrity_warnings.append(
+            "Warehouse stock differs from FIFO remaining."
+        )
+
+    # --------------------------------------------------------------------------
+    # MASTER vs WAREHOUSE
+    # --------------------------------------------------------------------------
+
+    if master_stock == warehouse_stock:
+
+        integrity_passed.append(
+            "Master stock matches warehouse stock."
+        )
+
+    else:
+
+        integrity_warnings.append(
+            "Master stock differs from warehouse stock."
+        )
+
+    # --------------------------------------------------------------------------
+    # BATCH vs FIFO
+    # --------------------------------------------------------------------------
+
+    if batch_remaining == fifo_remaining:
+
+        integrity_passed.append(
+            "Batch remaining matches FIFO remaining."
+        )
+
+    else:
+
+        integrity_warnings.append(
+            "Batch remaining differs from FIFO remaining."
+        )
+
+    # --------------------------------------------------------------------------
+    # INTEGRITY OBJECT
+    # --------------------------------------------------------------------------
+
+    integrity = {
+        "master_stock":
+            master_stock,
+
+        "warehouse_stock":
+            warehouse_stock,
+
+        "batch_remaining":
+            batch_remaining,
+
+        "fifo_remaining":
+            fifo_remaining,
+
+        "warnings":
+            integrity_warnings,
+
+        "passed":
+            integrity_passed,
+    }
+
+    # ==========================================================================
     # TRANSACTION DATA
-    # --------------------------------------------------------------------------
+    # ==========================================================================
 
     sales_rows = get_sales(
         client,
@@ -2175,7 +2284,7 @@ def render_product_360(
     )
 
     # ==========================================================================
-    # HEADER
+    # PRODUCT HEADER
     # ==========================================================================
 
     render_product_header(
@@ -2185,7 +2294,7 @@ def render_product_360(
     st.divider()
 
     # ==========================================================================
-    # CURRENT INVENTORY STATUS
+    # CURRENT STATUS
     # ==========================================================================
 
     render_current_status(
@@ -2196,7 +2305,7 @@ def render_product_360(
     st.divider()
 
     # ==========================================================================
-    # PRICING INTELLIGENCE
+    # PRICING
     # ==========================================================================
 
     render_pricing(
@@ -2314,19 +2423,6 @@ def render_product_360(
 
 # ==============================================================================
 # COMPATIBILITY WRAPPER
-# ------------------------------------------------------------------------------
-# IMPORTANT
-#
-# page.py currently imports:
-#
-#     from .product_360 import render_product_360_page
-#
-# Therefore this function MUST exist.
-#
-# Do NOT rename page.py yet.
-# Do NOT change the import yet.
-#
-# This wrapper keeps the existing Inventory page compatible.
 # ==============================================================================
 
 def render_product_360_page(
@@ -2334,16 +2430,9 @@ def render_product_360_page(
     product_id: Optional[int] = None,
 ):
     """
-    Compatibility entry point used by inventory/page.py.
+    Compatibility wrapper used by:
 
-    Signature intentionally matches:
-
-        render_product_360_page(
-            client,
-            product_id,
-        )
-
-    It delegates to the main Product 360 renderer.
+        erp_pages/inventory/page.py
     """
 
     if client is None:
@@ -2382,7 +2471,8 @@ def render_product_360_page(
     render_product_360(
         client,
         product_id,
-    )
+)
+
 
 
 # ==============================================================================
