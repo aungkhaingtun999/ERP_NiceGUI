@@ -896,7 +896,30 @@ class InventoryService:
                 "is_active",
                 True
             )
+# ------------------------------------------------------------------
+# AUTO SELLING PRICE
+# If selling price is empty or zero,
+# calculate from purchase price and global markup.
+# ------------------------------------------------------------------
 
+selling_price = product_data.get("selling_price")
+purchase_price = float(product_data.get("purchase_price", 0) or 0)
+
+if selling_price is None or float(selling_price or 0) <= 0:
+
+    default_markup_percent = float(
+        self.settings.get_setting(
+            "DEFAULT_MARKUP_PERCENT",
+            0
+        ) or 0
+    )
+
+    product_data["selling_price"] = round(
+        purchase_price * (
+            1 + default_markup_percent / 100
+        ),
+        2
+    )
             result = (
                 self.client
                 .table("products")
