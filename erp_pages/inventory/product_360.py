@@ -887,11 +887,9 @@ def render_fifo(
     )
 
     if not rows:
-
         empty_history(
             "FIFO Cost Layers"
         )
-
         return
 
     display = []
@@ -900,13 +898,11 @@ def render_fifo(
         rows,
         start=1,
     ):
-
         qty_in_value = row.get(
             "qty_in"
         )
 
         if qty_in_value is None:
-
             qty_in_value = row.get(
                 "quantity"
             )
@@ -916,58 +912,24 @@ def render_fifo(
         )
 
         if remaining_value is None:
-
             remaining_value = row.get(
                 "remaining_qty"
             )
 
         display.append(
             {
-                "FIFO Rank":
-                    index,
-
-                "Layer ID":
-                    row.get(
-                        "id"
-                    ) or "-",
-
-                "Qty In":
-                    qty(
-                        qty_in_value
-                    ),
-
-                "Remaining":
-                    qty(
-                        remaining_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "Reference":
-                    row.get(
-                        "reference_type"
-                    ) or "-",
-
-                "Reference ID":
-                    row.get(
-                        "reference_id"
-                    ) or "-",
-
-                "Batch":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Expiry":
-                    row.get(
-                        "expiry_date")}
-             
-
+                "FIFO Rank": index,
+                "Layer ID": row.get("id") or "-",
+                "Qty In": qty(qty_in_value),
+                "Remaining": qty(remaining_value),
+                "Unit Cost": money(row.get("unit_cost")),
+                "Reference": row.get("reference_type") or "-",
+                "Reference ID": row.get("reference_id") or "-",
+                "Batch": row.get("batch_no") or "-",
+                "Expiry": row.get("expiry_date"),
+            }
+        )
+        
 # ==============================================================================
 # PART 2 / 3
 # PRODUCT 360° — UI RENDERERS
