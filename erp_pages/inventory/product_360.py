@@ -2,29 +2,23 @@
 # erp_pages/inventory/product_360.py
 #
 # ERP ENTERPRISE PRODUCT 360°
-# PART 1 / 3
-#
-# CLEAN REBUILD
+# CLEAN & OPTIMIZED BUILD
 # ------------------------------------------------------------------------------
 # Product Master
 # Warehouse Stock
 # Batch / FEFO
 # FIFO Cost Layers
-# Integrity
+# Pricing Intelligence
+# Sales / Purchases / Adjustments / Transfers / Refunds
+# Unified History & Audit
+# Integrity & Entry Points
 #
 # Compatibility:
 #     render_product_360_page(client, product_id)
 #     render_product_360(client, product_id)
 #     render_page(client, product_id)
 #
-# IMPORTANT
-# ------------------------------------------------------------------------------
-# READ ONLY MODULE
-# No stock mutation
-# No FIFO mutation
-# No approval mutation
-# No product creation
-#
+# IMPORTANT: READ ONLY MODULE
 # ==============================================================================
 
 from __future__ import annotations
@@ -48,53 +42,30 @@ UTC = ZoneInfo("UTC")
 def format_myanmar_time(value: Any) -> str:
     """
     Convert database timestamp to Myanmar Standard Time.
-
-    PostgreSQL timestamptz:
-        aware datetime
-
-    ISO timestamp:
-        supported
-
-    Naive datetime:
-        treated as UTC for safety
     """
-
     if value is None or value == "":
         return "-"
 
     try:
-
         if isinstance(value, str):
-
             text = value.strip()
-
             if not text:
                 return "-"
-
             if text.endswith("Z"):
                 text = text[:-1] + "+00:00"
-
             dt = datetime.fromisoformat(text)
-
         elif isinstance(value, datetime):
-
             dt = value
-
         else:
-
             return str(value)
 
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
 
         dt = dt.astimezone(MMT)
-
-        return dt.strftime(
-            "%Y-%m-%d %H:%M:%S MMT"
-        )
+        return dt.strftime("%Y-%m-%d %H:%M:%S MMT")
 
     except Exception:
-
         return str(value)
 
 
@@ -109,7 +80,6 @@ def to_decimal(
     """
     Safe Decimal conversion.
     """
-
     if value is None:
         return default
 
@@ -117,50 +87,28 @@ def to_decimal(
         return value
 
     try:
-
-        return Decimal(
-            str(value)
-        )
-
-    except (
-        InvalidOperation,
-        ValueError,
-        TypeError,
-    ):
-
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
         return default
 
 
 def money(value: Any) -> str:
     """
-    Format money.
-
-    Example:
-        1500 -> 1,500.00
+    Format money. Example: 1500 -> 1,500.00
     """
-
     return f"{to_decimal(value):,.2f}"
 
 
 def qty(value: Any) -> str:
     """
     Format quantity.
-
-    100     -> 100
-    10.250  -> 10.250
     """
-
     amount = to_decimal(value)
-
     try:
-
         if amount == amount.to_integral_value():
-
             return f"{int(amount):,}"
-
     except Exception:
         pass
-
     return f"{amount:,.3f}"
 
 
@@ -171,38 +119,17 @@ def qty(value: Any) -> str:
 def _execute(query: Any) -> Any:
     """
     Execute Supabase query safely.
-
-    Success:
-        list
-
-    Failure:
-        {"__error__": "..."}
     """
-
     try:
-
         result = query.execute()
-
-        data = getattr(
-            result,
-            "data",
-            None,
-        )
-
+        data = getattr(result, "data", None)
         return data or []
-
     except Exception as exc:
-
-        return {
-            "__error__": str(exc)
-        }
+        return {"__error__": str(exc)}
 
 
 def _is_error(data: Any) -> bool:
-    return (
-        isinstance(data, dict)
-        and "__error__" in data
-    )
+    return isinstance(data, dict) and "__error__" in data
 
 
 # ==============================================================================
@@ -213,174 +140,156 @@ def empty_history(
     title: str,
     message: str = "No historical record available.",
 ):
-    st.info(
-        f"**{title}**\n\n{message}"
-    )
+    st.info(f"**{title}**\n\n{message}")
 
 
 # ==============================================================================
-# PRODUCT MASTER
+# DATA LOADERS (PRODUCT, STOCK, BATCHES, FIFO)
 # ==============================================================================
 
-def get_product(
-    client: Any,
-    product_id: int,
-) -> Optional[Dict]:
-    """
-    Load Product Master.
-
-    Table:
-        products
-    """
-
+def get_product(client: Any, product_id: int) -> Optional[Dict]:
     try:
-
         result = (
-            client
-            .table("products")
+            client.table("products")
             .select("*")
-            .eq(
-                "id",
-                int(product_id),
-            )
+            .eq("id", int(product_id))
             .limit(1)
             .execute()
         )
-
-        rows = getattr(
-            result,
-            "data",
-            None,
-        ) or []
-
+        rows = getattr(result, "data", None) or []
         if isinstance(rows, list) and rows:
             return rows[0]
-
         if isinstance(rows, dict):
             return rows
-
         return None
-
     except Exception:
-
         return None
 
 
+def get_warehouse_stock(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("warehouse_stock")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("warehouse_id", desc=False)
+    )
+    return [] if _is_error(data) else data
+
+
+def get_batches(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("inventory_batches")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=False)
+    )
+    return [] if _is_error(data) else data
+
+
+def get_fifo_layers(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("inventory_cost_layers")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=False)
+    )
+    return [] if _is_error(data) else data
+
+
 # ==============================================================================
-# WAREHOUSE STOCK
+# HISTORY DATA LOADERS
 # ==============================================================================
 
-def get_warehouse_stock(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Load warehouse stock.
+def get_sales(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("sale_items")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=True)
+    )
+    return [] if _is_error(data) else data
 
-    Table:
-        warehouse_stock
-    """
+
+def get_purchases(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("purchase_items")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=True)
+    )
+    return [] if _is_error(data) else data
+
+
+def get_adjustments(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("stock_adjustments")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=True)
+    )
+    return [] if _is_error(data) else data
+
+
+def get_transfers(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("stock_transfers")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=True)
+    )
+    return [] if _is_error(data) else data
+
+
+def get_refunds(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("refunds")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("refund_date", desc=True)
+    )
+    return [] if _is_error(data) else data
+
+
+def get_unified_history(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("product_inventory_history")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("transaction_time", desc=True)
+    )
+    if not _is_error(data):
+        return data
 
     data = _execute(
-        client
-        .table("warehouse_stock")
+        client.table("inventory_movements")
         .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "warehouse_id",
-            desc=False,
-        )
+        .eq("product_id", int(product_id))
+        .order("created_at", desc=True)
     )
-
-    if _is_error(data):
-        return []
-
-    return data
+    return [] if _is_error(data) else data
 
 
-# ==============================================================================
-# INVENTORY BATCHES
-# ==============================================================================
-
-def get_batches(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Load inventory batches.
-
-    Table:
-        inventory_batches
-
-    NOTE:
-        created_at is used because received_date
-        is not assumed to exist.
-    """
+def get_audit_history(client: Any, product_id: int) -> List[Dict]:
+    data = _execute(
+        client.table("product_audit_logs")
+        .select("*")
+        .eq("product_id", int(product_id))
+        .order("changed_at", desc=True)
+    )
+    if not _is_error(data):
+        return data
 
     data = _execute(
-        client
-        .table("inventory_batches")
+        client.table("inventory_audit_logs")
         .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=False,
-        )
+        .eq("product_id", int(product_id))
+        .order("changed_at", desc=True)
     )
-
-    if _is_error(data):
-        return []
-
-    return data
+    return [] if _is_error(data) else data
 
 
 # ==============================================================================
-# FIFO COST LAYERS
-# ==============================================================================
-
-def get_fifo_layers(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Load FIFO cost layers.
-
-    Table:
-        inventory_cost_layers
-
-    IMPORTANT:
-        Do NOT use received_date.
-        Current ERP schema uses created_at.
-    """
-
-    data = _execute(
-        client
-        .table("inventory_cost_layers")
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=False,
-        )
-    )
-
-    if _is_error(data):
-        return []
-
-    return data
-
-
-# ==============================================================================
-# INVENTORY INTEGRITY
+# INVENTORY INTEGRITY & CALCULATIONS
 # ==============================================================================
 
 def get_integrity(
@@ -389,135 +298,40 @@ def get_integrity(
     batch_rows: List[Dict],
     fifo_rows: List[Dict],
 ) -> Dict:
-    """
-    Read-only inventory integrity calculation.
+    master_stock = to_decimal(product.get("stock"))
 
-    Compares:
-
-        Product Master
-            |
-            +-- Warehouse
-            |
-            +-- Batch
-            |
-            +-- FIFO
-    """
-
-    # --------------------------------------------------------------------------
-    # MASTER
-    # --------------------------------------------------------------------------
-
-    master_stock = to_decimal(
-        product.get("stock")
+    warehouse_stock = sum(
+        to_decimal(row.get("qty") if row.get("qty") is not None else row.get("quantity"))
+        for row in warehouse_rows
     )
 
-    # --------------------------------------------------------------------------
-    # WAREHOUSE
-    # --------------------------------------------------------------------------
+    batch_remaining = sum(
+        to_decimal(row.get("qty_remaining") if row.get("qty_remaining") is not None else row.get("remaining_qty"))
+        for row in batch_rows
+    )
 
-    warehouse_stock = Decimal("0")
-
-    for row in warehouse_rows:
-
-        value = row.get("qty")
-
-        if value is None:
-            value = row.get("quantity")
-
-        warehouse_stock += to_decimal(
-            value
-        )
-
-    # --------------------------------------------------------------------------
-    # BATCH
-    # --------------------------------------------------------------------------
-
-    batch_remaining = Decimal("0")
-
-    for row in batch_rows:
-
-        value = row.get(
-            "qty_remaining"
-        )
-
-        if value is None:
-            value = row.get(
-                "remaining_qty"
-            )
-
-        batch_remaining += to_decimal(
-            value
-        )
-
-    # --------------------------------------------------------------------------
-    # FIFO
-    # --------------------------------------------------------------------------
-
-    fifo_remaining = Decimal("0")
-
-    for row in fifo_rows:
-
-        value = row.get(
-            "qty_remaining"
-        )
-
-        if value is None:
-            value = row.get(
-                "remaining_qty"
-            )
-
-        fifo_remaining += to_decimal(
-            value
-        )
-
-    # --------------------------------------------------------------------------
-    # CHECKS
-    # --------------------------------------------------------------------------
+    fifo_remaining = sum(
+        to_decimal(row.get("qty_remaining") if row.get("qty_remaining") is not None else row.get("remaining_qty"))
+        for row in fifo_rows
+    )
 
     warnings: List[str] = []
     passed: List[str] = []
 
-    # Warehouse vs FIFO
-
     if warehouse_stock == fifo_remaining:
-
-        passed.append(
-            "Warehouse stock matches FIFO remaining."
-        )
-
+        passed.append("Warehouse stock matches FIFO remaining.")
     else:
-
-        warnings.append(
-            "Warehouse stock differs from FIFO remaining."
-        )
-
-    # Master vs Warehouse
+        warnings.append("Warehouse stock differs from FIFO remaining.")
 
     if master_stock == warehouse_stock:
-
-        passed.append(
-            "Master stock matches warehouse stock."
-        )
-
+        passed.append("Master stock matches warehouse stock.")
     else:
-
-        warnings.append(
-            "Master stock differs from warehouse stock."
-        )
-
-    # Batch vs FIFO
+        warnings.append("Master stock differs from warehouse stock.")
 
     if batch_remaining == fifo_remaining:
-
-        passed.append(
-            "Batch remaining matches FIFO remaining."
-        )
-
+        passed.append("Batch remaining matches FIFO remaining.")
     else:
-
-        warnings.append(
-            "Batch remaining differs from FIFO remaining."
-        )
+        warnings.append("Batch remaining differs from FIFO remaining.")
 
     return {
         "master_stock": master_stock,
@@ -529,3809 +343,481 @@ def get_integrity(
     }
 
 
-# ==============================================================================
-# STOCK SUMMARY
-# ==============================================================================
-
 def calculate_stock_summary(
     product: Dict,
     warehouse_rows: List[Dict],
     batch_rows: List[Dict],
     fifo_rows: List[Dict],
 ) -> Dict:
-    """
-    Compatibility helper.
-
-    Uses the same calculation rules as get_integrity().
-    """
-
-    integrity = get_integrity(
-        product,
-        warehouse_rows,
-        batch_rows,
-        fifo_rows,
-    )
-
+    integrity = get_integrity(product, warehouse_rows, batch_rows, fifo_rows)
     return {
-        "master_stock":
-            integrity["master_stock"],
-
-        "warehouse_stock":
-            integrity["warehouse_stock"],
-
-        "batch_remaining":
-            integrity["batch_remaining"],
-
-        "fifo_remaining":
-            integrity["fifo_remaining"],
+        "master_stock": integrity["master_stock"],
+        "warehouse_stock": integrity["warehouse_stock"],
+        "batch_remaining": integrity["batch_remaining"],
+        "fifo_remaining": integrity["fifo_remaining"],
     }
 
 
-# ==============================================================================
-# PRODUCT HEADER
-# ==============================================================================
-
-def render_product_header(
-    product: Dict,
-):
-
-    name = (
-        product.get("name")
-        or "Unknown Product"
-    )
-
-    sku = (
-        product.get("sku")
-        or "-"
-    )
-
-    barcode = (
-        product.get("barcode")
-        or "-"
-    )
-
-    active = product.get(
-        "is_active",
-        True,
-    )
-
-    status = (
-        "ACTIVE"
-        if active
-        else "INACTIVE"
-    )
-
-    st.title(
-        f"Product 360° — {name}"
-    )
-
-    st.caption(
-        f"SKU: {sku}  |  "
-        f"Barcode: {barcode}  |  "
-        f"Status: {status}"
-    )
-
-
-# ==============================================================================
-# CURRENT STATUS
-# ==============================================================================
-
-def render_current_status(
-    product: Dict,
-    integrity: Dict,
-):
-    """
-    Current inventory KPI panel.
-    """
-
-    st.subheader(
-        "Current Inventory Status"
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Master Stock",
-        qty(
-            integrity.get(
-                "master_stock"
-            )
-        ),
-    )
-
-    c2.metric(
-        "Warehouse Stock",
-        qty(
-            integrity.get(
-                "warehouse_stock"
-            )
-        ),
-    )
-
-    c3.metric(
-        "FIFO Remaining",
-        qty(
-            integrity.get(
-                "fifo_remaining"
-            )
-        ),
-    )
-
-    c4.metric(
-        "Batch Remaining",
-        qty(
-            integrity.get(
-                "batch_remaining"
-            )
-        ),
-    )
-
-    warnings = integrity.get(
-        "warnings",
-        [],
-    )
-
-    if warnings:
-
-        for warning in warnings:
-
-            st.warning(
-                f"⚠️ {warning}"
-            )
-
-    else:
-
-        st.success(
-            "Inventory integrity checks passed."
-        )
-
-
-# ==============================================================================
-# WAREHOUSE UI
-# ==============================================================================
-
-def render_warehouse(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Warehouse Stock"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Warehouse Stock"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        qty_value = row.get("qty")
-
-        if qty_value is None:
-            qty_value = row.get(
-                "quantity"
-            )
-
-        display.append(
-            {
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    ) or "-",
-
-                "Qty":
-                    qty(qty_value),
-
-                "Reserved":
-                    qty(
-                        row.get(
-                            "reserved_qty"
-                        )
-                    ),
-
-                "Available":
-                    qty(
-                        row.get(
-                            "available_qty"
-                        )
-                    ),
-
-                "Minimum":
-                    qty(
-                        row.get(
-                            "minimum_stock"
-                        )
-                    ),
-
-                "Reorder":
-                    qty(
-                        row.get(
-                            "reorder_level"
-                        )
-                    ),
-
-                "Location":
-                    row.get(
-                        "location"
-                    ) or "-",
-
-                "Batch No":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Updated":
-                    format_myanmar_time(
-                        row.get(
-                            "updated_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# BATCH UI
-# ==============================================================================
-
-def render_batches(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Batch / FEFO"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Batch / FEFO"
-        )
-
-        return
-
-    display = []
-
-    for index, row in enumerate(
-        rows,
-        start=1,
-    ):
-
-        quantity_value = row.get(
-            "quantity"
-        )
-
-        if quantity_value is None:
-            quantity_value = row.get(
-                "qty_in"
-            )
-
-        remaining_value = row.get(
-            "qty_remaining"
-        )
-
-        if remaining_value is None:
-            remaining_value = row.get(
-                "remaining_qty"
-            )
-
-        display.append(
-            {
-                "FEFO Rank":
-                    index,
-
-                "Batch":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Qty In":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Remaining":
-                    qty(
-                        remaining_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "MFG Date":
-                    row.get(
-                        "mfg_date"
-                    ) or "-",
-
-                "Expiry":
-                    row.get(
-                        "expiry_date"
-                    ) or "-",
-
-                "Supplier":
-                    row.get(
-                        "supplier_code"
-                    ) or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# FIFO UI
-# ==============================================================================
-
-def render_fifo(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "FIFO Cost Layers"
-    )
-
-    if not rows:
-
-        empty_history(
-            "FIFO Cost Layers"
-        )
-
-        return
-
-    display = []
-
-    for index, row in enumerate(
-        rows,
-        start=1,
-    ):
-
-        qty_in_value = row.get(
-            "qty_in"
-        )
-
-        if qty_in_value is None:
-            qty_in_value = row.get(
-                "quantity"
-            )
-
-        remaining_value = row.get(
-            "qty_remaining"
-        )
-
-        if remaining_value is None:
-            remaining_value = row.get(
-                "remaining_qty"
-            )
-
-        display.append(
-            {
-                "FIFO Rank":
-                    index,
-
-                "Layer ID":
-                    row.get(
-                        "id"
-                    ) or "-",
-
-                "Qty In":
-                    qty(
-                        qty_in_value
-                    ),
-
-                "Remaining":
-                    qty(
-                        remaining_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "Reference":
-                    row.get(
-                        "reference_type"
-                    ) or "-",
-
-                "Reference ID":
-                    row.get(
-                        "reference_id"
-                    ) or "-",
-
-                "Batch":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Expiry":
-                    row.get(
-                        "expiry_date"
-                    ) or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# PART 1 END
-# ==============================================================================
-# Part 2:
-#   Pricing
-#   Sales
-#   Purchases
-#   Adjustments
-#   Transfers
-#   Refunds
-#   Unified History
-#   Audit
-# ==============================================================================
-# ==============================================================================
-# erp_pages/inventory/product_360.py
-#
-# ERP ENTERPRISE PRODUCT 360°
-# PART 2 / 3
-#
-# UI:
-#   Pricing
-#   Sales
-#   Purchases
-#   Adjustments
-#   Transfers
-#   Refunds
-#   Unified History
-#   Audit
-# ==============================================================================
-
-
-# ==============================================================================
-# PRICING HELPERS
-# ==============================================================================
-
-def _safe_percent(
-    value: Any,
-) -> Decimal:
-
-    return to_decimal(
-        value,
-        Decimal("0"),
-    )
-
-
-def calculate_price_info(
-    product: Dict,
-) -> Dict:
-    """
-    Read-only pricing intelligence.
-
-    This function intentionally does NOT call PricingService.
-    It reads the product record safely so Product 360 can load
-    even when pricing-service dependencies are unavailable.
-
-    Supported product fields:
-
-        purchase_price
-        selling_price
-        markup_percent
-        owner_selling_price
-        final_selling_price
-        price_source
-        owner_price_locked
-
-    Global markup fallback:
-
-        markup_percent
-        DEFAULT_MARKUP_PERCENT
-    """
-
-    purchase_price = to_decimal(
-        product.get(
-            "purchase_price"
-        )
-    )
-
-    selling_price = to_decimal(
-        product.get(
-            "selling_price"
-        )
-    )
-
-    markup_percent = _safe_percent(
-        product.get(
-            "markup_percent"
-        )
-    )
-
-    # --------------------------------------------------------------------------
-    # FALLBACK GLOBAL MARKUP
-    # --------------------------------------------------------------------------
+def calculate_price_info(product: Dict) -> Dict:
+    purchase_price = to_decimal(product.get("purchase_price"))
+    selling_price = to_decimal(product.get("selling_price"))
+    markup_percent = to_decimal(product.get("markup_percent"))
 
     if markup_percent == Decimal("0"):
+        markup_percent = to_decimal(product.get("global_markup_percent", product.get("default_markup_percent", 0)))
 
-        markup_percent = _safe_percent(
-            product.get(
-                "global_markup_percent"
-            )
-        )
+    global_markup_price = purchase_price * (Decimal("1") + markup_percent / Decimal("100"))
 
-    if markup_percent == Decimal("0"):
+    owner_selling_price = to_decimal(product.get("owner_selling_price"))
+    owner_price_locked = bool(product.get("owner_price_locked", False))
 
-        markup_percent = _safe_percent(
-            product.get(
-                "default_markup_percent"
-            )
-        )
-
-    # --------------------------------------------------------------------------
-    # MARKUP PRICE
-    # --------------------------------------------------------------------------
-
-    global_markup_price = (
-        purchase_price
-        * (
-            Decimal("1")
-            + (
-                markup_percent
-                / Decimal("100")
-            )
-        )
-    )
-
-    # --------------------------------------------------------------------------
-    # OWNER PRICE
-    # --------------------------------------------------------------------------
-
-    owner_price_value = product.get(
-        "owner_selling_price"
-    )
-
-    owner_selling_price = (
-        to_decimal(
-            owner_price_value
-        )
-        if owner_price_value is not None
-        else Decimal("0")
-    )
-
-    owner_price_locked = bool(
-        product.get(
-            "owner_price_locked",
-            False,
-        )
-    )
-
-    # --------------------------------------------------------------------------
-    # FINAL SELLING PRICE
-    # --------------------------------------------------------------------------
-
-    final_price_value = product.get(
-        "final_selling_price"
-    )
-
-    if final_price_value is not None:
-
-        final_selling_price = to_decimal(
-            final_price_value
-        )
-
-    elif (
-        owner_price_locked
-        and owner_selling_price > 0
-    ):
-
-        final_selling_price = (
-            owner_selling_price
-        )
-
-    elif selling_price > 0:
-
-        final_selling_price = (
-            selling_price
-        )
-
-    else:
-
-        final_selling_price = (
-            global_markup_price
-        )
-
-    # --------------------------------------------------------------------------
-    # ACTUAL MARKUP
-    # --------------------------------------------------------------------------
+    final_selling_price = to_decimal(product.get("final_selling_price"))
+    if final_selling_price == 0:
+        if owner_price_locked and owner_selling_price > 0:
+            final_selling_price = owner_selling_price
+        elif selling_price > 0:
+            final_selling_price = selling_price
+        else:
+            final_selling_price = global_markup_price
 
     if purchase_price > 0:
-
-        actual_markup_percent = (
-            (
-                (
-                    final_selling_price
-                    - purchase_price
-                )
-                / purchase_price
-            )
-            * Decimal("100")
-        )
-
+        actual_markup_percent = ((final_selling_price - purchase_price) / purchase_price) * Decimal("100")
     else:
-
-        actual_markup_percent = Decimal(
-            "0"
-        )
-
-    profit_per_unit = (
-        final_selling_price
-        - purchase_price
-    )
-
-    # --------------------------------------------------------------------------
-    # PRICE SOURCE
-    # --------------------------------------------------------------------------
-
-    price_source = (
-        product.get(
-            "price_source"
-        )
-        or "PRODUCT"
-    )
-
-    return {
-        "purchase_price":
-            purchase_price,
-
-        "selling_price":
-            selling_price,
-
-        "global_markup_percent":
-            markup_percent,
-
-        "global_markup_price":
-            global_markup_price,
-
-        "actual_markup_percent":
-            actual_markup_percent,
-
-        "owner_selling_price":
-            owner_selling_price,
-
-        "final_selling_price":
-            final_selling_price,
-
-        "owner_price_locked":
-            owner_price_locked,
-
-        "price_source":
-            price_source,
-
-        "profit_per_unit":
-            profit_per_unit,
-    }
-
-
-# ==============================================================================
-# PRICING UI
-# ==============================================================================
-
-def render_pricing(
-    product: Dict,
-):
-
-    st.subheader(
-        "Pricing Intelligence"
-    )
-
-    info = calculate_price_info(
-        product
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Purchase Price",
-        money(
-            info[
-                "purchase_price"
-            ]
-        ),
-    )
-
-    c2.metric(
-        "Global Markup",
-        (
-            f"{info['global_markup_percent']}"
-            "%"
-        ),
-    )
-
-    c3.metric(
-        "Selling Price",
-        money(
-            info[
-                "selling_price"
-            ]
-        ),
-    )
-
-    c4.metric(
-        "Profit / Unit",
-        money(
-            info[
-                "profit_per_unit"
-            ]
-        ),
-    )
-
-    st.markdown(
-        f"""
-**Price Source:** `{info["price_source"]}`
-
-**Global Markup Price:** `{money(info["global_markup_price"])}`
-
-**Actual Markup:** `{info["actual_markup_percent"]:.2f}%`
-
-**Owner Selling Price:** `{money(info["owner_selling_price"])}`
-
-**Final Selling Price:** `{money(info["final_selling_price"])}`
-
-**Owner Price Locked:** `{info["owner_price_locked"]}`
-"""
-    )
-
-
-# ==============================================================================
-# SALES
-# ==============================================================================
-
-def get_sales(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Product sales history.
-
-    Uses sale_items as the primary source.
-
-    The query intentionally uses select("*") so this module
-    remains tolerant of schema variations.
-    """
-
-    data = _execute(
-        client
-        .table("sale_items")
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-        return []
-
-    return data
-
-
-def render_sales(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Sales History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Sales History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        quantity_value = row.get(
-            "quantity"
-        )
-
-        if quantity_value is None:
-            quantity_value = row.get(
-                "qty"
-            )
-
-        total_value = row.get(
-            "total"
-        )
-
-        if total_value is None:
-            total_value = row.get(
-                "line_total"
-            )
-
-        display.append(
-            {
-                "Invoice":
-                    row.get(
-                        "invoice_no"
-                    )
-                    or row.get(
-                        "sale_id"
-                    )
-                    or "-",
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    )
-                    or "-",
-
-                "Qty":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Unit Price":
-                    money(
-                        row.get(
-                            "unit_price"
-                        )
-                        or row.get(
-                            "selling_price"
-                        )
-                    ),
-
-                "Discount":
-                    money(
-                        row.get(
-                            "discount"
-                        )
-                    ),
-
-                "Total":
-                    money(
-                        total_value
-                    ),
-
-                "Status":
-                    row.get(
-                        "sale_status"
-                    )
-                    or row.get(
-                        "status"
-                    )
-                    or "-",
-
-                "Payment":
-                    row.get(
-                        "payment_method"
-                    )
-                    or "-",
-
-                "Time":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# PURCHASES
-# ==============================================================================
-
-def get_purchases(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Product purchase history.
-
-    Primary table:
-        purchase_items
-
-    If the table does not exist or cannot be queried,
-    return an empty list rather than breaking Product 360.
-    """
-
-    data = _execute(
-        client
-        .table("purchase_items")
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-        return []
-
-    return data
-
-
-def render_purchases(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Purchase History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Purchase History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        quantity_value = row.get(
-            "qty"
-        )
-
-        if quantity_value is None:
-            quantity_value = row.get(
-                "quantity"
-            )
-
-        price_value = row.get(
-            "price"
-        )
-
-        if price_value is None:
-            price_value = row.get(
-                "unit_cost"
-            )
-
-        total_value = row.get(
-            "total"
-        )
-
-        if total_value is None:
-            total_value = (
-                to_decimal(
-                    quantity_value
-                )
-                * to_decimal(
-                    price_value
-                )
-            )
-
-        display.append(
-            {
-                "Purchase No":
-                    row.get(
-                        "purchase_no"
-                    )
-                    or row.get(
-                        "purchase_id"
-                    )
-                    or "-",
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    )
-                    or "-",
-
-                "Qty":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        price_value
-                    ),
-
-                "Total":
-                    money(
-                        total_value
-                    ),
-
-                "Status":
-                    row.get(
-                        "status"
-                    )
-                    or "-",
-
-                "Payment":
-                    row.get(
-                        "payment_method"
-                    )
-                    or "-",
-
-                "Reference":
-                    row.get(
-                        "reference_no"
-                    )
-                    or "-",
-
-                "Time":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# STOCK ADJUSTMENTS
-# ==============================================================================
-
-def get_adjustments(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Stock adjustment history.
-
-    Table:
-        stock_adjustments
-    """
-
-    data = _execute(
-        client
-        .table("stock_adjustments")
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-        return []
-
-    return data
-
-
-def render_adjustments(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Stock Adjustment History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Adjustment History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        display.append(
-            {
-                "ID":
-                    row.get(
-                        "id"
-                    ),
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    )
-                    or "-",
-
-                "Type":
-                    row.get(
-                        "adjustment_type"
-                    )
-                    or "-",
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "qty"
-                        )
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "Reason":
-                    row.get(
-                        "reason"
-                    )
-                    or "-",
-
-                "Status":
-                    row.get(
-                        "status"
-                    )
-                    or "-",
-
-                "Requested By":
-                    row.get(
-                        "requested_by"
-                    )
-                    or "-",
-
-                "Approved By":
-                    row.get(
-                        "approved_by"
-                    )
-                    or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-
-                "Approved":
-                    format_myanmar_time(
-                        row.get(
-                            "approved_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# TRANSFERS
-# ==============================================================================
-
-def get_transfers(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Stock transfer history.
-
-    Table:
-        stock_transfers
-
-    Schema variations are tolerated.
-    """
-
-    data = _execute(
-        client
-        .table("stock_transfers")
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-        return []
-
-    return data
-
-
-def render_transfers(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Stock Transfer History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Transfer History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        quantity_value = row.get(
-            "qty"
-        )
-
-        if quantity_value is None:
-            quantity_value = row.get(
-                "quantity"
-            )
-
-        display.append(
-            {
-                "Transfer No":
-                    row.get(
-                        "transfer_no"
-                    )
-                    or row.get(
-                        "id"
-                    )
-                    or "-",
-
-                "From Warehouse":
-                    row.get(
-                        "from_warehouse_id"
-                    )
-                    or "-",
-
-                "To Warehouse":
-                    row.get(
-                        "to_warehouse_id"
-                    )
-                    or "-",
-
-                "Qty":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Status":
-                    row.get(
-                        "status"
-                    )
-                    or "-",
-
-                "Remarks":
-                    row.get(
-                        "remarks"
-                    )
-                    or "-",
-
-                "Requested By":
-                    row.get(
-                        "requested_by"
-                    )
-                    or "-",
-
-                "Approved By":
-                    row.get(
-                        "approved_by"
-                    )
-                    or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-
-                "Approved":
-                    format_myanmar_time(
-                        row.get(
-                            "approved_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# REFUNDS
-# ==============================================================================
-
-def get_refunds(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Refund history.
-
-    Table:
-        refunds
-
-    Depending on ERP schema, product_id may be stored directly
-    or inside refund_items.
-
-    Primary attempt:
-        refunds.product_id
-    """
-
-    data = _execute(
-        client
-        .table("refunds")
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "refund_date",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-        return []
-
-    return data
-
-
-def render_refunds(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Refund History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Refund History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        display.append(
-            {
-                "Refund ID":
-                    row.get(
-                        "refund_id"
-                    )
-                    or row.get(
-                        "id"
-                    ),
-
-                "Sale ID":
-                    row.get(
-                        "sale_id"
-                    ),
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "quantity"
-                        )
-                    ),
-
-                "Unit Price":
-                    money(
-                        row.get(
-                            "unit_price"
-                        )
-                    ),
-
-                "Total":
-                    money(
-                        row.get(
-                            "total"
-                        )
-                    ),
-
-                "Refund Amount":
-                    money(
-                        row.get(
-                            "refund_amount"
-                        )
-                    ),
-
-                "Reason":
-                    row.get(
-                        "reason"
-                    )
-                    or "-",
-
-                "Status":
-                    row.get(
-                        "status"
-                    )
-                    or "-",
-
-                "Date":
-                    format_myanmar_time(
-                        row.get(
-                            "refund_date"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# UNIFIED MOVEMENT HISTORY
-# ==============================================================================
-
-def get_unified_history(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Load unified product movement history.
-
-    Preferred source:
-        product_inventory_history
-
-    Fallback:
-        inventory_movements
-
-    The function is READ ONLY.
-    """
-
-    # --------------------------------------------------------------------------
-    # PRIMARY
-    # --------------------------------------------------------------------------
-
-    data = _execute(
-        client
-        .table(
-            "product_inventory_history"
-        )
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "transaction_time",
-            desc=True,
-        )
-    )
-
-    if not _is_error(data):
-
-        return data
-
-    # --------------------------------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------------------------------
-
-    data = _execute(
-        client
-        .table(
-            "inventory_movements"
-        )
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "created_at",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-
-        return []
-
-    return data
-
-
-def render_unified_history(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Unified Product Transaction History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Unified Transaction History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        transaction_time = row.get(
-            "transaction_time"
-        )
-
-        if transaction_time is None:
-
-            transaction_time = row.get(
-                "created_at"
-            )
-
-        quantity_value = row.get(
-            "quantity"
-        )
-
-        if quantity_value is None:
-
-            quantity_value = row.get(
-                "qty"
-            )
-
-        balance = row.get(
-            "balance_after"
-        )
-
-        display.append(
-            {
-                "Time (MMT)":
-                    format_myanmar_time(
-                        transaction_time
-                    ),
-
-                "Source":
-                    row.get(
-                        "transaction_source"
-                    )
-                    or row.get(
-                        "source"
-                    )
-                    or "-",
-
-                "Type":
-                    row.get(
-                        "transaction_type"
-                    )
-                    or row.get(
-                        "movement_type"
-                    )
-                    or "-",
-
-                "Reference":
-                    row.get(
-                        "reference_id"
-                    )
-                    or "-",
-
-                "Transaction":
-                    row.get(
-                        "transaction_id"
-                    )
-                    or row.get(
-                        "id"
-                    )
-                    or "-",
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    )
-                    or "-",
-
-                "Qty":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Balance":
-                    (
-                        qty(balance)
-                        if balance is not None
-                        else "-"
-                    ),
-
-                "Remarks":
-                    row.get(
-                        "remarks"
-                    )
-                    or row.get(
-                        "reason"
-                    )
-                    or "-",
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# AUDIT HISTORY
-# ==============================================================================
-
-def get_audit_history(
-    client: Any,
-    product_id: int,
-) -> List[Dict]:
-    """
-    Product audit history.
-
-    Primary:
-        product_audit_logs
-
-    Fallback:
-        inventory_audit_logs
-    """
-
-    # --------------------------------------------------------------------------
-    # PRIMARY
-    # --------------------------------------------------------------------------
-
-    data = _execute(
-        client
-        .table(
-            "product_audit_logs"
-        )
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "changed_at",
-            desc=True,
-        )
-    )
-
-    if not _is_error(data):
-
-        return data
-
-    # --------------------------------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------------------------------
-
-    data = _execute(
-        client
-        .table(
-            "inventory_audit_logs"
-        )
-        .select("*")
-        .eq(
-            "product_id",
-            int(product_id),
-        )
-        .order(
-            "changed_at",
-            desc=True,
-        )
-    )
-
-    if _is_error(data):
-
-        return []
-
-    return data
-
-
-def render_audit(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Product Audit History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Audit History",
-            "No historical audit record available.",
-        )
-
-        return
-
-    for row in rows:
-
-        operation = (
-            row.get(
-                "operation"
-            )
-            or row.get(
-                "action"
-            )
-            or "UNKNOWN"
-        )
-
-        changed_at = format_myanmar_time(
-            row.get(
-                "changed_at"
-            )
-        )
-
-        with st.expander(
-            f"{operation} — {changed_at}"
-        ):
-
-            c1, c2 = st.columns(2)
-
-            # ------------------------------------------------------------------
-            # BEFORE
-            # ------------------------------------------------------------------
-
-            with c1:
-
-                st.markdown(
-                    "### Before"
-                )
-
-                st.json(
-                    {
-                        "purchase_price":
-                            row.get(
-                                "old_purchase_price"
-                            ),
-
-                        "selling_price":
-                            row.get(
-                                "old_selling_price"
-                            ),
-
-                        "markup_percent":
-                            row.get(
-                                "old_markup_percent"
-                            ),
-
-                        "price_source":
-                            row.get(
-                                "old_price_source"
-                            ),
-
-                        "owner_selling_price":
-                            row.get(
-                                "old_owner_selling_price"
-                            ),
-
-                        "final_selling_price":
-                            row.get(
-                                "old_final_selling_price"
-                            ),
-                    }
-                )
-
-            # ------------------------------------------------------------------
-            # AFTER
-            # ------------------------------------------------------------------
-
-            with c2:
-
-                st.markdown(
-                    "### After"
-                )
-
-                st.json(
-                    {
-                        "purchase_price":
-                            row.get(
-                                "new_purchase_price"
-                            ),
-
-                        "selling_price":
-                            row.get(
-                                "new_selling_price"
-                            ),
-
-                        "markup_percent":
-                            row.get(
-                                "new_markup_percent"
-                            ),
-
-                        "price_source":
-                            row.get(
-                                "new_price_source"
-                            ),
-
-                        "owner_selling_price":
-                            row.get(
-                                "new_owner_selling_price"
-                            ),
-
-                        "final_selling_price":
-                            row.get(
-                                "new_final_selling_price"
-                            ),
-                    }
-                )
-
-            st.caption(
-                "Changed By: "
-                f"{row.get('changed_by') or 'SYSTEM'}"
-            )
-
-
-# ==============================================================================
-# INTEGRITY PANEL
-# ==============================================================================
-
-def render_integrity(
-    integrity: Dict,
-):
-
-    st.subheader(
-        "Inventory Integrity"
-    )
-
-    passed = integrity.get(
-        "passed",
-        [],
-    )
-
-    warnings = integrity.get(
-        "warnings",
-        [],
-    )
-
-    for item in passed:
-
-        st.success(
-            f"✓ {item}"
-        )
-
-    for item in warnings:
-
-        st.warning(
-            f"⚠ {item}"
-        )
-
-    if not passed and not warnings:
-
-        st.info(
-            "No inventory integrity result available."
-        )
-
-
-# ==============================================================================
-# PART 2 END
-# ==============================================================================
-#
-# Part 3 will contain ONLY:
-#
-#   render_product_360()
-#   render_product_360_page()
-#   render_page()
-#   __all__
-#
-# No duplicate get_integrity()
-# No duplicate render_current_status()
-# No duplicate render_fifo()
-# No duplicate render_warehouse()
-#
-# ==============================================================================
-# ==============================================================================
-# erp_pages/inventory/product_360.py
-#
-# ERP ENTERPRISE PRODUCT 360°
-# ------------------------------------------------------------------------------
-# PART 2 / 3
-#
-# UI RENDERERS
-# ------------------------------------------------------------------------------
-# Pricing
-# Sales
-# Purchases
-# Adjustments
-# Transfers
-# Refunds
-# Unified History
-# Audit
-# Integrity
-# ==============================================================================
-
-
-# ==============================================================================
-# PRICING INTELLIGENCE
-# ==============================================================================
-
-def calculate_price_info(
-    product: Dict,
-) -> Dict:
-    """
-    Calculate Product 360 pricing information.
-
-    READ ONLY.
-    No database update is performed.
-    """
-
-    purchase_price = to_decimal(
-        product.get("purchase_price")
-    )
-
-    selling_price = to_decimal(
-        product.get("selling_price")
-    )
-
-    markup_percent = to_decimal(
-        product.get("markup_percent")
-    )
-
-    owner_selling_price = to_decimal(
-        product.get("owner_selling_price")
-    )
-
-    final_selling_price = to_decimal(
-        product.get("final_selling_price")
-    )
-
-    # --------------------------------------------------------------------------
-    # Fallback selling price
-    # --------------------------------------------------------------------------
-
-    if final_selling_price == 0:
-
-        final_selling_price = selling_price
-
-    # --------------------------------------------------------------------------
-    # Markup price
-    # --------------------------------------------------------------------------
-
-    global_markup_price = (
-        purchase_price
-        * (
-            Decimal("1")
-            + markup_percent / Decimal("100")
-        )
-    )
-
-    # --------------------------------------------------------------------------
-    # Actual markup
-    # --------------------------------------------------------------------------
-
-    if purchase_price != 0:
-
-        actual_markup_percent = (
-            (
-                final_selling_price
-                - purchase_price
-            )
-            / purchase_price
-            * Decimal("100")
-        )
-
-    else:
-
         actual_markup_percent = Decimal("0")
 
-    # --------------------------------------------------------------------------
-    # Profit
-    # --------------------------------------------------------------------------
-
-    profit_per_unit = (
-        final_selling_price
-        - purchase_price
-    )
-
-    # --------------------------------------------------------------------------
-    # Price source
-    # --------------------------------------------------------------------------
-
-    price_source = (
-        product.get("price_source")
-        or "PRODUCT"
-    )
-
-    owner_price_locked = bool(
-        product.get(
-            "owner_price_locked",
-            False,
-        )
-    )
+    profit_per_unit = final_selling_price - purchase_price
+    price_source = product.get("price_source") or "PRODUCT"
 
     return {
-        "purchase_price":
-            purchase_price,
-
-        "selling_price":
-            selling_price,
-
-        "global_markup_percent":
-            markup_percent,
-
-        "global_markup_price":
-            global_markup_price,
-
-        "actual_markup_percent":
-            actual_markup_percent,
-
-        "owner_selling_price":
-            owner_selling_price,
-
-        "final_selling_price":
-            final_selling_price,
-
-        "profit_per_unit":
-            profit_per_unit,
-
-        "price_source":
-            price_source,
-
-        "owner_price_locked":
-            owner_price_locked,
+        "purchase_price": purchase_price,
+        "selling_price": selling_price,
+        "global_markup_percent": markup_percent,
+        "global_markup_price": global_markup_price,
+        "actual_markup_percent": actual_markup_percent,
+        "owner_selling_price": owner_selling_price,
+        "final_selling_price": final_selling_price,
+        "owner_price_locked": owner_price_locked,
+        "price_source": price_source,
+        "profit_per_unit": profit_per_unit,
     }
 
 
-def render_pricing(
-    product: Dict,
-):
-    """
-    Render pricing intelligence.
-    """
+# ==============================================================================
+# UI RENDERERS
+# ==============================================================================
 
-    st.subheader(
-        "Pricing Intelligence"
-    )
+def render_product_header(product: Dict):
+    name = product.get("name") or "Unknown Product"
+    sku = product.get("sku") or "-"
+    barcode = product.get("barcode") or "-"
+    status = "ACTIVE" if product.get("is_active", True) else "INACTIVE"
 
-    info = calculate_price_info(
-        product
-    )
+    st.title(f"Product 360° — {name}")
+    st.caption(f"SKU: {sku}  |  Barcode: {barcode}  |  Status: {status}")
 
+
+def render_current_status(product: Dict, integrity: Dict):
+    st.subheader("Current Inventory Status")
     c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Master Stock", qty(integrity.get("master_stock")))
+    c2.metric("Warehouse Stock", qty(integrity.get("warehouse_stock")))
+    c3.metric("FIFO Remaining", qty(integrity.get("fifo_remaining")))
+    c4.metric("Batch Remaining", qty(integrity.get("batch_remaining")))
 
-    c1.metric(
-        "Purchase Price",
-        money(
-            info["purchase_price"]
-        ),
-    )
+    warnings = integrity.get("warnings", [])
+    if warnings:
+        for warning in warnings:
+            st.warning(f"⚠️ {warning}")
+    else:
+        st.success("Inventory integrity checks passed.")
 
-    c2.metric(
-        "Global Markup",
-        f"{info['global_markup_percent']}%",
-    )
 
-    c3.metric(
-        "Selling Price",
-        money(
-            info["selling_price"]
-        ),
-    )
+def render_warehouse(rows: List[Dict]):
+    st.subheader("Warehouse Stock")
+    if not rows:
+        empty_history("Warehouse Stock")
+        return
 
-    c4.metric(
-        "Profit / Unit",
-        money(
-            info["profit_per_unit"]
-        ),
-    )
+    display = []
+    for row in rows:
+        qty_value = row.get("qty") if row.get("qty") is not None else row.get("quantity")
+        display.append({
+            "Warehouse": row.get("warehouse_id") or "-",
+            "Qty": qty(qty_value),
+            "Reserved": qty(row.get("reserved_qty")),
+            "Available": qty(row.get("available_qty")),
+            "Minimum": qty(row.get("minimum_stock")),
+            "Reorder": qty(row.get("reorder_level")),
+            "Location": row.get("location") or "-",
+            "Batch No": row.get("batch_no") or "-",
+            "Updated": format_myanmar_time(row.get("updated_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+
+def render_batches(rows: List[Dict]):
+    st.subheader("Batch / FEFO")
+    if not rows:
+        empty_history("Batch / FEFO")
+        return
+
+    display = []
+    for index, row in enumerate(rows, start=1):
+        q_val = row.get("quantity") if row.get("quantity") is not None else row.get("qty_in")
+        r_val = row.get("qty_remaining") if row.get("qty_remaining") is not None else row.get("remaining_qty")
+        display.append({
+            "FEFO Rank": index,
+            "Batch": row.get("batch_no") or "-",
+            "Qty In": qty(q_val),
+            "Remaining": qty(r_val),
+            "Unit Cost": money(row.get("unit_cost")),
+            "MFG Date": row.get("mfg_date") or "-",
+            "Expiry": row.get("expiry_date") or "-",
+            "Supplier": row.get("supplier_code") or "-",
+            "Created": format_myanmar_time(row.get("created_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+
+def render_fifo(rows: List[Dict]):
+    st.subheader("FIFO Cost Layers")
+    if not rows:
+        empty_history("FIFO Cost Layers")
+        return
+
+    display = []
+    for index, row in enumerate(rows, start=1):
+        q_in = row.get("qty_in") if row.get("qty_in") is not None else row.get("quantity")
+        r_val = row.get("qty_remaining") if row.get("qty_remaining") is not None else row.get("remaining_qty")
+        display.append({
+            "FIFO Rank": index,
+            "Layer ID": row.get("id") or "-",
+            "Qty In": qty(q_in),
+            "Remaining": qty(r_val),
+            "Unit Cost": money(row.get("unit_cost")),
+            "Reference": row.get("reference_type") or "-",
+            "Reference ID": row.get("reference_id") or "-",
+            "Batch": row.get("batch_no") or "-",
+            "Expiry": row.get("expiry_date") or "-",
+            "Created": format_myanmar_time(row.get("created_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+
+def render_pricing(product: Dict):
+    st.subheader("Pricing Intelligence")
+    info = calculate_price_info(product)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Purchase Price", money(info["purchase_price"]))
+    c2.metric("Global Markup", f"{info['global_markup_percent']}%")
+    c3.metric("Selling Price", money(info["selling_price"]))
+    c4.metric("Profit / Unit", money(info["profit_per_unit"]))
 
     st.markdown(
         f"""
-**Price Source:** `{info["price_source"]}`
-
-**Global Markup Price:** `{money(info["global_markup_price"])}`
-
-**Actual Markup:** `{info["actual_markup_percent"]:.2f}%`
-
-**Owner Selling Price:** `{money(info["owner_selling_price"])}`
-
-**Final Selling Price:** `{money(info["final_selling_price"])}`
-
+**Price Source:** `{info["price_source"]}`  
+**Global Markup Price:** `{money(info["global_markup_price"])}`  
+**Actual Markup:** `{info["actual_markup_percent"]:.2f}%`  
+**Owner Selling Price:** `{money(info["owner_selling_price"])}`  
+**Final Selling Price:** `{money(info["final_selling_price"])}`  
 **Owner Price Locked:** `{info["owner_price_locked"]}`
 """
     )
 
 
-# ==============================================================================
-# WAREHOUSE STOCK
-# ==============================================================================
-
-def render_warehouse(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Warehouse Stock"
-    )
-
+def render_sales(rows: List[Dict]):
+    st.subheader("Sales History")
     if not rows:
-
-        empty_history(
-            "Warehouse Stock"
-        )
-
+        empty_history("Sales History")
         return
 
     display = []
-
     for row in rows:
-
-        qty_value = row.get(
-            "qty"
-        )
-
-        if qty_value is None:
-
-            qty_value = row.get(
-                "quantity"
-            )
-
-        reserved_value = row.get(
-            "reserved_qty"
-        )
-
-        available_value = row.get(
-            "available_qty"
-        )
-
-        display.append(
-            {
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    ) or "-",
-
-                "Qty":
-                    qty(
-                        qty_value
-                    ),
-
-                "Reserved":
-                    qty(
-                        reserved_value
-                    ),
-
-                "Available":
-                    qty(
-                        available_value
-                    ),
-
-                "Minimum":
-                    qty(
-                        row.get(
-                            "minimum_stock"
-                        )
-                    ),
-
-                "Reorder":
-                    qty(
-                        row.get(
-                            "reorder_level"
-                        )
-                    ),
-
-                "Location":
-                    row.get(
-                        "location"
-                    ) or "-",
-
-                "Batch No":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Updated":
-                    format_myanmar_time(
-                        row.get(
-                            "updated_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
+        display.append({
+            "Invoice": row.get("invoice_no") or row.get("sale_id") or "-",
+            "Warehouse": row.get("warehouse_id") or "-",
+            "Qty": qty(row.get("quantity") if row.get("quantity") is not None else row.get("qty")),
+            "Unit Price": money(row.get("unit_price") or row.get("selling_price")),
+            "Discount": money(row.get("discount")),
+            "Total": money(row.get("total") or row.get("line_total")),
+            "Status": row.get("sale_status") or row.get("status") or "-",
+            "Payment": row.get("payment_method") or "-",
+            "Time": format_myanmar_time(row.get("created_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ==============================================================================
-# BATCH / FEFO
-# ==============================================================================
-
-def render_batches(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Batch / FEFO"
-    )
-
+def render_purchases(rows: List[Dict]):
+    st.subheader("Purchase History")
     if not rows:
-
-        empty_history(
-            "Batch / FEFO"
-        )
-
+        empty_history("Purchase History")
         return
 
     display = []
-
-    for index, row in enumerate(
-        rows,
-        start=1,
-    ):
-
-        quantity_value = row.get(
-            "quantity"
-        )
-
-        if quantity_value is None:
-
-            quantity_value = row.get(
-                "qty_in"
-            )
-
-        remaining_value = row.get(
-            "qty_remaining"
-        )
-
-        if remaining_value is None:
-
-            remaining_value = row.get(
-                "remaining_qty"
-            )
-
-        display.append(
-            {
-                "FEFO Rank":
-                    index,
-
-                "Batch":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Qty In":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Remaining":
-                    qty(
-                        remaining_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "MFG Date":
-                    row.get(
-                        "mfg_date"
-                    ) or "-",
-
-                "Expiry":
-                    row.get(
-                        "expiry_date"
-                    ) or "-",
-
-                "Supplier":
-                    row.get(
-                        "supplier_code"
-                    ) or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# FIFO COST LAYERS
-# ==============================================================================
-
-def render_fifo(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "FIFO Cost Layers"
-    )
-
-    if not rows:
-
-        empty_history(
-            "FIFO Cost Layers"
-        )
-
-        return
-
-    display = []
-
-    for index, row in enumerate(
-        rows,
-        start=1,
-    ):
-
-        qty_in_value = row.get(
-            "qty_in"
-        )
-
-        if qty_in_value is None:
-
-            qty_in_value = row.get(
-                "quantity"
-            )
-
-        remaining_value = row.get(
-            "qty_remaining"
-        )
-
-        if remaining_value is None:
-
-            remaining_value = row.get(
-                "remaining_qty"
-            )
-
-        display.append(
-            {
-                "FIFO Rank":
-                    index,
-
-                "Layer ID":
-                    row.get(
-                        "id"
-                    ) or "-",
-
-                "Qty In":
-                    qty(
-                        qty_in_value
-                    ),
-
-                "Remaining":
-                    qty(
-                        remaining_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "Reference":
-                    row.get(
-                        "reference_type"
-                    ) or "-",
-
-                "Reference ID":
-                    row.get(
-                        "reference_id"
-                    ) or "-",
-
-                "Batch":
-                    row.get(
-                        "batch_no"
-                    ) or "-",
-
-                "Expiry":
-                    row.get(
-                        "expiry_date"
-                    ) or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# SALES
-# ==============================================================================
-
-def render_sales(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Sales History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Sales History"
-        )
-
-        return
-
-    display = []
-
     for row in rows:
-
-        display.append(
-            {
-                "Invoice":
-                    row.get(
-                        "invoice_no"
-                    ) or "-",
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    ) or "-",
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "quantity"
-                        )
-                    ),
-
-                "Unit Price":
-                    money(
-                        row.get(
-                            "unit_price"
-                        )
-                    ),
-
-                "Discount":
-                    money(
-                        row.get(
-                            "discount"
-                        )
-                    ),
-
-                "Total":
-                    money(
-                        row.get(
-                            "total"
-                        )
-                    ),
-
-                "Status":
-                    row.get(
-                        "sale_status"
-                    ) or "-",
-
-                "Payment":
-                    row.get(
-                        "payment_method"
-                    ) or "-",
-
-                "Time":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
+        q_val = row.get("qty") if row.get("qty") is not None else row.get("quantity")
+        p_val = row.get("price") if row.get("price") is not None else row.get("unit_cost")
+        t_val = row.get("total") if row.get("total") is not None else (to_decimal(q_val) * to_decimal(p_val))
+        display.append({
+            "Purchase No": row.get("purchase_no") or row.get("purchase_id") or "-",
+            "Warehouse": row.get("warehouse_id") or "-",
+            "Qty": qty(q_val),
+            "Unit Cost": money(p_val),
+            "Total": money(t_val),
+            "Status": row.get("status") or "-",
+            "Payment": row.get("payment_method") or "-",
+            "Reference": row.get("reference_no") or "-",
+            "Time": format_myanmar_time(row.get("created_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ==============================================================================
-# PURCHASES
-# ==============================================================================
-
-def render_purchases(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Purchase History"
-    )
-
+def render_adjustments(rows: List[Dict]):
+    st.subheader("Stock Adjustment History")
     if not rows:
-
-        empty_history(
-            "Purchase History"
-        )
-
+        empty_history("Adjustment History")
         return
 
     display = []
-
     for row in rows:
-
-        quantity_value = row.get(
-            "qty"
-        )
-
-        if quantity_value is None:
-
-            quantity_value = row.get(
-                "quantity"
-            )
-
-        price_value = row.get(
-            "price"
-        )
-
-        if price_value is None:
-
-            price_value = row.get(
-                "unit_cost"
-            )
-
-        display.append(
-            {
-                "Purchase No":
-                    row.get(
-                        "purchase_no"
-                    ) or "-",
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    ) or "-",
-
-                "Qty":
-                    qty(
-                        quantity_value
-                    ),
-
-                "Unit Cost":
-                    money(
-                        price_value
-                    ),
-
-                "Total":
-                    money(
-                        row.get(
-                            "total"
-                        )
-                    ),
-
-                "Status":
-                    row.get(
-                        "status"
-                    ) or "-",
-
-                "Payment":
-                    row.get(
-                        "payment_method"
-                    ) or "-",
-
-                "Reference":
-                    row.get(
-                        "reference_no"
-                    ) or "-",
-
-                "Time":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
+        display.append({
+            "ID": row.get("id"),
+            "Warehouse": row.get("warehouse_id") or "-",
+            "Type": row.get("adjustment_type") or "-",
+            "Qty": qty(row.get("qty")),
+            "Unit Cost": money(row.get("unit_cost")),
+            "Reason": row.get("reason") or "-",
+            "Status": row.get("status") or "-",
+            "Requested By": row.get("requested_by") or "-",
+            "Approved By": row.get("approved_by") or "-",
+            "Created": format_myanmar_time(row.get("created_at")),
+            "Approved": format_myanmar_time(row.get("approved_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ==============================================================================
-# STOCK ADJUSTMENTS
-# ==============================================================================
-
-def render_adjustments(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Stock Adjustment History"
-    )
-
+def render_transfers(rows: List[Dict]):
+    st.subheader("Stock Transfer History")
     if not rows:
-
-        empty_history(
-            "Adjustment History"
-        )
-
+        empty_history("Transfer History")
         return
 
     display = []
-
     for row in rows:
-
-        display.append(
-            {
-                "ID":
-                    row.get(
-                        "id"
-                    ),
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    ) or "-",
-
-                "Type":
-                    row.get(
-                        "adjustment_type"
-                    ) or "-",
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "qty"
-                        )
-                    ),
-
-                "Unit Cost":
-                    money(
-                        row.get(
-                            "unit_cost"
-                        )
-                    ),
-
-                "Reason":
-                    row.get(
-                        "reason"
-                    ) or "-",
-
-                "Status":
-                    row.get(
-                        "status"
-                    ) or "-",
-
-                "Requested By":
-                    row.get(
-                        "requested_by"
-                    ) or "-",
-
-                "Approved By":
-                    row.get(
-                        "approved_by"
-                    ) or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-
-                "Approved":
-                    format_myanmar_time(
-                        row.get(
-                            "approved_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
+        display.append({
+            "Transfer No": row.get("transfer_no") or row.get("id") or "-",
+            "From Warehouse": row.get("from_warehouse_id") or "-",
+            "To Warehouse": row.get("to_warehouse_id") or "-",
+            "Qty": qty(row.get("qty") if row.get("qty") is not None else row.get("quantity")),
+            "Status": row.get("status") or "-",
+            "Remarks": row.get("remarks") or "-",
+            "Requested By": row.get("requested_by") or "-",
+            "Approved By": row.get("approved_by") or "-",
+            "Created": format_myanmar_time(row.get("created_at")),
+            "Approved": format_myanmar_time(row.get("approved_at")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ==============================================================================
-# TRANSFERS
-# ==============================================================================
-
-def render_transfers(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Stock Transfer History"
-    )
-
+def render_refunds(rows: List[Dict]):
+    st.subheader("Refund History")
     if not rows:
-
-        empty_history(
-            "Transfer History"
-        )
-
+        empty_history("Refund History")
         return
 
     display = []
-
     for row in rows:
-
-        display.append(
-            {
-                "Transfer No":
-                    row.get(
-                        "transfer_no"
-                    ) or "-",
-
-                "From Warehouse":
-                    row.get(
-                        "from_warehouse_id"
-                    ) or "-",
-
-                "To Warehouse":
-                    row.get(
-                        "to_warehouse_id"
-                    ) or "-",
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "qty"
-                        )
-                    ),
-
-                "Status":
-                    row.get(
-                        "status"
-                    ) or "-",
-
-                "Remarks":
-                    row.get(
-                        "remarks"
-                    ) or "-",
-
-                "Requested By":
-                    row.get(
-                        "requested_by"
-                    ) or "-",
-
-                "Approved By":
-                    row.get(
-                        "approved_by"
-                    ) or "-",
-
-                "Created":
-                    format_myanmar_time(
-                        row.get(
-                            "created_at"
-                        )
-                    ),
-
-                "Approved":
-                    format_myanmar_time(
-                        row.get(
-                            "approved_at"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
+        display.append({
+            "Refund ID": row.get("refund_id") or row.get("id"),
+            "Sale ID": row.get("sale_id"),
+            "Qty": qty(row.get("quantity")),
+            "Unit Price": money(row.get("unit_price")),
+            "Total": money(row.get("total")),
+            "Refund Amount": money(row.get("refund_amount")),
+            "Reason": row.get("reason") or "-",
+            "Status": row.get("status") or "-",
+            "Date": format_myanmar_time(row.get("refund_date")),
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ==============================================================================
-# REFUNDS
-# ==============================================================================
-
-def render_refunds(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Refund History"
-    )
-
+def render_unified_history(rows: List[Dict]):
+    st.subheader("Unified Product Transaction History")
     if not rows:
-
-        empty_history(
-            "Refund History"
-        )
-
+        empty_history("Unified Transaction History")
         return
 
     display = []
-
     for row in rows:
-
-        display.append(
-            {
-                "Refund ID":
-                    row.get(
-                        "refund_id"
-                    ),
-
-                "Sale ID":
-                    row.get(
-                        "sale_id"
-                    ),
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "quantity"
-                        )
-                    ),
-
-                "Unit Price":
-                    money(
-                        row.get(
-                            "unit_price"
-                        )
-                    ),
-
-                "Total":
-                    money(
-                        row.get(
-                            "total"
-                        )
-                    ),
-
-                "Refund Amount":
-                    money(
-                        row.get(
-                            "refund_amount"
-                        )
-                    ),
-
-                "Reason":
-                    row.get(
-                        "reason"
-                    ) or "-",
-
-                "Status":
-                    row.get(
-                        "status"
-                    ) or "-",
-
-                "Date":
-                    format_myanmar_time(
-                        row.get(
-                            "refund_date"
-                        )
-                    ),
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
+        balance = row.get("balance_after")
+        display.append({
+            "Time (MMT)": format_myanmar_time(row.get("transaction_time") or row.get("created_at")),
+            "Source": row.get("transaction_source") or row.get("source") or "-",
+            "Type": row.get("transaction_type") or row.get("movement_type") or "-",
+            "Reference": row.get("reference_id") or "-",
+            "Transaction": row.get("transaction_id") or row.get("id") or "-",
+            "Warehouse": row.get("warehouse_id") or "-",
+            "Qty": qty(row.get("quantity") if row.get("quantity") is not None else row.get("qty")),
+            "Balance": qty(balance) if balance is not None else "-",
+            "Remarks": row.get("remarks") or row.get("reason") or "-",
+        })
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ==============================================================================
-# UNIFIED MOVEMENT HISTORY
-# ==============================================================================
-
-def render_unified_history(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Unified Product Transaction History"
-    )
-
+def render_audit(rows: List[Dict]):
+    st.subheader("Product Audit History")
     if not rows:
-
-        empty_history(
-            "Unified Transaction History"
-        )
-
-        return
-
-    display = []
-
-    for row in rows:
-
-        balance = row.get(
-            "balance_after"
-        )
-
-        display.append(
-            {
-                "Time (MMT)":
-                    format_myanmar_time(
-                        row.get(
-                            "transaction_time"
-                        )
-                    ),
-
-                "Source":
-                    row.get(
-                        "transaction_source"
-                    ) or "-",
-
-                "Type":
-                    row.get(
-                        "transaction_type"
-                    ) or "-",
-
-                "Reference":
-                    row.get(
-                        "reference_id"
-                    ) or "-",
-
-                "Transaction":
-                    row.get(
-                        "transaction_id"
-                    ) or "-",
-
-                "Warehouse":
-                    row.get(
-                        "warehouse_id"
-                    ) or "-",
-
-                "Qty":
-                    qty(
-                        row.get(
-                            "quantity"
-                        )
-                    ),
-
-                "Balance":
-                    (
-                        qty(balance)
-                        if balance is not None
-                        else "-"
-                    ),
-
-                "Remarks":
-                    row.get(
-                        "remarks"
-                    ) or "-",
-            }
-        )
-
-    st.dataframe(
-        display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ==============================================================================
-# AUDIT HISTORY
-# ==============================================================================
-
-def render_audit(
-    rows: List[Dict],
-):
-
-    st.subheader(
-        "Product Audit History"
-    )
-
-    if not rows:
-
-        empty_history(
-            "Audit History",
-            "No historical audit record available.",
-        )
-
+        empty_history("Audit History", "No historical audit record available.")
         return
 
     for row in rows:
-
-        operation = (
-            row.get(
-                "operation"
-            )
-            or "UNKNOWN"
-        )
-
-        changed_at = format_myanmar_time(
-            row.get(
-                "changed_at"
-            )
-        )
-
-        with st.expander(
-            f"{operation} — {changed_at}"
-        ):
-
+        operation = row.get("operation") or row.get("action") or "UNKNOWN"
+        changed_at = format_myanmar_time(row.get("changed_at"))
+        with st.expander(f"{operation} — {changed_at}"):
             c1, c2 = st.columns(2)
-
             with c1:
-
-                st.markdown(
-                    "### Before"
-                )
-
-                st.json(
-                    {
-                        "purchase_price":
-                            row.get(
-                                "old_purchase_price"
-                            ),
-
-                        "selling_price":
-                            row.get(
-                                "old_selling_price"
-                            ),
-
-                        "markup_percent":
-                            row.get(
-                                "old_markup_percent"
-                            ),
-
-                        "price_source":
-                            row.get(
-                                "old_price_source"
-                            ),
-
-                        "owner_selling_price":
-                            row.get(
-                                "old_owner_selling_price"
-                            ),
-
-                        "final_selling_price":
-                            row.get(
-                                "old_final_selling_price"
-                            ),
-                    }
-                )
-
+                st.markdown("### Before")
+                st.json({
+                    "purchase_price": row.get("old_purchase_price"),
+                    "selling_price": row.get("old_selling_price"),
+                    "markup_percent": row.get("old_markup_percent"),
+                    "price_source": row.get("old_price_source"),
+                    "owner_selling_price": row.get("old_owner_selling_price"),
+                    "final_selling_price": row.get("old_final_selling_price"),
+                })
             with c2:
-
-                st.markdown(
-                    "### After"
-                )
-
-                st.json(
-                    {
-                        "purchase_price":
-                            row.get(
-                                "new_purchase_price"
-                            ),
-
-                        "selling_price":
-                            row.get(
-                                "new_selling_price"
-                            ),
-
-                        "markup_percent":
-                            row.get(
-                                "new_markup_percent"
-                            ),
-
-                        "price_source":
-                            row.get(
-                                "new_price_source"
-                            ),
-
-                        "owner_selling_price":
-                            row.get(
-                                "new_owner_selling_price"
-                            ),
-
-                        "final_selling_price":
-                            row.get(
-                                "new_final_selling_price"
-                            ),
-                    }
-                )
-
-            st.caption(
-                "Changed By: "
-                f"{row.get('changed_by') or 'SYSTEM'}"
-            )
+                st.markdown("### After")
+                st.json({
+                    "purchase_price": row.get("new_purchase_price"),
+                    "selling_price": row.get("new_selling_price"),
+                    "markup_percent": row.get("new_markup_percent"),
+                    "price_source": row.get("new_price_source"),
+                    "owner_selling_price": row.get("new_owner_selling_price"),
+                    "final_selling_price": row.get("new_final_selling_price"),
+                })
+            st.caption(f"Changed By: {row.get('changed_by') or 'SYSTEM'}")
 
 
-# ==============================================================================
-# CURRENT STATUS
-# ==============================================================================
-
-def render_current_status(
-    product: Dict,
-    integrity: Dict,
-):
-
-    st.subheader(
-        "Current Inventory Status"
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Master Stock",
-        qty(
-            integrity.get(
-                "master_stock"
-            )
-        ),
-    )
-
-    c2.metric(
-        "Warehouse Stock",
-        qty(
-            integrity.get(
-                "warehouse_stock"
-            )
-        ),
-    )
-
-    c3.metric(
-        "FIFO Remaining",
-        qty(
-            integrity.get(
-                "fifo_remaining"
-            )
-        ),
-    )
-
-    c4.metric(
-        "Batch Remaining",
-        qty(
-            integrity.get(
-                "batch_remaining"
-            )
-        ),
-    )
-
-    warnings = integrity.get(
-        "warnings",
-        [],
-    )
-
-    if warnings:
-
-        for warning in warnings:
-
-            st.warning(
-                f"⚠️ {warning}"
-            )
-
-    else:
-
-        st.success(
-            "Inventory integrity checks passed."
-        )
-
-
-# ==============================================================================
-# INTEGRITY PANEL
-# ==============================================================================
-
-def render_integrity(
-    integrity: Dict,
-):
-
-    st.subheader(
-        "Inventory Integrity"
-    )
-
-    passed = integrity.get(
-        "passed",
-        [],
-    )
-
-    warnings = integrity.get(
-        "warnings",
-        [],
-    )
+def render_integrity(integrity: Dict):
+    st.subheader("Inventory Integrity")
+    passed = integrity.get("passed", [])
+    warnings = integrity.get("warnings", [])
 
     for item in passed:
-
-        st.success(
-            f"✓ {item}"
-        )
-
+        st.success(f"✓ {item}")
     for item in warnings:
-
-        st.warning(
-            f"⚠ {item}"
-        )
+        st.warning(f"⚠ {item}")
 
     if not passed and not warnings:
-
-        st.info(
-            "No inventory integrity result available."
-        )
+        st.info("No inventory integrity result available.")
 
 
 # ==============================================================================
-# PART 2 END
-# ==============================================================================
-#
-# IMPORTANT
-# ------------------------------------------------------------------------------
-# There is intentionally NO call to get_integrity() in this part.
-#
-# Part 3 will calculate integrity locally inside render_product_360().
-#
-# ==============================================================================
-# ==============================================================================
-# erp_pages/inventory/product_360.py
-#
-# ERP ENTERPRISE PRODUCT 360°
-# PART 3 / 3
-#
 # ENTRY POINTS
-# ------------------------------------------------------------------------------
-# render_product_360()
-# render_product_360_page()
-# render_page()
-#
-# READ ONLY
-# No stock mutation
-# No FIFO mutation
-# No approval mutation
-# No product creation
 # ==============================================================================
 
-
-# ==============================================================================
-# PRODUCT 360 MAIN RENDERER
-# ==============================================================================
-
-def render_product_360(
-    client: Any,
-    product_id: int,
-):
-    """
-    ERP Product 360° main renderer.
-
-    Compatibility:
-        render_product_360(client, product_id)
-
-    READ ONLY.
-    """
-
-    # --------------------------------------------------------------------------
-    # VALIDATE PRODUCT ID
-    # --------------------------------------------------------------------------
-
+def render_product_360(client: Any, product_id: int):
     try:
-
         product_id = int(product_id)
-
-    except (
-        TypeError,
-        ValueError,
-    ):
-
-        st.error(
-            "Invalid Product ID."
-        )
-
+    except (TypeError, ValueError):
+        st.error("Invalid Product ID.")
         return
 
     if product_id <= 0:
-
-        st.error(
-            "Invalid Product ID."
-        )
-
+        st.error("Invalid Product ID.")
         return
 
-    # --------------------------------------------------------------------------
-    # LOAD PRODUCT
-    # --------------------------------------------------------------------------
-
-    product = get_product(
-        client,
-        product_id,
-    )
-
+    product = get_product(client, product_id)
     if not product:
-
-        st.error(
-            f"Product ID {product_id} was not found."
-        )
-
+        st.error(f"Product ID {product_id} was not found.")
         return
 
-    # --------------------------------------------------------------------------
-    # LOAD INVENTORY DATA
-    # --------------------------------------------------------------------------
+    warehouse_rows = get_warehouse_stock(client, product_id)
+    batch_rows = get_batches(client, product_id)
+    fifo_rows = get_fifo_layers(client, product_id)
 
-    warehouse_rows = get_warehouse_stock(
-        client,
-        product_id,
-    )
+    sales_rows = get_sales(client, product_id)
+    purchase_rows = get_purchases(client, product_id)
+    adjustment_rows = get_adjustments(client, product_id)
+    transfer_rows = get_transfers(client, product_id)
+    refund_rows = get_refunds(client, product_id)
+    unified_rows = get_unified_history(client, product_id)
+    audit_rows = get_audit_history(client, product_id)
 
-    batch_rows = get_batches(
-        client,
-        product_id,
-    )
+    integrity = get_integrity(product, warehouse_rows, batch_rows, fifo_rows)
 
-    fifo_rows = get_fifo_layers(
-        client,
-        product_id,
-    )
-
-    # --------------------------------------------------------------------------
-    # LOAD HISTORY
-    # --------------------------------------------------------------------------
-
-    sales_rows = get_sales(
-        client,
-        product_id,
-    )
-
-    purchase_rows = get_purchases(
-        client,
-        product_id,
-    )
-
-    adjustment_rows = get_adjustments(
-        client,
-        product_id,
-    )
-
-    transfer_rows = get_transfers(
-        client,
-        product_id,
-    )
-
-    refund_rows = get_refunds(
-        client,
-        product_id,
-    )
-
-    unified_rows = get_unified_history(
-        client,
-        product_id,
-    )
-
-    audit_rows = get_audit_history(
-        client,
-        product_id,
-    )
-
-    # --------------------------------------------------------------------------
-    # INTEGRITY
-    # --------------------------------------------------------------------------
-
-    integrity = get_integrity(
-        product,
-        warehouse_rows,
-        batch_rows,
-        fifo_rows,
-    )
-
-    # --------------------------------------------------------------------------
-    # PRODUCT HEADER
-    # --------------------------------------------------------------------------
-
-    render_product_header(
-        product
-    )
-
+    render_product_header(product)
+    st.divider()
+    render_current_status(product, integrity)
     st.divider()
 
-    # --------------------------------------------------------------------------
-    # CURRENT STATUS
-    # --------------------------------------------------------------------------
-
-    render_current_status(
-        product,
-        integrity,
-    )
-
-    st.divider()
-
-    # --------------------------------------------------------------------------
-    # PRODUCT INFORMATION
-    # --------------------------------------------------------------------------
-
-    st.subheader(
-        "Product Information"
-    )
-
+    st.subheader("Product Information")
     c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Product ID", str(product.get("id") or product_id))
+    c2.metric("SKU", str(product.get("sku") or "-"))
+    c3.metric("Barcode", str(product.get("barcode") or "-"))
+    c4.metric("Category", str(product.get("category_id") or "-"))
 
-    c1.metric(
-        "Product ID",
-        str(
-            product.get(
-                "id"
-            ) or product_id
-        ),
-    )
-
-    c2.metric(
-        "SKU",
-        str(
-            product.get(
-                "sku"
-            ) or "-"
-        ),
-    )
-
-    c3.metric(
-        "Barcode",
-        str(
-            product.get(
-                "barcode"
-            ) or "-"
-        ),
-    )
-
-    c4.metric(
-        "Category",
-        str(
-            product.get(
-                "category_id"
-            ) or "-"
-        ),
-    )
-
-    # --------------------------------------------------------------------------
-    # TABS
-    # --------------------------------------------------------------------------
-
-    tabs = st.tabs(
-        [
-            "Overview",
-            "Warehouse",
-            "Batch / FEFO",
-            "FIFO",
-            "Pricing",
-            "Sales",
-            "Purchases",
-            "Adjustments",
-            "Transfers",
-            "Refunds",
-            "History",
-            "Audit",
-            "Integrity",
-        ]
-    )
-
-    # ==========================================================================
-    # OVERVIEW
-    # ==========================================================================
+    tabs = st.tabs([
+        "Overview", "Warehouse", "Batch / FEFO", "FIFO", "Pricing",
+        "Sales", "Purchases", "Adjustments", "Transfers", "Refunds",
+        "History", "Audit", "Integrity"
+    ])
 
     with tabs[0]:
-
-        st.subheader(
-            "Product Overview"
-        )
-
+        st.subheader("Product Overview")
         overview = {
-            "Product ID":
-                product.get(
-                    "id"
-                ),
-
-            "Name":
-                product.get(
-                    "name"
-                ),
-
-            "SKU":
-                product.get(
-                    "sku"
-                ),
-
-            "Barcode":
-                product.get(
-                    "barcode"
-                ),
-
-            "Category ID":
-                product.get(
-                    "category_id"
-                ),
-
-            "Brand ID":
-                product.get(
-                    "brand_id"
-                ),
-
-            "Purchase Price":
-                money(
-                    product.get(
-                        "purchase_price"
-                    )
-                ),
-
-            "Selling Price":
-                money(
-                    product.get(
-                        "selling_price"
-                    )
-                ),
-
-            "Stock":
-                qty(
-                    product.get(
-                        "stock"
-                    )
-                ),
-
-            "Active":
-                product.get(
-                    "is_active",
-                    True,
-                ),
-
-            "Created":
-                format_myanmar_time(
-                    product.get(
-                        "created_at"
-                    )
-                ),
-
-            "Updated":
-                format_myanmar_time(
-                    product.get(
-                        "updated_at"
-                    )
-                ),
+            "Product ID": product.get("id"),
+            "Name": product.get("name"),
+            "SKU": product.get("sku"),
+            "Barcode": product.get("barcode"),
+            "Category ID": product.get("category_id"),
+            "Brand ID": product.get("brand_id"),
+            "Purchase Price": money(product.get("purchase_price")),
+            "Selling Price": money(product.get("selling_price")),
+            "Stock": qty(product.get("stock")),
+            "Active": product.get("is_active", True),
+            "Created": format_myanmar_time(product.get("created_at")),
+            "Updated": format_myanmar_time(product.get("updated_at")),
         }
-
         st.dataframe(
-            [
-                {
-                    "Field": key,
-                    "Value": value,
-                }
-                for key, value in overview.items()
-            ],
+            [{"Field": k, "Value": v} for k, v in overview.items()],
             use_container_width=True,
             hide_index=True,
         )
 
-    # ==========================================================================
-    # WAREHOUSE
-    # ==========================================================================
-
     with tabs[1]:
-
-        render_warehouse(
-            warehouse_rows
-        )
-
-    # ==========================================================================
-    # BATCH / FEFO
-    # ==========================================================================
-
+        render_warehouse(warehouse_rows)
     with tabs[2]:
-
-        render_batches(
-            batch_rows
-        )
-
-    # ==========================================================================
-    # FIFO
-    # ==========================================================================
-
+        render_batches(batch_rows)
     with tabs[3]:
-
-        render_fifo(
-            fifo_rows
-        )
-
-    # ==========================================================================
-    # PRICING
-    # ==========================================================================
-
+        render_fifo(fifo_rows)
     with tabs[4]:
-
-        render_pricing(
-            product
-        )
-
-    # ==========================================================================
-    # SALES
-    # ==========================================================================
-
+        render_pricing(product)
     with tabs[5]:
-
-        render_sales(
-            sales_rows
-        )
-
-    # ==========================================================================
-    # PURCHASES
-    # ==========================================================================
-
+        render_sales(sales_rows)
     with tabs[6]:
-
-        render_purchases(
-            purchase_rows
-        )
-
-    # ==========================================================================
-    # ADJUSTMENTS
-    # ==========================================================================
-
+        render_purchases(purchase_rows)
     with tabs[7]:
-
-        render_adjustments(
-            adjustment_rows
-        )
-
-    # ==========================================================================
-    # TRANSFERS
-    # ==========================================================================
-
+        render_adjustments(adjustment_rows)
     with tabs[8]:
-
-        render_transfers(
-            transfer_rows
-        )
-
-    # ==========================================================================
-    # REFUNDS
-    # ==========================================================================
-
+        render_transfers(transfer_rows)
     with tabs[9]:
-
-        render_refunds(
-            refund_rows
-        )
-
-    # ==========================================================================
-    # UNIFIED HISTORY
-    # ==========================================================================
-
+        render_refunds(refund_rows)
     with tabs[10]:
-
-        render_unified_history(
-            unified_rows
-        )
-
-    # ==========================================================================
-    # AUDIT
-    # ==========================================================================
-
+        render_unified_history(unified_rows)
     with tabs[11]:
-
-        render_audit(
-            audit_rows
-        )
-
-    # ==========================================================================
-    # INTEGRITY
-    # ==========================================================================
-
+        render_audit(audit_rows)
     with tabs[12]:
-
-        render_integrity(
-            integrity
-        )
+        render_integrity(integrity)
 
 
-# ==============================================================================
-# PAGE COMPATIBILITY WRAPPER
-# ==============================================================================
-
-def render_product_360_page(
-    client: Any,
-    product_id: int,
-):
-    """
-    Compatibility entry point.
-
-    Existing Inventory page code may call:
-
-        render_product_360_page(
-            client,
-            product_id,
-        )
-
-    """
-
-    return render_product_360(
-        client,
-        product_id,
-    )
+def render_product_360_page(client: Any, product_id: int):
+    return render_product_360(client, product_id)
 
 
-# ==============================================================================
-# GENERIC PAGE COMPATIBILITY WRAPPER
-# ==============================================================================
-
-def render_page(
-    client: Any,
-    product_id: int,
-):
-    """
-    Generic compatibility entry point.
-
-    Existing ERP modules may call:
-
-        render_page(
-            client,
-            product_id,
-        )
-    """
-
-    return render_product_360(
-        client,
-        product_id,
-    )
+def render_page(client: Any, product_id: int):
+    return render_product_360(client, product_id)
 
 
 # ==============================================================================
@@ -4342,26 +828,20 @@ __all__ = [
     "render_product_360",
     "render_product_360_page",
     "render_page",
-
     "get_product",
     "get_warehouse_stock",
     "get_batches",
     "get_fifo_layers",
-
     "get_sales",
     "get_purchases",
     "get_adjustments",
     "get_transfers",
     "get_refunds",
-
     "get_unified_history",
     "get_audit_history",
-
     "get_integrity",
     "calculate_stock_summary",
-
     "calculate_price_info",
-
     "format_myanmar_time",
     "to_decimal",
     "money",
