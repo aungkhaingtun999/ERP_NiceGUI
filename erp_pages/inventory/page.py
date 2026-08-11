@@ -48,13 +48,9 @@ It NEVER creates products directly.
 
 ==============================================================================
 
-import streamlit as st
+import streamlit as str
 
-from database import (
-db,
-get_inventory_view,
-get_warehouses,
-)
+from database import ( db, get_inventory_view, get_warehouses, )
 
 from erp_core.services.inventory_service import InventoryService
 from erp_core.services.pricing_service import PricingService
@@ -80,7 +76,6 @@ PRODUCT MASTER BULK IMPORT
 ------------------------------------------------------------------------------
 
 from .product_import import render_product_import
-
 from .stock_adjustment import render_stock_adjustment
 from .dashboard import render_inventory_dashboard
 
@@ -91,25 +86,25 @@ TAB DEFINITIONS
 ==============================================================================
 
 INVENTORY_TABS = [
-"Product Master",
-"Add Product",
-"Approval Queue",
-"Edit Product",
-"Product Import",
-"Inventory In",
-"Stock Adjustment",
-"Dashboard",
+    "Product Master",
+    "Add Product",
+    "Approval Queue",
+    "Edit Product",
+    "Product Import",
+    "Inventory In",
+    "Stock Adjustment",
+    "Dashboard",
 ]
 
 INVENTORY_TAB_ICONS = [
-"📋",
-"➕",
-"🟡",
-"✏️",
-"📦",
-"📥",
-"🔧",
-"📊",
+    "📋",
+    "➕",
+    "🟡",
+    "✏️",
+    "📦",
+    "📥",
+    "🔧",
+    "📊",
 ]
 
 ==============================================================================
@@ -119,33 +114,18 @@ TAB STATE
 ==============================================================================
 
 def _get_active_tab():
-
-if "inventory_active_tab" not in st.session_state:
-
-    st.session_state.inventory_active_tab = (
-        "Product Master"
-    )
-
-# --------------------------------------------------------------------------
-# Safety check
-# --------------------------------------------------------------------------
-
-if (
-    st.session_state.inventory_active_tab
-    not in INVENTORY_TABS
-):
-
-    st.session_state.inventory_active_tab = (
-        "Product Master"
-    )
-
-return st.session_state.inventory_active_tab
+    if "inventory_active_tab" not in st.session_state:
+        st.session_state.inventory_active_tab = "Product Master"
+    # --------------------------------------------------------------------------
+    # Safety check
+    # --------------------------------------------------------------------------
+    if st.session_state.inventory_active_tab not in INVENTORY_TABS:
+        st.session_state.inventory_active_tab = "Product Master"
+    return st.session_state.inventory_active_tab 
 
 def _set_active_tab(tab_name):
-
-if tab_name in INVENTORY_TABS:
-
-    st.session_state.inventory_active_tab = tab_name
+    if tab_name in INVENTORY_TABS:
+        st.session_state.inventory_active_tab = tab_name 
 
 ==============================================================================
 
@@ -154,47 +134,28 @@ TAB NAVIGATION
 ==============================================================================
 
 def _render_tab_navigation():
-
-active_tab = _get_active_tab()
-
-labels = [
-    f"{icon} {name}"
-    for icon, name in zip(
-        INVENTORY_TAB_ICONS,
-        INVENTORY_TABS,
+    active_tab = _get_active_tab()
+    labels = [
+        f"{icon} {name}" for icon, name in zip(
+            INVENTORY_TAB_ICONS,
+            INVENTORY_TABS,
+        )
+    ]
+    current_index = INVENTORY_TABS.index(active_tab)
+    selected_label = st.radio(
+        "Inventory Section",
+        labels,
+        index=current_index,
+        horizontal=True,
+        key="inventory_tab_navigation",
+        label_visibility="collapsed",
     )
-]
-
-current_index = INVENTORY_TABS.index(
-    active_tab
-)
-
-selected_label = st.radio(
-    "Inventory Section",
-    labels,
-    index=current_index,
-    horizontal=True,
-    key="inventory_tab_navigation",
-    label_visibility="collapsed",
-)
-
-selected_index = labels.index(
-    selected_label
-)
-
-selected_tab = INVENTORY_TABS[
-    selected_index
-]
-
-if selected_tab != active_tab:
-
-    _set_active_tab(
-        selected_tab
-    )
-
-    st.rerun()
-
-return selected_tab
+    selected_index = labels.index(selected_label)
+    selected_tab = INVENTORY_TABS[selected_index]
+    if selected_tab != active_tab:
+        _set_active_tab(selected_tab)
+        st.rerun()
+    return selected_tab 
 
 ==============================================================================
 
@@ -203,228 +164,141 @@ MAIN PAGE
 ==============================================================================
 
 def run_inventory_page():
-
-# ==========================================================================
-# HEADER
-# ==========================================================================
-
-st.title(
-    "🏭 Enterprise Product Master"
-)
-
-st.caption(
-    "ERP Inventory Control Center | "
-    "Mobile Ready | Maker Checker Enabled"
-)
-
-
-# ==========================================================================
-# SESSION
-# ==========================================================================
-
-if "inventory_barcode" not in st.session_state:
-
-    st.session_state.inventory_barcode = ""
-
-_get_active_tab()
-
-
-# ==========================================================================
-# SERVICES
-# ==========================================================================
-
-try:
-
-    client = db()
-
-    if client is None:
-
-        raise RuntimeError(
-            "ERP database client is not available."
-        )
-
-    inventory_service = (
-        InventoryService(client)
-    )
-
-    pricing_service = (
-        PricingService(client)
-    )
-
-except Exception as e:
-
-    st.error(
-        f"ERP Service Connection Failed: {e}"
-    )
-
-    st.stop()
-
-
-# ==========================================================================
-# WAREHOUSE
-# ==========================================================================
-
-try:
-
-    warehouses = get_warehouses()
-
-except Exception as e:
-
-    st.error(
-        f"Warehouse loading failed: {e}"
-    )
-
-    st.stop()
-
-
-if not warehouses:
-
-    st.error(
-        "No active warehouses found."
-    )
-
-    st.stop()
-
-
-selected_wh_id, selected_wh_name = (
-    render_warehouse_selector(
+    # ==========================================================================
+    # HEADER
+    # ==========================================================================
+    st.title("🏭 Enterprise Product Master")
+    st.caption("ERP Inventory Control Center | Mobile Ready | Maker Checker Enabled")
+    
+    # ==========================================================================
+    # SESSION
+    # ==========================================================================
+    if "inventory_barcode" not in st.session_state:
+        st.session_state.inventory_barcode = ""
+    _get_active_tab()
+    
+    # ==========================================================================
+    # SERVICES
+    # ==========================================================================
+    try:
+        client = db()
+        if client is None:
+            raise RuntimeError("ERP database client is not available.")
+        inventory_service = InventoryService(client)
+        pricing_service = PricingService(client)
+    except Exception as e:
+        st.error(f"ERP Service Connection Failed: {e}")
+        st.stop()
+        
+    # ==========================================================================
+    # WAREHOUSE
+    # ==========================================================================
+    try:
+        warehouses = get_warehouses()
+    except Exception as e:
+        st.error(f"Warehouse loading failed: {e}")
+        st.stop()
+        
+    if not warehouses:
+        st.error("No active warehouses found.")
+        st.stop()
+        
+    selected_wh_id, selected_wh_name = render_warehouse_selector(
         warehouses,
         key="inventory_warehouse_selector",
     )
-)
-
-
-# --------------------------------------------------------------------------
-# Keep warehouses available to inventory modules
-# --------------------------------------------------------------------------
-
-st.session_state.warehouses = warehouses
-
-
-# ==========================================================================
-# PRODUCT LOAD
-# ==========================================================================
-
-barcode = st.session_state.get(
-    "inventory_barcode",
-    "",
-)
-
-
-try:
-
-    products = get_inventory_view(
-        warehouse_id=selected_wh_id,
-        search=barcode.strip(),
+    
+    # --------------------------------------------------------------------------
+    # Keep warehouses available to inventory modules
+    # --------------------------------------------------------------------------
+    st.session_state.warehouses = warehouses
+    
+    # ==========================================================================
+    # PRODUCT LOAD
+    # ==========================================================================
+    barcode = st.session_state.get(
+        "inventory_barcode",
+        "",
     )
-
-except Exception as e:
-
-    st.error(
-        f"Product loading error: {e}"
-    )
-
-    products = []
-
-
-# ==========================================================================
-# NAVIGATION
-# ==========================================================================
-
-active_tab = _render_tab_navigation()
-
-st.markdown("---")
-
-
-# ==========================================================================
-# PRODUCT MASTER
-# ==========================================================================
-
-if active_tab == "Product Master":
-
-    render_product_master(
-        products
-    )
-
-
-# ==========================================================================
-# ADD PRODUCT
-# ==========================================================================
-
-elif active_tab == "Add Product":
-
-    render_product_create(
-        db_client=client,
-        pricing_service=pricing_service,
-        warehouse_id=selected_wh_id,
-    )
-
-
-# ==========================================================================
-# APPROVAL QUEUE
-# ==========================================================================
-
-elif active_tab == "Approval Queue":
-
-    render_product_approval_queue()
-
-
-# ==========================================================================
-# EDIT PRODUCT
-# ==========================================================================
-
-elif active_tab == "Edit Product":
-
-    render_product_edit(
-        warehouse_id=selected_wh_id,
-        warehouse_name=selected_wh_name,
-    )
-
-
-# ==========================================================================
-# PRODUCT MASTER BULK IMPORT
-# ==========================================================================
-
-elif active_tab == "Product Import":
-
-    render_product_import(
-        client=client,
-        warehouse_id=selected_wh_id,
-    )
-
-
-# ==========================================================================
-# INVENTORY IN
-# ==========================================================================
-
-elif active_tab == "Inventory In":
-
-    render_inventory_import()
-
-
-# ==========================================================================
-# STOCK ADJUSTMENT
-# ==========================================================================
-
-elif active_tab == "Stock Adjustment":
-
-    render_stock_adjustment(
-        products=products,
-        warehouse_id=selected_wh_id,
-        warehouse_name=selected_wh_name,
-        inventory_service=inventory_service,
-    )
-
-
-# ==========================================================================
-# DASHBOARD
-# ==========================================================================
-
-elif active_tab == "Dashboard":
-
-    render_inventory_dashboard(
-        warehouse_id=selected_wh_id,
-    )
+    try:
+        products = get_inventory_view(
+            warehouse_id=selected_wh_id,
+            search=barcode.strip(),
+        )
+    except Exception as e:
+        st.error(f"Product loading error: {e}")
+        products = []
+        
+    # ==========================================================================
+    # NAVIGATION
+    # ==========================================================================
+    active_tab = _render_tab_navigation()
+    st.markdown("---")
+    
+    # ==========================================================================
+    # PRODUCT MASTER
+    # ==========================================================================
+    if active_tab == "Product Master":
+        render_product_master(products)
+        
+    # ==========================================================================
+    # ADD PRODUCT
+    # ==========================================================================
+    elif active_tab == "Add Product":
+        render_product_create(
+            db_client=client,
+            pricing_service=pricing_service,
+            warehouse_id=selected_wh_id,
+        )
+        
+    # ==========================================================================
+    # APPROVAL QUEUE
+    # ==========================================================================
+    elif active_tab == "Approval Queue":
+        render_product_approval_queue()
+        
+    # ==========================================================================
+    # EDIT PRODUCT
+    # ==========================================================================
+    elif active_tab == "Edit Product":
+        render_product_edit(
+            warehouse_id=selected_wh_id,
+            warehouse_name=selected_wh_name,
+        )
+        
+    # ==========================================================================
+    # PRODUCT MASTER BULK IMPORT
+    # ==========================================================================
+    elif active_tab == "Product Import":
+        render_product_import(
+            client=client,
+            warehouse_id=selected_wh_id,
+        )
+        
+    # ==========================================================================
+    # INVENTORY IN
+    # ==========================================================================
+    elif active_tab == "Inventory In":
+        render_inventory_import()
+        
+    # ==========================================================================
+    # STOCK ADJUSTMENT
+    # ==========================================================================
+    elif active_tab == "Stock Adjustment":
+        render_stock_adjustment(
+            products=products,
+            warehouse_id=selected_wh_id,
+            warehouse_name=selected_wh_name,
+            inventory_service=inventory_service,
+        )
+        
+    # ==========================================================================
+    # DASHBOARD
+    # ==========================================================================
+    elif active_tab == "Dashboard":
+        render_inventory_dashboard(
+            warehouse_id=selected_wh_id,
+        )
 
 ==============================================================================
 
@@ -435,5 +309,4 @@ Compatible with erp_pages/2_Inventory.py
 ==============================================================================
 
 def run():
-
-return run_inventory_page()
+    return run_inventory_page()
