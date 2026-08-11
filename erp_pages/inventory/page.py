@@ -231,118 +231,85 @@ def run_inventory_page():
     active_tab = _render_tab_navigation()
 
     st.markdown("---")
+# ==========================================================================
+# PRODUCT MASTER
+# ==========================================================================
+
+if active_tab == "Product Master":
+    render_product_master(products)
 
 
-    # ==========================================================================
-    # PRODUCT MASTER
-    # ==========================================================================
+# ==========================================================================
+# ADD PRODUCT
+# ==========================================================================
 
-    if active_tab == "Product Master":
-
-        render_product_master(products)
-
-
-    # ==========================================================================
-    # ADD PRODUCT
-    # ==========================================================================
-
-    elif active_tab == "Add Product":
-
-        render_product_create(
-            db_client=client,
-            pricing_service=pricing_service,
-            warehouse_id=selected_wh_id,
-        )
+elif active_tab == "Add Product":
+    render_product_create(
+        db_client=client,
+        pricing_service=pricing_service,
+        warehouse_id=selected_wh_id,
+    )
 
 
-    # ==========================================================================
-    # PRODUCT APPROVAL QUEUE
-    # ==========================================================================
+# ==========================================================================
+# APPROVAL QUEUE
+# ==========================================================================
 
-    elif active_tab == "Approval Queue":
-
-        render_product_approval_queue()
-
-
-    # ==========================================================================
-    # EDIT PRODUCT
-    # ==========================================================================
-
-    elif active_tab == "Edit Product":
-
-        render_product_edit(
-            warehouse_id=selected_wh_id,
-            warehouse_name=selected_wh_name,
-        )
+elif active_tab == "Approval Queue":
+    render_product_approval_queue()
 
 
-    # ==========================================================================
-    # PRODUCT MASTER BULK IMPORT
-    #
-    # CSV / Excel
-    #
-    # IMPORTANT:
-    #   This does NOT directly insert into products.
-    #
-    #   Next stage:
-    #
-    #   CSV / Excel
-    #        ↓
-    #   Validation
-    #        ↓
-    #   Preview
-    #        ↓
-    #   Maker Request
-    #        ↓
-    #   Checker Approval
-    #        ↓
-    #   products
-    # ==============================================================================
-# PRODUCT MASTER BULK IMPORT
-# ==============================================================================
+# ==========================================================================
+# EDIT PRODUCT
+# ==========================================================================
+
+elif active_tab == "Edit Product":
+    render_product_edit(
+        warehouse_id=selected_wh_id,
+        warehouse_name=selected_wh_name,
+    )
+
+
+# ==========================================================================
+# PRODUCT MASTER IMPORT
+# ==========================================================================
 
 elif active_tab == "Product Import":
-
     render_product_import(
         db_client=client,
         warehouse_id=selected_wh_id,
     )
 
 
-    # ==========================================================================
-    # INVENTORY IN
-    #
-    # Existing Stock-In workflow
-    # ==========================================================================
+# ==========================================================================
+# INVENTORY IN
+# ==========================================================================
 
-    elif active_tab == "Inventory In":
-
-        render_inventory_import()
+elif active_tab == "Inventory In":
+    render_inventory_import()
 
 
-    # ==========================================================================
-    # STOCK ADJUSTMENT
-    # ==========================================================================
+# ==========================================================================
+# STOCK ADJUSTMENT
+# ==========================================================================
 
-    elif active_tab == "Stock Adjustment":
+elif active_tab == "Stock Adjustment":
+    render_stock_adjustment(
+        products=products,
+        warehouse_id=selected_wh_id,
+        warehouse_name=selected_wh_name,
+        inventory_service=inventory_service,
+    )
 
-        render_stock_adjustment(
-            products=products,
-            warehouse_id=selected_wh_id,
-            warehouse_name=selected_wh_name,
-            inventory_service=inventory_service,
-        )
 
+# ==========================================================================
+# DASHBOARD
+# ==========================================================================
 
-    # ==========================================================================
-    # DASHBOARD
-    # ==========================================================================
-
-    elif active_tab == "Dashboard":
-
-        render_inventory_dashboard(
-            warehouse_id=selected_wh_id
-        )
+elif active_tab == "Dashboard":
+    render_inventory_dashboard(
+        warehouse_id=selected_wh_id,
+    )
 
 
 # ==============================================================================
