@@ -2409,6 +2409,65 @@ def render_page(
             "Select a Product ID, SKU, or Barcode."
         )
 
+# ==============================================================================
+# INVENTORY PAGE COMPATIBILITY ENTRY
+# ------------------------------------------------------------------------------
+# Used by:
+#     erp_pages/inventory/page.py
+#
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# The Inventory Control Center calls:
+#
+#     render_product_360_page(client, product_id)
+#
+# The actual Product 360 renderer is:
+#
+#     render_product_360(client, product_id)
+#
+# This wrapper keeps both interfaces compatible.
+# ==============================================================================
+
+def render_product_360_page(
+    client,
+    product_id: Optional[int] = None,
+):
+    """
+    Render Product 360° inside the Inventory Control Center.
+
+    This is intentionally a thin compatibility wrapper.
+    It does NOT create a separate Product 360 implementation.
+    """
+
+    if product_id is None:
+
+        st.info(
+            "Select a product to open Product 360°."
+        )
+
+        return
+
+    try:
+
+        product_id = int(product_id)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        st.error(
+            "Invalid Product ID."
+        )
+
+        return
+
+    render_product_360(
+        client,
+        product_id,
+    )
+
+
 
 # ==============================================================================
 # EXPORT
@@ -2416,6 +2475,7 @@ def render_page(
 
 __all__ = [
     "render_product_360",
+    "render_product_360_page",
     "render_page",
     "format_myanmar_time",
 ]
