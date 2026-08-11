@@ -243,7 +243,153 @@ def _is_error(
         and "__error__" in data
     )
 
+# ==============================================================================
+# INVENTORY INTEGRITY CHECK
+# ==============================================================================
 
+def get_integrity(
+    product: Dict,
+    warehouse_rows: List[Dict],
+    batch_rows: List[Dict],
+    fifo_rows: List[Dict],
+) -> Dict:
+    """
+    Compare:
+
+        Product Master Stock
+            =
+        Warehouse Stock
+            =
+        Batch Remaining
+            =
+        FIFO Remaining
+
+    This is a READ-ONLY integrity check.
+    It does NOT modify database data.
+    """
+
+    # --------------------------------------------------------------------------
+    # PRODUCT MASTER STOCK
+    # --------------------------------------------------------------------------
+
+    master_stock = to_decimal(
+        product.get("stock")
+    )
+
+    # --------------------------------------------------------------------------
+    # WAREHOUSE STOCK
+    # --------------------------------------------------------------------------
+
+    warehouse_stock = Decimal("0")
+
+    for row in warehouse_rows:
+
+        warehouse_stock += to_decimal(
+            row.get("qty")
+        )
+
+    # --------------------------------------------------------------------------
+    # BATCH REMAINING
+    # --------------------------------------------------------------------------
+
+    batch_remaining = Decimal("0")
+
+    for row in batch_rows:
+
+        batch_remaining += to_decimal(
+            row.get("qty_remaining")
+        )
+
+    # --------------------------------------------------------------------------
+    # FIFO REMAINING
+    # --------------------------------------------------------------------------
+
+    fifo_remaining = Decimal("0")
+
+    for row in fifo_rows:
+
+        fifo_remaining += to_decimal(
+            row.get("qty_remaining")
+        )
+
+    # --------------------------------------------------------------------------
+    # RESULT
+    # --------------------------------------------------------------------------
+
+    warnings = []
+    passed = []
+
+    # --------------------------------------------------------------------------
+    # WAREHOUSE vs FIFO
+    # --------------------------------------------------------------------------
+
+    if warehouse_stock == fifo_remaining:
+
+        passed.append(
+            "Warehouse stock matches FIFO remaining."
+        )
+
+    else:
+
+        warnings.append(
+            "Warehouse stock differs from FIFO remaining."
+        )
+
+    # --------------------------------------------------------------------------
+    # MASTER vs WAREHOUSE
+    # --------------------------------------------------------------------------
+
+    if master_stock == warehouse_stock:
+
+        passed.append(
+            "Master stock matches warehouse stock."
+        )
+
+    else:
+
+        warnings.append(
+            "Master stock differs from warehouse stock."
+        )
+
+    # --------------------------------------------------------------------------
+    # BATCH vs FIFO
+    # --------------------------------------------------------------------------
+
+    if batch_remaining == fifo_remaining:
+
+        passed.append(
+            "Batch remaining matches FIFO remaining."
+        )
+
+    else:
+
+        warnings.append(
+            "Batch remaining differs from FIFO remaining."
+        )
+
+    # --------------------------------------------------------------------------
+    # RETURN
+    # --------------------------------------------------------------------------
+
+    return {
+        "master_stock":
+            master_stock,
+
+        "warehouse_stock":
+            warehouse_stock,
+
+        "batch_remaining":
+            batch_remaining,
+
+        "fifo_remaining":
+            fifo_remaining,
+
+        "warnings":
+            warnings,
+
+        "passed":
+            passed,
+    }
 # ==============================================================================
 # PRODUCT MASTER
 # ==============================================================================
