@@ -1,0 +1,221 @@
+from __future__ import annotations
+
+from typing import Optional, List, Dict, Any
+import streamlit as st
+from datetime import datetime
+
+
+class InventoryImportService:
+    """
+    Service layer for Inventory Import (Stock In) maker-checker workflow.
+    Uses database RPC functions already tested in production:
+    - submit_inventory_import_batch(text)
+    - approve_inventory_import_batch(text)
+    """
+
+    def __init__(self):
+        self.db = st.session_state.db
+
+    # =========================================================
+    # Batch Header
+    # =========================================================
+    def create_batch(
+        self,
+        batch_no: str,
+        warehouse_to: int,
+        requested_by: str,
+        remarks: Optional[str] = None,
+        transaction_type: str = "STOCK_IN"
+    ) -> Dict[str, Any]:
+        sql = """
+            INSERT INTO inventory_import_batches (
+                batch_no, transaction_type, status, warehouse_to, requested_by, remarks
+            ) VALUES (%s, %s, 'DRAFT', %s, %s, %s)
+            RETURNING id, batch_no, status
+        """
+        rows = self.db.query(
+            sql,
+            (
+                batch_no,
+                transaction_type,
+                warehouse_to,
+                requested_by,
+                remarks
+            )
+        )
+        if not rows:
+            return {
+                "success": False,
+                "message": "Failed to create batch."
+            }
+        return {
+            "success": True,
+            **rows[0]
+        }
+
+    # =========================================================
+    # Add Line
+    # =========================================================
+    def add_line(
+        self,
+        batch_id: int,
+        line_no: int,
+        warehouse_id: int,
+        sku: str,
+        qty: float,
+        unit_cost: float,
+        lot_no: Optional[str] = None,
+        mfg_date: Optional[str] = None,
+        expiry_date: Optional[str] = None,
+        reference_no: Optional[str] = None,
+        supplier_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        sql = """
+            INSERT INTO inventory_import_lines (
+                batch_id, line_no, warehouse_id, sku, qty, unit_cost, 
+                lot_no, mfg_date, expiry_date, reference_no, supplier_code
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """
+        rows = self.db.query(
+            sql,
+            (
+                batch_id,
+                line_no,
+                warehouse_id,
+                sku,
+                qty,
+                unit_cost,
+                lot_no,
+                mfg_date,
+                expiry_date,
+                reference_no,
+                supplier_code
+            )
+        )
+        return {
+            "success": bool(rows),
+            "line_id": rows[0]["id"] if rows else None
+        }
+
+    # =========================================================
+    # Get Batch Header
+    # =========================================================
+    def get_batch(self, batch_no: str):
+        sql = """
+            SELECT * FROM inventory_import_batches WHERE batch_no = %s
+        """
+        rows = self.db.query(sql, (batch_no,))
+        return rows[0] if rows else None
+
+    # =========================================================
+    # Get Batch Lines
+    # =========================================================
+    def get_batch_lines(self, batch_no: str):
+        sql = """
+            SELECT l.id, l.line_no, l.warehouse_id, w.name AS warehouse_name, 
+                   l.sku, l.product_id, p.name AS product_name, l.qty, 
+                   l.unit_cost, l.lot_no, l.mfg_date, l.expiry_date, 
+                   l.is_valid, l.error_message 
+            FROM inventory_import_lines l 
+            JOIN inventory_import_batches b ON b.id = l.batch_id 
+            LEFT JOIN products p ON p.id = l.product_id 
+            LEFT JOIN warehouses w ON w.id = l.warehouse_id 
+            WHERE b.batch_no = %s 
+            ORDER BY l.line_no
+        """
+        return self.db.query(sql, (batch_no,))
+
+    # =========================================================
+    # Submit (Validate)
+    # =========================================================
+    def submit_batch(self, batch_no: str) -> Dict[str, Any]:
+        sql = """
+            SELECT public.submit_inventory_import_batch(%s) AS result
+        """
+        rows = self.db.query(sql, (batch_no,))
+        if not rows:
+            return {
+                "success": False,
+                "message": "No response from database."
+            }
+        return rows[0]["result"]
+
+    # =========================================================
+    # Approve (Post)
+    # =========================================================
+    def approve_batch(self, batch_no: str) -> Dict[str, Any]:
+        sql = """
+            SELECT public.approve_inventory_import_batch(%s) AS result
+        """
+        rows = self.db.query(sql, (batch_no,))
+        if not rows:
+            return {
+                "success": False,
+                "message": "No response from database."
+            }
+        return rows[0]["result"]
+
+    # =========================================================
+    # Pending Queue
+    # =========================================================
+    def get_pending_batches(self):
+        sql = """
+            SELECT b.id, b.batch_no, b.transaction_type, b.status, 
+                   b.total_lines, b.valid_lines, b.error_lines, 
+                   b.requested_by, u.username AS requested_by_username, 
+                   w.name AS warehouse_name, b.remarks, b.created_at 
+            FROM inventory_import_batches b 
+            LEFT JOIN users u ON u.id = b.requested_by 
+            LEFT JOIN warehouses w ON w.id = b.warehouse_to 
+            WHERE upper(b.status) = 'PENDING' 
+            ORDER BY b.created_at ASC
+        """
+        return self.db.query(sql)
+
+    # =========================================================
+    # Draft Queue
+    # =========================================================
+    def get_draft_batches(self):
+        sql = """
+            SELECT b.id, b.batch_no, b.transaction_type, b.status, 
+                   b.total_lines, b.valid_lines, b.error_lines, 
+                   w.name AS warehouse_name, b.remarks, b.created_at 
+            FROM inventory_import_batches b 
+            LEFT JOIN warehouses w ON w.id = b.warehouse_to 
+            WHERE upper(b.status) = 'DRAFT' 
+            ORDER BY b.created_at DESC
+        """
+        return self.db.query(sql)
+
+    # =========================================================
+    # Recent History
+    # =========================================================
+    def get_recent_batches(self, limit: int = 20):
+        sql = """
+            SELECT b.id, b.batch_no, b.transaction_type, b.status, 
+                   b.total_lines, b.valid_lines, b.error_lines, 
+                   w.name AS warehouse_name, u1.username AS requested_by, 
+                   u2.username AS approved_by, b.created_at, b.approved_at, b.posted_at 
+            FROM inventory_import_batches b 
+            LEFT JOIN warehouses w ON w.id = b.warehouse_to 
+            LEFT JOIN users u1 ON u1.id = b.requested_by 
+            LEFT JOIN users u2 ON u2.id = b.approved_by 
+            ORDER BY b.created_at DESC 
+            LIMIT %s
+        """
+        return self.db.query(sql, (limit,))
+
+    # =========================================================
+    # Generate Next Batch Number
+    # =========================================================
+    def generate_batch_no(self, prefix: str = "INV") -> str:
+        sql = """
+            SELECT COUNT(*) + 1 AS seq 
+            FROM inventory_import_batches 
+            WHERE created_at::date = CURRENT_DATE
+        """
+        rows = self.db.query(sql)
+        seq = rows[0]["seq"] if rows else 1
+        today = datetime.now().strftime("%Y%m%d")
+        return f"{prefix}-{today}-{int(seq):04d}"
