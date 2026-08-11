@@ -490,7 +490,7 @@ def run_inventory_page():
 
     elif active_tab == "Product Import":
 
-    render_product_import(
+        render_product_import(
         warehouse_id=selected_wh_id,
     )
 
