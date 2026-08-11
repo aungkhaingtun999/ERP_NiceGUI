@@ -490,11 +490,9 @@ def run_inventory_page():
 
     elif active_tab == "Product Import":
 
-        render_product_import(
-            db_client=client,
-            warehouse_id=selected_wh_id,
-        )
-
+    render_product_import(
+        warehouse_id=selected_wh_id,
+    )
 
     # ==========================================================================
     # INVENTORY IN
