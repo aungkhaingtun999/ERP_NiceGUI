@@ -60,7 +60,15 @@ IMPORT_COLUMNS = [
 def _init_state():
 
     defaults = {
+        # ----------------------------------------------------------------------
+        # IMPORTANT:
+        # inventory_import_batch_no is BUSINESS STATE.
+        # inventory_import_batch_no_input is the Streamlit WIDGET STATE.
+        #
+        # NEVER use the same key for both.
+        # ----------------------------------------------------------------------
         "inventory_import_batch_no": "",
+        "inventory_import_batch_no_input": "",
         "inventory_import_remarks": "",
         "inventory_import_file_data": None,
         "inventory_import_file_name": "",
@@ -84,6 +92,120 @@ def _generate_batch_no():
         "INV-IN-"
         + time.strftime("%Y%m%d-%H%M%S")
     )
+
+
+# ==============================================================================
+# GENERATE BATCH CALLBACK
+# ==============================================================================
+
+def _on_generate_batch():
+
+    batch_no = _generate_batch_no()
+
+    # --------------------------------------------------------------------------
+    # IMPORTANT:
+    # This callback executes BEFORE Streamlit instantiates/renders the widget
+    # on the next rerun.
+    #
+    # We modify ONLY the widget's dedicated state key here.
+    # --------------------------------------------------------------------------
+
+    st.session_state["inventory_import_batch_no_input"] = batch_no
+
+    # --------------------------------------------------------------------------
+    # Keep business state synchronized.
+    #
+    # This is safe because inventory_import_batch_no is NOT a widget key.
+    # --------------------------------------------------------------------------
+
+    st.session_state["inventory_import_batch_no"] = batch_no
+
+
+# ==============================================================================
+# IMPORT BATCH UI
+# ==============================================================================
+
+def _render_import_batch():
+
+    # --------------------------------------------------------------------------
+    # Initialize BEFORE widget creation
+    # --------------------------------------------------------------------------
+
+    if "inventory_import_batch_no_input" not in st.session_state:
+        st.session_state["inventory_import_batch_no_input"] = ""
+
+    if "inventory_import_batch_no" not in st.session_state:
+        st.session_state["inventory_import_batch_no"] = ""
+
+    st.markdown("### 1️⃣ Import Batch")
+
+    col1, col2 = st.columns(
+        [3, 1],
+        vertical_alignment="bottom",
+    )
+
+    # --------------------------------------------------------------------------
+    # BATCH INPUT
+    #
+    # IMPORTANT:
+    # Do NOT use inventory_import_batch_no here.
+    # --------------------------------------------------------------------------
+
+    with col1:
+
+        st.text_input(
+            "Batch No",
+            key="inventory_import_batch_no_input",
+            placeholder="INV-IN-YYYYMMDD-HHMMSS",
+        )
+
+    # --------------------------------------------------------------------------
+    # GENERATE BUTTON
+    # --------------------------------------------------------------------------
+
+    with col2:
+
+        st.button(
+            "Generate Batch No",
+            key="generate_inventory_import_batch_no_btn",
+            type="secondary",
+            use_container_width=True,
+            on_click=_on_generate_batch,
+        )
+
+    # --------------------------------------------------------------------------
+    # READ WIDGET VALUE
+    # --------------------------------------------------------------------------
+
+    batch_no = (
+        st.session_state
+        .get(
+            "inventory_import_batch_no_input",
+            "",
+        )
+    )
+
+    batch_no = str(batch_no).strip()
+
+    # --------------------------------------------------------------------------
+    # Synchronize BUSINESS STATE
+    #
+    # inventory_import_batch_no is NOT a widget key, so this assignment is safe.
+    # --------------------------------------------------------------------------
+
+    st.session_state["inventory_import_batch_no"] = batch_no
+
+    # --------------------------------------------------------------------------
+    # DISPLAY
+    # --------------------------------------------------------------------------
+
+    if batch_no:
+
+        st.success(
+            f"Import Batch: **{batch_no}**"
+        )
+
+    return batch_no
 
 
 # ==============================================================================
@@ -921,7 +1043,7 @@ def render_inventory_import():
 
         st.warning(
             "Current user session ID was not found. "
-            "Please login again."
+            "Please log in again."
         )
 
     # ==========================================================================
@@ -974,69 +1096,21 @@ def render_inventory_import():
     # BATCH
     # ==========================================================================
 
-    st.markdown(
-        "### 1️⃣ Import Batch"
+    batch_no = _render_import_batch()
+
+    if not batch_no:
+
+        st.warning(
+            "Please generate an Import Batch No before uploading."
+        )
+
+        return
+
+    remarks = st.text_input(
+        "Remarks",
+        key="inventory_import_remarks",
+        placeholder="August stock receiving",
     )
-
-    col1, col2 = st.columns(
-        [2, 2]
-    )
-
-    with col1:
-
-        batch_no = st.text_input(
-            "Batch No",
-            key="inventory_import_batch_no",
-            placeholder="INV-IN-20260811-001",
-        )
-
-        col_a, col_b = st.columns(
-            2
-        )
-
-        with col_a:
-
-            if st.button(
-                "Generate Batch No",
-                key="inventory_import_generate",
-            ):
-
-                st.session_state[
-                    "inventory_import_batch_no"
-                ] = _generate_batch_no()
-
-                st.rerun()
-
-        with col_b:
-
-            if st.button(
-                "Clear",
-                key="inventory_import_clear",
-            ):
-
-                for key in [
-                    "inventory_import_batch_no",
-                    "inventory_import_remarks",
-                    "inventory_import_file_data",
-                    "inventory_import_file_name",
-                    "inventory_import_preview",
-                    "inventory_import_validated",
-                ]:
-
-                    st.session_state.pop(
-                        key,
-                        None,
-                    )
-
-                st.rerun()
-
-    with col2:
-
-        remarks = st.text_input(
-            "Remarks",
-            key="inventory_import_remarks",
-            placeholder="August stock receiving",
-        )
 
     # ==========================================================================
     # TEMPLATE
@@ -1048,7 +1122,7 @@ def render_inventory_import():
 
     st.info(
         "ရာချီ / ထောင်ချီသော ပစ္စည်းများကို "
-        "Excel သို့မဟုတ် CSV ဖြင့် တစ်ကြိမ်တည်းသွင်းနိုင်ပါတယ်။ "
+        "Excel သို့မဟုတ် CSV ဖြင့် တစ်ကြိမ်တည်း သွင်းနိုင်ပါတယ်။ "
         "Upload လုပ်ရုံနဲ့ stock မတက်ပါ။ Checker approval ပြီးမှသာ POSTED ဖြစ်ပါမယ်။"
     )
 
