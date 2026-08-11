@@ -3828,3 +3828,542 @@ def render_integrity(
 # Part 3 will calculate integrity locally inside render_product_360().
 #
 # ==============================================================================
+# ==============================================================================
+# erp_pages/inventory/product_360.py
+#
+# ERP ENTERPRISE PRODUCT 360°
+# PART 3 / 3
+#
+# ENTRY POINTS
+# ------------------------------------------------------------------------------
+# render_product_360()
+# render_product_360_page()
+# render_page()
+#
+# READ ONLY
+# No stock mutation
+# No FIFO mutation
+# No approval mutation
+# No product creation
+# ==============================================================================
+
+
+# ==============================================================================
+# PRODUCT 360 MAIN RENDERER
+# ==============================================================================
+
+def render_product_360(
+    client: Any,
+    product_id: int,
+):
+    """
+    ERP Product 360° main renderer.
+
+    Compatibility:
+        render_product_360(client, product_id)
+
+    READ ONLY.
+    """
+
+    # --------------------------------------------------------------------------
+    # VALIDATE PRODUCT ID
+    # --------------------------------------------------------------------------
+
+    try:
+
+        product_id = int(product_id)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        st.error(
+            "Invalid Product ID."
+        )
+
+        return
+
+    if product_id <= 0:
+
+        st.error(
+            "Invalid Product ID."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # LOAD PRODUCT
+    # --------------------------------------------------------------------------
+
+    product = get_product(
+        client,
+        product_id,
+    )
+
+    if not product:
+
+        st.error(
+            f"Product ID {product_id} was not found."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # LOAD INVENTORY DATA
+    # --------------------------------------------------------------------------
+
+    warehouse_rows = get_warehouse_stock(
+        client,
+        product_id,
+    )
+
+    batch_rows = get_batches(
+        client,
+        product_id,
+    )
+
+    fifo_rows = get_fifo_layers(
+        client,
+        product_id,
+    )
+
+    # --------------------------------------------------------------------------
+    # LOAD HISTORY
+    # --------------------------------------------------------------------------
+
+    sales_rows = get_sales(
+        client,
+        product_id,
+    )
+
+    purchase_rows = get_purchases(
+        client,
+        product_id,
+    )
+
+    adjustment_rows = get_adjustments(
+        client,
+        product_id,
+    )
+
+    transfer_rows = get_transfers(
+        client,
+        product_id,
+    )
+
+    refund_rows = get_refunds(
+        client,
+        product_id,
+    )
+
+    unified_rows = get_unified_history(
+        client,
+        product_id,
+    )
+
+    audit_rows = get_audit_history(
+        client,
+        product_id,
+    )
+
+    # --------------------------------------------------------------------------
+    # INTEGRITY
+    # --------------------------------------------------------------------------
+
+    integrity = get_integrity(
+        product,
+        warehouse_rows,
+        batch_rows,
+        fifo_rows,
+    )
+
+    # --------------------------------------------------------------------------
+    # PRODUCT HEADER
+    # --------------------------------------------------------------------------
+
+    render_product_header(
+        product
+    )
+
+    st.divider()
+
+    # --------------------------------------------------------------------------
+    # CURRENT STATUS
+    # --------------------------------------------------------------------------
+
+    render_current_status(
+        product,
+        integrity,
+    )
+
+    st.divider()
+
+    # --------------------------------------------------------------------------
+    # PRODUCT INFORMATION
+    # --------------------------------------------------------------------------
+
+    st.subheader(
+        "Product Information"
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "Product ID",
+        str(
+            product.get(
+                "id"
+            ) or product_id
+        ),
+    )
+
+    c2.metric(
+        "SKU",
+        str(
+            product.get(
+                "sku"
+            ) or "-"
+        ),
+    )
+
+    c3.metric(
+        "Barcode",
+        str(
+            product.get(
+                "barcode"
+            ) or "-"
+        ),
+    )
+
+    c4.metric(
+        "Category",
+        str(
+            product.get(
+                "category_id"
+            ) or "-"
+        ),
+    )
+
+    # --------------------------------------------------------------------------
+    # TABS
+    # --------------------------------------------------------------------------
+
+    tabs = st.tabs(
+        [
+            "Overview",
+            "Warehouse",
+            "Batch / FEFO",
+            "FIFO",
+            "Pricing",
+            "Sales",
+            "Purchases",
+            "Adjustments",
+            "Transfers",
+            "Refunds",
+            "History",
+            "Audit",
+            "Integrity",
+        ]
+    )
+
+    # ==========================================================================
+    # OVERVIEW
+    # ==========================================================================
+
+    with tabs[0]:
+
+        st.subheader(
+            "Product Overview"
+        )
+
+        overview = {
+            "Product ID":
+                product.get(
+                    "id"
+                ),
+
+            "Name":
+                product.get(
+                    "name"
+                ),
+
+            "SKU":
+                product.get(
+                    "sku"
+                ),
+
+            "Barcode":
+                product.get(
+                    "barcode"
+                ),
+
+            "Category ID":
+                product.get(
+                    "category_id"
+                ),
+
+            "Brand ID":
+                product.get(
+                    "brand_id"
+                ),
+
+            "Purchase Price":
+                money(
+                    product.get(
+                        "purchase_price"
+                    )
+                ),
+
+            "Selling Price":
+                money(
+                    product.get(
+                        "selling_price"
+                    )
+                ),
+
+            "Stock":
+                qty(
+                    product.get(
+                        "stock"
+                    )
+                ),
+
+            "Active":
+                product.get(
+                    "is_active",
+                    True,
+                ),
+
+            "Created":
+                format_myanmar_time(
+                    product.get(
+                        "created_at"
+                    )
+                ),
+
+            "Updated":
+                format_myanmar_time(
+                    product.get(
+                        "updated_at"
+                    )
+                ),
+        }
+
+        st.dataframe(
+            [
+                {
+                    "Field": key,
+                    "Value": value,
+                }
+                for key, value in overview.items()
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ==========================================================================
+    # WAREHOUSE
+    # ==========================================================================
+
+    with tabs[1]:
+
+        render_warehouse(
+            warehouse_rows
+        )
+
+    # ==========================================================================
+    # BATCH / FEFO
+    # ==========================================================================
+
+    with tabs[2]:
+
+        render_batches(
+            batch_rows
+        )
+
+    # ==========================================================================
+    # FIFO
+    # ==========================================================================
+
+    with tabs[3]:
+
+        render_fifo(
+            fifo_rows
+        )
+
+    # ==========================================================================
+    # PRICING
+    # ==========================================================================
+
+    with tabs[4]:
+
+        render_pricing(
+            product
+        )
+
+    # ==========================================================================
+    # SALES
+    # ==========================================================================
+
+    with tabs[5]:
+
+        render_sales(
+            sales_rows
+        )
+
+    # ==========================================================================
+    # PURCHASES
+    # ==========================================================================
+
+    with tabs[6]:
+
+        render_purchases(
+            purchase_rows
+        )
+
+    # ==========================================================================
+    # ADJUSTMENTS
+    # ==========================================================================
+
+    with tabs[7]:
+
+        render_adjustments(
+            adjustment_rows
+        )
+
+    # ==========================================================================
+    # TRANSFERS
+    # ==========================================================================
+
+    with tabs[8]:
+
+        render_transfers(
+            transfer_rows
+        )
+
+    # ==========================================================================
+    # REFUNDS
+    # ==========================================================================
+
+    with tabs[9]:
+
+        render_refunds(
+            refund_rows
+        )
+
+    # ==========================================================================
+    # UNIFIED HISTORY
+    # ==========================================================================
+
+    with tabs[10]:
+
+        render_unified_history(
+            unified_rows
+        )
+
+    # ==========================================================================
+    # AUDIT
+    # ==========================================================================
+
+    with tabs[11]:
+
+        render_audit(
+            audit_rows
+        )
+
+    # ==========================================================================
+    # INTEGRITY
+    # ==========================================================================
+
+    with tabs[12]:
+
+        render_integrity(
+            integrity
+        )
+
+
+# ==============================================================================
+# PAGE COMPATIBILITY WRAPPER
+# ==============================================================================
+
+def render_product_360_page(
+    client: Any,
+    product_id: int,
+):
+    """
+    Compatibility entry point.
+
+    Existing Inventory page code may call:
+
+        render_product_360_page(
+            client,
+            product_id,
+        )
+
+    """
+
+    return render_product_360(
+        client,
+        product_id,
+    )
+
+
+# ==============================================================================
+# GENERIC PAGE COMPATIBILITY WRAPPER
+# ==============================================================================
+
+def render_page(
+    client: Any,
+    product_id: int,
+):
+    """
+    Generic compatibility entry point.
+
+    Existing ERP modules may call:
+
+        render_page(
+            client,
+            product_id,
+        )
+    """
+
+    return render_product_360(
+        client,
+        product_id,
+    )
+
+
+# ==============================================================================
+# PUBLIC API
+# ==============================================================================
+
+__all__ = [
+    "render_product_360",
+    "render_product_360_page",
+    "render_page",
+
+    "get_product",
+    "get_warehouse_stock",
+    "get_batches",
+    "get_fifo_layers",
+
+    "get_sales",
+    "get_purchases",
+    "get_adjustments",
+    "get_transfers",
+    "get_refunds",
+
+    "get_unified_history",
+    "get_audit_history",
+
+    "get_integrity",
+    "calculate_stock_summary",
+
+    "calculate_price_info",
+
+    "format_myanmar_time",
+    "to_decimal",
+    "money",
+    "qty",
+]
