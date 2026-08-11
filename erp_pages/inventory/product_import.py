@@ -1,26 +1,44 @@
 # ==============================================================================
 # erp_pages/inventory/product_import.py
 #
-# ERP ENTERPRISE PRODUCT MASTER IMPORT v1.0
+# ERP ENTERPRISE PRODUCT MASTER BULK IMPORT v2.0
 #
-# Purpose:
-#   Product Master bulk import foundation
+# CSV / Excel
+# Template Download
+# Preview
+# Validation
+# Duplicate Detection
+# Maker-Checker Submission
 #
-# Supported:
-#   - CSV
-#   - Excel (.xlsx / .xls)
-#   - Template download
-#   - Preview
-#   - Basic validation
-#   - Duplicate SKU / Barcode detection inside import file
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# This module NEVER writes directly to products table.
 #
-# IMPORTANT:
-#   This module DOES NOT write directly to products table.
-#   Maker-Checker approval will be connected in the next step.
+# Flow:
+#
+# CSV / Excel
+#      ↓
+# Validation
+#      ↓
+# Preview
+#      ↓
+# request_product_create_rpc()
+#      ↓
+# product_create_requests
+#      ↓
+# PENDING
+#      ↓
+# Checker Approval
+#      ↓
+# approve_product_create_rpc()
+#      ↓
+# products + stock + FIFO
 # ==============================================================================
 
 import io
 import csv
+import uuid
+
 import streamlit as st
 
 
@@ -95,13 +113,11 @@ TEMPLATE_ROWS = [
 
 
 # ==============================================================================
-# NORMALIZE COLUMN NAME
+# COLUMN NORMALIZATION
 # ==============================================================================
 
 def _normalize_column_name(value):
-    """
-    Convert uploaded column names into standard ERP column names.
-    """
+    """Convert uploaded column names into standard ERP names."""
 
     if value is None:
         return ""
@@ -156,13 +172,10 @@ def _normalize_column_name(value):
 
 
 # ==============================================================================
-# NORMALIZE DATAFRAME
+# DATAFRAME NORMALIZATION
 # ==============================================================================
 
 def _normalize_dataframe(df):
-    """
-    Normalize uploaded DataFrame.
-    """
 
     if df is None:
         return None
@@ -174,24 +187,19 @@ def _normalize_dataframe(df):
         for column in df.columns
     ]
 
-    # Keep known columns only
     for column in PRODUCT_IMPORT_COLUMNS:
+
         if column not in df.columns:
             df[column] = ""
 
-    df = df[PRODUCT_IMPORT_COLUMNS]
-
-    return df
+    return df[PRODUCT_IMPORT_COLUMNS]
 
 
 # ==============================================================================
-# READ CSV
+# CSV READER
 # ==============================================================================
 
 def _read_csv(uploaded_file):
-    """
-    Read CSV with UTF-8 / UTF-8-SIG fallback.
-    """
 
     if pd is None:
         raise RuntimeError(
@@ -201,11 +209,13 @@ def _read_csv(uploaded_file):
 
     raw = uploaded_file.getvalue()
 
-    # UTF-8 BOM
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
-        text = raw.decode("utf-8", errors="replace")
+        text = raw.decode(
+            "utf-8",
+            errors="replace",
+        )
 
     return pd.read_csv(
         io.StringIO(text),
@@ -215,13 +225,10 @@ def _read_csv(uploaded_file):
 
 
 # ==============================================================================
-# READ EXCEL
+# EXCEL READER
 # ==============================================================================
 
 def _read_excel(uploaded_file):
-    """
-    Read Excel workbook.
-    """
 
     if pd is None:
         raise RuntimeError(
@@ -237,140 +244,165 @@ def _read_excel(uploaded_file):
 
 
 # ==============================================================================
-# LOAD FILE
+# FILE LOADER
 # ==============================================================================
 
 def _load_uploaded_file(uploaded_file):
-    """
-    Detect CSV / Excel and return DataFrame.
-    """
 
     if uploaded_file is None:
         return None
 
-    file_name = uploaded_file.name.lower()
+    filename = uploaded_file.name.lower()
 
-    if file_name.endswith(".csv"):
+    if filename.endswith(".csv"):
+
         df = _read_csv(uploaded_file)
 
-    elif file_name.endswith(".xlsx"):
+    elif filename.endswith(".xlsx"):
+
         df = _read_excel(uploaded_file)
 
-    elif file_name.endswith(".xls"):
+    elif filename.endswith(".xls"):
+
         df = _read_excel(uploaded_file)
 
     else:
+
         raise ValueError(
             "Unsupported file format. "
-            "Please upload CSV or Excel (.xlsx / .xls)."
+            "Please upload CSV or Excel."
         )
 
     return _normalize_dataframe(df)
 
 
 # ==============================================================================
-# BASIC VALIDATION
+# VALIDATION
 # ==============================================================================
 
 def _validate_dataframe(df):
-    """
-    Validate imported Product Master rows.
-
-    Returns:
-        validated_df
-        error_count
-    """
 
     if df is None:
         return None, 0
 
     df = df.copy()
 
-    # Make everything string first
-    for column in PRODUCT_IMPORT_COLUMNS:
-        if column in df.columns:
-            df[column] = (
-                df[column]
-                .fillna("")
-                .astype(str)
-                .str.strip()
-            )
+    # --------------------------------------------------------------------------
+    # STRING CLEANUP
+    # --------------------------------------------------------------------------
 
-    # Validation columns
+    for column in PRODUCT_IMPORT_COLUMNS:
+
+        df[column] = (
+            df[column]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+    # --------------------------------------------------------------------------
+    # VALIDATION COLUMNS
+    # --------------------------------------------------------------------------
+
     df["is_valid"] = True
     df["error_message"] = ""
 
     # --------------------------------------------------------------------------
-    # Required SKU
+    # REQUIRED SKU
     # --------------------------------------------------------------------------
 
     missing_sku = df["sku"] == ""
 
-    df.loc[missing_sku, "is_valid"] = False
-    df.loc[missing_sku, "error_message"] = (
-        "SKU is required"
-    )
+    df.loc[
+        missing_sku,
+        "is_valid",
+    ] = False
+
+    df.loc[
+        missing_sku,
+        "error_message",
+    ] = "SKU is required"
 
     # --------------------------------------------------------------------------
-    # Required Product Name
+    # REQUIRED NAME
     # --------------------------------------------------------------------------
 
     missing_name = df["name"] == ""
 
-    df.loc[missing_name, "is_valid"] = False
+    df.loc[
+        missing_name,
+        "is_valid",
+    ] = False
 
     df.loc[
-        missing_name & (df["error_message"] == ""),
-        "error_message"
+        missing_name
+        & (df["error_message"] == ""),
+        "error_message",
     ] = "Product name is required"
 
     # --------------------------------------------------------------------------
-    # Duplicate SKU inside import file
+    # DUPLICATE SKU
     # --------------------------------------------------------------------------
 
     duplicate_sku = (
-        df["sku"] != ""
-    ) & df["sku"].duplicated(
-        keep=False
+        (df["sku"] != "")
+        & df["sku"].duplicated(
+            keep=False
+        )
     )
 
-    df.loc[duplicate_sku, "is_valid"] = False
+    df.loc[
+        duplicate_sku,
+        "is_valid",
+    ] = False
 
     df.loc[
-        duplicate_sku & (df["error_message"] == ""),
-        "error_message"
+        duplicate_sku
+        & (df["error_message"] == ""),
+        "error_message",
     ] = "Duplicate SKU in import file"
 
     # --------------------------------------------------------------------------
-    # Duplicate Barcode inside import file
+    # DUPLICATE BARCODE
     # --------------------------------------------------------------------------
 
     barcode_mask = df["barcode"] != ""
 
     duplicate_barcode = (
         barcode_mask
-        & df.loc[barcode_mask, "barcode"].duplicated(
+        & df.loc[
+            barcode_mask,
+            "barcode",
+        ].duplicated(
             keep=False
         )
     )
 
-    duplicate_barcode_index = duplicate_barcode[
-        duplicate_barcode
-    ].index
+    duplicate_barcode_indexes = (
+        duplicate_barcode[
+            duplicate_barcode
+        ].index
+    )
 
     df.loc[
-        duplicate_barcode_index,
-        "is_valid"
+        duplicate_barcode_indexes,
+        "is_valid",
     ] = False
 
-    for index in duplicate_barcode_index:
-        if not df.loc[index, "error_message"]:
-            df.loc[index, "error_message"] = (
-                "Duplicate barcode in import file"
-            )
+    for index in duplicate_barcode_indexes:
+
+        if not df.loc[
+            index,
+            "error_message",
+        ]:
+
+            df.loc[
+                index,
+                "error_message",
+            ] = "Duplicate barcode in import file"
 
     # --------------------------------------------------------------------------
-    # Numeric Validation
+    # NUMERIC FIELDS
     # --------------------------------------------------------------------------
 
     numeric_columns = [
@@ -388,6 +420,7 @@ def _validate_dataframe(df):
                 continue
 
             try:
+
                 number = float(value)
 
                 if number < 0:
@@ -395,15 +428,23 @@ def _validate_dataframe(df):
 
             except Exception:
 
-                df.loc[index, "is_valid"] = False
+                df.loc[
+                    index,
+                    "is_valid",
+                ] = False
 
-                if not df.loc[index, "error_message"]:
-                    df.loc[index, "error_message"] = (
-                        f"Invalid {column}"
-                    )
+                if not df.loc[
+                    index,
+                    "error_message",
+                ]:
+
+                    df.loc[
+                        index,
+                        "error_message",
+                    ] = f"Invalid {column}"
 
     # --------------------------------------------------------------------------
-    # Final error count
+    # FINAL COUNT
     # --------------------------------------------------------------------------
 
     error_count = int(
@@ -414,13 +455,10 @@ def _validate_dataframe(df):
 
 
 # ==============================================================================
-# CSV TEMPLATE
+# TEMPLATE CSV
 # ==============================================================================
 
 def _create_csv_template():
-    """
-    Create downloadable CSV template.
-    """
 
     output = io.StringIO()
 
@@ -434,17 +472,16 @@ def _create_csv_template():
     for row in TEMPLATE_ROWS:
         writer.writerow(row)
 
-    return output.getvalue().encode("utf-8-sig")
+    return output.getvalue().encode(
+        "utf-8-sig"
+    )
 
 
 # ==============================================================================
-# EXCEL TEMPLATE
+# TEMPLATE EXCEL
 # ==============================================================================
 
 def _create_excel_template():
-    """
-    Create downloadable Excel template.
-    """
 
     if pd is None:
         return None
@@ -484,27 +521,31 @@ def _render_template_section():
     ):
 
         st.write(
-            "Use this template when importing hundreds or "
+            "Use this template to import hundreds or "
             "thousands of Product Master items."
         )
 
-        st.dataframe(
-            pd.DataFrame(
-                TEMPLATE_ROWS,
-                columns=PRODUCT_IMPORT_COLUMNS,
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
+        if pd is not None:
+
+            st.dataframe(
+                pd.DataFrame(
+                    TEMPLATE_ROWS,
+                    columns=PRODUCT_IMPORT_COLUMNS,
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
 
         col1, col2 = st.columns(2)
 
         with col1:
 
             st.download_button(
-                label="⬇️ Download CSV Template",
+                "⬇️ Download CSV Template",
                 data=_create_csv_template(),
-                file_name="product_master_import_template.csv",
+                file_name=(
+                    "product_master_import_template.csv"
+                ),
                 mime="text/csv",
                 use_container_width=True,
             )
@@ -516,15 +557,18 @@ def _render_template_section():
             if excel_data:
 
                 st.download_button(
-                    label="⬇️ Download Excel Template",
+                    "⬇️ Download Excel Template",
                     data=excel_data,
-                    file_name="product_master_import_template.xlsx",
+                    file_name=(
+                        "product_master_import_template.xlsx"
+                    ),
                     mime=(
                         "application/vnd.openxmlformats-"
                         "officedocument.spreadsheetml.sheet"
                     ),
                     use_container_width=True,
                 )
+
             else:
 
                 st.warning(
@@ -533,24 +577,299 @@ def _render_template_section():
 
 
 # ==============================================================================
-# IMPORT PREVIEW
+# USER ID RESOLUTION
 # ==============================================================================
 
-def _render_preview(df):
+def _get_current_user_id():
+
+    """
+    Try common session-state keys used by the ERP.
+
+    We do NOT invent a user ID.
+    """
+
+    candidate_keys = [
+        "user_id",
+        "current_user_id",
+        "logged_in_user_id",
+        "auth_user_id",
+        "user_uuid",
+    ]
+
+    for key in candidate_keys:
+
+        value = st.session_state.get(key)
+
+        if not value:
+            continue
+
+        try:
+
+            return str(
+                uuid.UUID(str(value))
+            )
+
+        except Exception:
+
+            continue
+
+    # Nested user object
+    user = st.session_state.get("user")
+
+    if isinstance(user, dict):
+
+        for key in [
+            "id",
+            "user_id",
+            "uuid",
+        ]:
+
+            value = user.get(key)
+
+            if value:
+
+                try:
+
+                    return str(
+                        uuid.UUID(str(value))
+                    )
+
+                except Exception:
+                    pass
+
+    return None
+
+
+# ==============================================================================
+# PRODUCT DATA BUILDER
+# ==============================================================================
+
+def _row_to_product_data(row):
+
+    def _none_if_empty(value):
+
+        value = str(value).strip()
+
+        return value if value else None
+
+    def _float_or_none(value):
+
+        value = str(value).strip()
+
+        if value == "":
+            return None
+
+        return float(value)
+
+    def _int_or_zero(value):
+
+        value = str(value).strip()
+
+        if value == "":
+            return 0
+
+        return int(float(value))
+
+    return {
+        "sku": _none_if_empty(row["sku"]),
+        "barcode": _none_if_empty(row["barcode"]),
+        "name": _none_if_empty(row["name"]),
+        "category": _none_if_empty(row["category"]),
+        "brand": _none_if_empty(row["brand"]),
+        "unit": _none_if_empty(row["unit"]),
+
+        "purchase_price": _float_or_none(
+            row["purchase_price"]
+        ),
+
+        "selling_price": _float_or_none(
+            row["selling_price"]
+        ),
+
+        "tax_rate": _float_or_none(
+            row["tax_rate"]
+        ),
+
+        "minimum_stock": _int_or_zero(
+            row["minimum_stock"]
+        ),
+
+        # ----------------------------------------------------------------------
+        # Keep pricing architecture compatible with current ERP
+        # ----------------------------------------------------------------------
+
+        "price_source": "PRICING_SERVICE",
+    }
+
+
+# ==============================================================================
+# SUBMIT ONE PRODUCT REQUEST
+# ==============================================================================
+
+def _submit_product_request(
+    client,
+    row,
+    warehouse_id,
+    requested_by,
+    reason,
+):
+
+    product_data = _row_to_product_data(row)
+
+    response = client.rpc(
+        "request_product_create_rpc",
+        {
+            "p_product_data": product_data,
+            "p_warehouse_id": int(warehouse_id),
+            "p_initial_qty": 0,
+            "p_reason": reason,
+            "p_requested_by": requested_by,
+        },
+    ).execute()
+
+    return response.data
+
+
+# ==============================================================================
+# SUBMIT VALID PRODUCTS
+# ==============================================================================
+
+def _submit_valid_products(
+    client,
+    validated_df,
+    warehouse_id,
+    requested_by,
+):
+
+    valid_df = validated_df[
+        validated_df["is_valid"] == True
+    ].copy()
+
+    if valid_df.empty:
+
+        return {
+            "submitted": 0,
+            "failed": 0,
+            "results": [],
+        }
+
+    results = []
+
+    submitted = 0
+    failed = 0
+
+    reason = (
+        "Product Master bulk import request "
+        "from Inventory UI"
+    )
+
+    progress = st.progress(0)
+
+    total = len(valid_df)
+
+    for position, (_, row) in enumerate(
+        valid_df.iterrows(),
+        start=1,
+    ):
+
+        try:
+
+            result = _submit_product_request(
+                client=client,
+                row=row,
+                warehouse_id=warehouse_id,
+                requested_by=requested_by,
+                reason=reason,
+            )
+
+            success = False
+
+            if isinstance(result, dict):
+
+                success = bool(
+                    result.get("success", False)
+                )
+
+            if success:
+
+                submitted += 1
+
+            else:
+
+                failed += 1
+
+            results.append(
+                {
+                    "sku": row["sku"],
+                    "name": row["name"],
+                    "success": success,
+                    "message": (
+                        result.get("message", "")
+                        if isinstance(result, dict)
+                        else str(result)
+                    ),
+                    "request_id": (
+                        result.get("request_id")
+                        if isinstance(result, dict)
+                        else None
+                    ),
+                }
+            )
+
+        except Exception as e:
+
+            failed += 1
+
+            results.append(
+                {
+                    "sku": row["sku"],
+                    "name": row["name"],
+                    "success": False,
+                    "message": str(e),
+                    "request_id": None,
+                }
+            )
+
+        progress.progress(
+            position / total
+        )
+
+    progress.empty()
+
+    return {
+        "submitted": submitted,
+        "failed": failed,
+        "results": results,
+    }
+
+
+# ==============================================================================
+# PREVIEW
+# ==============================================================================
+
+def _render_preview(
+    client,
+    df,
+    warehouse_id,
+):
 
     if df is None or df.empty:
 
         st.warning(
-            "No product records found in the uploaded file."
+            "No product records found."
         )
 
         return
 
-    validated_df, error_count = _validate_dataframe(df)
+    validated_df, error_count = (
+        _validate_dataframe(df)
+    )
 
     total_count = len(validated_df)
 
-    valid_count = total_count - error_count
+    valid_count = (
+        total_count - error_count
+    )
 
     # --------------------------------------------------------------------------
     # KPI
@@ -579,23 +898,23 @@ def _render_preview(df):
     st.markdown("---")
 
     # --------------------------------------------------------------------------
-    # Validation result
+    # VALIDATION MESSAGE
     # --------------------------------------------------------------------------
 
     if error_count == 0:
 
         st.success(
-            "All imported Product Master rows passed basic validation."
+            f"All {valid_count} rows passed basic validation."
         )
 
     else:
 
         st.error(
-            f"{error_count} row(s) require correction before submission."
+            f"{error_count} row(s) require correction."
         )
 
     # --------------------------------------------------------------------------
-    # Preview tabs
+    # PREVIEW TABS
     # --------------------------------------------------------------------------
 
     tab_all, tab_valid, tab_errors = st.tabs(
@@ -616,23 +935,23 @@ def _render_preview(df):
 
     with tab_valid:
 
-        valid_df = validated_df[
+        valid_preview = validated_df[
             validated_df["is_valid"] == True
         ]
 
         st.dataframe(
-            valid_df,
+            valid_preview,
             use_container_width=True,
             hide_index=True,
         )
 
     with tab_errors:
 
-        error_df = validated_df[
+        error_preview = validated_df[
             validated_df["is_valid"] == False
         ]
 
-        if error_df.empty:
+        if error_preview.empty:
 
             st.success(
                 "No validation errors."
@@ -641,52 +960,195 @@ def _render_preview(df):
         else:
 
             st.dataframe(
-                error_df,
+                error_preview,
                 use_container_width=True,
                 hide_index=True,
             )
 
     # --------------------------------------------------------------------------
-    # IMPORTANT
+    # SUBMISSION
     # --------------------------------------------------------------------------
+
+    st.markdown("---")
 
     if error_count > 0:
 
         st.warning(
-            "Please correct the error rows and upload the file again."
+            "❌ Fix all error rows before submitting "
+            "the import for approval."
         )
 
-    else:
+        return
+
+    # --------------------------------------------------------------------------
+    # CURRENT USER
+    # --------------------------------------------------------------------------
+
+    requested_by = _get_current_user_id()
+
+    if not requested_by:
+
+        st.error(
+            "Current logged-in user ID was not found "
+            "in session state. Import submission is disabled."
+        )
 
         st.info(
-            "Validation passed. Maker-Checker submission will be "
-            "connected in the next step."
+            "This is intentional: Maker-Checker requests "
+            "must always have a real requested_by UUID."
         )
 
+        return
+
+    # --------------------------------------------------------------------------
+    # CONFIRMATION
+    # --------------------------------------------------------------------------
+
+    st.success(
+        f"Ready to submit {valid_count} product request(s) "
+        "to Maker-Checker approval."
+    )
+
+    st.caption(
+        f"Requester: {requested_by}"
+    )
+
+    confirm = st.checkbox(
+        "I confirm that the imported Product Master data is correct.",
+        key="product_import_confirm",
+    )
+
+    if not confirm:
+
+        st.info(
+            "Tick the confirmation box to enable submission."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # SUBMIT BUTTON
+    # --------------------------------------------------------------------------
+
+    if st.button(
+        "🚀 Submit All Valid Products for Approval",
+        type="primary",
+        use_container_width=True,
+        key="submit_product_import",
+    ):
+
+        with st.spinner(
+            "Submitting Product Master requests..."
+        ):
+
+            result = _submit_valid_products(
+                client=client,
+                validated_df=validated_df,
+                warehouse_id=warehouse_id,
+                requested_by=requested_by,
+            )
+
+        submitted = result["submitted"]
+        failed = result["failed"]
+
+        # ----------------------------------------------------------------------
+        # RESULT
+        # ----------------------------------------------------------------------
+
+        if submitted > 0:
+
+            st.success(
+                f"✅ {submitted} product request(s) "
+                "submitted successfully for Maker-Checker approval."
+            )
+
+        if failed > 0:
+
+            st.error(
+                f"❌ {failed} product request(s) failed."
+            )
+
+        # ----------------------------------------------------------------------
+        # RESULT TABLE
+        # ----------------------------------------------------------------------
+
+        if result["results"]:
+
+            result_df = pd.DataFrame(
+                result["results"]
+            )
+
+            st.dataframe(
+                result_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        # ----------------------------------------------------------------------
+        # CLEAR UPLOADER AFTER SUCCESS
+        # ----------------------------------------------------------------------
+
+        if submitted > 0 and failed == 0:
+
+            st.session_state.pop(
+                "product_import_confirm",
+                None,
+            )
+
+            st.info(
+                "Next step: open Approval Queue and "
+                "approve these Product Master requests."
+            )
+
 
 # ==============================================================================
-# MAIN RENDER FUNCTION
+# MAIN RENDER
 # ==============================================================================
 
-def render_product_import():
+def render_product_import(
+    client=None,
+    warehouse_id=None,
+):
 
     st.subheader(
         "📦 Product Master Bulk Import"
     )
 
     st.caption(
-        "ERP Enterprise Product Master | CSV / Excel | "
-        "Bulk Import | Maker-Checker"
+        "ERP Enterprise Product Master | "
+        "CSV / Excel | Bulk Import | Maker-Checker"
     )
 
     # --------------------------------------------------------------------------
-    # INFORMATION
+    # IMPORTANT
     # --------------------------------------------------------------------------
 
     st.info(
-        "Import hundreds of Product Master items using CSV or Excel. "
-        "This step validates and previews the file before database submission."
+        "Upload hundreds or thousands of Product Master items. "
+        "The system validates the file first, then creates "
+        "PENDING Maker-Checker requests. Products are NOT created "
+        "until a Checker approves them."
     )
+
+    # --------------------------------------------------------------------------
+    # VALIDATION OF CONTEXT
+    # --------------------------------------------------------------------------
+
+    if client is None:
+
+        st.error(
+            "ERP database client is not available."
+        )
+
+        return
+
+    if warehouse_id is None:
+
+        st.error(
+            "Destination warehouse is required."
+        )
+
+        return
 
     # --------------------------------------------------------------------------
     # TEMPLATE
@@ -697,7 +1159,19 @@ def render_product_import():
     st.markdown("---")
 
     # --------------------------------------------------------------------------
-    # FILE UPLOAD
+    # DESTINATION
+    # --------------------------------------------------------------------------
+
+    st.write("### 🏭 Destination Warehouse")
+
+    st.info(
+        f"Warehouse ID: {warehouse_id}"
+    )
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # UPLOAD
     # --------------------------------------------------------------------------
 
     uploaded_file = st.file_uploader(
@@ -722,7 +1196,7 @@ def render_product_import():
         return
 
     # --------------------------------------------------------------------------
-    # FILE INFORMATION
+    # FILE INFO
     # --------------------------------------------------------------------------
 
     st.caption(
@@ -731,7 +1205,7 @@ def render_product_import():
     )
 
     # --------------------------------------------------------------------------
-    # READ FILE
+    # LOAD FILE
     # --------------------------------------------------------------------------
 
     try:
@@ -761,24 +1235,32 @@ def render_product_import():
         return
 
     # --------------------------------------------------------------------------
-    # PREVIEW
+    # PREVIEW + SUBMIT
     # --------------------------------------------------------------------------
 
-    _render_preview(df)
+    _render_preview(
+        client=client,
+        df=df,
+        warehouse_id=warehouse_id,
+    )
 
 
 # ==============================================================================
-# LEGACY / OPTIONAL ENTRY
+# BACKWARD COMPATIBILITY
 # ==============================================================================
 
-def render_inventory_import():
+def render_inventory_import(
+    client=None,
+    warehouse_id=None,
+):
     """
-    Backward-compatible wrapper.
+    Backward-compatible entry.
 
-    IMPORTANT:
-    Inventory In and Product Master Import are different workflows.
-
-    This wrapper is kept only so older imports do not immediately break.
+    NOTE:
+    Product Master Import and Inventory In are separate workflows.
     """
 
-    return render_product_import()
+    return render_product_import(
+        client=client,
+        warehouse_id=warehouse_id,
+    )
