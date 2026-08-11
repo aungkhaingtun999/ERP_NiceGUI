@@ -40,6 +40,9 @@ import csv
 import uuid
 
 import streamlit as st
+import streamlit as st
+
+from database import db
 
 
 # ==============================================================================
@@ -1225,155 +1228,79 @@ def _render_preview(
 # MAIN RENDER FUNCTION
 # ==============================================================================
 
-def render_product_import(
-    db_client=None,
-    warehouse_id=None,
-):
-    """
-    Main Product Master Bulk Import UI.
+def render_product_import(warehouse_id=None):
 
-    Parameters:
-        db_client:
-            Supabase / ERP database client.
-
-        warehouse_id:
-            Selected destination warehouse.
-
-    IMPORTANT:
-        This function never directly inserts products.
-    """
-
-    st.subheader(
-        "📦 Product Master Bulk Import"
-    )
+    st.subheader("📦 Product Master Bulk Import")
 
     st.caption(
-        "ERP Enterprise Product Master | "
-        "CSV / Excel | Bulk Import | Maker-Checker"
+        "ERP Enterprise Product Master | CSV / Excel | "
+        "Bulk Import | Maker-Checker"
     )
 
-    # --------------------------------------------------------------------------
-    # INFORMATION
-    # --------------------------------------------------------------------------
-
-    st.info(
-        "Import hundreds or thousands of Product Master items "
-        "using CSV or Excel. The file is validated first, then "
-        "submitted as Maker-Checker requests."
-    )
-
-    # --------------------------------------------------------------------------
-    # DESTINATION WAREHOUSE
-    # --------------------------------------------------------------------------
-
-    if warehouse_id is not None:
-
-        st.success(
-            f"Destination Warehouse ID: {warehouse_id}"
-        )
-
-    else:
-
-        st.warning(
-            "No destination warehouse selected."
-        )
-
-    # --------------------------------------------------------------------------
-    # DATABASE STATUS
-    # --------------------------------------------------------------------------
-
-    if db_client is None:
-
-        st.error(
-            "ERP database client is not available."
-        )
-
-        st.info(
-            "Please return to the Inventory page and "
-            "select a warehouse before using Product Import."
-        )
-
+    # ------------------------------------------------------------------
+    # DATABASE CLIENT
+    # ------------------------------------------------------------------
+    try:
+        client = db()
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
         return
 
-    # --------------------------------------------------------------------------
-    # TEMPLATE
-    # --------------------------------------------------------------------------
+    if client is None:
+        st.error("ERP database client is not available.")
+        return
 
+    # ------------------------------------------------------------------
+    # WAREHOUSE CHECK
+    # ------------------------------------------------------------------
+    if warehouse_id is None:
+        st.warning(
+            "Please return to Inventory page and select a warehouse first."
+        )
+        return
+
+    st.info(f"Destination Warehouse ID: {warehouse_id}")
+
+    # ------------------------------------------------------------------
+    # TEMPLATE
+    # ------------------------------------------------------------------
     _render_template_section()
 
     st.markdown("---")
 
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # FILE UPLOAD
-    # --------------------------------------------------------------------------
-
+    # ------------------------------------------------------------------
     uploaded_file = st.file_uploader(
         "📤 Upload Product Master CSV / Excel",
-        type=[
-            "csv",
-            "xlsx",
-            "xls",
-        ],
+        type=["csv", "xlsx", "xls"],
         key="product_master_import_uploader",
-        help=(
-            "Upload a CSV or Excel file containing "
-            "Product Master records."
-        ),
     )
 
     if uploaded_file is None:
-
-        st.info(
-            "Please upload a CSV or Excel file to continue."
-        )
-
+        st.info("Please upload a CSV or Excel file to continue.")
         return
-
-    # --------------------------------------------------------------------------
-    # FILE INFORMATION
-    # --------------------------------------------------------------------------
 
     st.caption(
-        f"File: {uploaded_file.name} | "
-        f"Size: {uploaded_file.size:,} bytes"
+        f"File: {uploaded_file.name} | Size: {uploaded_file.size:,} bytes"
     )
 
-    # --------------------------------------------------------------------------
-    # READ FILE
-    # --------------------------------------------------------------------------
-
     try:
-
-        df = _load_uploaded_file(
-            uploaded_file
-        )
-
+        df = _load_uploaded_file(uploaded_file)
     except Exception as e:
-
-        st.error(
-            f"Unable to read import file: {e}"
-        )
-
+        st.error(f"Unable to read import file: {e}")
         return
-
-    # --------------------------------------------------------------------------
-    # EMPTY FILE
-    # --------------------------------------------------------------------------
 
     if df is None or df.empty:
-
-        st.error(
-            "The uploaded file contains no product data."
-        )
-
+        st.error("The uploaded file contains no data.")
         return
 
-    # --------------------------------------------------------------------------
-    # PREVIEW + SUBMISSION
-    # --------------------------------------------------------------------------
-
+    # ------------------------------------------------------------------
+    # PREVIEW + SUBMIT
+    # ------------------------------------------------------------------
     _render_preview(
-        client=db_client,
+        client=client,
         df=df,
         warehouse_id=warehouse_id,
     )
+    
