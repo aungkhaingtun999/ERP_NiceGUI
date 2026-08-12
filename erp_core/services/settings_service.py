@@ -1,8 +1,14 @@
 # ==============================================================================
 # erp_core/services/settings_service.py
-# ERP SETTINGS SERVICE v5.0
+# ERP SETTINGS SERVICE v6.0
 #
 # ERP ENTERPRISE SETTINGS SERVICE
+#
+# Canonical Settings Source:
+#     public.settings
+#
+# Approval Queue:
+#     public.settings_change_requests
 #
 # Maker - Checker Approval Workflow
 #
@@ -12,12 +18,13 @@
 # - Create Maker change request
 # - Prevent duplicate pending requests
 # - Detect no-change requests
-# - Approve through RPC
-# - Reject through RPC
+# - Approve through PostgreSQL RPC
+# - Reject through PostgreSQL RPC
 # - Cancel by Maker
-# - Direct save compatibility
+# - Legacy direct-save compatibility
 #
 # IMPORTANT:
+#
 # Normal configuration changes MUST use:
 #
 # Maker
@@ -30,13 +37,21 @@
 #   ↓
 # approve_setting_change_rpc
 #   ↓
-# settings
+# public.settings
 #
-# Do NOT bypass Maker-Checker for normal UI changes.
+# erp_settings is NOT used.
+#
 # ==============================================================================
 
 
+from typing import Any, Dict, List
+
+
 from erp_core.repositories.settings_repository import (
+
+    get_all_settings,
+
+    get_setting,
 
     create_setting_request,
 
@@ -56,8 +71,7 @@ from erp_core.repositories.settings_repository import (
 # ==============================================================================
 
 
-def _normalize_value(value):
-
+def _normalize_value(value: Any) -> str:
     """
     Normalize values for safe comparison.
 
@@ -68,15 +82,21 @@ def _normalize_value(value):
         "20"
         "20.0"
 
-    are considered equal.
+    become:
 
-    Boolean values are normalized as:
+        "20"
+
+    Boolean values:
 
         True
         "true"
         "TRUE"
 
-    -> "true"
+    become:
+
+        "true"
+
+    Text remains case-sensitive.
     """
 
     if value is None:
@@ -90,7 +110,11 @@ def _normalize_value(value):
 
     if isinstance(value, bool):
 
-        return "true" if value else "false"
+        return (
+            "true"
+            if value
+            else "false"
+        )
 
 
     text = str(value).strip()
@@ -123,7 +147,9 @@ def _normalize_value(value):
 
         if number.is_integer():
 
-            return str(int(number))
+            return str(
+                int(number)
+            )
 
 
         return str(number)
@@ -157,7 +183,7 @@ class SettingsService:
 
         self,
 
-        db
+        db=None
 
     ):
 
@@ -168,42 +194,14 @@ class SettingsService:
     # LOAD ALL SETTINGS
     # ==========================================================================
 
-    def get_all_settings(self):
+    def get_all_settings(self) -> Dict[str, Any]:
+        """
+        Load all settings from canonical public.settings.
+        """
 
         try:
 
-            result = (
-
-                self.db
-
-                .table("settings")
-
-                .select("*")
-
-                .execute()
-
-            )
-
-
-            settings = {}
-
-
-            for row in result.data or []:
-
-                key = row.get("key")
-
-
-                if not key:
-
-                    continue
-
-
-                settings[key] = row.get(
-                    "value"
-                )
-
-
-            return settings
+            return get_all_settings()
 
 
         except Exception as e:
@@ -224,11 +222,14 @@ class SettingsService:
 
         self,
 
-        key,
+        key: str,
 
-        default=None
+        default: Any = None
 
-    ):
+    ) -> Any:
+        """
+        Read one setting from canonical public.settings.
+        """
 
         if not key:
 
@@ -237,35 +238,13 @@ class SettingsService:
 
         try:
 
-            result = (
+            return get_setting(
 
-                self.db
+                key,
 
-                .table("settings")
-
-                .select("value")
-
-                .eq(
-                    "key",
-                    key
-                )
-
-                .maybe_single()
-
-                .execute()
+                default
 
             )
-
-
-            if result.data:
-
-                return result.data.get(
-                    "value",
-                    default
-                )
-
-
-            return default
 
 
         except Exception as e:
@@ -279,54 +258,64 @@ class SettingsService:
 
 
     # ==========================================================================
-    # SAVE SETTING
+    # DIRECT SAVE
     #
-    # COMPATIBILITY METHOD
+    # LEGACY COMPATIBILITY ONLY
     #
     # IMPORTANT:
-    # This method is NOT intended for normal Maker-Checker UI changes.
     #
-    # Normal settings changes should use request_change().
+    # Normal Settings UI MUST NOT use this method.
     #
-    # This method exists because older code / loaders may call:
+    # It exists only because older modules may still call:
     #
     #     service.save_setting(key, value)
     #
+    # Future code should migrate those callers to request_change().
     # ==========================================================================
 
     def save_setting(
 
         self,
 
-        key,
+        key: str,
 
-        value
+        value: Any
 
-    ):
+    ) -> Dict[str, Any]:
 
         if not key:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Setting key is required"
+                    "Setting key is required."
 
             }
 
 
         try:
 
+            from erp_core.base_repo import db
+
+            client = db()
+
+
             result = (
 
-                self.db
+                client
 
                 .table("settings")
 
                 .update({
 
-                    "value": str(value)
+                    "value":
+                        str(value),
+
+                    "updated_at":
+                        "now()"
 
                 })
 
@@ -344,7 +333,8 @@ class SettingsService:
 
                 return {
 
-                    "success": False,
+                    "success":
+                        False,
 
                     "message":
                         f"Setting not found: {key}"
@@ -354,10 +344,11 @@ class SettingsService:
 
             return {
 
-                "success": True,
+                "success":
+                    True,
 
                 "message":
-                    "Setting saved",
+                    "Setting saved directly.",
 
                 "setting_key":
                     key,
@@ -372,7 +363,8 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
                     str(e)
@@ -388,28 +380,49 @@ class SettingsService:
     @staticmethod
     def request_change(
 
-        setting_key,
+        setting_key: str,
 
-        new_value,
+        new_value: Any,
 
-        reason,
+        reason: str,
 
-        requested_by
+        requested_by: str
 
-    ):
+    ) -> Dict[str, Any]:
+        """
+        Create a Maker change request.
+
+        Does NOT modify public.settings.
+
+        Workflow:
+
+            current value
+                ↓
+            compare
+                ↓
+            create PENDING request
+        """
 
         # ----------------------------------------------------------------------
         # BASIC VALIDATION
         # ----------------------------------------------------------------------
 
+        setting_key = (
+            str(setting_key).strip()
+            if setting_key is not None
+            else ""
+        )
+
+
         if not setting_key:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Setting key is required"
+                    "Setting key is required."
 
             }
 
@@ -418,12 +431,29 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Requester ID is required"
+                    "Requester ID is required."
 
             }
+
+
+        reason = (
+
+            str(reason).strip()
+
+            if reason is not None
+
+            else ""
+
+        )
+
+
+        if not reason:
+
+            reason = "Setting change request"
 
 
         # ----------------------------------------------------------------------
@@ -434,42 +464,56 @@ class SettingsService:
 
             pending = (
                 get_pending_setting_requests()
+                or []
             )
+
 
         except Exception as e:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    f"Unable to check pending requests: {e}"
+                    (
+                        "Unable to check pending "
+                        f"setting requests: {e}"
+                    )
 
             }
 
 
-        for req in pending or []:
+        for request in pending:
 
-            if (
-                str(
-                    req.get("setting_key", "")
-                ).strip()
-                ==
-                str(setting_key).strip()
-            ):
+            existing_key = str(
+
+                request.get(
+                    "setting_key",
+                    ""
+                )
+
+            ).strip()
+
+
+            if existing_key == setting_key:
 
                 return {
 
-                    "success": False,
+                    "success":
+                        False,
 
                     "message":
                         (
                             f"⏳ {setting_key} "
-                            "already waiting approval"
+                            "already waiting approval."
                         ),
 
                     "request_id":
-                        req.get("id")
+                        request.get("id"),
+
+                    "status":
+                        request.get("status")
 
                 }
 
@@ -477,53 +521,31 @@ class SettingsService:
         # ----------------------------------------------------------------------
         # LOAD CURRENT VALUE
         #
-        # Use a fresh DB read instead of cached settings.
-        # This prevents stale approval values.
+        # IMPORTANT:
+        # Repository reads public.settings directly.
+        #
+        # We deliberately DO NOT use cached settings here.
+        #
+        # This prevents stale values when another approval has just occurred.
         # ----------------------------------------------------------------------
 
         try:
 
-            from erp_core.base_repo import db
+            old_value = get_setting(
 
-            client = db()
+                setting_key,
 
-
-            result = (
-
-                client
-
-                .table("settings")
-
-                .select("value")
-
-                .eq(
-                    "key",
-                    setting_key
-                )
-
-                .maybe_single()
-
-                .execute()
+                ""
 
             )
-
-
-            if result.data:
-
-                old_value = result.data.get(
-                    "value"
-                )
-
-            else:
-
-                old_value = ""
 
 
         except Exception as e:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
                     (
@@ -535,16 +557,20 @@ class SettingsService:
 
 
         # ----------------------------------------------------------------------
-        # NORMALIZE VALUES
+        # NORMALIZE
         # ----------------------------------------------------------------------
 
         old_normalized = _normalize_value(
+
             old_value
+
         )
 
 
         new_normalized = _normalize_value(
+
             new_value
+
         )
 
 
@@ -556,22 +582,25 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "No change detected",
+                    "No change detected.",
 
                 "setting_key":
                     setting_key,
 
                 "current_value":
                     str(old_value)
+                    if old_value is not None
+                    else ""
 
             }
 
 
         # ----------------------------------------------------------------------
-        # CREATE REQUEST
+        # CREATE PENDING REQUEST
         # ----------------------------------------------------------------------
 
         try:
@@ -580,9 +609,11 @@ class SettingsService:
 
                 setting_key,
 
-                str(old_value)
-                if old_value is not None
-                else "",
+                (
+                    str(old_value)
+                    if old_value is not None
+                    else ""
+                ),
 
                 str(new_value),
 
@@ -597,7 +628,8 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
                     (
@@ -614,7 +646,8 @@ class SettingsService:
 
         return {
 
-            "success": True,
+            "success":
+                True,
 
             "message":
                 (
@@ -629,9 +662,11 @@ class SettingsService:
                 setting_key,
 
             "old_value":
-                str(old_value)
-                if old_value is not None
-                else "",
+                (
+                    str(old_value)
+                    if old_value is not None
+                    else ""
+                ),
 
             "new_value":
                 str(new_value),
@@ -647,7 +682,10 @@ class SettingsService:
     # ==========================================================================
 
     @staticmethod
-    def get_pending_requests():
+    def get_pending_requests() -> List[Dict[str, Any]]:
+        """
+        Return all pending setting requests.
+        """
 
         try:
 
@@ -656,7 +694,13 @@ class SettingsService:
                 or []
             )
 
+
         except Exception as e:
+
+            print(
+                "PENDING SETTINGS LOAD ERROR:",
+                e
+            )
 
             return []
 
@@ -673,16 +717,22 @@ class SettingsService:
 
         checker_id
 
-    ):
+    ) -> Dict[str, Any]:
+        """
+        Approve setting change through PostgreSQL RPC.
 
-        if not request_id:
+        Python never directly marks the request APPROVED.
+        """
+
+        if request_id is None:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Request ID is required"
+                    "Request ID is required."
 
             }
 
@@ -691,10 +741,11 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Checker ID is required"
+                    "Checker ID is required."
 
             }
 
@@ -709,11 +760,13 @@ class SettingsService:
 
             )
 
+
         except Exception as e:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
                     str(e)
@@ -733,18 +786,22 @@ class SettingsService:
 
         checker_id,
 
-        reason
+        reason=None
 
-    ):
+    ) -> Dict[str, Any]:
+        """
+        Reject setting change through PostgreSQL RPC.
+        """
 
-        if not request_id:
+        if request_id is None:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Request ID is required"
+                    "Request ID is required."
 
             }
 
@@ -753,18 +810,23 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Checker ID is required"
+                    "Checker ID is required."
 
             }
 
 
         reason = (
+
             str(reason).strip()
+
             if reason is not None
+
             else ""
+
         )
 
 
@@ -785,11 +847,13 @@ class SettingsService:
 
             )
 
+
         except Exception as e:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
                     str(e)
@@ -809,16 +873,20 @@ class SettingsService:
 
         user_id
 
-    ):
+    ) -> Dict[str, Any]:
+        """
+        Cancel a pending request through PostgreSQL RPC.
+        """
 
-        if not request_id:
+        if request_id is None:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "Request ID is required"
+                    "Request ID is required."
 
             }
 
@@ -827,10 +895,11 @@ class SettingsService:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
-                    "User ID is required"
+                    "User ID is required."
 
             }
 
@@ -845,16 +914,30 @@ class SettingsService:
 
             )
 
+
         except Exception as e:
 
             return {
 
-                "success": False,
+                "success":
+                    False,
 
                 "message":
                     str(e)
 
             }
+
+
+# ==============================================================================
+# EXPORT
+# ==============================================================================
+
+
+__all__ = [
+
+    "SettingsService"
+
+]
 
 
 # ==============================================================================
