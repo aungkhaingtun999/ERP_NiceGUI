@@ -50,9 +50,7 @@ from erp_ui.settings.finance_settings import (
 from erp_ui.settings.system_status import (
     render_system_status,
 )
-from erp_core.repositories.settings_repository import (
-    approve_setting_change
-)
+
 from erp_ui.settings.settings_summary import (
     render_settings_summary,
 )
@@ -130,14 +128,6 @@ def run():
     clear_settings_cache()
 
     user = require_admin()
-
-    settings = load_settings()
-
-def run():
-
-
-    user = require_admin()
-
 
     settings = load_settings()
 
