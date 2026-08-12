@@ -257,35 +257,24 @@ def run():
     # =====================================================
 
 
-    def cashier_name(user):
+def cashier_name(user):
+    if not isinstance(user, dict):
+        return "Unknown"
 
-        if isinstance(
-            user,
-            dict
-        ):
+    first_name = str(user.get("first_name") or "").strip()
+    last_name = str(user.get("last_name") or "").strip()
+    username = str(user.get("username") or "").strip()
 
-            return (
+    full_name = f"{first_name} {last_name}".strip()
 
-                user.get(
-                    "employee_code",
-                    ""
-                )
+    if full_name:
+        return full_name
 
-                +
+    if username:
+        return username
 
-                " "
-
-                +
-
-                user.get(
-                    "username",
-                    ""
-                )
-
-            )
-
-
-        return "SYSTEM"
+    return "Unknown"
+    
 
 
 
