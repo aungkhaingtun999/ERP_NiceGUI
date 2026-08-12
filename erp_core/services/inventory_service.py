@@ -45,7 +45,42 @@ class InventoryService:
         self.settings = SettingsService(
             client
         )
+ class InventoryService:
+    def __init__(self, client):
+        self.client = client
 
+    # ... existing methods ...
+
+    # ==============================================================================
+    # HEALTH CHECK
+    # ==============================================================================
+    def health_check(self):
+        """
+        Simple database connectivity check for Inventory module.
+        Returns a dict compatible with UI health checks.
+        """
+
+        try:
+            response = (
+                self.client
+                .table("warehouses")
+                .select("id")
+                .limit(1)
+                .execute()
+            )
+
+            return {
+                "success": True,
+                "message": "Inventory service is healthy",
+                "rows": len(response.data or []),
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "message": str(e),
+            }
+            
     # ==========================================================================
     # LOW STOCK RULE
     # ==========================================================================
