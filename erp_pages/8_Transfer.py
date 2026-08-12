@@ -337,8 +337,8 @@ Available Qty:
 
             st.success('✅ Transfer request submitted successfully.')
 
-st.info(
-    f'''
+            st.info(
+                f'''
 Request ID : #{result.get('request_id')}
 Status : {result.get('status')}
 Maker : {current_username}
@@ -346,12 +346,10 @@ Maker : {current_username}
 Stock has NOT moved yet.
 Waiting for Checker approval.
 '''
-)
+            )
 
-if st.button('🔄 Refresh Page'):
-    st.rerun()
-    
-
+            if st.button('🔄 Refresh Page'):
+                st.rerun()
 
         except Exception as e:
 
