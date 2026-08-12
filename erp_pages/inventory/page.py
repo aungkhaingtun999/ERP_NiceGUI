@@ -1,519 +1,307 @@
 # ==============================================================================
-# erp_pages/inventory/page.py
-#
-# ERP ENTERPRISE INVENTORY PAGE CONTROLLER v1.8
-# ------------------------------------------------------------------------------
-# PRODUCT MASTER
-# PRODUCT 360°
-# ADD PRODUCT
-# APPROVAL QUEUE
-# EDIT PRODUCT
-# PRODUCT MASTER BULK IMPORT
-# INVENTORY IN
-# STOCK ADJUSTMENT
-# DASHBOARD
+# erp_pages/8_Transfer.py
+# ERP ENTERPRISE WAREHOUSE TRANSFER v32
 #
 # MAKER-CHECKER ENABLED
-# MOBILE READY
+#
+# FLOW
+# ------------------------------------------------------------------------------
+# Maker
+#   ↓
+# create_warehouse_transfer_request_rpc()
+#   ↓
+# warehouse_transfer_requests
+#   ↓
+# PENDING
+#   ↓
+# Checker
+#   ↓
+# approve_warehouse_transfer_rpc()
+#   ↓
+# warehouse_stock movement
 #
 # IMPORTANT
 # ------------------------------------------------------------------------------
-# Product Import and Inventory In are DIFFERENT workflows.
-#
-# Product Import
-#     ↓
-# request_product_create_rpc()
-#     ↓
-# product_create_requests
-#     ↓
-# PENDING
-#     ↓
-# Checker Approval
-#     ↓
-# approve_product_create_rpc()
-#     ↓
-# products + warehouse_stock + FIFO
-#
-# Inventory In
-#     ↓
-# Existing Product Stock Entry
-#
-# Product 360°
-#     ↓
-# Product Master
-# Current Stock
-# Warehouse
-# FIFO / Cost Layers
-# Batch / FEFO
-# Pricing
-# Sales
-# Purchases
-# Adjustments
-# Transfers
-# Refunds
-# Movement History
-# Audit History
-# Integrity
+# This page MUST NOT directly update warehouse_stock.
+# All stock movement is controlled by Supabase RPC.
 # ==============================================================================
 
-from __future__ import annotations
-
+import time
 import streamlit as st
 
+from erp_core.base_repo import db, log_error
+from erp_core.loaders.warehouse_loader import get_warehouses
 
-# ==============================================================================
-# DATABASE
-# ==============================================================================
-
-from database import (
-    db,
-    get_inventory_view,
-    get_warehouses,
+from .inventory.warehouse_transfer_approval import (
+    render_warehouse_transfer_approval_queue,
 )
 
 
 # ==============================================================================
-# SERVICES
+# USER
 # ==============================================================================
 
-from erp_core.services.inventory_service import (
-    InventoryService,
-)
+def _get_current_user():
 
-from erp_core.services.pricing_service import (
-    PricingService,
-)
+    user = st.session_state.get("user")
 
+    if not isinstance(user, dict):
+        return None
 
-# ==============================================================================
-# INVENTORY UI MODULES
-# ==============================================================================
-
-from .warehouse import (
-    render_warehouse_selector,
-)
-
-from .product_master import (
-    render_product_master,
-)
-
-from .product_create import (
-    render_product_create,
-)
-
-from .product_approval import (
-    render_product_approval_queue,
-)
-
-from .product_edit import (
-    render_product_edit,
-)
-
-from .product_import import (
-    render_product_import,
-)
-
-from .inventory_import import (
-    render_inventory_import,
-)
-
-from .stock_adjustment import (
-    render_stock_adjustment,
-)
-
-from .dashboard import (
-    render_inventory_dashboard,
-)
+    return user
 
 
 # ==============================================================================
-# PRODUCT 360°
+# REQUEST TRANSFER
 # ==============================================================================
 
-from .product_360 import (
-    render_product_360_page,
-)
-
-
-# ==============================================================================
-# TAB DEFINITIONS
-# ==============================================================================
-
-INVENTORY_TABS = [
-    "Product Master",
-    "Product 360°",
-    "Add Product",
-    "Approval Queue",
-    "Edit Product",
-    "Product Import",
-    "Inventory In",
-    "Stock Adjustment",
-    "Dashboard",
-]
-
-
-# ==============================================================================
-# TAB ICONS
-# ==============================================================================
-
-INVENTORY_TAB_ICONS = [
-    "📋",
-    "🧭",
-    "➕",
-    "🟡",
-    "✏️",
-    "📦",
-    "📥",
-    "🔧",
-    "📊",
-]
-
-
-# ==============================================================================
-# SESSION STATE
-# ==============================================================================
-
-def _initialize_session_state():
-    """
-    Initialize Inventory page session state.
-    """
-
-    if "inventory_active_tab" not in st.session_state:
-
-        st.session_state.inventory_active_tab = (
-            "Product Master"
-        )
-
-    if "inventory_barcode" not in st.session_state:
-
-        st.session_state.inventory_barcode = ""
-
-    if "product_360_selected_id" not in st.session_state:
-
-        st.session_state.product_360_selected_id = None
-
-
-# ==============================================================================
-# GET ACTIVE TAB
-# ==============================================================================
-
-def _get_active_tab():
-    """
-    Return currently selected Inventory tab.
-
-    Default:
-        Product Master
-    """
-
-    active_tab = st.session_state.get(
-        "inventory_active_tab",
-        "Product Master",
-    )
-
-    if active_tab not in INVENTORY_TABS:
-
-        active_tab = "Product Master"
-
-        st.session_state.inventory_active_tab = (
-            active_tab
-        )
-
-    return active_tab
-
-
-# ==============================================================================
-# SET ACTIVE TAB
-# ==============================================================================
-
-def _set_active_tab(
-    tab_name: str,
+def _create_transfer_request(
+    client,
+    current_user_id,
+    source_warehouse_id,
+    destination_warehouse_id,
+    product_id,
+    quantity,
 ):
-    """
-    Safely update active Inventory tab.
-    """
-
-    if tab_name in INVENTORY_TABS:
-
-        st.session_state.inventory_active_tab = (
-            tab_name
-        )
-
-
-# ==============================================================================
-# TAB NAVIGATION
-# ==============================================================================
-
-def _render_tab_navigation():
-    """
-    Render Inventory navigation.
-
-    Uses radio instead of st.tabs so selected
-    section can persist across Streamlit reruns.
-    """
-
-    active_tab = _get_active_tab()
-
-    labels = [
-        f"{icon} {name}"
-        for icon, name in zip(
-            INVENTORY_TAB_ICONS,
-            INVENTORY_TABS,
-        )
-    ]
 
     try:
 
-        current_index = INVENTORY_TABS.index(
-            active_tab
+        response = (
+            client.rpc(
+                "create_warehouse_transfer_request_rpc",
+                {
+                    "p_source_warehouse_id":
+                        int(source_warehouse_id),
+
+                    "p_destination_warehouse_id":
+                        int(destination_warehouse_id),
+
+                    "p_product_id":
+                        int(product_id),
+
+                    "p_quantity":
+                        float(quantity),
+
+                    "p_maker_id":
+                        str(current_user_id),
+                },
+            )
+            .execute()
         )
 
-    except ValueError:
+        result = response.data
 
-        current_index = 0
+        if isinstance(result, list):
+            result = result[0] if result else None
 
-        active_tab = "Product Master"
+        if not isinstance(result, dict):
 
-        _set_active_tab(
-            active_tab
-        )
-
-    selected_label = st.radio(
-        "Inventory Section",
-        labels,
-        index=current_index,
-        horizontal=True,
-        key="inventory_tab_navigation",
-        label_visibility="collapsed",
-    )
-
-    selected_tab = INVENTORY_TABS[
-        labels.index(selected_label)
-    ]
-
-    if selected_tab != active_tab:
-
-        _set_active_tab(
-            selected_tab
-        )
-
-        st.rerun()
-
-    return selected_tab
-
-
-# ==============================================================================
-# PRODUCT 360° PRODUCT SELECTOR
-# ==============================================================================
-
-def _render_product_360_selector(
-    products,
-):
-    """
-    Render Product 360° product selector.
-
-    IMPORTANT
-    ----------
-    This selector is rendered ONLY inside Product 360° tab.
-
-    Returns:
-        product_id or None
-    """
-
-    if not products:
-
-        st.warning(
-            "No products found for the selected warehouse."
-        )
-
-        st.session_state.product_360_selected_id = (
-            None
-        )
-
-        return None
-
-    # --------------------------------------------------------------------------
-    # Build safe product options
-    # --------------------------------------------------------------------------
-
-    product_options = {}
-
-    for product in products:
-
-        product_id = (
-            product.get("product_id")
-            or product.get("id")
-        )
-
-        if product_id is None:
-
-            continue
-
-        name = (
-            product.get("name")
-            or product.get("product_name")
-            or "Unnamed Product"
-        )
-
-        sku = (
-            product.get("sku")
-            or "-"
-        )
-
-        label = (
-            f"{name} ({sku})"
-        )
-
-        # Prevent duplicate labels
-        if label in product_options:
-
-            label = (
-                f"{name} ({sku}) "
-                f"[ID: {product_id}]"
+            st.error(
+                "❌ Invalid transfer RPC response."
             )
 
-        product_options[label] = int(
-            product_id
-        )
+            st.json(result)
 
-    if not product_options:
+            return False
 
-        st.warning(
-            "Products were loaded, but no valid Product ID was found."
-        )
+        if not result.get("success"):
 
-        st.session_state.product_360_selected_id = (
-            None
-        )
-
-        return None
-
-    labels = list(
-        product_options.keys()
-    )
-
-    current_product_id = (
-        st.session_state.get(
-            "product_360_selected_id"
-        )
-    )
-
-    # --------------------------------------------------------------------------
-    # Determine default selection
-    # --------------------------------------------------------------------------
-
-    default_index = 0
-
-    if current_product_id is not None:
-
-        try:
-
-            current_product_id = int(
-                current_product_id
+            st.error(
+                result.get(
+                    "message",
+                    "Transfer request failed."
+                )
             )
 
-            for index, label in enumerate(labels):
+            return False
 
-                if (
-                    product_options[label]
-                    == current_product_id
-                ):
+        request_id = result.get(
+            "request_id",
+            "-"
+        )
 
-                    default_index = index
-                    break
+        status = result.get(
+            "status",
+            "PENDING"
+        )
 
-        except (
-            TypeError,
-            ValueError,
-        ):
+        # ----------------------------------------------------------------------
+        # DO NOT show only a short-lived toast.
+        # Keep the result visible.
+        # ----------------------------------------------------------------------
 
-            default_index = 0
+        st.session_state[
+            "warehouse_transfer_last_result"
+        ] = {
+            "success": True,
+            "request_id": request_id,
+            "status": status,
+            "quantity": result.get(
+                "quantity",
+                quantity
+            ),
+            "source_warehouse_id":
+                result.get(
+                    "source_warehouse_id",
+                    source_warehouse_id
+                ),
+            "destination_warehouse_id":
+                result.get(
+                    "destination_warehouse_id",
+                    destination_warehouse_id
+                ),
+            "product_id":
+                result.get(
+                    "product_id",
+                    product_id
+                ),
+            "message":
+                result.get(
+                    "message",
+                    "Transfer request created."
+                ),
+        }
 
-    # --------------------------------------------------------------------------
-    # Selector
-    # --------------------------------------------------------------------------
+        return True
 
-    st.subheader(
-        "🧭 Product 360°"
-    )
+    except Exception as e:
 
-    selected_label = st.selectbox(
-        "Select Product",
-        labels,
-        index=default_index,
-        key="product_360_selector",
-    )
+        log_error(
+            message="Warehouse transfer request failed.",
+            exception=e
+        )
 
-    selected_product_id = product_options[
-        selected_label
-    ]
+        st.error(
+            "❌ Failed to create warehouse transfer request."
+        )
 
-    st.session_state.product_360_selected_id = (
-        selected_product_id
-    )
+        st.exception(e)
 
-    return selected_product_id
+        return False
 
 
 # ==============================================================================
-# MAIN INVENTORY PAGE
+# SHOW LAST RESULT
 # ==============================================================================
 
-def run_inventory_page():
-    """
-    Main ERP Inventory Control Center.
+def _render_last_result():
 
-    All Inventory UI routing MUST remain inside
-    this function.
-    """
-
-    # ==========================================================================
-    # SESSION INITIALIZATION
-    # ==========================================================================
-
-    _initialize_session_state()
-
-    # ==========================================================================
-    # PAGE HEADER
-    # ==========================================================================
-
-    st.title(
-        "🏭 Enterprise Product Master"
+    result = st.session_state.get(
+        "warehouse_transfer_last_result"
     )
 
-    st.caption(
-        "ERP Inventory Control Center | "
-        "Mobile Ready | Maker Checker Enabled"
-    )
+    if not result:
+        return
 
-    # ==========================================================================
-    # DATABASE CLIENT + SERVICES
-    # ==========================================================================
+    st.markdown("---")
+    st.subheader("📌 Latest Transfer Request")
+
+    if result.get("success"):
+
+        st.success(
+            "✅ Transfer request created successfully."
+        )
+
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+
+            st.metric(
+                "Request ID",
+                f"#{result.get('request_id')}"
+            )
+
+        with c2:
+
+            st.metric(
+                "Status",
+                result.get("status", "PENDING")
+            )
+
+        with c3:
+
+            st.metric(
+                "Quantity",
+                result.get("quantity", 0)
+            )
+
+        st.info(
+            """
+🟡 STATUS: PENDING
+
+Stock has NOT been moved yet.
+
+This transfer is waiting for Checker approval.
+"""
+        )
+
+        st.write(
+            f"**Source Warehouse:** "
+            f"{result.get('source_warehouse_id')}"
+        )
+
+        st.write(
+            f"**Destination Warehouse:** "
+            f"{result.get('destination_warehouse_id')}"
+        )
+
+        st.write(
+            f"**Product ID:** "
+            f"{result.get('product_id')}"
+        )
+
+        st.caption(
+            "Maker → Pending → Checker Approval → Stock Movement"
+        )
+
+
+# ==============================================================================
+# TRANSFER REQUEST FORM
+# ==============================================================================
+
+def _render_transfer_request():
+
+    st.subheader("🚚 Create Warehouse Transfer")
+
+    current_user = _get_current_user()
+
+    if not current_user:
+
+        st.error("🔒 Login required.")
+
+        return
+
+    current_user_id = current_user.get("id")
+
+    if not current_user_id:
+
+        st.error(
+            "Current user ID is missing."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # DATABASE
+    # --------------------------------------------------------------------------
 
     try:
 
         client = db()
 
-        inventory_service = InventoryService(
-            client
-        )
-
-        pricing_service = PricingService(
-            client
-        )
-
     except Exception as e:
 
         st.error(
-            "ERP Service Connection Failed"
+            "ERP database connection failed."
         )
 
         st.exception(e)
 
-        st.stop()
+        return
 
-    # ==========================================================================
-    # WAREHOUSE
-    # ==========================================================================
+    # --------------------------------------------------------------------------
+    # WAREHOUSES
+    # --------------------------------------------------------------------------
 
     try:
 
@@ -522,240 +310,570 @@ def run_inventory_page():
     except Exception as e:
 
         st.error(
-            "Warehouse loading error"
+            "Warehouse loading failed."
         )
 
         st.exception(e)
 
-        st.stop()
+        return
 
     if not warehouses:
 
-        st.error(
-            "No active warehouses found."
+        st.warning(
+            "No warehouses found."
         )
 
-        st.stop()
+        return
 
-    # --------------------------------------------------------------------------
-    # Warehouse selector
-    # --------------------------------------------------------------------------
+    warehouse_options = {}
 
-    selected_wh_id, selected_wh_name = (
-        render_warehouse_selector(
-            warehouses,
-            key="inventory_warehouse_selector",
+    for warehouse in warehouses:
+
+        try:
+
+            warehouse_id = int(
+                warehouse.get("id")
+            )
+
+        except Exception:
+
+            continue
+
+        code = (
+            warehouse.get("code")
+            or "N/A"
         )
-    )
+
+        name = (
+            warehouse.get("name")
+            or "Unknown"
+        )
+
+        warehouse_options[
+            warehouse_id
+        ] = (
+            f"[{warehouse_id}] "
+            f"{code} - {name}"
+        )
+
+    if len(warehouse_options) < 2:
+
+        st.warning(
+            "At least two warehouses are required."
+        )
+
+        return
 
     # --------------------------------------------------------------------------
-    # Store warehouse list
+    # SOURCE / DESTINATION
     # --------------------------------------------------------------------------
 
-    st.session_state.warehouses = (
-        warehouses
-    )
+    col1, col2 = st.columns(2)
 
-    # ==========================================================================
-    # BARCODE / SEARCH STATE
-    # ==========================================================================
+    with col1:
 
-    barcode = st.session_state.get(
-        "inventory_barcode",
-        "",
-    )
+        source_warehouse_id = st.selectbox(
+            "Source Warehouse",
+            list(
+                warehouse_options.keys()
+            ),
+            format_func=lambda x:
+                warehouse_options[x],
+            key="transfer_source_warehouse",
+        )
 
-    barcode = (
-        str(barcode).strip()
-        if barcode
-        else ""
-    )
+    destination_list = [
+        x
+        for x in warehouse_options.keys()
+        if x != source_warehouse_id
+    ]
 
-    # ==========================================================================
-    # PRODUCT LOAD
-    # ----------------------------------------------------------------------------
-    # Product Master
-    # Product 360°
-    # Stock Adjustment
-    #
-    # Product Import does NOT depend on this list.
-    # Inventory In does NOT depend on this list.
-    # ==========================================================================
+    with col2:
+
+        destination_warehouse_id = st.selectbox(
+            "Destination Warehouse",
+            destination_list,
+            format_func=lambda x:
+                warehouse_options[x],
+            key="transfer_destination_warehouse",
+        )
+
+    # --------------------------------------------------------------------------
+    # SOURCE STOCK
+    # --------------------------------------------------------------------------
 
     try:
 
-        products = get_inventory_view(
-            warehouse_id=selected_wh_id,
-            search=barcode,
+        stock_rows = (
+            client
+            .table("warehouse_stock")
+            .select(
+                """
+                product_id,
+                qty,
+                available_qty
+                """
+            )
+            .eq(
+                "warehouse_id",
+                int(source_warehouse_id)
+            )
+            .gt(
+                "available_qty",
+                0
+            )
+            .execute()
+            .data
+            or []
         )
-
-        if not products:
-
-            products = []
 
     except Exception as e:
 
         st.error(
-            "Product loading error"
+            "Source stock loading failed."
         )
 
         st.exception(e)
 
-        products = []
+        return
 
-    # ==========================================================================
-    # TAB NAVIGATION
-    # ==========================================================================
+    if not stock_rows:
 
-    active_tab = _render_tab_navigation()
-
-    st.markdown("---")
-
-    # ==========================================================================
-    # PRODUCT MASTER
-    # ==========================================================================
-
-    if active_tab == "Product Master":
-
-        render_product_master(
-            products
+        st.warning(
+            "Source warehouse has no available stock."
         )
 
-    # ==========================================================================
-    # PRODUCT 360°
-    # ==========================================================================
+        return
 
-    elif active_tab == "Product 360°":
+    # --------------------------------------------------------------------------
+    # PRODUCTS
+    # --------------------------------------------------------------------------
 
-        selected_product_id = (
-            _render_product_360_selector(
-                products
-            )
-        )
+    product_ids = []
 
-        st.markdown("---")
+    for row in stock_rows:
 
-        if selected_product_id is None:
+        try:
 
-            st.info(
-                "Select a product above to open Product 360°."
+            product_ids.append(
+                int(row["product_id"])
             )
 
-        else:
+        except Exception:
 
-            try:
+            pass
 
-                render_product_360_page(
-                    client,
-                    int(selected_product_id),
-                )
+    if not product_ids:
 
-            except Exception as e:
-
-                st.error(
-                    "Product 360° failed to load."
-                )
-
-                st.exception(e)
-
-    # ==========================================================================
-    # ADD PRODUCT
-    # ==========================================================================
-
-    elif active_tab == "Add Product":
-
-        render_product_create(
-            db_client=client,
-            pricing_service=pricing_service,
-            warehouse_id=selected_wh_id,
+        st.warning(
+            "No valid products found."
         )
 
-    # ==========================================================================
-    # APPROVAL QUEUE
-    # ==========================================================================
+        return
 
-    elif active_tab == "Approval Queue":
+    try:
 
-        render_product_approval_queue()
-
-    # ==========================================================================
-    # EDIT PRODUCT
-    # ==========================================================================
-
-    elif active_tab == "Edit Product":
-
-        render_product_edit(
-            warehouse_id=selected_wh_id,
-            warehouse_name=selected_wh_name,
+        products = (
+            client
+            .table("products")
+            .select(
+                "id,name,sku"
+            )
+            .in_(
+                "id",
+                product_ids
+            )
+            .execute()
+            .data
+            or []
         )
 
-    # ==========================================================================
-    # PRODUCT MASTER BULK IMPORT
-    # ----------------------------------------------------------------------------
-    # CSV / Excel
-    #
-    # IMPORTANT:
-    # This workflow must create
-    # product_create_requests only.
-    #
-    # It must NOT directly insert:
-    #     products
-    #     warehouse_stock
-    #     inventory_batches
-    #     inventory_cost_layers
-    # ==========================================================================
+    except Exception as e:
 
-    elif active_tab == "Product Import":
-
-        render_product_import(
-            warehouse_id=selected_wh_id,
+        st.error(
+            "Product loading failed."
         )
 
-    # ==========================================================================
-    # INVENTORY IN
-    # ----------------------------------------------------------------------------
-    # Existing Product → Stock Entry
-    #
-    # This is completely separate from Product Master Import.
-    # ==========================================================================
+        st.exception(e)
 
-    elif active_tab == "Inventory In":
+        return
 
-        render_inventory_import()
+    product_options = {}
 
-    # ==========================================================================
-    # STOCK ADJUSTMENT
-    # ==========================================================================
+    for product in products:
 
-    elif active_tab == "Stock Adjustment":
+        try:
 
-        render_stock_adjustment(
-            products=products,
-            warehouse_id=selected_wh_id,
-            warehouse_name=selected_wh_name,
-            inventory_service=inventory_service,
+            product_id = int(
+                product["id"]
+            )
+
+        except Exception:
+
+            continue
+
+        name = (
+            product.get("name")
+            or "Unnamed Product"
         )
 
-    # ==========================================================================
-    # DASHBOARD
-    # ==========================================================================
-
-    elif active_tab == "Dashboard":
-
-        render_inventory_dashboard(
-            warehouse_id=selected_wh_id,
+        sku = (
+            product.get("sku")
+            or "-"
         )
+
+        product_options[
+            product_id
+        ] = (
+            f"{name} "
+            f"(SKU: {sku})"
+        )
+
+    if not product_options:
+
+        st.warning(
+            "No products available for transfer."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # PRODUCT
+    # --------------------------------------------------------------------------
+
+    selected_product_id = st.selectbox(
+        "Select Product",
+        list(
+            product_options.keys()
+        ),
+        format_func=lambda x:
+            product_options[x],
+        key="transfer_product",
+    )
+
+    # --------------------------------------------------------------------------
+    # SOURCE STOCK
+    # --------------------------------------------------------------------------
+
+    source_stock = next(
+        (
+            row
+            for row in stock_rows
+            if int(row["product_id"])
+            == int(selected_product_id)
+        ),
+        None
+    )
+
+    if not source_stock:
+
+        st.error(
+            "Source stock record not found."
+        )
+
+        return
+
+    try:
+
+        source_qty = float(
+            source_stock.get(
+                "qty",
+                0
+            ) or 0
+        )
+
+        source_available = float(
+            source_stock.get(
+                "available_qty",
+                0
+            ) or 0
+        )
+
+    except Exception:
+
+        source_qty = 0
+        source_available = 0
+
+    # --------------------------------------------------------------------------
+    # DESTINATION STOCK
+    # --------------------------------------------------------------------------
+
+    try:
+
+        dest_rows = (
+            client
+            .table("warehouse_stock")
+            .select(
+                "qty,available_qty"
+            )
+            .eq(
+                "warehouse_id",
+                int(destination_warehouse_id)
+            )
+            .eq(
+                "product_id",
+                int(selected_product_id)
+            )
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+
+    except Exception as e:
+
+        st.error(
+            "Destination stock loading failed."
+        )
+
+        st.exception(e)
+
+        return
+
+    if dest_rows:
+
+        dest_qty = float(
+            dest_rows[0].get(
+                "qty",
+                0
+            ) or 0
+        )
+
+        dest_available = float(
+            dest_rows[0].get(
+                "available_qty",
+                0
+            ) or 0
+        )
+
+    else:
+
+        dest_qty = 0
+        dest_available = 0
+
+    # --------------------------------------------------------------------------
+    # STOCK DISPLAY
+    # --------------------------------------------------------------------------
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        st.info(
+            f"""
+📤 SOURCE STOCK
+
+Warehouse:
+{warehouse_options[source_warehouse_id]}
+
+Product:
+{product_options[selected_product_id]}
+
+Current Qty:
+{source_qty:g}
+
+Available Qty:
+{source_available:g}
+"""
+        )
+
+    with c2:
+
+        st.success(
+            f"""
+📥 DESTINATION STOCK
+
+Warehouse:
+{warehouse_options[destination_warehouse_id]}
+
+Product:
+{product_options[selected_product_id]}
+
+Current Qty:
+{dest_qty:g}
+
+Available Qty:
+{dest_available:g}
+"""
+        )
+
+    if source_available <= 0:
+
+        st.error(
+            "No available stock."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # QUANTITY
+    # --------------------------------------------------------------------------
+
+    transfer_qty = st.number_input(
+        "Transfer Quantity",
+        min_value=1.0,
+        max_value=float(source_available),
+        value=1.0,
+        step=1.0,
+        key="warehouse_transfer_quantity",
+    )
+
+    # --------------------------------------------------------------------------
+    # PREVIEW
+    # --------------------------------------------------------------------------
+
+    st.subheader(
+        "📊 Transfer Preview"
+    )
+
+    p1, p2 = st.columns(2)
+
+    with p1:
+
+        st.metric(
+            "After Approval - Source Stock",
+            f"{source_qty - transfer_qty:g}",
+            delta=f"-{transfer_qty:g}",
+        )
+
+    with p2:
+
+        st.metric(
+            "After Approval - Destination Stock",
+            f"{dest_qty + transfer_qty:g}",
+            delta=f"+{transfer_qty:g}",
+        )
+
+    # --------------------------------------------------------------------------
+    # IMPORTANT NOTICE
+    # --------------------------------------------------------------------------
+
+    st.warning(
+        """
+⚠️ Maker-Checker Control
+
+This action creates a PENDING transfer request only.
+
+Stock will NOT move now.
+
+Stock will move only after a different Checker
+approves the request.
+"""
+    )
+
+    # --------------------------------------------------------------------------
+    # SUBMIT
+    # --------------------------------------------------------------------------
+
+    if st.button(
+        "📤 Submit Transfer Request",
+        type="primary",
+        use_container_width=True,
+        key="submit_warehouse_transfer_request",
+    ):
+
+        if int(source_warehouse_id) == int(
+            destination_warehouse_id
+        ):
+
+            st.error(
+                "Source and destination warehouses must be different."
+            )
+
+            return
+
+        if transfer_qty <= 0:
+
+            st.error(
+                "Transfer quantity must be greater than zero."
+            )
+
+            return
+
+        if transfer_qty > source_available:
+
+            st.error(
+                "Transfer quantity exceeds available stock."
+            )
+
+            return
+
+        success = _create_transfer_request(
+            client=client,
+            current_user_id=current_user_id,
+            source_warehouse_id=
+                source_warehouse_id,
+            destination_warehouse_id=
+                destination_warehouse_id,
+            product_id=
+                selected_product_id,
+            quantity=
+                transfer_qty,
+        )
+
+        if success:
+
+            # Do NOT immediately rerun.
+            # User must see the PENDING result.
+            st.session_state[
+                "warehouse_transfer_form_submitted"
+            ] = True
 
 
 # ==============================================================================
-# LEGACY ENTRY
-# ------------------------------------------------------------------------------
-# Compatible with:
-#
-# erp_pages/2_Inventory.py
-#
+# MAIN
 # ==============================================================================
 
 def run():
 
-    return run_inventory_page()
+    st.title(
+        "🔁 Enterprise Warehouse Transfer"
+    )
+
+    st.caption(
+        "Maker-Checker Controlled Warehouse Transfer"
+    )
+
+    current_user = _get_current_user()
+
+    if not current_user:
+
+        st.error(
+            "🔒 Login required."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # TABS
+    # --------------------------------------------------------------------------
+
+    request_tab, approval_tab = st.tabs(
+        [
+            "📤 Transfer Request",
+            "🟡 Transfer Approval",
+        ]
+    )
+
+    # --------------------------------------------------------------------------
+    # MAKER
+    # --------------------------------------------------------------------------
+
+    with request_tab:
+
+        _render_transfer_request()
+
+        _render_last_result()
+
+    # --------------------------------------------------------------------------
+    # CHECKER
+    # --------------------------------------------------------------------------
+
+    with approval_tab:
+
+        render_warehouse_transfer_approval_queue()
+
+
+if __name__ == "__main__":
+
+    run()
