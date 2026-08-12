@@ -54,9 +54,7 @@ SENSITIVE_KEYS = (
 # DATABASE TABLE MAP
 # ==============================================================================
 
-
 class Tables:
-
 
     # ------------------------------------------------------------------
     # PRODUCT
@@ -67,7 +65,6 @@ class Tables:
     PRODUCT_VIEW = "pos_products_view"
 
     CATEGORIES = "categories"
-
 
 
     # ------------------------------------------------------------------
@@ -85,7 +82,6 @@ class Tables:
     )
 
 
-
     # ------------------------------------------------------------------
     # SALES
     # ------------------------------------------------------------------
@@ -93,7 +89,6 @@ class Tables:
     SALES = "sales"
 
     SALE_ITEMS = "sale_items"
-
 
 
     # ------------------------------------------------------------------
@@ -105,7 +100,6 @@ class Tables:
     PURCHASE_ITEMS = "purchase_items"
 
 
-
     # ------------------------------------------------------------------
     # REFUND
     # ------------------------------------------------------------------
@@ -115,7 +109,6 @@ class Tables:
     REFUND_ITEMS = "refund_items"
 
 
-
     # ------------------------------------------------------------------
     # CUSTOMER / SUPPLIER
     # ------------------------------------------------------------------
@@ -123,7 +116,6 @@ class Tables:
     CUSTOMERS = "customers"
 
     SUPPLIERS = "suppliers"
-
 
 
     # ------------------------------------------------------------------
@@ -139,13 +131,17 @@ class Tables:
     ROLE_PERMISSIONS = "role_permissions"
 
 
-
     # ------------------------------------------------------------------
     # SETTINGS
     # ------------------------------------------------------------------
 
-    SETTINGS = "erp_settings"
+    # Canonical active settings table
+    SETTINGS = "settings"
 
+    # Maker-Checker approval queue
+    SETTINGS_CHANGE_REQUESTS = (
+        "settings_change_requests"
+    )
 
 
     # ------------------------------------------------------------------
@@ -159,7 +155,6 @@ class Tables:
     CHART_OF_ACCOUNTS = "chart_of_accounts"
 
 
-
     # ------------------------------------------------------------------
     # SYSTEM
     # ------------------------------------------------------------------
@@ -169,7 +164,6 @@ class Tables:
     TRANSACTIONS = "erp_transactions"
 
     SYNC_QUEUE = "sync_queue"
-
 
 
 
