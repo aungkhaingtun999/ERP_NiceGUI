@@ -472,65 +472,7 @@ except Exception as e:
     SalesService = None
 
 
-# ------------------------------------------------------------------------------
-# PURCHASE
-# ------------------------------------------------------------------------------
-
-try:
-
-    from .services.purchase_service import (
-        PurchaseService,
-    )
-
-except Exception as e:
-
-    log_error(
-        message="PurchaseService import failed",
-        exception=e,
-    )
-
-    PurchaseService = None
-
-
-# ------------------------------------------------------------------------------
-# INVENTORY
-# ------------------------------------------------------------------------------
-
-try:
-
-    from .services.inventory_service import (
-        InventoryService,
-    )
-
-except Exception as e:
-
-    log_error(
-        message="InventoryService import failed",
-        exception=e,
-    )
-
-    InventoryService = None
-
-
-# ------------------------------------------------------------------------------
-# REFUND
-# ------------------------------------------------------------------------------
-
-try:
-
-    from .services.refund_service import (
-        RefundService,
-    )
-
-except Exception as e:
-
-    log_error(
-        message="RefundService import failed",
-        exception=e,
-    )
-
-    RefundService = None
-
+# 
 
 # ------------------------------------------------------------------------------
 # RECEIPT
