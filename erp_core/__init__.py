@@ -274,6 +274,10 @@ except Exception as e:
 # DO NOT import the same RPC again from individual modules below.
 # ==============================================================================
 
+# ==============================================================================
+# RPC
+# ==============================================================================
+
 try:
 
     from .rpc import (
@@ -299,9 +303,81 @@ try:
 except Exception as e:
 
     log_error(
-        message="ERP RPC package import failed",
-        exception=e,
+        message=
+            "ERP RPC package import failed",
+        exception=e
     )
+
+    def checkout_sale_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "checkout_sale_rpc unavailable"
+        }
+
+
+    def purchase_receive_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "purchase_receive_rpc unavailable"
+        }
+
+
+    def refund_sale_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "refund_sale_rpc unavailable"
+        }
+
+
+    def stock_adjustment_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "stock_adjustment_rpc unavailable"
+        }
+
+
+    def update_product_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "update_product_rpc unavailable"
+        }
+
+
+    def request_product_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "request_product_create_rpc unavailable"
+        }
+
+
+    def request_product_bulk_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "request_product_bulk_create_rpc unavailable"
+        }
+
+
+    def approve_product_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message":
+                "approve_product_create_rpc unavailable"
+        }
 
     # --------------------------------------------------------------------------
     # SAFE FALLBACKS
