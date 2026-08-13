@@ -1653,7 +1653,7 @@ def _submit_valid_products(
                         warehouse_id
                     ),
 
-                    "p_initial_qty": 0,
+                    "p_initial_qty": int(0),
 
                     "p_reason": reason,
 
