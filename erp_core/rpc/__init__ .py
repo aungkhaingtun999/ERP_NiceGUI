@@ -120,20 +120,18 @@ except Exception as e:
 
 # ==============================================================================
 # PRODUCT
-# ------------------------------------------------------------------------------
-# IMPORTANT:
-#
-# update_product_rpc lives in:
-#
-#     erp_core/rpc/product_rpc.py
-#
-# NOT stock_rpc.py
 # ==============================================================================
 
 try:
 
     from .product_rpc import (
+
         update_product_rpc,
+
+        request_product_create_rpc,
+
+        approve_product_create_rpc,
+
     )
 
 except Exception as e:
@@ -143,11 +141,28 @@ except Exception as e:
         e
     )
 
+
     def update_product_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message": "update_product_rpc unavailable"
+        }
+
+
+    def request_product_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": "request_product_create_rpc unavailable"
+        }
+
+
+    def approve_product_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": "approve_product_create_rpc unavailable"
         }
 
 
