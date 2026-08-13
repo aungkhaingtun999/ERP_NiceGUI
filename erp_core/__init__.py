@@ -576,7 +576,21 @@ except Exception:
 # ==============================================================================
 
 __all__ = [
+"checkout_sale_rpc",
 
+"purchase_receive_rpc",
+
+"refund_sale_rpc",
+
+"stock_adjustment_rpc",
+
+"update_product_rpc",
+
+"request_product_create_rpc",
+
+"request_product_bulk_create_rpc",
+
+"approve_product_create_rpc",
     # ==========================================================================
     # DATABASE
     # ==========================================================================
