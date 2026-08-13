@@ -1,15 +1,12 @@
 # ==============================================================================
 # erp_core/loaders/product_loader.py
-# ERP ENTERPRISE PRODUCT LOADER v32.0 FINAL
+# ERP ENTERPRISE PRODUCT LOADER v30.4
 #
-# POS
-#     ↓
-# get_pos_products()
-#     ↓
-# ProductRepository.get_pos_products()
-#     ↓
-# pos_products_view
+# PRODUCT MASTER
+# +
+# WAREHOUSE STOCK
 #
+# POS / INVENTORY / SALES READY
 # ==============================================================================
 
 
@@ -47,45 +44,7 @@ from erp_core.repositories import (
 
 
 # ==============================================================================
-# POS PRODUCT QUERY CACHE
-# ==============================================================================
-
-
-@st.cache_data(
-    show_spinner=False
-)
-def _get_pos_products_cached(
-    warehouse_id,
-    keyword,
-    limit,
-    version,
-):
-
-    try:
-
-        with RepositoryCoordinator(
-            db()
-        ) as coord:
-
-            return coord.products.get_pos_products(
-                warehouse_id=warehouse_id,
-                keyword=keyword,
-                limit=limit,
-            )
-
-    except Exception as e:
-
-        log_error(
-            message=
-                "POS product cache query failed",
-            exception=e,
-        )
-
-        return []
-
-
-# ==============================================================================
-# PRODUCT MASTER QUERY CACHE
+# CACHE QUERY
 # ==============================================================================
 
 
@@ -93,10 +52,15 @@ def _get_pos_products_cached(
     show_spinner=False
 )
 def _get_products_cached(
+
     warehouse_id,
+
     offset,
+
     limit,
+
     version,
+
 ):
 
     try:
@@ -106,16 +70,20 @@ def _get_products_cached(
         ) as coord:
 
             return coord.products.get_products(
+
                 warehouse_id=warehouse_id,
+
                 offset=offset,
+
                 limit=limit,
+
             )
 
     except Exception as e:
 
         log_error(
             message=
-                "Product Master cache query failed",
+                "Product cache query failed",
             exception=e,
         )
 
@@ -128,8 +96,11 @@ def _get_products_cached(
 
 
 def normalize_product(
+
     product: Dict[str, Any],
+
     warehouse_id=None,
+
 ):
 
     if not product:
@@ -169,12 +140,14 @@ def normalize_product(
                 "category"
             ),
 
+        # COST
         "purchase_price":
             product.get(
                 "purchase_price",
                 0,
             ),
 
+        # PRICE
         "selling_price":
             product.get(
                 "selling_price",
@@ -207,12 +180,14 @@ def normalize_product(
                 "SYSTEM",
             ),
 
+        # WAREHOUSE
         "warehouse_id":
             product.get(
                 "warehouse_id",
                 warehouse_id,
             ),
 
+        # STOCK
         "qty":
             product.get(
                 "qty",
@@ -237,32 +212,39 @@ def normalize_product(
                 0,
             ),
 
-        # ------------------------------------------------------------------
-        # IMPORTANT
-        # ------------------------------------------------------------------
-        # pos_products_view does NOT have is_active.
-        #
-        # We keep this compatibility value in Python only.
-        # ------------------------------------------------------------------
+        # PRODUCT
+        "unit":
+            product.get(
+                "unit",
+                "pcs",
+            ),
+
+        "notes":
+            product.get(
+                "notes"
+            ),
 
         "is_active":
             product.get(
                 "is_active",
                 True,
             ),
-
     }
 
 
 # ==============================================================================
-# PRODUCT MASTER
+# MAIN PRODUCT LOADER
 # ==============================================================================
 
 
 def get_products(
+
     warehouse_id=None,
+
     offset=0,
+
     limit=DEFAULT_PAGE_SIZE,
+
 ) -> List[Dict[str, Any]]:
 
     products = _get_products_cached(
@@ -279,56 +261,114 @@ def get_products(
 
     )
 
-    return [
+    result = []
 
-        normalize_product(
+    for product in products:
+
+        normalized = normalize_product(
+
             product,
+
             warehouse_id,
         )
 
-        for product in products
+        if normalized:
 
-        if product
+            result.append(
+                normalized
+            )
 
-    ]
+    return result
 
 
 # ==============================================================================
-# POS PRODUCTS
+# POS PRODUCT LOADER
 # ==============================================================================
 
 
 def get_pos_products(
+
     warehouse_id=None,
+
     search: Optional[str] = None,
+
 ):
 
-    products = _get_pos_products_cached(
+    products = get_products(
 
-        warehouse_id,
+        warehouse_id=warehouse_id,
 
-        search or "",
+        offset=0,
 
-        DEFAULT_PAGE_SIZE,
-
-        CacheManager.get_version(
-            CACHE_KEYS["inventory"]
-        ),
+        limit=DEFAULT_PAGE_SIZE,
 
     )
 
-    return [
+    # --------------------------------------------------------------------------
+    # ACTIVE ONLY
+    # --------------------------------------------------------------------------
 
-        normalize_product(
-            product,
-            warehouse_id,
+    products = [
+
+        p
+
+        for p in products
+
+        if p.get(
+            "is_active",
+            True,
         )
 
-        for product in products
-
-        if product
-
     ]
+
+    # --------------------------------------------------------------------------
+    # SEARCH
+    # --------------------------------------------------------------------------
+
+    if search:
+
+        keyword = str(
+            search
+        ).lower().strip()
+
+        products = [
+
+            p
+
+            for p in products
+
+            if (
+
+                keyword in str(
+                    p.get(
+                        "name",
+                        "",
+                    )
+                ).lower()
+
+                or
+
+                keyword in str(
+                    p.get(
+                        "sku",
+                        "",
+                    )
+                ).lower()
+
+                or
+
+                keyword in str(
+                    p.get(
+                        "barcode",
+                        "",
+                    )
+                ).lower()
+
+            )
+
+        ]
+
+    return products
 
 
 # ==============================================================================
@@ -337,25 +377,14 @@ def get_pos_products(
 
 
 def get_active_products(
+
     warehouse_id=None,
+
 ):
 
-    products = get_pos_products(
-        warehouse_id
+    return get_pos_products(
+        warehouse_id=warehouse_id
     )
-
-    return [
-
-        product
-
-        for product in products
-
-        if product.get(
-            "is_active",
-            True,
-        )
-
-    ]
 
 
 # ==============================================================================
@@ -379,8 +408,6 @@ def refresh_products_cache():
             CACHE_KEYS["pricing"]
         )
 
-        _get_pos_products_cached.clear()
-
         _get_products_cached.clear()
 
     except Exception as e:
@@ -389,7 +416,7 @@ def refresh_products_cache():
             message=
                 "Product cache refresh failed",
             exception=e,
-        )
+)
 
 
 # ==============================================================================
