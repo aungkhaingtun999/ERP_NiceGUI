@@ -333,21 +333,12 @@ def normalize_product(
 
 
 
+        
         "available_qty":
-
-            product.get(
-
-                "available_qty",
-
-                product.get(
-
-                    "stock",
-
-                    0
-
-                )
-
-            ),
+    product.get(
+        "available_qty",
+        0
+    ),
 
 
 
