@@ -46,7 +46,7 @@ def _get_client(privileged=False):
     Maker / Checker RPCs are server-side protected operations.
     Prefer privileged_db() for those RPC calls.
 
-    update_product_rpc() keeps the existing normal db() behaviour.
+    update_product_rpc() keeps the existing normal db() behavior.
     """
 
     if privileged:
@@ -274,14 +274,14 @@ def request_product_bulk_create_rpc(
 
     try:
 
-        qty = float(initial_qty or 0)
+        qty = int(initial_qty or 0)
 
     except Exception:
 
         return {
             "success": False,
             "status": "ERROR",
-            "message": "Initial quantity must be numeric."
+            "message": "Initial quantity must be an integer."
         }
 
     if qty < 0:
@@ -409,7 +409,7 @@ def approve_product_create_rpc(
 #
 # This is NOT Maker-Checker product creation.
 #
-# Existing behaviour is preserved:
+# Existing behavior is preserved:
 #     Empty SKU     -> keep old SKU
 #     Empty Barcode -> keep old Barcode
 #
