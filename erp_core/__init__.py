@@ -379,73 +379,6 @@ except Exception as e:
                 "approve_product_create_rpc unavailable"
         }
 
-    # --------------------------------------------------------------------------
-    # SAFE FALLBACKS
-    # --------------------------------------------------------------------------
-
-    def checkout_sale_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "checkout_sale_rpc unavailable",
-        }
-
-
-    def purchase_receive_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "purchase_receive_rpc unavailable",
-        }
-
-
-    def refund_sale_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "refund_sale_rpc unavailable",
-        }
-
-
-    def stock_adjustment_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "stock_adjustment_rpc unavailable",
-        }
-
-
-    def update_product_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "update_product_rpc unavailable",
-        }
-
-
-    def request_product_create_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "request_product_create_rpc unavailable",
-        }
-
-
-    def request_product_bulk_create_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "request_product_bulk_create_rpc unavailable",
-        }
-
-
-    def approve_product_create_rpc(*args, **kwargs):
-
-        return {
-            "success": False,
-            "message": "approve_product_create_rpc unavailable",
-        }
-
 
 # ==============================================================================
 # SERVICES
@@ -471,8 +404,6 @@ except Exception as e:
 
     SalesService = None
 
-
-# 
 
 # ------------------------------------------------------------------------------
 # RECEIPT
@@ -576,21 +507,15 @@ except Exception:
 # ==============================================================================
 
 __all__ = [
-"checkout_sale_rpc",
+    "checkout_sale_rpc",
+    "purchase_receive_rpc",
+    "refund_sale_rpc",
+    "stock_adjustment_rpc",
+    "update_product_rpc",
+    "request_product_create_rpc",
+    "request_product_bulk_create_rpc",
+    "approve_product_create_rpc",
 
-"purchase_receive_rpc",
-
-"refund_sale_rpc",
-
-"stock_adjustment_rpc",
-
-"update_product_rpc",
-
-"request_product_create_rpc",
-
-"request_product_bulk_create_rpc",
-
-"approve_product_create_rpc",
     # ==========================================================================
     # DATABASE
     # ==========================================================================
@@ -603,7 +528,6 @@ __all__ = [
     "DatabaseHealth",
     "database_health_check",
 
-
     # ==========================================================================
     # CONFIG
     # ==========================================================================
@@ -614,13 +538,11 @@ __all__ = [
     "ERP_VERSION",
     "log_error",
 
-
     # ==========================================================================
     # CONTEXT
     # ==========================================================================
 
     "CacheManager",
-
 
     # ==========================================================================
     # PRODUCT
@@ -632,13 +554,11 @@ __all__ = [
     "refresh_products_cache",
     "get_inventory_view",
 
-
     # ==========================================================================
     # SUPPLIER
     # ==========================================================================
 
     "get_suppliers",
-
 
     # ==========================================================================
     # CATEGORY
@@ -646,13 +566,11 @@ __all__ = [
 
     "get_categories",
 
-
     # ==========================================================================
     # CUSTOMER
     # ==========================================================================
 
     "get_customers",
-
 
     # ==========================================================================
     # SETTINGS
@@ -660,14 +578,12 @@ __all__ = [
 
     "get_setting",
 
-
     # ==========================================================================
     # WAREHOUSE
     # ==========================================================================
 
     "get_default_warehouse_id",
     "get_warehouses",
-
 
     # ==========================================================================
     # RECEIPT
@@ -678,34 +594,14 @@ __all__ = [
     "get_full_receipt",
     "search_receipts",
 
-
-    # ==========================================================================
-    # RPC
-    # ==========================================================================
-
-    "checkout_sale_rpc",
-    "purchase_receive_rpc",
-    "refund_sale_rpc",
-    "stock_adjustment_rpc",
-    "update_product_rpc",
-
-    "request_product_create_rpc",
-    "request_product_bulk_create_rpc",
-    "approve_product_create_rpc",
-
-
     # ==========================================================================
     # SERVICES
     # ==========================================================================
 
     "SalesService",
-    "PurchaseService",
-    "InventoryService",
-    "RefundService",
     "ReceiptService",
     "PaymentService",
     "PaymentQRService",
-
 
     # ==========================================================================
     # HELPERS
@@ -713,7 +609,6 @@ __all__ = [
 
     "get_fifo_cogs",
     "create_audit_log",
-
 
     # ==========================================================================
     # UTILITIES
@@ -725,7 +620,6 @@ __all__ = [
     "validate_uuid",
     "serialize_json",
     "safe_execute",
-
 ]
 
 
