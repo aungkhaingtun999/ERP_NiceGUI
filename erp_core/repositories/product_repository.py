@@ -536,17 +536,7 @@ class ProductRepository(BaseRepository):
             return []
 
     # ==========================================================================
-    # GET PRODUCTS — PRODUCT MASTER
-    # ==========================================================================
-    #
-    # IMPORTANT:
-    # Product Master is NOT warehouse-specific.
-    #
-    # Source of truth:
-    #
-    #     products
-    #
-    # This method remains compatible with existing loader code.
+    # GET PRODUCTS — PRODUCT MASTER + WAREHOUSE STOCK
     # ==========================================================================
 
     def get_products(
@@ -558,11 +548,16 @@ class ProductRepository(BaseRepository):
 
         try:
 
-            query = (
+            # ------------------------------------------------------------------
+            # PRODUCT MASTER
+            # ------------------------------------------------------------------
+
+            product_result = (
+
                 self.client
-                .table(
-                    TABLE_PRODUCTS
-                )
+
+                .table(TABLE_PRODUCTS)
+
                 .select(
                     """
                     id,
@@ -582,51 +577,125 @@ class ProductRepository(BaseRepository):
                     is_active
                     """
                 )
-                .order(
-                    "id"
-                )
-            )
 
-            result = (
-                query
+                .order("id")
+
                 .range(
                     int(offset),
-                    int(offset)
-                    + int(limit)
-                    - 1,
+                    int(offset) + int(limit) - 1,
                 )
+
                 .execute()
             )
 
+            products = product_result.data or []
+
+            if not products:
+
+                return []
+
+            # ------------------------------------------------------------------
+            # WAREHOUSE STOCK
+            # ------------------------------------------------------------------
+
+            stock_map = {}
+
+            if warehouse_id is not None:
+
+                stock_result = (
+
+                    self.client
+
+                    .table(TABLE_WAREHOUSE_STOCK)
+
+                    .select(
+                        """
+                        product_id,
+                        warehouse_id,
+                        qty,
+                        reserved_qty,
+                        available_qty
+                        """
+                    )
+
+                    .eq(
+                        "warehouse_id",
+                        int(warehouse_id),
+                    )
+
+                    .execute()
+                )
+
+                for stock in stock_result.data or []:
+
+                    product_id = stock.get(
+                        "product_id"
+                    )
+
+                    if product_id is None:
+                        continue
+
+                    stock_map[
+                        int(product_id)
+                    ] = stock
+
+            # ------------------------------------------------------------------
+            # MERGE PRODUCT + STOCK
+            # ------------------------------------------------------------------
+
             rows = []
 
-            for product in result.data or []:
+            for product in products:
+
+                product_id = product.get("id")
+
+                stock = (
+                    stock_map.get(
+                        int(product_id)
+                    )
+                    if product_id is not None
+                    else None
+                )
+
+                stock = stock or {}
 
                 rows.append({
 
+                    # ----------------------------------------------------------
+                    # PRODUCT
+                    # ----------------------------------------------------------
+
                     "id":
-                        product.get("id"),
+                        product_id,
 
                     "name":
-                        product.get("name") or "",
+                        product.get("name"),
 
                     "sku":
-                        product.get("sku") or "",
+                        product.get("sku"),
 
                     "barcode":
-                        product.get("barcode") or "",
+                        product.get("barcode"),
+
+                    # ----------------------------------------------------------
+                    # COST
+                    # ----------------------------------------------------------
 
                     "purchase_price":
                         product.get(
                             "purchase_price",
                             0,
-                        ) or 0,
+                        ),
+
+                    # ----------------------------------------------------------
+                    # PRICE ENGINE
+                    # ----------------------------------------------------------
 
                     "selling_price":
                         product.get(
                             "selling_price",
                             0,
-                        ) or 0,
+                        ),
 
                     "owner_selling_price":
                         product.get(
@@ -646,7 +715,7 @@ class ProductRepository(BaseRepository):
                                 "selling_price",
                                 0,
                             ),
-                        ) or 0,
+                        ),
 
                     "price_source":
                         product.get(
@@ -654,10 +723,18 @@ class ProductRepository(BaseRepository):
                             "SYSTEM",
                         ),
 
+                    # ----------------------------------------------------------
+                    # CATEGORY
+                    # ----------------------------------------------------------
+
                     "category_id":
                         product.get(
                             "category_id"
                         ),
+
+                    # ----------------------------------------------------------
+                    # PRODUCT SETTINGS
+                    # ----------------------------------------------------------
 
                     "minimum_stock":
                         product.get(
@@ -682,17 +759,34 @@ class ProductRepository(BaseRepository):
                             True,
                         ),
 
+                    # ----------------------------------------------------------
+                    # WAREHOUSE
+                    # ----------------------------------------------------------
+
                     "warehouse_id":
-                        None,
+                        warehouse_id,
+
+                    # ----------------------------------------------------------
+                    # STOCK
+                    # ----------------------------------------------------------
 
                     "qty":
-                        0,
+                        stock.get(
+                            "qty",
+                            0,
+                        ),
 
                     "reserved_qty":
-                        0,
+                        stock.get(
+                            "reserved_qty",
+                            0,
+                        ),
 
                     "available_qty":
-                        0,
+                        stock.get(
+                            "available_qty",
+                            0,
+                        ),
 
                 })
 
@@ -702,7 +796,7 @@ class ProductRepository(BaseRepository):
 
             log_error(
                 message=
-                    "Product Master load failed",
+                    "Product + warehouse stock load failed",
                 exception=e,
             )
 
