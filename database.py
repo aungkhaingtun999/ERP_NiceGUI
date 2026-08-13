@@ -83,6 +83,12 @@ from erp_core import (
 
     update_product_rpc,
 
+    request_product_create_rpc,
+
+    request_product_bulk_create_rpc,
+
+    approve_product_create_rpc,
+
 
     # ------------------------------------------------------------------
     # SERVICES
@@ -353,25 +359,25 @@ __all__ = [
 
 
 
-# ------------------------------------------------------------------
-# RPC
-# ------------------------------------------------------------------
+    # RPC
 
-checkout_sale_rpc,
+    "checkout_sale_rpc",
 
-purchase_receive_rpc,
+    "purchase_receive_rpc",
 
-refund_sale_rpc,
+    "refund_sale_rpc",
 
-stock_adjustment_rpc,
+    "stock_adjustment_rpc",
 
-update_product_rpc,
+    "update_product_rpc",
 
-request_product_create_rpc,
+    "request_product_create_rpc",
 
-request_product_bulk_create_rpc,
+    "request_product_bulk_create_rpc",
 
-approve_product_create_rpc,
+    "approve_product_create_rpc",
+
+
 
     # SERVICES
 
