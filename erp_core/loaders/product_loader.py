@@ -1,14 +1,14 @@
 # ==============================================================================
 # erp_core/loaders/product_loader.py
-# ERP ENTERPRISE PRODUCT LOADER v30.3 FINAL
+# ERP ENTERPRISE PRODUCT LOADER v32.0 FINAL
 #
-# Database
-#      ↓
-# Repository
-#      ↓
-# Loader
-#      ↓
-# POS / Inventory / Sales
+# POS
+#     ↓
+# get_pos_products()
+#     ↓
+# ProductRepository.get_pos_products()
+#     ↓
+# pos_products_view
 #
 # ==============================================================================
 
@@ -17,101 +17,109 @@ from typing import (
     List,
     Dict,
     Any,
-    Optional
+    Optional,
 )
 
 
 import streamlit as st
 
 
-
 from erp_core.base_repo import (
     db,
-    log_error
+    log_error,
 )
 
 
 from erp_core.context import (
-    CacheManager
+    CacheManager,
 )
 
 
 from erp_core.config import (
     DEFAULT_PAGE_SIZE,
-    CACHE_KEYS
+    CACHE_KEYS,
 )
 
 
 from erp_core.repositories import (
-    RepositoryCoordinator
+    RepositoryCoordinator,
 )
 
 
-
-
-
 # ==============================================================================
-# CACHE QUERY
+# POS PRODUCT QUERY CACHE
 # ==============================================================================
 
 
-@st.cache_data
-def _get_products_cached(
-
+@st.cache_data(
+    show_spinner=False
+)
+def _get_pos_products_cached(
     warehouse_id,
-
-    offset,
-
+    keyword,
     limit,
-
-    version
-
+    version,
 ):
-
 
     try:
 
-
         with RepositoryCoordinator(
-
             db()
-
         ) as coord:
 
-
-            return coord.products.get_products(
-
-                warehouse_id,
-
-                offset,
-
-                limit
-
+            return coord.products.get_pos_products(
+                warehouse_id=warehouse_id,
+                keyword=keyword,
+                limit=limit,
             )
-
-
-
 
     except Exception as e:
 
-
         log_error(
-
             message=
-
-            "Product cache query failed",
-
-            exception=e
-
+                "POS product cache query failed",
+            exception=e,
         )
-
 
         return []
 
 
+# ==============================================================================
+# PRODUCT MASTER QUERY CACHE
+# ==============================================================================
 
 
+@st.cache_data(
+    show_spinner=False
+)
+def _get_products_cached(
+    warehouse_id,
+    offset,
+    limit,
+    version,
+):
 
+    try:
+
+        with RepositoryCoordinator(
+            db()
+        ) as coord:
+
+            return coord.products.get_products(
+                warehouse_id=warehouse_id,
+                offset=offset,
+                limit=limit,
+            )
+
+    except Exception as e:
+
+        log_error(
+            message=
+                "Product Master cache query failed",
+            exception=e,
+        )
+
+        return []
 
 
 # ==============================================================================
@@ -120,276 +128,142 @@ def _get_products_cached(
 
 
 def normalize_product(
-
     product: Dict[str, Any],
-
-    warehouse_id=None
-
+    warehouse_id=None,
 ):
-
 
     if not product:
 
         return None
 
-
-
-
     return {
 
-
-        # --------------------------------------------------
-        # BASIC INFO
-        # --------------------------------------------------
-
         "id":
-
             product.get("id"),
 
-
         "name":
-
             product.get(
-
                 "name",
-
-                ""
-
+                "",
             ),
-
 
         "sku":
-
             product.get(
-
                 "sku",
-
-                ""
-
+                "",
             ),
-
 
         "barcode":
-
             product.get(
-
                 "barcode",
-
-                ""
-
+                "",
             ),
-
-
 
         "category_id":
-
             product.get(
-
                 "category_id"
-
             ),
-
 
         "category":
-
             product.get(
-
                 "category"
-
             ),
-
-
-
-
-        # --------------------------------------------------
-        # COST
-        # --------------------------------------------------
 
         "purchase_price":
-
             product.get(
-
                 "purchase_price",
-
-                0
-
+                0,
             ),
-
-
-
-
-        # --------------------------------------------------
-        # PRICE ENGINE
-        # --------------------------------------------------
 
         "selling_price":
-
             product.get(
-
                 "selling_price",
-
-                0
-
+                0,
             ),
-
-
 
         "owner_selling_price":
-
             product.get(
-
                 "owner_selling_price"
-
             ),
-
-
-
 
         "owner_price_locked":
-
             product.get(
-
                 "owner_price_locked",
-
-                False
-
+                False,
             ),
-
-
-
 
         "final_selling_price":
-
             product.get(
-
                 "final_selling_price",
-
                 product.get(
-
                     "selling_price",
-
-                    0
-
-                )
-
+                    0,
+                ),
             ),
-
-
-
 
         "price_source":
-
             product.get(
-
                 "price_source",
-
-                "SYSTEM"
-
+                "SYSTEM",
             ),
-
-
-
-
-
-        # --------------------------------------------------
-        # STOCK
-        # --------------------------------------------------
 
         "warehouse_id":
-
             product.get(
-
                 "warehouse_id",
-
-                warehouse_id
-
+                warehouse_id,
             ),
-
-
-
 
         "qty":
-
             product.get(
-
                 "qty",
-
-                0
-
+                0,
             ),
-
-
 
         "reserved_qty":
-
             product.get(
-
                 "reserved_qty",
-
-                0
-
+                0,
             ),
 
-
-
-
-        
         "available_qty":
-    product.get(
-        "available_qty",
-        0
-    ),
-
-
-
+            product.get(
+                "available_qty",
+                0,
+            ),
 
         "minimum_stock":
-
             product.get(
-
                 "minimum_stock",
-
-                0
-
+                0,
             ),
 
-
-
+        # ------------------------------------------------------------------
+        # IMPORTANT
+        # ------------------------------------------------------------------
+        # pos_products_view does NOT have is_active.
+        #
+        # We keep this compatibility value in Python only.
+        # ------------------------------------------------------------------
 
         "is_active":
-
             product.get(
-
                 "is_active",
-
-                True
-
-            )
-
+                True,
+            ),
 
     }
 
 
-
-
-
-
-
 # ==============================================================================
-# MAIN PRODUCT LOADER
+# PRODUCT MASTER
 # ==============================================================================
 
 
 def get_products(
-
     warehouse_id=None,
-
     offset=0,
-
-    limit=DEFAULT_PAGE_SIZE
-
+    limit=DEFAULT_PAGE_SIZE,
 ) -> List[Dict[str, Any]]:
-
 
     products = _get_products_cached(
 
@@ -399,26 +273,17 @@ def get_products(
 
         limit,
 
-
         CacheManager.get_version(
-
             CACHE_KEYS["inventory"]
-
-        )
+        ),
 
     )
-
-
-
 
     return [
 
         normalize_product(
-
             product,
-
-            warehouse_id
-
+            warehouse_id,
         )
 
         for product in products
@@ -428,121 +293,42 @@ def get_products(
     ]
 
 
-
-
-
-
-
 # ==============================================================================
-# POS PRODUCT LOADER
+# POS PRODUCTS
 # ==============================================================================
 
 
 def get_pos_products(
-
     warehouse_id=None,
-
-    search: Optional[str]=None
-
+    search: Optional[str] = None,
 ):
 
-
-    products = get_products(
+    products = _get_pos_products_cached(
 
         warehouse_id,
 
-        0,
+        search or "",
 
-        DEFAULT_PAGE_SIZE
+        DEFAULT_PAGE_SIZE,
+
+        CacheManager.get_version(
+            CACHE_KEYS["inventory"]
+        ),
 
     )
 
+    return [
 
+        normalize_product(
+            product,
+            warehouse_id,
+        )
 
+        for product in products
 
+        if product
 
-    if search:
-
-
-        keyword = str(
-
-            search
-
-        ).lower().strip()
-
-
-
-
-        products = [
-
-            p
-
-            for p in products
-
-            if (
-
-                keyword in str(
-
-                    p.get(
-
-                        "name",
-
-                        ""
-
-                    )
-
-                ).lower()
-
-
-
-                or
-
-
-
-                keyword in str(
-
-                    p.get(
-
-                        "sku",
-
-                        ""
-
-                    )
-
-                ).lower()
-
-
-
-                or
-
-
-
-                keyword in str(
-
-                    p.get(
-
-                        "barcode",
-
-                        ""
-
-                    )
-
-                ).lower()
-
-            )
-
-        ]
-
-
-
-
-
-    return products
-
-
-
-
-
+    ]
 
 
 # ==============================================================================
@@ -550,33 +336,26 @@ def get_pos_products(
 # ==============================================================================
 
 
-def get_active_products():
+def get_active_products(
+    warehouse_id=None,
+):
 
-
-    products = get_products()
-
-
+    products = get_pos_products(
+        warehouse_id
+    )
 
     return [
 
-        p
+        product
 
-        for p in products
+        for product in products
 
-        if p.get(
-
+        if product.get(
             "is_active",
-
-            True
-
+            True,
         )
 
     ]
-
-
-
-
-
 
 
 # ==============================================================================
@@ -586,48 +365,41 @@ def get_active_products():
 
 def refresh_products_cache():
 
-
     try:
 
-
         CacheManager.bump(
-
             CACHE_KEYS["inventory"]
-
         )
 
-
         CacheManager.bump(
-
             CACHE_KEYS["products"]
-
         )
-
-
 
         CacheManager.bump(
-
             CACHE_KEYS["pricing"]
-
         )
 
-
-
+        _get_pos_products_cached.clear()
 
         _get_products_cached.clear()
 
-
-
-
     except Exception as e:
 
-
         log_error(
-
             message=
-
-            "Product cache refresh failed",
-
-            exception=e
-
+                "Product cache refresh failed",
+            exception=e,
         )
+
+
+# ==============================================================================
+# PUBLIC
+# ==============================================================================
+
+__all__ = [
+    "get_products",
+    "get_pos_products",
+    "get_active_products",
+    "refresh_products_cache",
+    "normalize_product",
+]
