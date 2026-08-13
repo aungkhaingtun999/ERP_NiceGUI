@@ -254,10 +254,10 @@ try:
 except Exception as e:
 
     log_error(
-        message=
-            "ERP RPC package import failed",
+        message="ERP RPC package import failed",
         exception=e,
     )
+
 
     def checkout_sale_rpc(*args, **kwargs):
 
@@ -267,6 +267,7 @@ except Exception as e:
                 "checkout_sale_rpc unavailable",
         }
 
+
     def purchase_receive_rpc(*args, **kwargs):
 
         return {
@@ -274,6 +275,7 @@ except Exception as e:
             "message":
                 "purchase_receive_rpc unavailable",
         }
+
 
     def refund_sale_rpc(*args, **kwargs):
 
@@ -283,6 +285,7 @@ except Exception as e:
                 "refund_sale_rpc unavailable",
         }
 
+
     def stock_adjustment_rpc(*args, **kwargs):
 
         return {
@@ -290,6 +293,7 @@ except Exception as e:
             "message":
                 "stock_adjustment_rpc unavailable",
         }
+
 
     def update_product_rpc(*args, **kwargs):
 
@@ -299,6 +303,7 @@ except Exception as e:
                 "update_product_rpc unavailable",
         }
 
+
     def request_product_create_rpc(*args, **kwargs):
 
         return {
@@ -306,6 +311,7 @@ except Exception as e:
             "message":
                 "request_product_create_rpc unavailable",
         }
+
 
     def request_product_bulk_create_rpc(*args, **kwargs):
 
@@ -315,6 +321,7 @@ except Exception as e:
                 "request_product_bulk_create_rpc unavailable",
         }
 
+
     def approve_product_create_rpc(*args, **kwargs):
 
         return {
@@ -322,8 +329,6 @@ except Exception as e:
             "message":
                 "approve_product_create_rpc unavailable",
         }
-
-
 # ==============================================================================
 # SERVICES
 # ==============================================================================
