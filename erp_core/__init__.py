@@ -254,18 +254,22 @@ except Exception:
 
 try:
 
-    from .rpc.checkout_rpc import (
-        checkout_sale_rpc,
+    from .rpc.product_rpc import (
+        update_product_rpc,
+        request_product_create_rpc,
+        request_product_bulk_create_rpc,
+        approve_product_create_rpc,
     )
 
 except Exception:
 
-    def checkout_sale_rpc(*args, **kwargs):
+    update_product_rpc = None
 
-        return {
-            "success": False,
-            "message": "Checkout RPC unavailable",
-        }
+    request_product_create_rpc = None
+
+    request_product_bulk_create_rpc = None
+
+    approve_product_create_rpc = None
 
 
 # ------------------------------------------------------------------------------
@@ -568,17 +572,20 @@ __all__ = [
     "get_sale_items",
     "get_full_receipt",
     "search_receipts",
+# ==========================================================================
+# RPC
+# ==========================================================================
 
+"checkout_sale_rpc",
+"purchase_receive_rpc",
+"refund_sale_rpc",
+"stock_adjustment_rpc",
 
-    # ==========================================================================
-    # RPC
-    # ==========================================================================
+"update_product_rpc",
 
-    "checkout_sale_rpc",
-    "purchase_receive_rpc",
-    "refund_sale_rpc",
-    "stock_adjustment_rpc",
-    "update_product_rpc",
+"request_product_create_rpc",
+"request_product_bulk_create_rpc",
+"approve_product_create_rpc",
 
 
     # ==========================================================================
