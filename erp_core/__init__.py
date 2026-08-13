@@ -229,48 +229,19 @@ except Exception:
 # RPC
 # ==============================================================================
 
-try:
+from .rpc import (
+    checkout_sale_rpc,
+    purchase_receive_rpc,
+    refund_sale_rpc,
+    stock_adjustment_rpc,
+    update_product_rpc,
+    request_product_create_rpc,
+    request_product_bulk_create_rpc,
+    approve_product_create_rpc,
+)
 
-    from .rpc import (
+print("ERP CORE RPC IMPORT: OK")
 
-        checkout_sale_rpc,
-
-        purchase_receive_rpc,
-
-        refund_sale_rpc,
-
-        stock_adjustment_rpc,
-
-        update_product_rpc,
-
-        request_product_create_rpc,
-
-        request_product_bulk_create_rpc,
-
-        approve_product_create_rpc,
-
-    )
-
-    print("ERP CORE RPC IMPORT: OK")
-
-
-except Exception as e:
-
-    # --------------------------------------------------------------------------
-    # DO NOT HIDE THE REAL ERROR
-    # --------------------------------------------------------------------------
-
-    print("=" * 70)
-    print("ERP CORE RPC IMPORT FAILED")
-    print("ERROR TYPE :", type(e).__name__)
-    print("ERROR      :", str(e))
-    print("=" * 70)
-
-    # IMPORTANT:
-    # Do NOT create fake fallback functions here.
-    # Let the real import error remain visible.
-
-    raise
 
 # ==============================================================================
 # SERVICES
