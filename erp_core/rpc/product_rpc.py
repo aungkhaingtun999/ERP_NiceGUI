@@ -2,417 +2,91 @@
 # erp_core/rpc/product_rpc.py
 # ERP ENTERPRISE PRODUCT RPC v2.0
 #
-# Product Master RPC Gateway
+# PRODUCT MASTER + MAKER CHECKER
 #
-# Supports:
-#     update_product_rpc
+# Supported RPCs:
 #
-# Maker / Checker:
-#     request_product_create_rpc
-#     request_product_bulk_create_rpc
-#     approve_product_create_rpc
+#   update_product_rpc
 #
-# IMPORTANT:
-#     Real product creation is NOT performed by request functions.
+#   request_product_create_rpc
 #
-#     request_product_create_rpc()
-#         -> product_create_requests
-#         -> PENDING
+#   request_product_bulk_create_rpc
 #
-#     request_product_bulk_create_rpc()
-#         -> product_create_requests
-#         -> PENDING
+#   approve_product_create_rpc
 #
-#     approve_product_create_rpc()
-#         -> Supabase approve RPC
-#         -> create_product_full()
+# Database Functions:
+#
+#   request_product_create_rpc(
+#       p_product_data jsonb,
+#       p_warehouse_id bigint,
+#       p_initial_qty integer,
+#       p_reason text,
+#       p_requested_by uuid
+#   )
+#
+#   request_product_bulk_create_rpc(
+#       p_products jsonb,
+#       p_warehouse_id bigint,
+#       p_initial_qty numeric,
+#       p_reason text,
+#       p_requested_by uuid
+#   )
+#
+#   approve_product_create_rpc(
+#       p_request_id bigint,
+#       p_checker_id uuid
+#   )
 #
 # ==============================================================================
 
 
-from ..base_repo import db, privileged_db, log_error
+from typing import (
+    Any,
+    Dict,
+    Optional,
+)
+
+
+from ..base_repo import (
+    db,
+    privileged_db,
+    log_error,
+)
 
 
 # ==============================================================================
-# INTERNAL HELPERS
+# SAFE HELPERS
 # ==============================================================================
 
 
-def _get_client(privileged=False):
-
-    """
-    Return the appropriate Supabase client.
-
-    Maker / Checker RPCs are server-side protected operations.
-    Prefer privileged_db() for those RPC calls.
-
-    update_product_rpc() keeps the existing normal db() behavior.
-    """
-
-    if privileged:
-
-        return privileged_db()
-
-    return db()
-
-
-def _execute_rpc(client, function_name, params):
-
-    """
-    Execute a Supabase RPC and normalize the response.
-    """
+def _safe_int(value, default=0):
 
     try:
-
-        result = (
-            client
-            .rpc(
-                function_name,
-                params
-            )
-            .execute()
-        )
-
-        return result.data
-
-    except Exception as e:
-
-        log_error(
-            message=f"{function_name} failed",
-            exception=e
-        )
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": str(e)
-        }
-
-
-# ==============================================================================
-# REQUEST PRODUCT CREATE
-# MAKER
-# ==============================================================================
-
-
-def request_product_create_rpc(
-
-    product_data,
-
-    warehouse_id,
-
-    initial_qty,
-
-    reason,
-
-    requested_by
-
-):
-
-    """
-    Submit ONE product creation request.
-
-    IMPORTANT:
-        This function does NOT create a product.
-
-    Database flow:
-
-        request_product_create_rpc()
-                    ↓
-        product_create_requests
-                    ↓
-                  PENDING
-                    ↓
-              Checker Approval
-    """
-
-    if product_data is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Product data is required."
-        }
-
-    if warehouse_id is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Warehouse ID is required."
-        }
-
-    if requested_by is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Requester ID is required."
-        }
-
-    try:
-
-        qty = int(initial_qty or 0)
+        return int(value)
 
     except Exception:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Initial quantity must be an integer."
-        }
-
-    if qty < 0:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Initial quantity cannot be negative."
-        }
-
-    params = {
-
-        "p_product_data":
-        product_data,
-
-        "p_warehouse_id":
-        int(warehouse_id),
-
-        "p_initial_qty":
-        qty,
-
-        "p_reason":
-        reason
-        or "Product creation request",
-
-        "p_requested_by":
-        requested_by
-
-    }
-
-    return _execute_rpc(
-        _get_client(privileged=True),
-        "request_product_create_rpc",
-        params
-    )
+        return int(default)
 
 
-# ==============================================================================
-# REQUEST PRODUCT BULK CREATE
-# MAKER
-# ==============================================================================
-
-
-def request_product_bulk_create_rpc(
-
-    products,
-
-    warehouse_id,
-
-    initial_qty=0,
-
-    reason="Product Master bulk import request",
-
-    requested_by=None
-
-):
-
-    """
-    Submit MULTIPLE product creation requests.
-
-    IMPORTANT:
-        This function does NOT create real products.
-
-    Each product is passed to:
-
-        request_product_create_rpc()
-
-    inside the database bulk RPC.
-
-    Product creation happens only after Checker approval.
-    """
-
-    if products is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Products are required."
-        }
-
-    if not isinstance(products, list):
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Products must be a list."
-        }
-
-    if len(products) == 0:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "No products supplied."
-        }
-
-    if warehouse_id is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Warehouse ID is required."
-        }
-
-    if requested_by is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Requester ID is required."
-        }
+def _safe_float(value, default=0):
 
     try:
-
-        qty = int(initial_qty or 0)
-
-    except Exception:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Initial quantity must be an integer."
-        }
-
-    if qty < 0:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Initial quantity cannot be negative."
-        }
-
-    params = {
-
-        "p_products":
-        products,
-
-        "p_warehouse_id":
-        int(warehouse_id),
-
-        "p_initial_qty":
-        qty,
-
-        "p_reason":
-        reason
-        or "Product Master bulk import request",
-
-        "p_requested_by":
-        requested_by
-
-    }
-
-    return _execute_rpc(
-        _get_client(privileged=True),
-        "request_product_bulk_create_rpc",
-        params
-    )
-
-
-# ==============================================================================
-# APPROVE PRODUCT CREATE
-# CHECKER
-# ==============================================================================
-
-
-def approve_product_create_rpc(
-
-    request_id,
-
-    checker_id
-
-):
-
-    """
-    Approve ONE pending product creation request.
-
-    IMPORTANT:
-
-        Python does NOT call create_product_full() directly.
-
-    Database flow:
-
-        PENDING
-           ↓
-        Checker
-           ↓
-        approve_product_create_rpc()
-           ↓
-        create_product_full()
-           ↓
-        products
-        warehouse_stock
-        inventory_batches
-        inventory_cost_layers
-    """
-
-    if request_id is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Request ID is required."
-        }
-
-    if checker_id is None:
-
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Checker ID is required."
-        }
-
-    try:
-
-        request_id = int(request_id)
+        return float(value)
 
     except Exception:
+        return float(default)
 
-        return {
-            "success": False,
-            "status": "ERROR",
-            "message": "Request ID must be an integer."
-        }
 
-    params = {
+def _safe_text(value, default=""):
 
-        "p_request_id":
-        request_id,
+    if value is None:
+        return default
 
-        "p_checker_id":
-        checker_id
-
-    }
-
-    return _execute_rpc(
-        _get_client(privileged=True),
-        "approve_product_create_rpc",
-        params
-    )
+    return str(value).strip()
 
 
 # ==============================================================================
 # UPDATE PRODUCT
-# ==============================================================================
-#
-# Existing Product Master update.
-#
-# This is NOT Maker-Checker product creation.
-#
-# Existing behavior is preserved:
-#     Empty SKU     -> keep old SKU
-#     Empty Barcode -> keep old Barcode
-#
 # ==============================================================================
 
 
@@ -444,9 +118,9 @@ def update_product_rpc(
 
         client = db()
 
-        # ==============================================================
+        # ------------------------------------------------------------------
         # LOAD OLD PRODUCT
-        # ==============================================================
+        # ------------------------------------------------------------------
 
         old_result = (
 
@@ -455,7 +129,6 @@ def update_product_rpc(
             .table("products")
 
             .select(
-
                 """
                 id,
                 sku,
@@ -464,18 +137,16 @@ def update_product_rpc(
                 unit,
                 notes
                 """
-
             )
 
             .eq(
                 "id",
-                int(product_id)
+                _safe_int(product_id)
             )
 
             .maybe_single()
 
             .execute()
-
         )
 
         old_data = old_result.data
@@ -483,87 +154,97 @@ def update_product_rpc(
         if not old_data:
 
             return {
-
                 "success": False,
-
                 "message":
-                f"Product ID {product_id} not found"
-
+                    f"Product ID {product_id} not found"
             }
 
-        # ==============================================================
-        # KEEP OLD VALUES
-        # ==============================================================
+        # ------------------------------------------------------------------
+        # KEEP OLD SKU
+        # ------------------------------------------------------------------
 
-        final_sku = (
+        incoming_sku = _safe_text(sku)
 
-            str(sku).strip()
+        if incoming_sku:
 
-            if sku and str(sku).strip()
+            final_sku = incoming_sku
 
-            else old_data.get("sku")
+        else:
 
-        )
+            final_sku = old_data.get("sku")
 
-        final_barcode = (
+        # ------------------------------------------------------------------
+        # KEEP OLD BARCODE
+        # ------------------------------------------------------------------
 
-            str(barcode).strip()
+        incoming_barcode = _safe_text(barcode)
 
-            if barcode and str(barcode).strip()
+        if incoming_barcode:
 
-            else old_data.get("barcode")
+            final_barcode = incoming_barcode
 
-        )
+        else:
 
-        final_min_stock = (
+            final_barcode = old_data.get("barcode")
 
-            int(minimum_stock)
+        # ------------------------------------------------------------------
+        # MINIMUM STOCK
+        # ------------------------------------------------------------------
 
-            if minimum_stock is not None
+        if minimum_stock is not None:
 
-            else int(
+            final_minimum_stock = _safe_int(
+                minimum_stock
+            )
+
+        else:
+
+            final_minimum_stock = _safe_int(
                 old_data.get(
                     "minimum_stock",
                     0
                 )
             )
 
-        )
-
-        # ==============================================================
-        # UPDATE PAYLOAD
-        # ==============================================================
+        # ------------------------------------------------------------------
+        # PAYLOAD
+        # ------------------------------------------------------------------
 
         payload = {
 
             "name":
-            str(name).strip(),
+                _safe_text(name),
 
             "sku":
-            final_sku,
+                final_sku,
 
             "barcode":
-            final_barcode,
+                final_barcode,
 
             "purchase_price":
-            float(purchase_price or 0),
+                _safe_float(
+                    purchase_price
+                ),
 
             "selling_price":
-            float(selling_price or 0),
+                _safe_float(
+                    selling_price
+                ),
 
             "minimum_stock":
-            final_min_stock,
+                final_minimum_stock,
 
             "unit":
-            str(unit).strip()
-            if unit
-            else "pcs",
+                _safe_text(
+                    unit,
+                    "pcs"
+                ) or "pcs",
 
             "notes":
-            notes,
+                notes,
 
             "is_active":
-            bool(is_active)
+                bool(is_active),
 
         }
 
@@ -572,21 +253,29 @@ def update_product_rpc(
             payload
         )
 
-        # ==============================================================
+        # ------------------------------------------------------------------
         # UPDATE
-        # ==============================================================
+        # ------------------------------------------------------------------
 
-        client.table("products") \
-            .update(payload) \
+        result = (
+
+            client
+
+            .table("products")
+
+            .update(payload)
+
             .eq(
                 "id",
-                int(product_id)
-            ) \
-            .execute()
+                _safe_int(product_id)
+            )
 
-        # ==============================================================
+            .execute()
+        )
+
+        # ------------------------------------------------------------------
         # VERIFY
-        # ==============================================================
+        # ------------------------------------------------------------------
 
         verify = (
 
@@ -595,7 +284,6 @@ def update_product_rpc(
             .table("products")
 
             .select(
-
                 """
                 id,
                 name,
@@ -605,52 +293,507 @@ def update_product_rpc(
                 selling_price,
                 minimum_stock,
                 unit,
-                notes
+                notes,
+                is_active
                 """
-
             )
 
             .eq(
                 "id",
-                int(product_id)
+                _safe_int(product_id)
             )
 
             .maybe_single()
 
             .execute()
-
         )
 
         return {
 
-            "success":
-            True,
+            "success": True,
 
             "message":
-            "Product updated successfully",
+                "Product updated successfully",
 
             "data":
-            verify.data
+                verify.data
 
         }
 
     except Exception as e:
 
         log_error(
-
             message=
-            "update_product_rpc failed",
-
-            exception=e
-
+                "update_product_rpc failed",
+            exception=e,
+            rpc=
+                "update_product_rpc"
         )
 
         return {
 
-            "success":
-            False,
+            "success": False,
 
             "message":
-            str(e)
+                str(e)
 
         }
+
+
+# ==============================================================================
+# REQUEST PRODUCT CREATE
+# ==============================================================================
+#
+# MAKER
+#
+# This function DOES NOT create products directly.
+#
+# It only creates an approval request.
+#
+# ==============================================================================
+
+
+def request_product_create_rpc(
+
+    product_data: Dict[str, Any],
+
+    warehouse_id,
+
+    initial_qty,
+
+    reason,
+
+    requested_by
+
+):
+
+    try:
+
+        if not product_data:
+
+            return {
+                "success": False,
+                "message":
+                    "Product data is required."
+            }
+
+        if not requested_by:
+
+            return {
+                "success": False,
+                "message":
+                    "Requester ID is required."
+            }
+
+        payload = {
+
+            "p_product_data":
+                product_data,
+
+            "p_warehouse_id":
+                _safe_int(
+                    warehouse_id
+                ),
+
+            "p_initial_qty":
+                _safe_int(
+                    initial_qty
+                ),
+
+            "p_reason":
+                _safe_text(
+                    reason
+                ),
+
+            "p_requested_by":
+                requested_by,
+
+        }
+
+        print(
+            "ERP PRODUCT CREATE REQUEST =",
+            payload
+        )
+
+        # ------------------------------------------------------------------
+        # SERVER SIDE RPC
+        # ------------------------------------------------------------------
+
+        client = privileged_db()
+
+        response = (
+
+            client
+
+            .rpc(
+                "request_product_create_rpc",
+                payload
+            )
+
+            .execute()
+        )
+
+        result = getattr(
+            response,
+            "data",
+            response
+        )
+
+        # ------------------------------------------------------------------
+        # NORMALIZE
+        # ------------------------------------------------------------------
+
+        if isinstance(result, dict):
+
+            return result
+
+        if isinstance(result, list):
+
+            if (
+                len(result) == 1
+                and isinstance(
+                    result[0],
+                    dict
+                )
+            ):
+
+                return result[0]
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        return {
+            "success": True,
+            "data": result
+        }
+
+    except Exception as e:
+
+        log_error(
+            message=
+                "request_product_create_rpc failed",
+            exception=e,
+            rpc=
+                "request_product_create_rpc"
+        )
+
+        return {
+
+            "success": False,
+
+            "message":
+                str(e)
+
+        }
+
+
+# ==============================================================================
+# REQUEST PRODUCT BULK CREATE
+# ==============================================================================
+#
+# MAKER
+#
+# Creates approval requests.
+#
+# DOES NOT directly create products.
+#
+# ==============================================================================
+
+
+def request_product_bulk_create_rpc(
+
+    products,
+
+    warehouse_id,
+
+    initial_qty,
+
+    reason,
+
+    requested_by
+
+):
+
+    try:
+
+        if not products:
+
+            return {
+                "success": False,
+                "message":
+                    "Product list is empty."
+            }
+
+        if not requested_by:
+
+            return {
+                "success": False,
+                "message":
+                    "Requester ID is required."
+            }
+
+        if not isinstance(
+            products,
+            list
+        ):
+
+            return {
+                "success": False,
+                "message":
+                    "Products must be a list."
+            }
+
+        payload = {
+
+            "p_products":
+                products,
+
+            "p_warehouse_id":
+                _safe_int(
+                    warehouse_id
+                ),
+
+            "p_initial_qty":
+                _safe_float(
+                    initial_qty
+                ),
+
+            "p_reason":
+                _safe_text(
+                    reason
+                ),
+
+            "p_requested_by":
+                requested_by,
+
+        }
+
+        print(
+            "ERP BULK PRODUCT CREATE REQUEST =",
+            payload
+        )
+
+        # ------------------------------------------------------------------
+        # SERVER SIDE RPC
+        # ------------------------------------------------------------------
+
+        client = privileged_db()
+
+        response = (
+
+            client
+
+            .rpc(
+                "request_product_bulk_create_rpc",
+                payload
+            )
+
+            .execute()
+        )
+
+        result = getattr(
+            response,
+            "data",
+            response
+        )
+
+        # ------------------------------------------------------------------
+        # NORMALIZE
+        # ------------------------------------------------------------------
+
+        if isinstance(result, dict):
+
+            return result
+
+        if isinstance(result, list):
+
+            if (
+                len(result) == 1
+                and isinstance(
+                    result[0],
+                    dict
+                )
+            ):
+
+                return result[0]
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        return {
+            "success": True,
+            "data": result
+        }
+
+    except Exception as e:
+
+        log_error(
+            message=
+                "request_product_bulk_create_rpc failed",
+            exception=e,
+            rpc=
+                "request_product_bulk_create_rpc"
+        )
+
+        return {
+
+            "success": False,
+
+            "message":
+                str(e)
+
+        }
+
+
+# ==============================================================================
+# APPROVE PRODUCT CREATE
+# ==============================================================================
+#
+# CHECKER
+#
+# IMPORTANT:
+# p_request_id
+# p_checker_id
+#
+# The actual database function performs the final product creation.
+#
+# ==============================================================================
+
+
+def approve_product_create_rpc(
+
+    request_id,
+
+    checker_id
+
+):
+
+    try:
+
+        if not request_id:
+
+            return {
+                "success": False,
+                "message":
+                    "Request ID is required."
+            }
+
+        if not checker_id:
+
+            return {
+                "success": False,
+                "message":
+                    "Checker ID is required."
+            }
+
+        payload = {
+
+            "p_request_id":
+                _safe_int(
+                    request_id
+                ),
+
+            "p_checker_id":
+                checker_id,
+
+        }
+
+        print(
+            "ERP PRODUCT APPROVAL REQUEST =",
+            payload
+        )
+
+        # ------------------------------------------------------------------
+        # SERVER SIDE RPC
+        # ------------------------------------------------------------------
+
+        client = privileged_db()
+
+        response = (
+
+            client
+
+            .rpc(
+                "approve_product_create_rpc",
+                payload
+            )
+
+            .execute()
+        )
+
+        result = getattr(
+            response,
+            "data",
+            response
+        )
+
+        # ------------------------------------------------------------------
+        # NORMALIZE
+        # ------------------------------------------------------------------
+
+        if isinstance(result, dict):
+
+            return result
+
+        if isinstance(result, list):
+
+            if (
+                len(result) == 1
+                and isinstance(
+                    result[0],
+                    dict
+                )
+            ):
+
+                return result[0]
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        return {
+            "success": True,
+            "data": result
+        }
+
+    except Exception as e:
+
+        log_error(
+            message=
+                "approve_product_create_rpc failed",
+            exception=e,
+            rpc=
+                "approve_product_create_rpc"
+        )
+
+        return {
+
+            "success": False,
+
+            "message":
+                str(e)
+
+        }
+
+
+# ==============================================================================
+# PUBLIC EXPORTS
+# ==============================================================================
+
+
+__all__ = [
+
+    "update_product_rpc",
+
+    "request_product_create_rpc",
+
+    "request_product_bulk_create_rpc",
+
+    "approve_product_create_rpc",
+
+]
