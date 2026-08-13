@@ -248,30 +248,91 @@ except Exception:
 # RPC
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
-# CHECKOUT
-# ------------------------------------------------------------------------------
-
 try:
 
-    from .rpc.product_rpc import (
+    from .rpc import (
+
+        checkout_sale_rpc,
+
+        purchase_receive_rpc,
+
+        refund_sale_rpc,
+
+        stock_adjustment_rpc,
+
         update_product_rpc,
-        request_product_create_rpc,
-        request_product_bulk_create_rpc,
-        approve_product_create_rpc,
+
     )
 
-except Exception:
+except Exception as e:
 
-    update_product_rpc = None
+    log_error(
 
-    request_product_create_rpc = None
+        message="ERP RPC package import failed",
 
-    request_product_bulk_create_rpc = None
+        exception=e
 
-    approve_product_create_rpc = None
+    )
 
 
+    def checkout_sale_rpc(*args, **kwargs):
+
+        return {
+
+            "success": False,
+
+            "message":
+                "checkout_sale_rpc unavailable"
+
+        }
+
+
+    def purchase_receive_rpc(*args, **kwargs):
+
+        return {
+
+            "success": False,
+
+            "message":
+                "purchase_receive_rpc unavailable"
+
+        }
+
+
+    def refund_sale_rpc(*args, **kwargs):
+
+        return {
+
+            "success": False,
+
+            "message":
+                "refund_sale_rpc unavailable"
+
+        }
+
+
+    def stock_adjustment_rpc(*args, **kwargs):
+
+        return {
+
+            "success": False,
+
+            "message":
+                "stock_adjustment_rpc unavailable"
+
+        }
+
+
+    def update_product_rpc(*args, **kwargs):
+
+        return {
+
+            "success": False,
+
+            "message":
+                "update_product_rpc unavailable"
+
+        }
 # ------------------------------------------------------------------------------
 # PURCHASE
 # ------------------------------------------------------------------------------
