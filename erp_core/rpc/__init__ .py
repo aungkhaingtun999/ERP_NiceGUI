@@ -1,8 +1,24 @@
 # ==============================================================================
 # erp_core/rpc/__init__.py
-# ERP ENTERPRISE RPC PACKAGE v36.0
+# ERP ENTERPRISE RPC PACKAGE v36.0 FINAL
 #
 # SAFE RPC EXPORT HUB
+#
+# Architecture:
+#
+# ERP Core
+#     ↓
+# RPC Package
+#     ↓
+# Individual RPC Modules
+#
+# Maker / Checker
+#     ↓
+# Product Create Request
+#     ↓
+# Product Bulk Create Request
+#     ↓
+# Checker Approval
 #
 # ==============================================================================
 
@@ -31,8 +47,7 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "checkout_sale_rpc unavailable"
+            "message": "checkout_sale_rpc unavailable"
         }
 
 
@@ -57,8 +72,7 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "purchase_receive_rpc unavailable"
+            "message": "purchase_receive_rpc unavailable"
         }
 
 
@@ -83,8 +97,7 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "refund_sale_rpc unavailable"
+            "message": "refund_sale_rpc unavailable"
         }
 
 
@@ -109,13 +122,34 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "stock_adjustment_rpc unavailable"
+            "message": "stock_adjustment_rpc unavailable"
         }
 
 
 # ==============================================================================
 # PRODUCT
+# ==============================================================================
+#
+# Maker / Checker Product Workflow
+#
+# update_product_rpc
+#     ↓
+# Product Master Update
+#
+# request_product_create_rpc
+#     ↓
+# Maker Request
+#
+# request_product_bulk_create_rpc
+#     ↓
+# Bulk Maker Request
+#
+# approve_product_create_rpc
+#     ↓
+# Checker Approval
+#     ↓
+# Database creates actual product
+#
 # ==============================================================================
 
 try:
@@ -139,12 +173,12 @@ except Exception as e:
         e
     )
 
+
     def update_product_rpc(*args, **kwargs):
 
         return {
             "success": False,
-            "message":
-                "update_product_rpc unavailable"
+            "message": "update_product_rpc unavailable"
         }
 
 
@@ -152,8 +186,7 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "request_product_create_rpc unavailable"
+            "message": "request_product_create_rpc unavailable"
         }
 
 
@@ -161,8 +194,7 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "request_product_bulk_create_rpc unavailable"
+            "message": "request_product_bulk_create_rpc unavailable"
         }
 
 
@@ -170,8 +202,7 @@ except Exception as e:
 
         return {
             "success": False,
-            "message":
-                "approve_product_create_rpc unavailable"
+            "message": "approve_product_create_rpc unavailable"
         }
 
 
@@ -181,37 +212,37 @@ except Exception as e:
 
 __all__ = [
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # CHECKOUT
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     "checkout_sale_rpc",
 
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # PURCHASE
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     "purchase_receive_rpc",
 
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # REFUND
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     "refund_sale_rpc",
 
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # STOCK
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     "stock_adjustment_rpc",
 
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # PRODUCT
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     "update_product_rpc",
 
