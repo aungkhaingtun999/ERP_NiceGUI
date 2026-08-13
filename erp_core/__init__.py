@@ -1,20 +1,8 @@
 # ==============================================================================
 # erp_core/__init__.py
-# ERP ENTERPRISE CORE EXPORT HUB v36.0
+# ERP ENTERPRISE CORE EXPORT HUB v36.0 FINAL
 #
 # PUBLIC API GATEWAY
-#
-# Legacy:
-#     from database import ...
-#
-# New:
-#     from erp_core import ...
-#
-# Maker / Checker:
-#     request_product_create_rpc
-#     request_product_bulk_create_rpc
-#     approve_product_create_rpc
-#
 # ==============================================================================
 
 
@@ -32,7 +20,7 @@ from .config import (
 
 
 # ==============================================================================
-# DATABASE & UTILITIES
+# DATABASE
 # ==============================================================================
 
 from .base_repo import (
@@ -62,7 +50,7 @@ from .context import (
 
 
 # ==============================================================================
-# PRODUCT LOADER
+# PRODUCT LOADERS
 # ==============================================================================
 
 try:
@@ -77,7 +65,8 @@ try:
 except Exception as e:
 
     log_error(
-        message="Product loader import failed",
+        message=
+            "Product loader import failed",
         exception=e,
     )
 
@@ -95,7 +84,7 @@ except Exception as e:
 
 
 # ==============================================================================
-# INVENTORY LOADER
+# INVENTORY
 # ==============================================================================
 
 try:
@@ -104,19 +93,14 @@ try:
         get_inventory_view,
     )
 
-except Exception as e:
-
-    log_error(
-        message="Inventory loader import failed",
-        exception=e,
-    )
+except Exception:
 
     def get_inventory_view(*args, **kwargs):
         return []
 
 
 # ==============================================================================
-# CUSTOMER LOADER
+# CUSTOMER
 # ==============================================================================
 
 try:
@@ -125,19 +109,14 @@ try:
         get_customers,
     )
 
-except Exception as e:
-
-    log_error(
-        message="Customer loader import failed",
-        exception=e,
-    )
+except Exception:
 
     def get_customers(*args, **kwargs):
         return []
 
 
 # ==============================================================================
-# SUPPLIER LOADER
+# SUPPLIER
 # ==============================================================================
 
 try:
@@ -146,19 +125,14 @@ try:
         get_suppliers,
     )
 
-except Exception as e:
-
-    log_error(
-        message="Supplier loader import failed",
-        exception=e,
-    )
+except Exception:
 
     def get_suppliers(*args, **kwargs):
         return []
 
 
 # ==============================================================================
-# CATEGORY LOADER
+# CATEGORY
 # ==============================================================================
 
 try:
@@ -167,19 +141,14 @@ try:
         get_categories,
     )
 
-except Exception as e:
-
-    log_error(
-        message="Category loader import failed",
-        exception=e,
-    )
+except Exception:
 
     def get_categories(*args, **kwargs):
         return []
 
 
 # ==============================================================================
-# SETTINGS LOADER
+# SETTINGS
 # ==============================================================================
 
 try:
@@ -188,12 +157,7 @@ try:
         get_setting,
     )
 
-except Exception as e:
-
-    log_error(
-        message="Settings loader import failed",
-        exception=e,
-    )
+except Exception:
 
     def get_setting(
         key,
@@ -203,7 +167,7 @@ except Exception as e:
 
 
 # ==============================================================================
-# WAREHOUSE LOADER
+# WAREHOUSE
 # ==============================================================================
 
 try:
@@ -216,7 +180,8 @@ try:
 except Exception as e:
 
     log_error(
-        message="Warehouse loader import failed",
+        message=
+            "Warehouse loader import failed",
         exception=e,
     )
 
@@ -228,7 +193,7 @@ except Exception as e:
 
 
 # ==============================================================================
-# RECEIPT LOADER
+# RECEIPT
 # ==============================================================================
 
 try:
@@ -240,12 +205,7 @@ try:
         search_receipts,
     )
 
-except Exception as e:
-
-    log_error(
-        message="Receipt loader import failed",
-        exception=e,
-    )
+except Exception:
 
     def get_receipt(*args, **kwargs):
         return None
@@ -254,6 +214,7 @@ except Exception as e:
         return []
 
     def get_full_receipt(*args, **kwargs):
+
         return {
             "success": False,
             "sale": {},
@@ -263,16 +224,6 @@ except Exception as e:
     def search_receipts(*args, **kwargs):
         return []
 
-
-# ==============================================================================
-# RPC PACKAGE
-#
-# IMPORTANT
-# ------------------------------------------------------------------------------
-# All public RPC functions come from erp_core.rpc
-#
-# DO NOT import the same RPC again from individual modules below.
-# ==============================================================================
 
 # ==============================================================================
 # RPC
@@ -305,7 +256,7 @@ except Exception as e:
     log_error(
         message=
             "ERP RPC package import failed",
-        exception=e
+        exception=e,
     )
 
     def checkout_sale_rpc(*args, **kwargs):
@@ -313,70 +264,63 @@ except Exception as e:
         return {
             "success": False,
             "message":
-                "checkout_sale_rpc unavailable"
+                "checkout_sale_rpc unavailable",
         }
-
 
     def purchase_receive_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "purchase_receive_rpc unavailable"
+                "purchase_receive_rpc unavailable",
         }
-
 
     def refund_sale_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "refund_sale_rpc unavailable"
+                "refund_sale_rpc unavailable",
         }
-
 
     def stock_adjustment_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "stock_adjustment_rpc unavailable"
+                "stock_adjustment_rpc unavailable",
         }
-
 
     def update_product_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "update_product_rpc unavailable"
+                "update_product_rpc unavailable",
         }
-
 
     def request_product_create_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "request_product_create_rpc unavailable"
+                "request_product_create_rpc unavailable",
         }
-
 
     def request_product_bulk_create_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "request_product_bulk_create_rpc unavailable"
+                "request_product_bulk_create_rpc unavailable",
         }
-
 
     def approve_product_create_rpc(*args, **kwargs):
 
         return {
             "success": False,
             "message":
-                "approve_product_create_rpc unavailable"
+                "approve_product_create_rpc unavailable",
         }
 
 
@@ -384,30 +328,49 @@ except Exception as e:
 # SERVICES
 # ==============================================================================
 
-
-# ------------------------------------------------------------------------------
-# SALES
-# ------------------------------------------------------------------------------
-
 try:
 
     from .services.sales_service import (
         SalesService,
     )
 
-except Exception as e:
-
-    log_error(
-        message="SalesService import failed",
-        exception=e,
-    )
+except Exception:
 
     SalesService = None
 
 
-# ------------------------------------------------------------------------------
-# RECEIPT
-# ------------------------------------------------------------------------------
+try:
+
+    from .services.purchase_service import (
+        PurchaseService,
+    )
+
+except Exception:
+
+    PurchaseService = None
+
+
+try:
+
+    from .services.inventory_service import (
+        InventoryService,
+    )
+
+except Exception:
+
+    InventoryService = None
+
+
+try:
+
+    from .services.refund_service import (
+        RefundService,
+    )
+
+except Exception:
+
+    RefundService = None
+
 
 try:
 
@@ -415,19 +378,10 @@ try:
         ReceiptService,
     )
 
-except Exception as e:
-
-    log_error(
-        message="ReceiptService import failed",
-        exception=e,
-    )
+except Exception:
 
     ReceiptService = None
 
-
-# ------------------------------------------------------------------------------
-# PAYMENT
-# ------------------------------------------------------------------------------
 
 try:
 
@@ -435,19 +389,10 @@ try:
         PaymentService,
     )
 
-except Exception as e:
-
-    log_error(
-        message="PaymentService import failed",
-        exception=e,
-    )
+except Exception:
 
     PaymentService = None
 
-
-# ------------------------------------------------------------------------------
-# PAYMENT QR
-# ------------------------------------------------------------------------------
 
 try:
 
@@ -455,12 +400,7 @@ try:
         PaymentQRService,
     )
 
-except Exception as e:
-
-    log_error(
-        message="PaymentQRService import failed",
-        exception=e,
-    )
+except Exception:
 
     PaymentQRService = None
 
@@ -468,11 +408,6 @@ except Exception as e:
 # ==============================================================================
 # HELPERS
 # ==============================================================================
-
-
-# ------------------------------------------------------------------------------
-# FIFO COGS
-# ------------------------------------------------------------------------------
 
 try:
 
@@ -485,10 +420,6 @@ except Exception:
     def get_fifo_cogs(*args, **kwargs):
         return 0
 
-
-# ------------------------------------------------------------------------------
-# AUDIT LOG
-# ------------------------------------------------------------------------------
 
 try:
 
@@ -507,18 +438,8 @@ except Exception:
 # ==============================================================================
 
 __all__ = [
-    "checkout_sale_rpc",
-    "purchase_receive_rpc",
-    "refund_sale_rpc",
-    "stock_adjustment_rpc",
-    "update_product_rpc",
-    "request_product_create_rpc",
-    "request_product_bulk_create_rpc",
-    "approve_product_create_rpc",
 
-    # ==========================================================================
     # DATABASE
-    # ==========================================================================
 
     "db",
     "privileged_db",
@@ -528,9 +449,7 @@ __all__ = [
     "DatabaseHealth",
     "database_health_check",
 
-    # ==========================================================================
     # CONFIG
-    # ==========================================================================
 
     "Tables",
     "CACHE_KEYS",
@@ -538,15 +457,11 @@ __all__ = [
     "ERP_VERSION",
     "log_error",
 
-    # ==========================================================================
     # CONTEXT
-    # ==========================================================================
 
     "CacheManager",
 
-    # ==========================================================================
     # PRODUCT
-    # ==========================================================================
 
     "get_products",
     "get_pos_products",
@@ -554,65 +469,62 @@ __all__ = [
     "refresh_products_cache",
     "get_inventory_view",
 
-    # ==========================================================================
     # SUPPLIER
-    # ==========================================================================
 
     "get_suppliers",
 
-    # ==========================================================================
     # CATEGORY
-    # ==========================================================================
 
     "get_categories",
 
-    # ==========================================================================
     # CUSTOMER
-    # ==========================================================================
 
     "get_customers",
 
-    # ==========================================================================
     # SETTINGS
-    # ==========================================================================
 
     "get_setting",
 
-    # ==========================================================================
     # WAREHOUSE
-    # ==========================================================================
 
     "get_default_warehouse_id",
     "get_warehouses",
 
-    # ==========================================================================
     # RECEIPT
-    # ==========================================================================
 
     "get_receipt",
     "get_sale_items",
     "get_full_receipt",
     "search_receipts",
 
-    # ==========================================================================
+    # RPC
+
+    "checkout_sale_rpc",
+    "purchase_receive_rpc",
+    "refund_sale_rpc",
+    "stock_adjustment_rpc",
+    "update_product_rpc",
+
+    "request_product_create_rpc",
+    "request_product_bulk_create_rpc",
+    "approve_product_create_rpc",
+
     # SERVICES
-    # ==========================================================================
 
     "SalesService",
+    "PurchaseService",
+    "InventoryService",
+    "RefundService",
     "ReceiptService",
     "PaymentService",
     "PaymentQRService",
 
-    # ==========================================================================
     # HELPERS
-    # ==========================================================================
 
     "get_fifo_cogs",
     "create_audit_log",
 
-    # ==========================================================================
     # UTILITIES
-    # ==========================================================================
 
     "money",
     "money_float",
