@@ -458,109 +458,133 @@ class ProductRepository(BaseRepository):
 
             return []
 
-    # ==========================================================================
-    # GET PRODUCTS
-    # ==========================================================================
 
+# ==========================================================================
+# GET PRODUCTS — PRODUCT MASTER
+# ==========================================================================
+#
+# IMPORTANT:
+# Product Master is NOT warehouse-specific.
+# Source of truth = products
+#
+# Warehouse stock must NOT determine Product Master count.
+#
+# ==========================================================================
 
-    def get_products(
+def get_products(
+    self,
+    warehouse_id: Optional[int] = None,
+    offset: int = 0,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
 
-        self,
+    try:
 
-        warehouse_id: Optional[int] = None,
-
-        offset: int = 0,
-
-        limit: int = 100
-
-    ) -> List[Dict[str, Any]]:
-
-
-        try:
-
-
-            query = (
-
-                self.client
-
-                .table(
-
-                    TABLE_PRODUCT_VIEW
-
-                )
-
-                .select(
-
-                    """
-                    *
-                    """
-
-                )
-
+        query = (
+            self.client
+            .table(TABLE_PRODUCTS)
+            .select(
+                """
+                id,
+                name,
+                sku,
+                barcode,
+                purchase_price,
+                selling_price,
+                owner_selling_price,
+                owner_price_locked,
+                final_selling_price,
+                price_source,
+                category_id,
+                minimum_stock,
+                unit,
+                notes,
+                is_active
+                """
             )
+            .order("id")
+        )
 
-
-
-            if warehouse_id is not None:
-
-
-                query = (
-
-                    query
-
-                    .eq(
-
-                        "warehouse_id",
-
-                        int(warehouse_id)
-
-                    )
-
-                )
-
-
-
-            result = (
-
-                query
-
-                .range(
-
-                    offset,
-
-                    offset + limit - 1
-
-                )
-
-                .execute()
-
+        result = (
+            query
+            .range(
+                offset,
+                offset + limit - 1
             )
+            .execute()
+        )
 
+        rows = []
 
+        for product in result.data or []:
 
-            return result.data or []
+            rows.append({
 
+                "id": product.get("id"),
 
+                "name": product.get("name"),
 
-        except Exception as e:
+                "sku": product.get("sku"),
 
+                "barcode": product.get("barcode"),
 
-            log_error(
+                "purchase_price":
+                    product.get("purchase_price", 0),
 
-                message=
+                "selling_price":
+                    product.get("selling_price", 0),
 
-                "Product get_products failed",
+                "owner_selling_price":
+                    product.get("owner_selling_price"),
 
-                exception=e
+                "owner_price_locked":
+                    product.get("owner_price_locked", False),
 
-            )
+                "final_selling_price":
+                    product.get(
+                        "final_selling_price",
+                        product.get("selling_price", 0)
+                    ),
 
+                "price_source":
+                    product.get(
+                        "price_source",
+                        "SYSTEM"
+                    ),
 
-            return []
+                "category_id":
+                    product.get("category_id"),
 
+                "minimum_stock":
+                    product.get("minimum_stock", 0),
 
+                "unit":
+                    product.get("unit", "pcs"),
 
+                "notes":
+                    product.get("notes"),
 
+                "is_active":
+                    product.get("is_active", True),
+
+                # Product Master has no warehouse stock.
+                "warehouse_id": None,
+                "qty": 0,
+                "reserved_qty": 0,
+                "available_qty": 0
+
+            })
+
+        return rows
+
+    except Exception as e:
+
+        log_error(
+            message="Product Master load failed",
+            exception=e
+        )
+
+        return []
 
     # ==========================================================================
     # GET SINGLE PRODUCT
