@@ -4,41 +4,35 @@
 # ERP ENTERPRISE PRODUCT MASTER BULK IMPORT
 # ------------------------------------------------------------------------------
 # CSV / Excel
-# Product Master
 # Maker-Checker
-# Request Product Create RPC
+# Pricing Engine Compatible
+#
+# IMPORTANT PRICING RULE
+# ------------------------------------------------------------------------------
+# CSV selling_price
+#       ↓
+# owner_selling_price
+#
+# selling_price is OPTIONAL.
+#
+# If selling_price is supplied:
+#       OWNER PRICE
+#       ↓
+#       create_product_full()
+#       ↓
+#       price_source = OWNER
+#
+# If selling_price is blank:
+#       owner_selling_price = NULL
+#       ↓
+#       Pricing Settings Engine
+#       ↓
+#       PRODUCT / CATEGORY / GLOBAL
 #
 # IMPORTANT:
-#   This module NEVER directly inserts into products.
+# This module NEVER creates products directly.
+# It ONLY calls request_product_create_rpc().
 #
-# FLOW:
-#
-# CSV / Excel
-#      ↓
-# Normalize
-#      ↓
-# Validate
-#      ↓
-# request_product_create_rpc()
-#      ↓
-# PENDING
-#      ↓
-# Product Approval Queue
-#      ↓
-# approve_product_create_rpc()
-#      ↓
-# create_product_full()
-#
-# Compatible with:
-#
-#     render_product_import(warehouse_id=...)
-#
-# and:
-#
-#     render_product_import(
-#         db_client=client,
-#         warehouse_id=warehouse_id,
-#     )
 # ==============================================================================
 
 import io
@@ -63,11 +57,6 @@ except ImportError:
 
 # ==============================================================================
 # IMPORT COLUMNS
-# ------------------------------------------------------------------------------
-# These are the ERP-supported Product Master import columns.
-#
-# tax_rate and minimum_stock are OPTIONAL for backward compatibility.
-# A CSV containing only the first 8 columns is valid.
 # ==============================================================================
 
 PRODUCT_IMPORT_COLUMNS = [
@@ -85,21 +74,17 @@ PRODUCT_IMPORT_COLUMNS = [
 
 
 # ==============================================================================
-# REQUIRED COLUMNS
-# ==============================================================================
-
-PRODUCT_REQUIRED_COLUMNS = [
-    "sku",
-    "barcode",
-    "name",
-    "unit",
-    "purchase_price",
-    "selling_price",
-]
-
-
-# ==============================================================================
 # TEMPLATE DATA
+# ==============================================================================
+#
+# selling_price is OPTIONAL in the validation logic.
+#
+# When supplied:
+#     selling_price = OWNER PRICE
+#
+# When blank:
+#     Pricing Settings will determine final selling price.
+#
 # ==============================================================================
 
 TEMPLATE_ROWS = [
@@ -108,7 +93,7 @@ TEMPLATE_ROWS = [
         "barcode": "890000000001",
         "name": "Myanmar Tea",
         "category": "Tea",
-        "brand": "Premium Food",
+        "brand": "Example Brand",
         "unit": "PCS",
         "purchase_price": 1000,
         "selling_price": 1200,
@@ -120,10 +105,10 @@ TEMPLATE_ROWS = [
         "barcode": "890000000002",
         "name": "Coffee",
         "category": "Coffee",
-        "brand": "Premium Food",
+        "brand": "Example Brand",
         "unit": "PCS",
         "purchase_price": 2000,
-        "selling_price": 2500,
+        "selling_price": "",
         "tax_rate": 0,
         "minimum_stock": 10,
     },
@@ -137,7 +122,7 @@ TEMPLATE_ROWS = [
 
 def _normalize_column_name(value):
     """
-    Normalize common CSV / Excel column names
+    Convert common CSV / Excel column names
     into ERP standard column names.
     """
 
@@ -177,14 +162,18 @@ def _normalize_column_name(value):
         "unit name": "unit",
         "unit_name": "unit",
 
-        # Purchase
+        # Purchase Price
         "purchase price": "purchase_price",
         "purchase_price": "purchase_price",
         "cost": "purchase_price",
         "cost price": "purchase_price",
         "cost_price": "purchase_price",
 
-        # Selling
+        # Selling Price
+        #
+        # IMPORTANT:
+        # selling_price is interpreted as OWNER PRICE
+        #
         "selling price": "selling_price",
         "selling_price": "selling_price",
         "sale price": "selling_price",
@@ -195,7 +184,7 @@ def _normalize_column_name(value):
         "tax rate": "tax_rate",
         "tax_rate": "tax_rate",
 
-        # Minimum stock
+        # Minimum Stock
         "minimum stock": "minimum_stock",
         "minimum_stock": "minimum_stock",
         "min stock": "minimum_stock",
@@ -213,19 +202,6 @@ def _normalize_column_name(value):
 def _normalize_dataframe(df):
     """
     Normalize uploaded DataFrame.
-
-    Missing OPTIONAL columns are automatically added.
-
-    The user's original 8-column format is therefore accepted:
-
-        sku
-        barcode
-        name
-        category
-        brand
-        unit
-        purchase_price
-        selling_price
     """
 
     if df is None:
@@ -233,34 +209,15 @@ def _normalize_dataframe(df):
 
     df = df.copy()
 
-    # Normalize headers
     df.columns = [
         _normalize_column_name(column)
         for column in df.columns
     ]
 
-    # Remove completely unnamed Excel columns
-    valid_columns = []
-
-    for column in df.columns:
-        column_name = str(column).strip()
-
-        if not column_name:
-            continue
-
-        if column_name.startswith("Unnamed:"):
-            continue
-
-        valid_columns.append(column)
-
-    df = df[valid_columns]
-
-    # Add missing ERP columns
     for column in PRODUCT_IMPORT_COLUMNS:
         if column not in df.columns:
             df[column] = ""
 
-    # Keep only ERP columns
     return df[PRODUCT_IMPORT_COLUMNS]
 
 
@@ -270,7 +227,6 @@ def _normalize_dataframe(df):
 
 
 def _read_csv(uploaded_file):
-
     if pd is None:
         raise RuntimeError(
             "pandas is not installed. "
@@ -279,7 +235,6 @@ def _read_csv(uploaded_file):
 
     raw = uploaded_file.getvalue()
 
-    # UTF-8 BOM
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -288,23 +243,11 @@ def _read_csv(uploaded_file):
             errors="replace",
         )
 
-    # First attempt: normal CSV
-    try:
-        return pd.read_csv(
-            io.StringIO(text),
-            dtype=str,
-            keep_default_na=False,
-        )
-    except Exception:
-
-        # Fallback for unusual delimiter
-        return pd.read_csv(
-            io.StringIO(text),
-            dtype=str,
-            keep_default_na=False,
-            sep=None,
-            engine="python",
-        )
+    return pd.read_csv(
+        io.StringIO(text),
+        dtype=str,
+        keep_default_na=False,
+    )
 
 
 # ==============================================================================
@@ -313,7 +256,6 @@ def _read_csv(uploaded_file):
 
 
 def _read_excel(uploaded_file):
-
     if pd is None:
         raise RuntimeError(
             "pandas is not installed. "
@@ -337,53 +279,24 @@ def _load_uploaded_file(uploaded_file):
     if uploaded_file is None:
         return None
 
-    filename = str(
-        uploaded_file.name
-    ).lower()
+    filename = uploaded_file.name.lower()
 
     if filename.endswith(".csv"):
-
         df = _read_csv(uploaded_file)
 
     elif filename.endswith(".xlsx"):
-
         df = _read_excel(uploaded_file)
 
     elif filename.endswith(".xls"):
-
         df = _read_excel(uploaded_file)
 
     else:
-
         raise ValueError(
             "Unsupported file format. "
             "Please upload CSV or Excel (.xlsx / .xls)."
         )
 
     return _normalize_dataframe(df)
-
-
-# ==============================================================================
-# VALIDATION HELPERS
-# ==============================================================================
-
-
-def _is_blank(value):
-
-    if value is None:
-        return True
-
-    return str(value).strip() == ""
-
-
-def _safe_float(value):
-
-    if _is_blank(value):
-        return None
-
-    return float(
-        str(value).strip()
-    )
 
 
 # ==============================================================================
@@ -403,10 +316,6 @@ def _validate_dataframe(df):
     # --------------------------------------------------------------------------
 
     for column in PRODUCT_IMPORT_COLUMNS:
-
-        if column not in df.columns:
-            df[column] = ""
-
         df[column] = (
             df[column]
             .fillna("")
@@ -425,9 +334,7 @@ def _validate_dataframe(df):
     # REQUIRED SKU
     # --------------------------------------------------------------------------
 
-    missing_sku = (
-        df["sku"] == ""
-    )
+    missing_sku = df["sku"] == ""
 
     df.loc[
         missing_sku,
@@ -435,37 +342,15 @@ def _validate_dataframe(df):
     ] = False
 
     df.loc[
-        missing_sku
-        & (df["error_message"] == ""),
+        missing_sku & (df["error_message"] == ""),
         "error_message",
     ] = "SKU is required"
-
-    # --------------------------------------------------------------------------
-    # REQUIRED BARCODE
-    # --------------------------------------------------------------------------
-
-    missing_barcode = (
-        df["barcode"] == ""
-    )
-
-    df.loc[
-        missing_barcode,
-        "is_valid",
-    ] = False
-
-    df.loc[
-        missing_barcode
-        & (df["error_message"] == ""),
-        "error_message",
-    ] = "Barcode is required"
 
     # --------------------------------------------------------------------------
     # REQUIRED NAME
     # --------------------------------------------------------------------------
 
-    missing_name = (
-        df["name"] == ""
-    )
+    missing_name = df["name"] == ""
 
     df.loc[
         missing_name,
@@ -473,136 +358,29 @@ def _validate_dataframe(df):
     ] = False
 
     df.loc[
-        missing_name
-        & (df["error_message"] == ""),
+        missing_name & (df["error_message"] == ""),
         "error_message",
     ] = "Product name is required"
 
     # --------------------------------------------------------------------------
-    # REQUIRED UNIT
+    # REQUIRED PURCHASE PRICE
+    # --------------------------------------------------------------------------
+    #
+    # Purchase price is required because the pricing engine needs a cost base.
+    #
     # --------------------------------------------------------------------------
 
-    missing_unit = (
-        df["unit"] == ""
-    )
+    missing_purchase_price = df["purchase_price"] == ""
 
     df.loc[
-        missing_unit,
+        missing_purchase_price,
         "is_valid",
     ] = False
 
     df.loc[
-        missing_unit
-        & (df["error_message"] == ""),
+        missing_purchase_price & (df["error_message"] == ""),
         "error_message",
-    ] = "Unit is required"
-
-    # --------------------------------------------------------------------------
-    # PURCHASE PRICE
-    # --------------------------------------------------------------------------
-
-    for index, value in df["purchase_price"].items():
-
-        if _is_blank(value):
-
-            df.loc[
-                index,
-                "is_valid",
-            ] = False
-
-            if not df.loc[
-                index,
-                "error_message",
-            ]:
-                df.loc[
-                    index,
-                    "error_message",
-                ] = "Purchase price is required"
-
-            continue
-
-        try:
-
-            number = float(
-                str(value).strip()
-            )
-
-            if number <= 0:
-                raise ValueError
-
-        except Exception:
-
-            df.loc[
-                index,
-                "is_valid",
-            ] = False
-
-            if not df.loc[
-                index,
-                "error_message",
-            ]:
-
-                df.loc[
-                    index,
-                    "error_message",
-                ] = "Invalid purchase_price"
-
-    # --------------------------------------------------------------------------
-    # SELLING PRICE
-    #
-    # The CSV selling_price is required as Product Master data.
-    #
-    # NOTE:
-    # Current create_product_full() pricing engine remains the DB
-    # source of truth for final_selling_price.
-    # --------------------------------------------------------------------------
-
-    for index, value in df["selling_price"].items():
-
-        if _is_blank(value):
-
-            df.loc[
-                index,
-                "is_valid",
-            ] = False
-
-            if not df.loc[
-                index,
-                "error_message",
-            ]:
-
-                df.loc[
-                    index,
-                    "error_message",
-                ] = "Selling price is required"
-
-            continue
-
-        try:
-
-            number = float(
-                str(value).strip()
-            )
-
-            if number <= 0:
-                raise ValueError
-
-        except Exception:
-
-            df.loc[
-                index,
-                "is_valid",
-            ] = False
-
-            if not df.loc[
-                index,
-                "error_message",
-            ]:
-
-                df.loc[
-                    index,
-                    "error_message",
-                ] = "Invalid selling_price"
+    ] = "Purchase price is required"
 
     # --------------------------------------------------------------------------
     # DUPLICATE SKU
@@ -610,9 +388,7 @@ def _validate_dataframe(df):
 
     duplicate_sku = (
         (df["sku"] != "")
-        & df["sku"].duplicated(
-            keep=False
-        )
+        & df["sku"].duplicated(keep=False)
     )
 
     df.loc[
@@ -621,8 +397,7 @@ def _validate_dataframe(df):
     ] = False
 
     df.loc[
-        duplicate_sku
-        & (df["error_message"] == ""),
+        duplicate_sku & (df["error_message"] == ""),
         "error_message",
     ] = "Duplicate SKU in import file"
 
@@ -630,39 +405,30 @@ def _validate_dataframe(df):
     # DUPLICATE BARCODE
     # --------------------------------------------------------------------------
 
-    barcode_mask = (
-        df["barcode"] != ""
-    )
+    barcode_mask = df["barcode"] != ""
 
-    duplicate_barcode = pd.Series(
-        False,
-        index=df.index,
-    )
-
-    if barcode_mask.any():
-
-        duplicate_values = (
-            df.loc[
-                barcode_mask,
-                "barcode",
-            ]
-            .duplicated(
-                keep=False
-            )
+    duplicate_barcode = (
+        barcode_mask
+        & df.loc[
+            barcode_mask,
+            "barcode",
+        ].duplicated(
+            keep=False,
         )
+    )
 
-        duplicate_barcode.loc[
-            duplicate_values.index
-        ] = duplicate_values.values
+    duplicate_barcode_indexes = (
+        duplicate_barcode[
+            duplicate_barcode
+        ].index
+    )
 
     df.loc[
-        duplicate_barcode,
+        duplicate_barcode_indexes,
         "is_valid",
     ] = False
 
-    for index in duplicate_barcode[
-        duplicate_barcode
-    ].index:
+    for index in duplicate_barcode_indexes:
 
         if not df.loc[
             index,
@@ -675,26 +441,27 @@ def _validate_dataframe(df):
             ] = "Duplicate barcode in import file"
 
     # --------------------------------------------------------------------------
-    # OPTIONAL NUMERIC COLUMNS
+    # NUMERIC VALIDATION
     # --------------------------------------------------------------------------
 
-    optional_numeric_columns = [
+    numeric_columns = [
+        "purchase_price",
+        "selling_price",
         "tax_rate",
         "minimum_stock",
     ]
 
-    for column in optional_numeric_columns:
+    for column in numeric_columns:
 
         for index, value in df[column].items():
 
-            if _is_blank(value):
+            # Optional columns can be blank.
+            if value == "":
                 continue
 
             try:
 
-                number = float(
-                    str(value).strip()
-                )
+                number = float(value)
 
                 if number < 0:
                     raise ValueError
@@ -714,18 +481,59 @@ def _validate_dataframe(df):
                     df.loc[
                         index,
                         "error_message",
-                    ] = (
-                        f"Invalid {column}"
-                    )
+                    ] = f"Invalid {column}"
+
+    # --------------------------------------------------------------------------
+    # OWNER PRICE VALIDATION
+    # --------------------------------------------------------------------------
+    #
+    # selling_price is OPTIONAL.
+    #
+    # If supplied:
+    #     it becomes owner_selling_price.
+    #
+    # It must be greater than zero.
+    #
+    # --------------------------------------------------------------------------
+
+    for index, value in df["selling_price"].items():
+
+        if value == "":
+            continue
+
+        try:
+
+            owner_price = float(value)
+
+            if owner_price <= 0:
+                raise ValueError
+
+        except Exception:
+
+            df.loc[
+                index,
+                "is_valid",
+            ] = False
+
+            if not df.loc[
+                index,
+                "error_message",
+            ]:
+
+                df.loc[
+                    index,
+                    "error_message",
+                ] = (
+                    "Owner selling price must be "
+                    "greater than zero"
+                )
 
     # --------------------------------------------------------------------------
     # FINAL COUNT
     # --------------------------------------------------------------------------
 
     error_count = int(
-        (
-            ~df["is_valid"]
-        ).sum()
+        (~df["is_valid"]).sum()
     )
 
     return df, error_count
@@ -748,7 +556,6 @@ def _create_csv_template():
     writer.writeheader()
 
     for row in TEMPLATE_ROWS:
-
         writer.writerow(row)
 
     return output.getvalue().encode(
@@ -802,13 +609,14 @@ def _render_template_section():
     ):
 
         st.write(
-            "Use this template to import hundreds "
-            "or thousands of Product Master items."
+            "Use this template to import hundreds or thousands "
+            "of Product Master items."
         )
 
-        st.caption(
-            "The first 8 columns are supported. "
-            "tax_rate and minimum_stock are optional."
+        st.info(
+            "💡 Selling Price is optional. "
+            "If supplied, it is treated as Owner Price. "
+            "If blank, ERP Pricing Settings will determine the final price."
         )
 
         if pd is not None:
@@ -838,9 +646,7 @@ def _render_template_section():
 
         with col2:
 
-            excel_data = (
-                _create_excel_template()
-            )
+            excel_data = _create_excel_template()
 
             if excel_data:
 
@@ -865,7 +671,7 @@ def _render_template_section():
 
 
 # ==============================================================================
-# IMPORT BATCH NUMBER
+# IMPORT BATCH HELPERS
 # ==============================================================================
 
 
@@ -875,9 +681,7 @@ def _generate_inventory_import_batch_no():
         "%Y%m%d"
     )
 
-    prefix = (
-        f"INV-IN-{today}-"
-    )
+    prefix = f"INV-IN-{today}-"
 
     sequence_key = (
         "inventory_import_batch_sequence"
@@ -906,9 +710,7 @@ def _on_click_generate_batch():
 
     st.session_state[
         "inventory_import_batch_no"
-    ] = (
-        _generate_inventory_import_batch_no()
-    )
+    ] = _generate_inventory_import_batch_no()
 
 
 # ==============================================================================
@@ -983,9 +785,9 @@ def _render_import_batch():
 def _get_current_user_id():
 
     """
-    Resolve current ERP user UUID.
+    Try common ERP session-state user ID keys.
 
-    Never invents a UUID.
+    Never invent a user ID.
     """
 
     candidate_keys = [
@@ -1015,10 +817,6 @@ def _get_current_user_id():
 
         except Exception:
             continue
-
-    # --------------------------------------------------------------------------
-    # USER OBJECT
-    # --------------------------------------------------------------------------
 
     user = st.session_state.get(
         "user"
@@ -1052,42 +850,44 @@ def _get_current_user_id():
 
 
 # ==============================================================================
-# RPC RESULT NORMALIZER
+# SAFE VALUE HELPERS
 # ==============================================================================
 
 
-def _normalize_rpc_result(result):
+def _text_or_none(value):
 
-    """
-    Supabase RPC may return:
+    if value is None:
+        return None
 
-        dict
+    value = str(value).strip()
 
-    or:
+    return (
+        value
+        if value
+        else None
+    )
 
-        [dict]
-    """
 
-    if isinstance(result, dict):
+def _float_or_none(value):
 
-        return result
+    value = _text_or_none(value)
 
-    if (
-        isinstance(result, list)
-        and result
-        and isinstance(
-            result[0],
-            dict,
-        )
-    ):
+    if value is None:
+        return None
 
-        return result[0]
+    return float(value)
 
-    return {
-        "success": False,
-        "status": "ERROR",
-        "message": str(result),
-    }
+
+def _int_or_zero(value):
+
+    value = _text_or_none(value)
+
+    if value is None:
+        return 0
+
+    return int(
+        float(value)
+    )
 
 
 # ==============================================================================
@@ -1102,89 +902,38 @@ def _row_to_product_data(
     """
     Convert one validated import row into the JSON payload
     expected by request_product_create_rpc().
+
+    IMPORTANT PRICING RULE:
+
+        CSV selling_price
+                ↓
+        owner_selling_price
+
+    selling_price is NOT treated as normal calculated selling
+    price.
+
+    If blank:
+        owner_selling_price = None
+
+    Then create_product_full() uses Pricing Settings.
     """
 
-    def _text_or_none(value):
-
-        if value is None:
-            return None
-
-        value = str(
-            value
-        ).strip()
-
-        return (
-            value
-            if value
-            else None
-        )
-
-    def _float_or_none(value):
-
-        value = _text_or_none(
-            value
-        )
-
-        if value is None:
-            return None
-
-        return float(value)
-
-    def _int_or_zero(value):
-
-        value = _text_or_none(
-            value
-        )
-
-        if value is None:
-            return 0
-
-        return int(
-            float(value)
-        )
-
-    purchase_price = (
-        _float_or_none(
-            row["purchase_price"]
-        )
-    )
-
-    selling_price = (
-        _float_or_none(
-            row["selling_price"]
-        )
-    )
-
-    tax_rate = (
-        _float_or_none(
-            row["tax_rate"]
-        )
-    )
-
-    minimum_stock = (
-        _int_or_zero(
-            row["minimum_stock"]
-        )
+    purchase_price = _float_or_none(
+        row["purchase_price"]
     )
 
     # --------------------------------------------------------------------------
-    # IMPORTANT
-    #
-    # Keep BOTH:
-    #
-    # selling_price
-    #
-    # and:
-    #
-    # owner_selling_price
-    #
-    # for compatibility with the current pricing architecture.
-    #
-    # We do NOT change the DB pricing engine here.
+    # CSV SELLING PRICE = OWNER PRICE
     # --------------------------------------------------------------------------
 
-    return {
+    owner_selling_price = _float_or_none(
+        row["selling_price"]
+    )
 
+    product_data = {
+        # ----------------------------------------------------------------------
+        # MASTER DATA
+        # ----------------------------------------------------------------------
         "sku": _text_or_none(
             row["sku"]
         ),
@@ -1209,32 +958,54 @@ def _row_to_product_data(
             row["unit"]
         ),
 
-        "purchase_price": (
-            purchase_price
+        # ----------------------------------------------------------------------
+        # COST
+        # ----------------------------------------------------------------------
+        "purchase_price": purchase_price,
+
+        # ----------------------------------------------------------------------
+        # IMPORTANT:
+        # CSV selling_price becomes OWNER PRICE
+        # ----------------------------------------------------------------------
+        "owner_selling_price": owner_selling_price,
+
+        # ----------------------------------------------------------------------
+        # Keep original CSV value as informational/reference data.
+        #
+        # create_product_full() does NOT use this as owner price.
+        # The canonical field is owner_selling_price.
+        # ----------------------------------------------------------------------
+        "selling_price": owner_selling_price,
+
+        # ----------------------------------------------------------------------
+        # OPTIONAL SETTINGS DATA
+        # ----------------------------------------------------------------------
+        "tax_rate": _float_or_none(
+            row["tax_rate"]
         ),
 
-        "selling_price": (
-            selling_price
+        "minimum_stock": _int_or_zero(
+            row["minimum_stock"]
         ),
 
-        "owner_selling_price": (
-            selling_price
-        ),
-
-        "tax_rate": tax_rate,
-
-        "minimum_stock": (
-            minimum_stock
-        ),
-
+        # ----------------------------------------------------------------------
+        # IMPORT BATCH
+        # ----------------------------------------------------------------------
         "batch_no": _text_or_none(
             batch_no
         ),
 
+        # ----------------------------------------------------------------------
+        # Pricing architecture
+        # ----------------------------------------------------------------------
         "price_source": (
-            "PRODUCT_IMPORT"
+            "OWNER"
+            if owner_selling_price is not None
+            else "PRICING_SERVICE"
         ),
     }
+
+    return product_data
 
 
 # ==============================================================================
@@ -1250,11 +1021,14 @@ def _submit_product_request(
     reason,
     batch_no=None,
 ):
+
     """
     Submit exactly ONE product creation request.
 
     IMPORTANT:
-        No direct INSERT into products.
+    This calls request_product_create_rpc().
+
+    It does NOT insert into products directly.
     """
 
     if client is None:
@@ -1275,27 +1049,71 @@ def _submit_product_request(
             "Current user ID could not be resolved."
         )
 
-    product_data = (
-        _row_to_product_data(
-            row,
-            batch_no=batch_no,
-        )
+    product_data = _row_to_product_data(
+        row,
+        batch_no=batch_no,
     )
 
     response = client.rpc(
         "request_product_create_rpc",
         {
             "p_product_data": product_data,
+
             "p_warehouse_id": int(
                 warehouse_id
             ),
+
             "p_initial_qty": 0,
+
             "p_reason": reason,
+
             "p_requested_by": requested_by,
         },
     ).execute()
 
     return response.data
+
+
+# ==============================================================================
+# RESULT NORMALIZATION
+# ==============================================================================
+
+
+def _extract_rpc_result(result):
+
+    """
+    Supabase RPC responses may come back as:
+
+        dict
+
+    or:
+
+        [dict]
+    """
+
+    if isinstance(
+        result,
+        dict,
+    ):
+
+        return result
+
+    if (
+        isinstance(result, list)
+        and result
+        and isinstance(
+            result[0],
+            dict,
+        )
+    ):
+
+        return result[0]
+
+    return {
+        "success": False,
+        "status": "ERROR",
+        "message": str(result),
+    }
 
 
 # ==============================================================================
@@ -1323,12 +1141,9 @@ def _submit_valid_products(
             "results": [],
         }
 
-    valid_df = (
-        validated_df[
-            validated_df["is_valid"] == True
-        ]
-        .copy()
-    )
+    valid_df = validated_df[
+        validated_df["is_valid"] == True
+    ].copy()
 
     if valid_df.empty:
 
@@ -1344,14 +1159,9 @@ def _submit_valid_products(
     failed = 0
 
     reason = (
-        "Product Master bulk import request"
+        "Product Master bulk import request "
+        "from Inventory UI"
     )
-
-    if batch_no:
-
-        reason += (
-            f" | Batch: {batch_no}"
-        )
 
     total = len(valid_df)
 
@@ -1362,7 +1172,10 @@ def _submit_valid_products(
         ),
     )
 
-    for position, (_, row) in enumerate(
+    for position, (
+        _,
+        row,
+    ) in enumerate(
         valid_df.iterrows(),
         start=1,
     ):
@@ -1377,50 +1190,29 @@ def _submit_valid_products(
 
         try:
 
-            raw_result = (
-                _submit_product_request(
-                    client=client,
-                    row=row,
-                    warehouse_id=warehouse_id,
-                    requested_by=requested_by,
-                    reason=reason,
-                    batch_no=batch_no,
-                )
+            result = _submit_product_request(
+                client=client,
+                row=row,
+                warehouse_id=warehouse_id,
+                requested_by=requested_by,
+                reason=reason,
+                batch_no=batch_no,
             )
 
-            result = (
-                _normalize_rpc_result(
-                    raw_result
-                )
+            rpc_result = _extract_rpc_result(
+                result
             )
 
             success = bool(
-                result.get(
+                rpc_result.get(
                     "success",
                     False,
                 )
             )
 
-            message = result.get(
-                "message",
-                "",
-            )
-
-            request_id = result.get(
-                "request_id"
-            )
-
-            status = result.get(
-                "status",
-                "",
-            )
-
             if success:
-
                 submitted += 1
-
             else:
-
                 failed += 1
 
             results.append(
@@ -1428,9 +1220,17 @@ def _submit_valid_products(
                     "sku": sku,
                     "name": name,
                     "success": success,
-                    "status": status,
-                    "message": message,
-                    "request_id": request_id,
+                    "status": rpc_result.get(
+                        "status",
+                        "",
+                    ),
+                    "message": rpc_result.get(
+                        "message",
+                        "",
+                    ),
+                    "request_id": rpc_result.get(
+                        "request_id"
+                    ),
                 }
             )
 
@@ -1534,35 +1334,41 @@ def _render_preview(
     st.markdown("---")
 
     # --------------------------------------------------------------------------
+    # PRICING INFORMATION
+    # --------------------------------------------------------------------------
+
+    st.info(
+        "💰 Pricing Rule: "
+        "CSV selling_price is treated as Owner Price. "
+        "If selling_price is blank, ERP Pricing Settings determine the final price."
+    )
+
+    # --------------------------------------------------------------------------
     # VALIDATION STATUS
     # --------------------------------------------------------------------------
 
     if error_count == 0:
 
         st.success(
-            "All Product Master rows "
-            "passed validation."
+            "All Product Master rows passed basic validation."
         )
 
     else:
 
         st.error(
-            f"{error_count} row(s) "
-            "require correction."
+            f"{error_count} row(s) require correction."
         )
 
     # --------------------------------------------------------------------------
     # PREVIEW TABS
     # --------------------------------------------------------------------------
 
-    tab_all, tab_valid, tab_errors = (
-        st.tabs(
-            [
-                "📋 All",
-                "✅ Valid",
-                "❌ Errors",
-            ]
-        )
+    tab_all, tab_valid, tab_errors = st.tabs(
+        [
+            "📋 All",
+            "✅ Valid",
+            "❌ Errors",
+        ]
     )
 
     with tab_all:
@@ -1575,12 +1381,9 @@ def _render_preview(
 
     with tab_valid:
 
-        valid_df = (
-            validated_df[
-                validated_df["is_valid"]
-                == True
-            ]
-        )
+        valid_df = validated_df[
+            validated_df["is_valid"] == True
+        ]
 
         st.dataframe(
             valid_df,
@@ -1590,12 +1393,9 @@ def _render_preview(
 
     with tab_errors:
 
-        error_df = (
-            validated_df[
-                validated_df["is_valid"]
-                == False
-            ]
-        )
+        error_df = validated_df[
+            validated_df["is_valid"] == False
+        ]
 
         if error_df.empty:
 
@@ -1614,14 +1414,14 @@ def _render_preview(
     st.markdown("---")
 
     # --------------------------------------------------------------------------
-    # BLOCK SUBMISSION
+    # BLOCK SUBMISSION IF VALIDATION FAILS
     # --------------------------------------------------------------------------
 
     if error_count > 0:
 
         st.warning(
-            "❌ Submission is disabled "
-            "until all error rows are corrected."
+            "❌ Submission is disabled until "
+            "all error rows are corrected."
         )
 
         return
@@ -1637,15 +1437,11 @@ def _render_preview(
     if not requested_by:
 
         st.error(
-            "Current ERP user ID could not "
-            "be resolved. Please log in again."
+            "Current ERP user ID could not be resolved. "
+            "Please log in again."
         )
 
         return
-
-    st.caption(
-        f"Maker User ID: `{requested_by}`"
-    )
 
     # --------------------------------------------------------------------------
     # DATABASE CLIENT
@@ -1672,21 +1468,13 @@ def _render_preview(
         return
 
     # --------------------------------------------------------------------------
-    # MAKER CHECKER INFORMATION
+    # MAKER-CHECKER
     # --------------------------------------------------------------------------
 
     st.info(
-        "⚠️ Submission creates PENDING "
-        "Product Master requests only. "
-        "Products will NOT be created until "
-        "a Checker approves them."
+        "⚠️ Submission creates PENDING Product Master requests only. "
+        "Products will NOT be created until a Checker approves them."
     )
-
-    if batch_no:
-
-        st.caption(
-            f"Import Batch: `{batch_no}`"
-        )
 
     # --------------------------------------------------------------------------
     # SUBMIT BUTTON
@@ -1707,76 +1495,72 @@ def _render_preview(
             "Submitting Product Master requests..."
         ):
 
-            result = (
-                _submit_valid_products(
-                    client=client,
-                    validated_df=validated_df,
-                    warehouse_id=warehouse_id,
-                    requested_by=requested_by,
-                    batch_no=batch_no,
+            result = _submit_valid_products(
+                client=client,
+                validated_df=validated_df,
+                warehouse_id=warehouse_id,
+                requested_by=requested_by,
+                batch_no=batch_no,
+            )
+
+            submitted = result.get(
+                "submitted",
+                0,
+            )
+
+            failed = result.get(
+                "failed",
+                0,
+            )
+
+            # ------------------------------------------------------------------
+            # RESULT
+            # ------------------------------------------------------------------
+
+            if submitted > 0:
+
+                st.success(
+                    f"✅ {submitted} Product request(s) "
+                    "submitted successfully as PENDING."
                 )
+
+            if failed > 0:
+
+                st.error(
+                    f"❌ {failed} Product request(s) failed."
+                )
+
+            # ------------------------------------------------------------------
+            # RESULT TABLE
+            # ------------------------------------------------------------------
+
+            results = result.get(
+                "results",
+                [],
             )
 
-        submitted = result.get(
-            "submitted",
-            0,
-        )
+            if results and pd is not None:
 
-        failed = result.get(
-            "failed",
-            0,
-        )
+                result_df = pd.DataFrame(
+                    results
+                )
 
-        # ----------------------------------------------------------------------
-        # RESULT
-        # ----------------------------------------------------------------------
+                st.dataframe(
+                    result_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
-        if submitted > 0:
+            # ------------------------------------------------------------------
+            # REFRESH APPROVAL QUEUE
+            # ------------------------------------------------------------------
 
-            st.success(
-                f"✅ {submitted} Product "
-                "request(s) submitted "
-                "successfully as PENDING."
-            )
+            if submitted > 0:
 
-        if failed > 0:
-
-            st.error(
-                f"❌ {failed} Product "
-                "request(s) failed."
-            )
-
-        # ----------------------------------------------------------------------
-        # RESULT TABLE
-        # ----------------------------------------------------------------------
-
-        results = result.get(
-            "results",
-            [],
-        )
-
-        if results:
-
-            result_df = pd.DataFrame(
-                results
-            )
-
-            st.dataframe(
-                result_df,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        # ----------------------------------------------------------------------
-        # APPROVAL QUEUE
-        # ----------------------------------------------------------------------
-
-        if submitted > 0:
-
-            st.info(
-                "Product requests are now "
-                "waiting in Product Approval Queue."
-            )
+                st.info(
+                    "Product requests are now waiting "
+                    "in Product Approval Queue."
+                )
 
 
 # ==============================================================================
@@ -1786,58 +1570,32 @@ def _render_preview(
 
 def render_product_import(
     warehouse_id=None,
-    db_client=None,
 ):
-    """
-    Main Product Import page.
-
-    Supports BOTH:
-
-        render_product_import(
-            warehouse_id=1
-        )
-
-    and:
-
-        render_product_import(
-            db_client=client,
-            warehouse_id=1
-        )
-    """
 
     st.subheader(
         "📦 Product Master Bulk Import"
     )
 
     st.caption(
-        "ERP Enterprise Product Master "
-        "| CSV / Excel "
-        "| Bulk Import "
-        "| Maker-Checker"
+        "ERP Enterprise Product Master | "
+        "CSV / Excel | Bulk Import | Maker-Checker"
     )
 
     # --------------------------------------------------------------------------
     # DATABASE CLIENT
-    #
-    # IMPORTANT:
-    # db_client is optional for backward compatibility.
     # --------------------------------------------------------------------------
 
-    client = db_client
+    try:
 
-    if client is None:
+        client = db()
 
-        try:
+    except Exception as e:
 
-            client = db()
+        st.error(
+            f"Database connection error: {e}"
+        )
 
-        except Exception as e:
-
-            st.error(
-                f"Database connection error: {e}"
-            )
-
-            return
+        return
 
     if client is None:
 
@@ -1861,8 +1619,7 @@ def render_product_import(
         return
 
     st.info(
-        f"Destination Warehouse ID: "
-        f"{warehouse_id}"
+        f"Destination Warehouse ID: {warehouse_id}"
     )
 
     st.markdown("---")
@@ -1913,16 +1670,14 @@ def render_product_import(
     if uploaded_file is None:
 
         st.info(
-            "Please upload a CSV or Excel "
-            "file to continue."
+            "Please upload a CSV or Excel file to continue."
         )
 
         return
 
     st.caption(
-        f"File: {uploaded_file.name} "
-        f"| Size: "
-        f"{uploaded_file.size:,} bytes"
+        f"File: {uploaded_file.name} | "
+        f"Size: {uploaded_file.size:,} bytes"
     )
 
     # --------------------------------------------------------------------------
@@ -1942,10 +1697,6 @@ def render_product_import(
         )
 
         return
-
-    # --------------------------------------------------------------------------
-    # EMPTY FILE
-    # --------------------------------------------------------------------------
 
     if df is None or df.empty:
 
