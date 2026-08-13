@@ -1,260 +1,745 @@
-# ==============================================================================
-# erp_core/rpc/__init__.py
-# ERP ENTERPRISE RPC PACKAGE v36.0 DEBUG-SAFE EXPORT HUB
-#
-# IMPORTANT
-# ------------------------------------------------------------------------------
-# Do NOT silently hide RPC import failures.
-# The real exception is printed so the broken module can be identified.
-# ==============================================================================
+==============================================================================
 
+erp_core/rpc/checkout_rpc.py
 
-print("============================================================")
-print("ERP RPC PACKAGE START")
-print("============================================================")
+ERP ENTERPRISE CHECKOUT RPC ENGINE v12.2 FINAL
 
 
-# ==============================================================================
-# CHECKOUT
-# ==============================================================================
 
-try:
+Responsibilities:
 
-    from .checkout_rpc import checkout_sale_rpc
+- Validate checkout request
 
-    print(
-        "ERP RPC CHECKOUT: OK"
-    )
+- Normalize cart payload
 
-except Exception as e:
+- Call Supabase RPC
 
-    print(
-        "============================================================"
-    )
+- Handle response safely
 
-    print(
-        "ERP RPC CHECKOUT IMPORT FAILED"
-    )
+- Refresh ERP cache
 
-    print(
-        "ERROR TYPE:",
-        type(e).__name__
-    )
 
-    print(
-        "ERROR:",
-        str(e)
-    )
 
-    print(
-        "============================================================"
-    )
+Database Function:
 
-    def checkout_sale_rpc(*args, **kwargs):
 
-        return {
-            "success": False,
-            "message": (
-                "checkout_sale_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
 
+checkout_sale_rpc(
 
-# ==============================================================================
-# PURCHASE
-# ==============================================================================
+p_cart,
 
-try:
+p_paid_amount,
 
-    from .purchase_rpc import purchase_receive_rpc
+p_warehouse_id,
 
-    print(
-        "ERP RPC PURCHASE: OK"
-    )
+p_cashier_id,
 
-except Exception as e:
+p_counter_id,
 
-    print(
-        "ERP RPC PURCHASE IMPORT FAILED:",
-        type(e).__name__,
-        str(e)
-    )
+p_payment_method,
 
-    def purchase_receive_rpc(*args, **kwargs):
+p_tax_rate,
 
-        return {
-            "success": False,
-            "message": (
-                "purchase_receive_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+p_discount
 
+)
 
-# ==============================================================================
-# REFUND
-# ==============================================================================
 
-try:
 
-    from .refund_rpc import refund_sale_rpc
+==============================================================================
 
-    print(
-        "ERP RPC REFUND: OK"
-    )
+from typing import (
 
-except Exception as e:
+Any,  
+Dict,  
+List,  
+Optional
 
-    print(
-        "ERP RPC REFUND IMPORT FAILED:",
-        type(e).__name__,
-        str(e)
-    )
+)
 
-    def refund_sale_rpc(*args, **kwargs):
+from ..base_repo import (
 
-        return {
-            "success": False,
-            "message": (
-                "refund_sale_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+db,  
 
+log_error
 
-# ==============================================================================
-# STOCK
-# ==============================================================================
+)
 
-try:
+from ..context import (
 
-    from .stock_rpc import stock_adjustment_rpc
+CacheManager
 
-    print(
-        "ERP RPC STOCK: OK"
-    )
+)
 
-except Exception as e:
+from ..config import (
 
-    print(
-        "ERP RPC STOCK IMPORT FAILED:",
-        type(e).__name__,
-        str(e)
-    )
+CACHE_KEYS
 
-    def stock_adjustment_rpc(*args, **kwargs):
+)
 
-        return {
-            "success": False,
-            "message": (
-                "stock_adjustment_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+==============================================================================
 
+SAFE CONVERTER
 
-# ==============================================================================
-# PRODUCT
-# ==============================================================================
+==============================================================================
 
-try:
+def safe_float(
 
-    from .product_rpc import (
+value,  
 
-        update_product_rpc,
+default=0
 
-        request_product_create_rpc,
+):
 
-        request_product_bulk_create_rpc,
+try:  
 
-        approve_product_create_rpc,
+    return float(value)  
 
-    )
 
-    print(
-        "ERP RPC PRODUCT: OK"
-    )
+except Exception:  
 
-except Exception as e:
+    return float(default)
 
-    print(
-        "ERP RPC PRODUCT IMPORT FAILED:",
-        type(e).__name__,
-        str(e)
-    )
+def safe_int(
 
-    def update_product_rpc(*args, **kwargs):
+value,  
 
-        return {
-            "success": False,
-            "message": (
-                "update_product_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+default=0
 
+):
 
-    def request_product_create_rpc(*args, **kwargs):
+try:  
 
-        return {
-            "success": False,
-            "message": (
-                "request_product_create_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+    return int(value)  
 
 
-    def request_product_bulk_create_rpc(*args, **kwargs):
+except Exception:  
 
-        return {
-            "success": False,
-            "message": (
-                "request_product_bulk_create_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+    return int(default)
 
+==============================================================================
 
-    def approve_product_create_rpc(*args, **kwargs):
+CART NORMALIZER
 
-        return {
-            "success": False,
-            "message": (
-                "approve_product_create_rpc import failed: "
-                f"{type(e).__name__}: {e}"
-            ),
-        }
+==============================================================================
 
+def normalize_cart(
 
-# ==============================================================================
-# PUBLIC EXPORTS
-# ==============================================================================
+cart: List[Dict[str, Any]]
 
-__all__ = [
+):
 
-    # CHECKOUT
-    "checkout_sale_rpc",
+result = []  
 
-    # PURCHASE
-    "purchase_receive_rpc",
 
-    # REFUND
-    "refund_sale_rpc",
 
-    # STOCK
-    "stock_adjustment_rpc",
+for item in cart:  
 
-    # PRODUCT
-    "update_product_rpc",
-    "request_product_create_rpc",
-    "request_product_bulk_create_rpc",
-    "approve_product_create_rpc",
 
-]
 
+    if not item.get(  
 
-print("============================================================")
-print("ERP RPC PACKAGE READY")
-print("============================================================")
+        "id"  
+
+    ):  
+
+        continue  
+
+
+
+
+
+    result.append(  
+
+        {  
+
+
+            "id":  
+
+                safe_int(  
+
+                    item.get(  
+
+                        "id"  
+
+                    )  
+
+                ),  
+
+
+
+            "qty":  
+
+                safe_int(  
+
+                    item.get(  
+
+                        "qty",  
+
+                        0  
+
+                    )  
+
+                ),  
+
+
+
+            "selling_price":  
+
+                safe_float(  
+
+                    item.get(  
+
+                        "selling_price",  
+
+                        item.get(  
+
+                            "unit_price",  
+
+                            0  
+
+                        )  
+
+                    )  
+
+                )  
+
+
+        }  
+
+    )  
+
+
+
+return result
+
+==============================================================================
+
+CACHE REFRESH
+
+==============================================================================
+
+def refresh_checkout_cache():
+
+try:  
+
+
+    CacheManager.bump(  
+
+        CACHE_KEYS["inventory"]  
+
+    )  
+
+
+
+except Exception:  
+
+    pass  
+
+
+
+
+
+try:  
+
+
+    CacheManager.bump(  
+
+        CACHE_KEYS["products"]  
+
+    )  
+
+
+
+except Exception:  
+
+    pass  
+
+
+
+
+
+try:  
+
+
+    CacheManager.bump(  
+
+        CACHE_KEYS["sales"]  
+
+    )  
+
+
+
+except Exception:  
+
+    pass
+
+==============================================================================
+
+CHECKOUT RPC
+
+==============================================================================
+
+def checkout_sale_rpc(
+
+cart: List[Dict[str, Any]],  
+
+
+paid_amount: Any = 0,  
+
+
+warehouse_id: Optional[int] = None,  
+
+
+cashier_id: Optional[str] = None,  
+
+
+counter_id: int = 1,  
+
+
+payment_method: str = "CASH",  
+
+
+tax_rate: Any = 0,  
+
+
+discount: Any = 0
+
+):
+
+try:  
+
+
+
+    # ----------------------------------------------------------  
+    # VALIDATION  
+    # ----------------------------------------------------------  
+
+
+    if not cart:  
+
+
+
+        return {  
+
+
+            "success":  
+
+                False,  
+
+
+            "message":  
+
+                "Cart is empty."  
+
+        }  
+
+
+
+
+
+
+    if warehouse_id is None:  
+
+
+
+        return {  
+
+
+            "success":  
+
+                False,  
+
+
+            "message":  
+
+                "Warehouse not selected."  
+
+        }  
+
+
+
+
+
+
+    if not cashier_id:  
+
+
+
+        return {  
+
+
+            "success":  
+
+                False,  
+
+
+            "message":  
+
+                "Cashier not found."  
+
+        }  
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # CART  
+    # ----------------------------------------------------------  
+
+
+    rpc_cart = normalize_cart(  
+
+        cart  
+
+    )  
+
+
+
+    if not rpc_cart:  
+
+
+
+        return {  
+
+
+            "success":  
+
+                False,  
+
+
+            "message":  
+
+                "Invalid cart data."  
+
+        }  
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # PAYLOAD  
+    # ----------------------------------------------------------  
+
+
+    payload = {  
+
+
+
+        "p_cart":  
+
+            rpc_cart,  
+
+
+
+        "p_paid_amount":  
+
+            safe_float(  
+
+                paid_amount  
+
+            ),  
+
+
+
+        "p_warehouse_id":  
+
+            safe_int(  
+
+                warehouse_id  
+
+            ),  
+
+
+
+        "p_cashier_id":  
+
+            cashier_id,  
+
+
+
+        "p_counter_id":  
+
+            safe_int(  
+
+                counter_id  
+
+            ),  
+
+
+
+        "p_payment_method":  
+
+            str(  
+
+                payment_method  
+
+            ).upper(),  
+
+
+
+        "p_tax_rate":  
+
+            safe_float(  
+
+                tax_rate  
+
+            ),  
+
+
+
+        "p_discount":  
+
+            safe_float(  
+
+                discount  
+
+            )  
+
+    }  
+
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # EXECUTE SUPABASE RPC  
+    # ----------------------------------------------------------  
+
+
+    response = (  
+
+        db()  
+
+        .rpc(  
+
+            "checkout_sale_rpc",  
+
+            payload  
+
+        )  
+
+        .execute()  
+
+    )  
+
+
+
+
+
+
+
+    result = getattr(  
+
+        response,  
+
+        "data",  
+
+        response  
+
+    )  
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # DICT RESPONSE  
+    # ----------------------------------------------------------  
+
+
+    if isinstance(  
+
+        result,  
+
+        dict  
+
+    ):  
+
+
+
+        if result.get(  
+
+            "success",  
+
+            False  
+
+        ):  
+
+
+            refresh_checkout_cache()  
+
+
+
+        return result  
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # LIST RESPONSE  
+    # ----------------------------------------------------------  
+
+
+    if isinstance(  
+
+        result,  
+
+        list  
+
+    ):  
+
+
+
+        if len(result) == 1 and isinstance(  
+
+            result[0],  
+
+            dict  
+
+        ):  
+
+
+
+            if result[0].get(  
+
+                "success",  
+
+                False  
+
+            ):  
+
+
+                refresh_checkout_cache()  
+
+
+
+            return result[0]  
+
+
+
+
+
+        return {  
+
+
+            "success":  
+
+                True,  
+
+
+            "data":  
+
+                result  
+
+        }  
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # EMPTY  
+    # ----------------------------------------------------------  
+
+
+    if result is None:  
+
+
+
+        return {  
+
+
+            "success":  
+
+                False,  
+
+
+            "message":  
+
+                "Empty RPC response."  
+
+        }  
+
+
+
+
+
+
+
+    # ----------------------------------------------------------  
+    # OTHER TYPE  
+    # ----------------------------------------------------------  
+
+
+    return {  
+
+
+        "success":  
+
+            True,  
+
+
+        "data":  
+
+            result  
+
+    }  
+
+
+
+
+
+
+
+except Exception as e:  
+
+
+
+    log_error(  
+
+        message=  
+
+            "checkout_sale_rpc failed",  
+
+        exception=  
+
+            e,  
+
+        rpc=  
+
+            "checkout_sale_rpc"  
+
+    )  
+
+
+
+    return {  
+
+
+        "success":  
+
+            False,  
+
+
+        "message":  
+
+            str(e)  
+
+    }
