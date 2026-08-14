@@ -996,90 +996,252 @@ else:
 
 
 # ==============================================================================
+# ==============================================================================
 # MAIN REPORT TABLE
 # ==============================================================================
 
-display_columns = [
-    "refund_id",
-    "invoice_no",
-    "refund_date",
-    "status",
-    "product_name",
-    "quantity",
-    "unit_price",
-    "refund_net_amount",
-    "refund_tax_amount",
-    "refund_total_amount",
-    "cashier_name",
-    "processed_by",
-    "warehouse_name",
-    "reason",
+st.divider()
+
+st.subheader(
+    "📋 Refund Report"
+)
+
+
+# ==============================================================================
+# REPORT DISPLAY AMOUNTS
+#
+# V4:
+#   refund_net_amount
+#   refund_tax_amount
+#   refund_total_amount
+#
+# Legacy:
+#   item_total -> Net / Total
+#   Tax -> 0
+# ==============================================================================
+
+report_table = filtered.copy()
+
+
+# ------------------------------------------------------------------------------
+# Net
+# ------------------------------------------------------------------------------
+
+report_table["display_net"] = report_table[
+    "refund_net_amount"
+]
+
+legacy_net = (
+    report_table["display_net"].isna()
+    |
+    (report_table["display_net"] == 0)
+) & (
+    report_table["item_total"] != 0
+)
+
+report_table.loc[
+    legacy_net,
+    "display_net"
+] = report_table.loc[
+    legacy_net,
+    "item_total"
 ]
 
 
-for col in display_columns:
+# ------------------------------------------------------------------------------
+# Tax
+# ------------------------------------------------------------------------------
 
-    if col not in filtered.columns:
-
-        filtered[col] = ""
-
-
-report_table = filtered[
-    display_columns
-].copy()
+report_table["display_tax"] = (
+    report_table[
+        "refund_tax_amount"
+    ]
+    .fillna(0)
+)
 
 
-report_table = report_table.rename(
-    columns={
-        "refund_id":
-            "Refund ID",
+# ------------------------------------------------------------------------------
+# Total
+# ------------------------------------------------------------------------------
 
-        "invoice_no":
-            "Invoice",
+report_table["display_total"] = report_table[
+    "refund_total_amount"
+]
 
-        "refund_date":
-            "Date",
+legacy_total = (
+    report_table["display_total"].isna()
+    |
+    (report_table["display_total"] == 0)
+) & (
+    report_table["item_total"] != 0
+)
 
-        "status":
-            "Status",
+report_table.loc[
+    legacy_total,
+    "display_total"
+] = report_table.loc[
+    legacy_total,
+    "item_total"
+]
 
-        "product_name":
-            "Product",
 
-        "quantity":
-            "Qty",
+# ==============================================================================
+# DISPLAY COLUMNS
+# ==============================================================================
 
-        "unit_price":
-            "Unit Price",
+display_df = pd.DataFrame(
+    {
+        "Refund ID":
+            report_table["refund_id"],
 
-        "refund_net_amount":
-            "Refund Net",
+        "Invoice No":
+            report_table["invoice_no"],
 
-        "refund_tax_amount":
-            "Refund Tax",
+        "Refund Date":
+            report_table[
+                "refund_date"
+            ].dt.strftime(
+                "%Y-%m-%d %H:%M"
+            ),
 
-        "refund_total_amount":
-            "Refund Total",
+        "Product":
+            report_table["product_name"],
 
-        "cashier_name":
-            "Cashier",
+        "Qty":
+            report_table["quantity"],
 
-        "processed_by":
-            "Processed By",
+        "Refund Net":
+            report_table["display_net"],
 
-        "warehouse_name":
-            "Warehouse",
+        "Refund Tax":
+            report_table["display_tax"],
 
-        "reason":
-            "Reason",
+        "Refund Total":
+            report_table["display_total"],
+
+        "Status":
+            report_table["status"],
+
+        "Cashier":
+            report_table["cashier_name"],
+
+        "Warehouse":
+            report_table["warehouse_name"],
     }
 )
 
 
-show_table(
-    report_table
+# ==============================================================================
+# NUMERIC FORMATTING
+# ==============================================================================
+
+display_df["Qty"] = (
+    pd.to_numeric(
+        display_df["Qty"],
+        errors="coerce",
+    )
+    .fillna(0)
 )
 
+
+for col in [
+    "Refund Net",
+    "Refund Tax",
+    "Refund Total",
+]:
+
+    display_df[col] = (
+        pd.to_numeric(
+            display_df[col],
+            errors="coerce",
+        )
+        .fillna(0)
+    )
+
+
+# ==============================================================================
+# SHOW TABLE
+# ==============================================================================
+
+st.dataframe(
+    display_df,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Refund ID": st.column_config.NumberColumn(
+            "Refund ID",
+            format="%d",
+        ),
+
+        "Qty": st.column_config.NumberColumn(
+            "Qty",
+            format="%.2f",
+        ),
+
+        "Refund Net": st.column_config.NumberColumn(
+            "Refund Net",
+            format="%,.2f MMK",
+        ),
+
+        "Refund Tax": st.column_config.NumberColumn(
+            "Refund Tax",
+            format="%,.2f MMK",
+        ),
+
+        "Refund Total": st.column_config.NumberColumn(
+            "Refund Total",
+            format="%,.2f MMK",
+        ),
+    },
+)
+
+
+# ==============================================================================
+# TABLE SUMMARY
+# ==============================================================================
+
+st.divider()
+
+s1, s2, s3 = st.columns(3)
+
+
+table_net = report_table[
+    "display_net"
+].sum()
+
+
+table_tax = report_table[
+    "display_tax"
+].sum()
+
+
+table_total = report_table[
+    "display_total"
+].sum()
+
+
+with s1:
+
+    st.metric(
+        "Report Net",
+        f"{table_net:,.2f} MMK",
+    )
+
+
+with s2:
+
+    st.metric(
+        "Report Tax",
+        f"{table_tax:,.2f} MMK",
+    )
+
+
+with s3:
+
+    st.metric(
+        "Report Total",
+        f"{table_total:,.2f} MMK",
+    )
 
 # ==============================================================================
 # ANALYTICS
