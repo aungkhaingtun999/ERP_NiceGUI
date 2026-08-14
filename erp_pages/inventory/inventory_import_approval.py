@@ -1,58 +1,38 @@
 # ==============================================================================
 # erp_pages/inventory/inventory_import_approval.py
 #
-# ERP ENTERPRISE INVENTORY IN APPROVAL v6.0
+# ERP ENTERPRISE INVENTORY IN APPROVAL
+# VERSION 7.0
 #
-# STEP 5 - LINE APPROVAL / REJECTION / BATCH CANCELLATION
+# STEP 5
+# ------------------------------------------------------------------------------
+# LINE APPROVAL
+# LINE REJECTION
+# BATCH CANCELLATION
 #
-# ==============================================================================
-#
-# WORKFLOW
+# ARCHITECTURE
 # ------------------------------------------------------------------------------
 #
-# inventory_import_batches
-#          ↓
-#        PENDING
-#          ↓
-#      Select Batch
-#          ↓
-#   Load Import Lines
-#          ↓
-# ┌─────────────────────────────────────────────┐
-# │                                             │
-# │ Select / Individual Lines                   │
-# │                                             │
-# └─────────────────────────────────────────────┘
-#          │
-#          ├───────────────────────┐
-#          │                       │
-#          ▼                       ▼
-#      APPROVE                   REJECT
-#          │                       │
-#          ▼                       ▼
-#   approve_inventory_       reject_inventory_
-#   import_batch()            import_lines()
-#          │                       │
-#          ▼                       ▼
-#       POSTED                  REJECTED
+# Streamlit UI
+#      ↓
+# Supabase RPC
+#      ↓
+# PostgreSQL Business Transaction
 #
+# UI NEVER directly modifies:
 #
-# BATCH LEVEL
-# ------------------------------------------------------------------------------
+# - inventory_import_batches
+# - inventory_import_lines
+# - warehouse_stock
+# - inventory_batches
+# - inventory_cost_layers
 #
-# PENDING
-#    │
-#    └── Cancel Batch
-#            │
-#            ▼
-#        CANCELLED
-#
-# ==============================================================================
+# ALL business rules remain inside PostgreSQL RPCs.
 #
 # VERIFIED RPCs
 # ------------------------------------------------------------------------------
 #
-# APPROVE:
+# APPROVE
 #
 # approve_inventory_import_batch(
 #     p_batch_no text,
@@ -61,7 +41,7 @@
 # )
 #
 #
-# REJECT:
+# REJECT
 #
 # reject_inventory_import_lines(
 #     p_batch_no text,
@@ -71,7 +51,7 @@
 # )
 #
 #
-# CANCEL:
+# CANCEL
 #
 # cancel_inventory_import_batch(
 #     p_batch_no text,
@@ -79,56 +59,24 @@
 #     p_reason text
 # )
 #
-# ==============================================================================
-#
-# FEATURES
+# IMPORTANT DATABASE NOTE
 # ------------------------------------------------------------------------------
 #
-# ✔ Batch selector
-# ✔ Select All pending valid lines
-# ✔ Clear All
-# ✔ Individual line selection
-# ✔ Already APPROVED lines disabled
-# ✔ Already REJECTED lines disabled
-# ✔ Invalid lines disabled
-# ✔ Maker-Checker enforced by SQL
-# ✔ Partial approval
-# ✔ Partial rejection
-# ✔ Approve selected lines
-# ✔ Reject selected lines
-# ✔ Rejection reason required
-# ✔ Batch cancellation
-# ✔ Cancellation reason required
-# ✔ Cancel confirmation required
-# ✔ Myanmar Standard Time display
-# ✔ Approval metadata
-# ✔ Rejection metadata
-# ✔ Batch cancellation metadata
-# ✔ Pending / Approved / Rejected counters
-# ✔ Atomic approval posting
-# ✔ SQL RPC owns business transaction
-# ✔ UI NEVER directly modifies inventory stock
+# inventory_import_lines DOES NOT have batch_no.
 #
-# IMPORTANT
-# ------------------------------------------------------------------------------
+# Relationship:
 #
-# Batch cancellation is allowed ONLY by the SQL RPC.
+# inventory_import_batches.id
+#          ↓
+# inventory_import_lines.batch_id
 #
-# UI does NOT:
-#
-# - update inventory_import_batches directly
-# - delete import lines
-# - modify warehouse_stock
-# - modify inventory_batches
-# - modify inventory_cost_layers
-#
-# All business rules remain inside PostgreSQL RPCs.
+# Therefore this UI NEVER selects/inserts/updates inventory_import_lines.batch_no.
 #
 # ==============================================================================
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -150,27 +98,33 @@ MYANMAR_TIMEZONE = ZoneInfo("Asia/Yangon")
 
 
 # ==============================================================================
-# SESSION STATE
+# SESSION STATE KEYS
+# ==============================================================================
+
+KEY_BATCH_NO = "inventory_import_approval_batch_no"
+KEY_SELECTED_LINES = "inventory_import_approval_selected_lines"
+KEY_REJECT_REASON = "inventory_import_approval_reject_reason"
+KEY_CANCEL_REASON = "inventory_import_approval_cancel_reason"
+KEY_CANCEL_CONFIRM = "inventory_import_approval_cancel_confirm"
+
+
+# ==============================================================================
+# SESSION INITIALIZATION
 # ==============================================================================
 
 def _initialize_state():
 
     defaults = {
 
-        # Currently selected batch
-        "inventory_import_approval_batch_no": None,
+        KEY_BATCH_NO: None,
 
-        # Selected line IDs
-        "inventory_import_approval_selected_lines": set(),
+        KEY_SELECTED_LINES: set(),
 
-        # Line rejection reason
-        "inventory_import_approval_reject_reason": "",
+        KEY_REJECT_REASON: "",
 
-        # Batch cancellation reason
-        "inventory_import_approval_cancel_reason": "",
+        KEY_CANCEL_REASON: "",
 
-        # Batch cancellation confirmation
-        "inventory_import_approval_cancel_confirm": False,
+        KEY_CANCEL_CONFIRM: False,
 
     }
 
@@ -187,11 +141,22 @@ def _initialize_state():
 
 def _get_current_user_id():
 
-    possible_keys = [
+    """
+    Try the common ERP session keys.
+
+    SQL RPC remains the final authority for:
+        - user existence
+        - active status
+        - role
+        - permission
+        - maker/checker segregation
+    """
+
+    possible_keys = (
         "user_id",
         "current_user_id",
         "logged_in_user_id",
-    ]
+    )
 
     for key in possible_keys:
 
@@ -205,21 +170,21 @@ def _get_current_user_id():
 
 
 # ==============================================================================
-# SAFE RPC RESULT
+# RPC RESULT NORMALIZER
 # ==============================================================================
 
 def _normalize_rpc_result(data):
 
     """
-    Supabase RPC may return:
+    Supabase RPC can return:
 
         dict
 
-    or occasionally:
+    or:
 
         [dict]
 
-    Normalize to dict.
+    Normalize both to one dict.
     """
 
     if isinstance(data, dict):
@@ -242,73 +207,7 @@ def _normalize_rpc_result(data):
 
 
 # ==============================================================================
-# MYSQL / POSTGRES TIMESTAMP → MYANMAR TIME
-# ==============================================================================
-
-def _format_myanmar_datetime(value):
-
-    """
-    Convert PostgreSQL timestamp-with-time-zone value
-    to Myanmar Standard Time.
-
-    Display only.
-
-    Database storage remains timezone-aware.
-    """
-
-    if value is None:
-
-        return "-"
-
-    try:
-
-        if isinstance(value, datetime):
-
-            dt = value
-
-        else:
-
-            text = str(value).strip()
-
-            if not text:
-
-                return "-"
-
-            # PostgreSQL ISO format may contain +00:00
-            # or trailing Z.
-            if text.endswith("Z"):
-
-                text = text[:-1] + "+00:00"
-
-            dt = datetime.fromisoformat(
-                text
-            )
-
-        # If timestamp has no timezone,
-        # treat it as UTC rather than guessing.
-        if dt.tzinfo is None:
-
-            from datetime import timezone
-
-            dt = dt.replace(
-                tzinfo=timezone.utc
-            )
-
-        dt = dt.astimezone(
-            MYANMAR_TIMEZONE
-        )
-
-        return dt.strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ) + " MMT"
-
-    except Exception:
-
-        return str(value)
-
-
-# ==============================================================================
-# DISPLAY
+# DISPLAY HELPERS
 # ==============================================================================
 
 def _display(value):
@@ -319,11 +218,15 @@ def _display(value):
 
     text = str(value).strip()
 
-    return text if text else "-"
+    if not text:
+
+        return "-"
+
+    return text
 
 
 # ==============================================================================
-# FORMAT NUMBER
+# NUMBER FORMAT
 # ==============================================================================
 
 def _format_number(value):
@@ -348,6 +251,147 @@ def _format_number(value):
 
 
 # ==============================================================================
+# BOOLEAN NORMALIZATION
+# ==============================================================================
+
+def _is_true(value):
+
+    if value is True:
+
+        return True
+
+    if isinstance(value, str):
+
+        return value.strip().lower() in {
+            "true",
+            "t",
+            "1",
+            "yes",
+        }
+
+    if isinstance(value, int):
+
+        return value == 1
+
+    return False
+
+
+# ==============================================================================
+# STATUS NORMALIZATION
+# ==============================================================================
+
+def _normalize_status(value):
+
+    return str(
+        value or STATUS_PENDING
+    ).strip().upper()
+
+
+# ==============================================================================
+# DATETIME → MYANMAR STANDARD TIME
+# ==============================================================================
+
+def _format_myanmar_datetime(value):
+
+    """
+    PostgreSQL timestamp display helper.
+
+    Database storage remains unchanged.
+
+    Display timezone:
+        Asia/Yangon
+        UTC +06:30
+    """
+
+    if value is None:
+
+        return "-"
+
+    try:
+
+        if isinstance(value, datetime):
+
+            dt = value
+
+        else:
+
+            text = str(value).strip()
+
+            if not text:
+
+                return "-"
+
+            if text.endswith("Z"):
+
+                text = text[:-1] + "+00:00"
+
+            dt = datetime.fromisoformat(
+                text
+            )
+
+        if dt.tzinfo is None:
+
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
+
+        dt = dt.astimezone(
+            MYANMAR_TIMEZONE
+        )
+
+        return (
+            dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            + " MMT"
+        )
+
+    except Exception:
+
+        return str(value)
+
+
+# ==============================================================================
+# CLEAR SELECTION
+# ==============================================================================
+
+def _clear_selected_lines():
+
+    st.session_state[
+        KEY_SELECTED_LINES
+    ] = set()
+
+
+# ==============================================================================
+# CLEAR REJECTION FORM
+# ==============================================================================
+
+def _clear_reject_reason():
+
+    st.session_state[
+        KEY_REJECT_REASON
+    ] = ""
+
+    # Do not directly mutate the text_area widget key.
+    # It will be reset on rerun because the application state is cleared.
+
+
+# ==============================================================================
+# CLEAR CANCELLATION FORM
+# ==============================================================================
+
+def _clear_cancel_form():
+
+    st.session_state[
+        KEY_CANCEL_REASON
+    ] = ""
+
+    st.session_state[
+        KEY_CANCEL_CONFIRM
+    ] = False
+
+
+# ==============================================================================
 # LOAD PENDING BATCHES
 # ==============================================================================
 
@@ -355,7 +399,9 @@ def _load_pending_batches(client):
 
     response = (
         client
-        .table("inventory_import_batches")
+        .table(
+            "inventory_import_batches"
+        )
         .select(
             """
             id,
@@ -393,14 +439,16 @@ def _load_pending_batches(client):
 
 
 # ==============================================================================
-# LOAD WAREHOUSE MAP
+# LOAD WAREHOUSES
 # ==============================================================================
 
 def _load_warehouse_map(client):
 
     response = (
         client
-        .table("warehouses")
+        .table(
+            "warehouses"
+        )
         .select(
             "id,name"
         )
@@ -412,14 +460,38 @@ def _load_warehouse_map(client):
 
     rows = response.data or []
 
-    return {
-        int(row["id"]): row.get(
-            "name",
-            "",
+    result = {}
+
+    for row in rows:
+
+        warehouse_id = row.get(
+            "id"
         )
-        for row in rows
-        if row.get("id") is not None
-    }
+
+        if warehouse_id is None:
+
+            continue
+
+        try:
+
+            warehouse_id = int(
+                warehouse_id
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            continue
+
+        result[
+            warehouse_id
+        ] = _display(
+            row.get("name")
+        )
+
+    return result
 
 
 # ==============================================================================
@@ -431,9 +503,20 @@ def _load_import_lines(
     batch_id,
 ):
 
+    """
+    IMPORTANT:
+
+    inventory_import_lines has batch_id,
+    NOT batch_no.
+
+    Therefore only batch_id is used here.
+    """
+
     response = (
         client
-        .table("inventory_import_lines")
+        .table(
+            "inventory_import_lines"
+        )
         .select(
             """
             id,
@@ -465,11 +548,98 @@ def _load_import_lines(
         )
         .order(
             "line_no",
+            desc=False,
         )
         .execute()
     )
 
     return response.data or []
+
+
+# ==============================================================================
+# SELECTABLE LINE IDS
+# ==============================================================================
+
+def _get_selectable_line_ids(lines):
+
+    selectable = set()
+
+    for line in lines:
+
+        line_id = line.get(
+            "id"
+        )
+
+        if line_id is None:
+
+            continue
+
+        if not _is_true(
+            line.get("is_valid")
+        ):
+
+            continue
+
+        status = _normalize_status(
+            line.get(
+                "approval_status"
+            )
+        )
+
+        if status != STATUS_PENDING:
+
+            continue
+
+        try:
+
+            selectable.add(
+                int(line_id)
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            continue
+
+    return selectable
+
+
+# ==============================================================================
+# CLEAN STALE SELECTION
+# ==============================================================================
+
+def _sync_selection_with_lines(lines):
+
+    selectable_ids = (
+        _get_selectable_line_ids(
+            lines
+        )
+    )
+
+    current = st.session_state.get(
+        KEY_SELECTED_LINES,
+        set(),
+    )
+
+    if not isinstance(
+        current,
+        set,
+    ):
+
+        current = set()
+
+    cleaned = (
+        current
+        & selectable_ids
+    )
+
+    st.session_state[
+        KEY_SELECTED_LINES
+    ] = cleaned
+
+    return cleaned
 
 
 # ==============================================================================
@@ -482,34 +652,16 @@ def _render_batch_summary(
     lines,
 ):
 
-    warehouse_id = batch.get(
-        "warehouse_to"
-    )
-
-    try:
-
-        warehouse_id = int(
-            warehouse_id
-        )
-
-    except (
-        TypeError,
-        ValueError,
-    ):
-
-        pass
-
-    warehouse_name = warehouse_map.get(
-        warehouse_id,
-        f"Warehouse {_display(warehouse_id)}",
+    batch_no = _display(
+        batch.get("batch_no")
     )
 
     st.markdown(
-        f"### 📦 {batch.get('batch_no', '-')}"
+        f"### 📦 {batch_no}"
     )
 
     # --------------------------------------------------------------------------
-    # MAIN BATCH METRICS
+    # BATCH METRICS
     # --------------------------------------------------------------------------
 
     c1, c2, c3, c4 = st.columns(4)
@@ -546,7 +698,7 @@ def _render_batch_summary(
     )
 
     # --------------------------------------------------------------------------
-    # LINE STATUS COUNTERS
+    # ACTUAL LINE COUNTERS
     # --------------------------------------------------------------------------
 
     pending_count = 0
@@ -556,18 +708,19 @@ def _render_batch_summary(
 
     for line in lines:
 
-        if line.get("is_valid") is not True:
+        if not _is_true(
+            line.get("is_valid")
+        ):
 
             invalid_count += 1
 
             continue
 
-        status = str(
+        status = _normalize_status(
             line.get(
-                "approval_status",
-                STATUS_PENDING,
+                "approval_status"
             )
-        ).upper()
+        )
 
         if status == STATUS_APPROVED:
 
@@ -588,79 +741,103 @@ def _render_batch_summary(
     s1, s2, s3, s4 = st.columns(4)
 
     s1.metric(
-        "Pending",
+        "⏳ Pending",
         pending_count,
     )
 
     s2.metric(
-        "Approved",
+        "✅ Approved",
         approved_count,
     )
 
     s3.metric(
-        "Rejected",
+        "❌ Rejected",
         rejected_count,
     )
 
     s4.metric(
-        "Invalid",
+        "⚠️ Invalid",
         invalid_count,
     )
 
     # --------------------------------------------------------------------------
-    # BATCH INFO
+    # WAREHOUSE
+    # --------------------------------------------------------------------------
+
+    warehouse_id = batch.get(
+        "warehouse_to"
+    )
+
+    try:
+
+        warehouse_id_int = int(
+            warehouse_id
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        warehouse_id_int = warehouse_id
+
+    warehouse_name = warehouse_map.get(
+        warehouse_id_int,
+        f"Warehouse {_display(warehouse_id)}",
+    )
+
+    st.caption(
+        f"🏭 Warehouse: {warehouse_name}"
+    )
+
+    # --------------------------------------------------------------------------
+    # MAKER
     # --------------------------------------------------------------------------
 
     st.caption(
-        f"Warehouse: {warehouse_name} | "
-        f"Maker: {_display(batch.get('requested_by'))}"
+        f"👤 Maker: "
+        f"{_display(batch.get('requested_by'))}"
     )
 
-    if batch.get("transaction_type"):
+    # --------------------------------------------------------------------------
+    # TRANSACTION TYPE
+    # --------------------------------------------------------------------------
+
+    transaction_type = batch.get(
+        "transaction_type"
+    )
+
+    if transaction_type:
 
         st.caption(
             f"Transaction Type: "
-            f"{_display(batch.get('transaction_type'))}"
-        )
-
-    if batch.get("remarks"):
-
-        st.caption(
-            f"Remarks: {_display(batch.get('remarks'))}"
+            f"{_display(transaction_type)}"
         )
 
     # --------------------------------------------------------------------------
-    # CREATED TIME
+    # REMARKS
+    # --------------------------------------------------------------------------
+
+    remarks = batch.get(
+        "remarks"
+    )
+
+    if remarks:
+
+        st.caption(
+            f"Remarks: {_display(remarks)}"
+        )
+
+    # --------------------------------------------------------------------------
+    # CREATED
     # --------------------------------------------------------------------------
 
     st.caption(
-        f"Created: "
-        f"{_format_myanmar_datetime(batch.get('created_at'))}"
+        "Created: "
+        + _format_myanmar_datetime(
+            batch.get("created_at")
+        )
     )
-
-
-# ==============================================================================
-# SELECTION HELPERS
-# ==============================================================================
-
-def _get_selectable_line_ids(lines):
-
-    return {
-        int(line["id"])
-
-        for line in lines
-
-        if line.get("id") is not None
-
-        and line.get("is_valid") is True
-
-        and str(
-            line.get(
-                "approval_status",
-                STATUS_PENDING,
-            )
-        ).upper() == STATUS_PENDING
-    }
 
 
 # ==============================================================================
@@ -669,50 +846,15 @@ def _get_selectable_line_ids(lines):
 
 def _select_all_lines(lines):
 
-    selected = _get_selectable_line_ids(
-        lines
+    selectable = (
+        _get_selectable_line_ids(
+            lines
+        )
     )
 
     st.session_state[
-        "inventory_import_approval_selected_lines"
-    ] = selected
-
-
-# ==============================================================================
-# CLEAR ALL
-# ==============================================================================
-
-def _clear_all_lines():
-
-    st.session_state[
-        "inventory_import_approval_selected_lines"
-    ] = set()
-
-
-# ==============================================================================
-# CLEAR REJECT REASON
-# ==============================================================================
-
-def _clear_reject_reason():
-
-    st.session_state[
-        "inventory_import_approval_reject_reason"
-    ] = ""
-
-
-# ==============================================================================
-# CLEAR CANCEL REASON
-# ==============================================================================
-
-def _clear_cancel_reason():
-
-    st.session_state[
-        "inventory_import_approval_cancel_reason"
-    ] = ""
-
-    st.session_state[
-        "inventory_import_approval_cancel_confirm"
-    ] = False
+        KEY_SELECTED_LINES
+    ] = set(selectable)
 
 
 # ==============================================================================
@@ -727,49 +869,33 @@ def _render_line_selection(
         "### 📋 Import Lines"
     )
 
-    selectable_line_ids = _get_selectable_line_ids(
+    selectable_ids = (
+        _get_selectable_line_ids(
+            lines
+        )
+    )
+
+    current = _sync_selection_with_lines(
         lines
     )
 
-    current_selection = st.session_state.get(
-        "inventory_import_approval_selected_lines",
-        set(),
-    )
-
-    if not isinstance(
-        current_selection,
-        set,
-    ):
-
-        current_selection = set()
-
     # --------------------------------------------------------------------------
-    # Remove stale selections
-    # --------------------------------------------------------------------------
-
-    current_selection = (
-        current_selection
-        & selectable_line_ids
-    )
-
-    st.session_state[
-        "inventory_import_approval_selected_lines"
-    ] = current_selection
-
-    # --------------------------------------------------------------------------
-    # Selection controls
+    # TOP CONTROLS
     # --------------------------------------------------------------------------
 
     select_col, clear_col, info_col = st.columns(
-        [1.4, 1.3, 4]
+        [1.5, 1.3, 4]
     )
 
     with select_col:
 
         if st.button(
             "☑️ Select All Lines",
-            key="inventory_import_select_all_lines",
+            key=(
+                "inventory_import_select_all_lines_v7"
+            ),
             use_container_width=True,
+            disabled=not selectable_ids,
         ):
 
             _select_all_lines(
@@ -782,41 +908,43 @@ def _render_line_selection(
 
         if st.button(
             "⬜ Clear All",
-            key="inventory_import_clear_all_lines",
+            key=(
+                "inventory_import_clear_all_lines_v7"
+            ),
             use_container_width=True,
         ):
 
-            _clear_all_lines()
+            _clear_selected_lines()
 
             st.rerun()
 
     with info_col:
 
         st.caption(
-            f"Selected: {len(current_selection)} "
-            f"/ {len(selectable_line_ids)} selectable lines"
+            f"Selected: {len(current)} "
+            f"/ {len(selectable_ids)} selectable lines"
         )
 
     st.markdown("---")
 
     # --------------------------------------------------------------------------
-    # Lines
+    # RENDER EACH LINE
     # --------------------------------------------------------------------------
 
     for line in lines:
 
-        line_id = line.get(
+        line_id_raw = line.get(
             "id"
         )
 
-        if line_id is None:
+        if line_id_raw is None:
 
             continue
 
         try:
 
             line_id = int(
-                line_id
+                line_id_raw
             )
 
         except (
@@ -826,42 +954,40 @@ def _render_line_selection(
 
             continue
 
-        is_valid = (
+        is_valid = _is_true(
             line.get("is_valid")
-            is True
         )
 
-        approval_status = str(
+        status = _normalize_status(
             line.get(
-                "approval_status",
-                STATUS_PENDING,
+                "approval_status"
             )
-        ).upper()
+        )
+
+        is_pending = (
+            status == STATUS_PENDING
+        )
 
         is_approved = (
-            approval_status
-            == STATUS_APPROVED
+            status == STATUS_APPROVED
         )
 
         is_rejected = (
-            approval_status
-            == STATUS_REJECTED
+            status == STATUS_REJECTED
         )
 
         is_selectable = (
             is_valid
-            and not is_approved
-            and not is_rejected
+            and is_pending
         )
 
         is_selected = (
-            line_id
-            in current_selection
+            line_id in current
         )
 
-        # ----------------------------------------------------------------------
+        # ======================================================================
         # LINE CARD
-        # ----------------------------------------------------------------------
+        # ======================================================================
 
         with st.container(
             border=True
@@ -877,46 +1003,48 @@ def _render_line_selection(
 
             with select_col:
 
+                checkbox_key = (
+                    "inventory_import_line_"
+                    f"select_v7_{line_id}"
+                )
+
                 selected = st.checkbox(
                     f"Line {line.get('line_no', '-')}",
                     value=is_selected,
                     disabled=not is_selectable,
-                    key=(
-                        "inventory_import_line_select_"
-                        f"{line_id}"
-                    ),
+                    key=checkbox_key,
                 )
 
-                current = st.session_state.get(
-                    "inventory_import_approval_selected_lines",
+                current_selection = st.session_state.get(
+                    KEY_SELECTED_LINES,
                     set(),
                 )
 
                 if not isinstance(
-                    current,
+                    current_selection,
                     set,
                 ):
 
-                    current = set()
+                    current_selection = set()
 
                 if (
                     is_selectable
                     and selected
                 ):
 
-                    current.add(
+                    current_selection.add(
                         line_id
                     )
 
                 else:
 
-                    current.discard(
+                    current_selection.discard(
                         line_id
                     )
 
                 st.session_state[
-                    "inventory_import_approval_selected_lines"
-                ] = current
+                    KEY_SELECTED_LINES
+                ] = current_selection
 
             # ------------------------------------------------------------------
             # DATA
@@ -927,52 +1055,72 @@ def _render_line_selection(
                 c1, c2, c3 = st.columns(3)
 
                 c1.write(
-                    f"**SKU**  \n"
-                    f"{_display(line.get('sku'))}"
+                    "**SKU**\n\n"
+                    + _display(
+                        line.get("sku")
+                    )
                 )
 
                 c2.write(
-                    f"**Quantity**  \n"
-                    f"{_format_number(line.get('qty'))}"
+                    "**Quantity**\n\n"
+                    + _format_number(
+                        line.get("qty")
+                    )
                 )
 
                 c3.write(
-                    f"**Unit Cost**  \n"
-                    f"{_format_number(line.get('unit_cost'))}"
+                    "**Unit Cost**\n\n"
+                    + _format_number(
+                        line.get("unit_cost")
+                    )
                 )
 
                 c4, c5, c6 = st.columns(3)
 
                 c4.write(
-                    f"**Lot No**  \n"
-                    f"{_display(line.get('lot_no'))}"
+                    "**Lot No**\n\n"
+                    + _display(
+                        line.get("lot_no")
+                    )
                 )
 
                 c5.write(
-                    f"**MFG Date**  \n"
-                    f"{_display(line.get('mfg_date'))}"
+                    "**MFG Date**\n\n"
+                    + _display(
+                        line.get("mfg_date")
+                    )
                 )
 
                 c6.write(
-                    f"**Expiry Date**  \n"
-                    f"{_display(line.get('expiry_date'))}"
+                    "**Expiry Date**\n\n"
+                    + _display(
+                        line.get("expiry_date")
+                    )
                 )
 
                 c7, c8 = st.columns(2)
 
                 c7.write(
-                    f"**Reference No**  \n"
-                    f"{_display(line.get('reference_no'))}"
+                    "**Reference No**\n\n"
+                    + _display(
+                        line.get(
+                            "reference_no"
+                        )
+                    )
                 )
 
                 c8.write(
-                    f"**Supplier Code**  \n"
-                    f"{_display(line.get('supplier_code'))}"
+                    "**Supplier Code**\n\n"
+                    + _display(
+                        line.get(
+                            "supplier_code"
+                        )
+                    )
                 )
 
-                # --------------------------------------------------------------
+                # ==============================================================
                 # APPROVED
-                # --------------------------------------------------------------
+                # ==============================================================
 
                 if is_approved:
 
@@ -981,18 +1129,26 @@ def _render_line_selection(
                     )
 
                     st.caption(
-                        f"Approved By: "
-                        f"{_display(line.get('approved_by'))}"
+                        "Approved By: "
+                        + _display(
+                            line.get(
+                                "approved_by"
+                            )
+                        )
                     )
 
                     st.caption(
-                        f"Approved At: "
-                        f"{_format_myanmar_datetime(line.get('approved_at'))}"
+                        "Approved At: "
+                        + _format_myanmar_datetime(
+                            line.get(
+                                "approved_at"
+                            )
+                        )
                     )
 
-                # --------------------------------------------------------------
+                # ==============================================================
                 # REJECTED
-                # --------------------------------------------------------------
+                # ==============================================================
 
                 elif is_rejected:
 
@@ -1001,33 +1157,45 @@ def _render_line_selection(
                     )
 
                     st.caption(
-                        f"Rejected By: "
-                        f"{_display(line.get('rejected_by'))}"
+                        "Rejected By: "
+                        + _display(
+                            line.get(
+                                "rejected_by"
+                            )
+                        )
                     )
 
                     st.caption(
-                        f"Rejected At: "
-                        f"{_format_myanmar_datetime(line.get('rejected_at'))}"
+                        "Rejected At: "
+                        + _format_myanmar_datetime(
+                            line.get(
+                                "rejected_at"
+                            )
+                        )
                     )
 
                     st.caption(
-                        f"Reason: "
-                        f"{_display(line.get('rejection_reason'))}"
+                        "Reason: "
+                        + _display(
+                            line.get(
+                                "rejection_reason"
+                            )
+                        )
                     )
 
-                # --------------------------------------------------------------
-                # PENDING
-                # --------------------------------------------------------------
+                # ==============================================================
+                # VALID + PENDING
+                # ==============================================================
 
-                elif is_valid:
+                elif is_valid and is_pending:
 
                     st.info(
                         "⏳ PENDING"
                     )
 
-                # --------------------------------------------------------------
+                # ==============================================================
                 # INVALID
-                # --------------------------------------------------------------
+                # ==============================================================
 
                 else:
 
@@ -1035,16 +1203,16 @@ def _render_line_selection(
                         "⚠️ INVALID"
                     )
 
-                    if line.get(
+                    error_message = line.get(
                         "error_message"
-                    ):
+                    )
+
+                    if error_message:
 
                         st.caption(
                             "Error: "
                             + str(
-                                line.get(
-                                    "error_message"
-                                )
+                                error_message
                             )
                         )
 
@@ -1068,11 +1236,9 @@ def _approve_selected_lines(
                 "p_batch_no": str(
                     batch_no
                 ),
-
                 "p_checker_id": str(
                     checker_id
                 ),
-
                 "p_line_ids": [
                     int(x)
                     for x in line_ids
@@ -1107,16 +1273,13 @@ def _reject_selected_lines(
                 "p_batch_no": str(
                     batch_no
                 ),
-
                 "p_checker_id": str(
                     checker_id
                 ),
-
                 "p_line_ids": [
                     int(x)
                     for x in line_ids
                 ],
-
                 "p_reason": str(
                     reason
                 ).strip(),
@@ -1149,11 +1312,9 @@ def _cancel_inventory_batch(
                 "p_batch_no": str(
                     batch_no
                 ),
-
                 "p_checker_id": str(
                     checker_id
                 ),
-
                 "p_reason": str(
                     reason
                 ).strip(),
@@ -1176,34 +1337,26 @@ def _render_selection_summary(
     checker_id,
 ):
 
-    selected_line_ids = st.session_state.get(
-        "inventory_import_approval_selected_lines",
+    selected_ids = st.session_state.get(
+        KEY_SELECTED_LINES,
         set(),
     )
 
     if not isinstance(
-        selected_line_ids,
+        selected_ids,
         set,
     ):
 
-        selected_line_ids = set()
+        selected_ids = set()
 
     selected_lines = []
 
     for line in lines:
 
-        line_id = line.get(
-            "id"
-        )
-
-        if line_id is None:
-
-            continue
-
         try:
 
             line_id = int(
-                line_id
+                line.get("id")
             )
 
         except (
@@ -1213,7 +1366,7 @@ def _render_selection_summary(
 
             continue
 
-        if line_id in selected_line_ids:
+        if line_id in selected_ids:
 
             selected_lines.append(
                 line
@@ -1225,17 +1378,26 @@ def _render_selection_summary(
         "### 📊 Selection Summary"
     )
 
-    total_selected_qty = sum(
-        float(
-            line.get(
-                "qty",
-                0,
-            )
-            or 0
-        )
+    total_qty = 0.0
 
-        for line in selected_lines
-    )
+    for line in selected_lines:
+
+        try:
+
+            total_qty += float(
+                line.get(
+                    "qty",
+                    0,
+                )
+                or 0
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            pass
 
     c1, c2, c3 = st.columns(3)
 
@@ -1247,7 +1409,7 @@ def _render_selection_summary(
     c2.metric(
         "Selected Quantity",
         _format_number(
-            total_selected_qty
+            total_qty
         ),
     )
 
@@ -1269,8 +1431,8 @@ def _render_selection_summary(
 
             st.write(
                 f"• Line "
-                f"{line.get('line_no')} | "
-                f"{line.get('sku')} | "
+                f"{_display(line.get('line_no'))} | "
+                f"{_display(line.get('sku'))} | "
                 f"Qty "
                 f"{_format_number(line.get('qty'))}"
             )
@@ -1278,18 +1440,18 @@ def _render_selection_summary(
     else:
 
         st.info(
-            "Approve / Reject လုပ်မည့် "
-            "Line များကို အပေါ်မှ ရွေးချယ်ပါ။"
+            "Approve / Reject ပြုလုပ်ရန် "
+            "အပေါ်မှ Pending line များကို ရွေးချယ်ပါ။"
         )
 
     return (
-        selected_line_ids,
+        selected_ids,
         selected_lines,
     )
 
 
 # ==============================================================================
-# LINE APPROVAL / REJECTION ACTION PANEL
+# LINE ACTION PANEL
 # ==============================================================================
 
 def _render_action_panel(
@@ -1322,23 +1484,25 @@ def _render_action_panel(
         "#### ❌ Rejection Reason"
     )
 
-    reject_reason = st.text_area(
+    reject_reason_input = st.text_area(
         "Reject Reason",
         value=st.session_state.get(
-            "inventory_import_approval_reject_reason",
+            KEY_REJECT_REASON,
             "",
         ),
         placeholder=(
             "ဥပမာ - Quantity မမှန်ပါ၊ "
             "Lot No မမှန်ပါ၊ Unit Cost ပြန်စစ်ရန်..."
         ),
-        key="inventory_import_reject_reason_input",
+        key=(
+            "inventory_import_reject_reason_input_v7"
+        ),
         height=100,
     )
 
     st.session_state[
-        "inventory_import_approval_reject_reason"
-    ] = reject_reason
+        KEY_REJECT_REASON
+    ] = reject_reason_input
 
     st.caption(
         "Reject လုပ်ရာတွင် Reason မဖြစ်မနေထည့်ရပါမည်။"
@@ -1347,11 +1511,11 @@ def _render_action_panel(
     st.markdown("---")
 
     approve_col, reject_col, clear_col = st.columns(
-        [2.2, 2.2, 1.4]
+        [2.2, 2.2, 1.3]
     )
 
     # ==========================================================================
-    # APPROVE
+    # APPROVE BUTTON
     # ==========================================================================
 
     with approve_col:
@@ -1361,12 +1525,12 @@ def _render_action_panel(
             use_container_width=True,
             key=(
                 "inventory_import_"
-                "approve_selected_lines"
+                "approve_selected_lines_v7"
             ),
         )
 
     # ==========================================================================
-    # REJECT
+    # REJECT BUTTON
     # ==========================================================================
 
     with reject_col:
@@ -1376,7 +1540,7 @@ def _render_action_panel(
             use_container_width=True,
             key=(
                 "inventory_import_"
-                "reject_selected_lines"
+                "reject_selected_lines_v7"
             ),
         )
 
@@ -1391,17 +1555,17 @@ def _render_action_panel(
             use_container_width=True,
             key=(
                 "inventory_import_"
-                "clear_action_selection"
+                "clear_action_selection_v7"
             ),
         )
 
     # ==========================================================================
-    # CLEAR UI
+    # CLEAR
     # ==========================================================================
 
     if clear_clicked:
 
-        _clear_all_lines()
+        _clear_selected_lines()
 
         _clear_reject_reason()
 
@@ -1413,24 +1577,35 @@ def _render_action_panel(
 
     if approve_clicked:
 
+        selected_ids = sorted(
+            int(x)
+            for x in selected_line_ids
+        )
+
+        if not selected_ids:
+
+            st.warning(
+                "Approve လုပ်ရန် line မရှိပါ။"
+            )
+
+            return
+
         try:
 
             with st.spinner(
-                "Approving selected inventory lines..."
+                "Approving inventory import lines..."
             ):
 
-                result = _approve_selected_lines(
-                    client=client,
-                    batch_no=selected_batch_no,
-                    checker_id=checker_id,
-                    line_ids=sorted(
-                        selected_line_ids
-                    ),
+                result = (
+                    _approve_selected_lines(
+                        client=client,
+                        batch_no=selected_batch_no,
+                        checker_id=checker_id,
+                        line_ids=selected_ids,
+                    )
                 )
 
-            if result.get(
-                "success"
-            ):
+            if result.get("success"):
 
                 st.success(
                     result.get(
@@ -1439,11 +1614,19 @@ def _render_action_panel(
                     )
                 )
 
+                # --------------------------------------------------------------
+                # RPC RESULT
+                # --------------------------------------------------------------
+
                 st.json(
                     result
                 )
 
-                _clear_all_lines()
+                # --------------------------------------------------------------
+                # CLEAR UI
+                # --------------------------------------------------------------
+
+                _clear_selected_lines()
 
                 _clear_reject_reason()
 
@@ -1462,14 +1645,14 @@ def _render_action_panel(
                     result
                 )
 
-        except Exception as e:
+        except Exception as exc:
 
             st.error(
-                f"Inventory approval failed: {e}"
+                "Inventory approval failed."
             )
 
             st.exception(
-                e
+                exc
             )
 
     # ==========================================================================
@@ -1479,8 +1662,7 @@ def _render_action_panel(
     if reject_clicked:
 
         reason = str(
-            reject_reason
-            or ""
+            reject_reason_input or ""
         ).strip()
 
         if not reason:
@@ -1500,25 +1682,36 @@ def _render_action_panel(
 
             return
 
+        selected_ids = sorted(
+            int(x)
+            for x in selected_line_ids
+        )
+
+        if not selected_ids:
+
+            st.warning(
+                "Reject လုပ်ရန် line မရှိပါ။"
+            )
+
+            return
+
         try:
 
             with st.spinner(
-                "Rejecting selected inventory lines..."
+                "Rejecting inventory import lines..."
             ):
 
-                result = _reject_selected_lines(
-                    client=client,
-                    batch_no=selected_batch_no,
-                    checker_id=checker_id,
-                    line_ids=sorted(
-                        selected_line_ids
-                    ),
-                    reason=reason,
+                result = (
+                    _reject_selected_lines(
+                        client=client,
+                        batch_no=selected_batch_no,
+                        checker_id=checker_id,
+                        line_ids=selected_ids,
+                        reason=reason,
+                    )
                 )
 
-            if result.get(
-                "success"
-            ):
+            if result.get("success"):
 
                 st.success(
                     result.get(
@@ -1531,7 +1724,7 @@ def _render_action_panel(
                     result
                 )
 
-                _clear_all_lines()
+                _clear_selected_lines()
 
                 _clear_reject_reason()
 
@@ -1550,14 +1743,14 @@ def _render_action_panel(
                     result
                 )
 
-        except Exception as e:
+        except Exception as exc:
 
             st.error(
-                f"Inventory rejection failed: {e}"
+                "Inventory rejection failed."
             )
 
             st.exception(
-                e
+                exc
             )
 
 
@@ -1571,17 +1764,6 @@ def _render_batch_cancel_panel(
     checker_id,
 ):
 
-    """
-    Batch-level cancellation.
-
-    IMPORTANT:
-    Only PENDING batches are shown in this page because
-    the queue itself is PENDING-only.
-
-    Actual authorization and state validation remain
-    inside cancel_inventory_import_batch RPC.
-    """
-
     st.markdown("---")
 
     st.markdown(
@@ -1594,49 +1776,56 @@ def _render_batch_cancel_panel(
         )
     )
 
-    status = str(
+    status = _normalize_status(
         selected_batch.get(
-            "status",
-            "",
+            "status"
         )
-    ).upper()
+    )
+
+    # --------------------------------------------------------------------------
+    # ONLY PENDING
+    # --------------------------------------------------------------------------
 
     if status != STATUS_PENDING:
 
         st.info(
-            f"Batch {batch_no} is not PENDING. "
+            f"Batch {batch_no} is "
+            f"`{status}`. "
             f"Cancellation is unavailable."
         )
 
         return
 
     st.warning(
-        f"⚠️ ဒီလုပ်ဆောင်ချက်က Batch တစ်ခုလုံးကို "
-        f"`CANCELLED` အဖြစ် ပြောင်းပါမယ်။\n\n"
+        f"⚠️ Batch တစ်ခုလုံးကို "
+        f"`CANCELLED` အဖြစ် ပြောင်းလဲပါမည်။\n\n"
         f"Batch: **{batch_no}**"
     )
 
     # ==========================================================================
-    # CANCEL REASON
+    # REASON
     # ==========================================================================
 
-    cancel_reason = st.text_area(
+    cancel_reason_input = st.text_area(
         "Cancellation Reason",
         value=st.session_state.get(
-            "inventory_import_approval_cancel_reason",
+            KEY_CANCEL_REASON,
             "",
         ),
         placeholder=(
-            "ဥပမာ - Import file မှားယွင်းနေပါသည်၊ "
-            "Warehouse မှားနေပါသည်၊ Duplicate import ဖြစ်နေပါသည်..."
+            "ဥပမာ - Import file မှားနေပါသည်၊ "
+            "Warehouse မှားနေပါသည်၊ "
+            "Duplicate import ဖြစ်နေပါသည်..."
         ),
-        key="inventory_import_cancel_reason_input",
+        key=(
+            "inventory_import_cancel_reason_input_v7"
+        ),
         height=100,
     )
 
     st.session_state[
-        "inventory_import_approval_cancel_reason"
-    ] = cancel_reason
+        KEY_CANCEL_REASON
+    ] = cancel_reason_input
 
     # ==========================================================================
     # CONFIRMATION
@@ -1645,14 +1834,16 @@ def _render_batch_cancel_panel(
     confirm_cancel = st.checkbox(
         "⚠️ ဒီ Batch တစ်ခုလုံးကို CANCEL လုပ်မည်ကို အတည်ပြုပါသည်။",
         value=st.session_state.get(
-            "inventory_import_approval_cancel_confirm",
+            KEY_CANCEL_CONFIRM,
             False,
         ),
-        key="inventory_import_cancel_confirm_input",
+        key=(
+            "inventory_import_cancel_confirm_input_v7"
+        ),
     )
 
     st.session_state[
-        "inventory_import_approval_cancel_confirm"
+        KEY_CANCEL_CONFIRM
     ] = confirm_cancel
 
     st.markdown("---")
@@ -1662,7 +1853,7 @@ def _render_batch_cancel_panel(
     )
 
     # ==========================================================================
-    # CANCEL BATCH
+    # CANCEL
     # ==========================================================================
 
     with cancel_col:
@@ -1671,11 +1862,13 @@ def _render_batch_cancel_panel(
             "🚫 Cancel Entire Batch",
             disabled=not confirm_cancel,
             use_container_width=True,
-            key="inventory_import_cancel_entire_batch",
+            key=(
+                "inventory_import_cancel_entire_batch_v7"
+            ),
         )
 
     # ==========================================================================
-    # CLEAR CANCEL FORM
+    # CLEAR
     # ==========================================================================
 
     with clear_col:
@@ -1683,12 +1876,14 @@ def _render_batch_cancel_panel(
         clear_clicked = st.button(
             "Clear",
             use_container_width=True,
-            key="inventory_import_clear_cancel_form",
+            key=(
+                "inventory_import_clear_cancel_form_v7"
+            ),
         )
 
     if clear_clicked:
 
-        _clear_cancel_reason()
+        _clear_cancel_form()
 
         st.rerun()
 
@@ -1699,38 +1894,27 @@ def _render_batch_cancel_panel(
     if cancel_clicked:
 
         reason = str(
-            cancel_reason
-            or ""
+            cancel_reason_input or ""
         ).strip()
-
-        # ----------------------------------------------------------------------
-        # REASON REQUIRED
-        # ----------------------------------------------------------------------
 
         if not reason:
 
             st.error(
-                "❌ Cancellation Reason မဖြစ်မနေထည့်ပေးပါ။"
+                "❌ Cancellation Reason "
+                "မဖြစ်မနေထည့်ပေးပါ။"
             )
 
             return
-
-        # ----------------------------------------------------------------------
-        # MINIMUM REASON
-        # ----------------------------------------------------------------------
 
         if len(reason) < 3:
 
             st.error(
-                "❌ Cancellation Reason အနည်းဆုံး "
-                "3 characters ရှိရပါမည်။"
+                "❌ Cancellation Reason "
+                "အနည်းဆုံး 3 characters "
+                "ရှိရပါမည်။"
             )
 
             return
-
-        # ----------------------------------------------------------------------
-        # RPC
-        # ----------------------------------------------------------------------
 
         try:
 
@@ -1738,16 +1922,16 @@ def _render_batch_cancel_panel(
                 "Cancelling inventory import batch..."
             ):
 
-                result = _cancel_inventory_batch(
-                    client=client,
-                    batch_no=batch_no,
-                    checker_id=checker_id,
-                    reason=reason,
+                result = (
+                    _cancel_inventory_batch(
+                        client=client,
+                        batch_no=batch_no,
+                        checker_id=checker_id,
+                        reason=reason,
+                    )
                 )
 
-            if result.get(
-                "success"
-            ):
+            if result.get("success"):
 
                 st.success(
                     result.get(
@@ -1760,16 +1944,18 @@ def _render_batch_cancel_panel(
                     result
                 )
 
-                # Clear all UI state
-                _clear_all_lines()
+                # --------------------------------------------------------------
+                # RESET UI
+                # --------------------------------------------------------------
+
+                _clear_selected_lines()
 
                 _clear_reject_reason()
 
-                _clear_cancel_reason()
+                _clear_cancel_form()
 
-                # Remove current batch from selector
                 st.session_state[
-                    "inventory_import_approval_batch_no"
+                    KEY_BATCH_NO
                 ] = None
 
                 st.rerun()
@@ -1787,25 +1973,41 @@ def _render_batch_cancel_panel(
                     result
                 )
 
-        except Exception as e:
+        except Exception as exc:
 
             st.error(
-                f"Inventory batch cancellation failed: {e}"
+                "Inventory batch cancellation failed."
             )
 
             st.exception(
-                e
+                exc
             )
 
 
 # ==============================================================================
-# MAIN
+# EMPTY QUEUE
+# ==============================================================================
+
+def _render_empty_queue():
+
+    st.success(
+        "🎉 No PENDING Inventory In batches."
+    )
+
+    st.caption(
+        "All submitted inventory import batches "
+        "have already been processed."
+    )
+
+
+# ==============================================================================
+# MAIN RENDER
 # ==============================================================================
 
 def render_inventory_import_approval():
 
     # ==========================================================================
-    # SESSION
+    # INITIALIZE
     # ==========================================================================
 
     _initialize_state()
@@ -1819,14 +2021,15 @@ def render_inventory_import_approval():
     )
 
     st.caption(
-        "Checker | Line Approval / Rejection | Batch Cancellation | Maker-Checker"
+        "Checker | Line Approval / Rejection | "
+        "Batch Cancellation | Maker-Checker"
     )
 
     st.info(
-        "Inventory Import Batch တစ်ခုအတွင်းမှ "
-        "လိုအပ်သော Line များကို ရွေးချယ်ပြီး "
+        "Inventory Import Batch အတွင်းရှိ "
+        "Valid Pending Lines များကို ရွေးချယ်ပြီး "
         "Approve / Reject ပြုလုပ်နိုင်ပါသည်။ "
-        "လိုအပ်ပါက Batch တစ်ခုလုံးကိုလည်း Cancel ပြုလုပ်နိုင်ပါသည်။"
+        "လိုအပ်ပါက Batch တစ်ခုလုံးကို Cancel ပြုလုပ်နိုင်ပါသည်။"
     )
 
     # ==========================================================================
@@ -1837,10 +2040,14 @@ def render_inventory_import_approval():
 
         client = db()
 
-    except Exception as e:
+    except Exception as exc:
 
         st.error(
-            f"Database connection failed: {e}"
+            "Database connection failed."
+        )
+
+        st.exception(
+            exc
         )
 
         return
@@ -1857,10 +2064,14 @@ def render_inventory_import_approval():
             "Current user session ID was not found."
         )
 
+        st.info(
+            "Login session ကို ပြန်စစ်ပေးပါ။"
+        )
+
         return
 
     # ==========================================================================
-    # LOAD BATCHES
+    # LOAD PENDING BATCHES
     # ==========================================================================
 
     try:
@@ -1873,14 +2084,14 @@ def render_inventory_import_approval():
             client
         )
 
-    except Exception as e:
+    except Exception as exc:
 
         st.error(
             "Approval queue loading failed."
         )
 
         st.exception(
-            e
+            exc
         )
 
         return
@@ -1891,64 +2102,70 @@ def render_inventory_import_approval():
 
     if not batches:
 
-        st.success(
-            "🎉 No PENDING Inventory In batches."
-        )
+        _render_empty_queue()
 
         st.session_state[
-            "inventory_import_approval_batch_no"
+            KEY_BATCH_NO
         ] = None
 
-        _clear_all_lines()
-
-        _clear_reject_reason()
-
-        _clear_cancel_reason()
+        _clear_selected_lines()
 
         return
 
     # ==========================================================================
-    # BATCH OPTIONS
+    # BUILD BATCH MAP
     # ==========================================================================
 
-    batch_options = {
-        str(
-            batch["batch_no"]
-        ): batch
+    batch_options = {}
 
-        for batch in batches
+    for batch in batches:
 
-        if batch.get("batch_no")
-    }
+        batch_no = batch.get(
+            "batch_no"
+        )
+
+        if not batch_no:
+
+            continue
+
+        batch_options[
+            str(batch_no)
+        ] = batch
+
+    if not batch_options:
+
+        st.warning(
+            "PENDING batches were found, "
+            "but no valid batch number was returned."
+        )
+
+        return
 
     batch_nos = list(
         batch_options.keys()
     )
 
     # ==========================================================================
-    # CURRENT BATCH
+    # RESTORE CURRENT BATCH
     # ==========================================================================
 
     current_batch_no = st.session_state.get(
-        "inventory_import_approval_batch_no"
+        KEY_BATCH_NO
     )
 
-    if (
-        current_batch_no
-        not in batch_options
-    ):
+    if current_batch_no not in batch_options:
 
         current_batch_no = batch_nos[0]
 
         st.session_state[
-            "inventory_import_approval_batch_no"
+            KEY_BATCH_NO
         ] = current_batch_no
 
-        _clear_all_lines()
+        _clear_selected_lines()
 
         _clear_reject_reason()
 
-        _clear_cancel_reason()
+        _clear_cancel_form()
 
     # ==========================================================================
     # BATCH SELECTOR
@@ -1956,13 +2173,13 @@ def render_inventory_import_approval():
 
     selected_batch_no = st.selectbox(
         "Select PENDING Inventory In Batch",
-        batch_nos,
+        options=batch_nos,
         index=batch_nos.index(
             current_batch_no
         ),
         key=(
             "inventory_import_approval_"
-            "batch_selector"
+            "batch_selector_v7"
         ),
     )
 
@@ -1973,14 +2190,14 @@ def render_inventory_import_approval():
     if selected_batch_no != current_batch_no:
 
         st.session_state[
-            "inventory_import_approval_batch_no"
+            KEY_BATCH_NO
         ] = selected_batch_no
 
-        _clear_all_lines()
+        _clear_selected_lines()
 
         _clear_reject_reason()
 
-        _clear_cancel_reason()
+        _clear_cancel_form()
 
         st.rerun()
 
@@ -1999,18 +2216,20 @@ def render_inventory_import_approval():
     try:
 
         lines = _load_import_lines(
-            client,
-            selected_batch["id"],
+            client=client,
+            batch_id=selected_batch[
+                "id"
+            ],
         )
 
-    except Exception as e:
+    except Exception as exc:
 
         st.error(
             "Import line loading failed."
         )
 
         st.exception(
-            e
+            exc
         )
 
         return
@@ -2020,9 +2239,9 @@ def render_inventory_import_approval():
     # ==========================================================================
 
     _render_batch_summary(
-        selected_batch,
-        warehouse_map,
-        lines,
+        batch=selected_batch,
+        warehouse_map=warehouse_map,
+        lines=lines,
     )
 
     st.markdown("---")
@@ -2037,8 +2256,6 @@ def render_inventory_import_approval():
             "No import lines found in this batch."
         )
 
-        # Even if lines are missing,
-        # batch cancellation remains SQL-controlled.
         _render_batch_cancel_panel(
             client=client,
             selected_batch=selected_batch,
@@ -2052,7 +2269,7 @@ def render_inventory_import_approval():
     # ==========================================================================
 
     _render_line_selection(
-        lines
+        lines=lines
     )
 
     # ==========================================================================
@@ -2063,12 +2280,12 @@ def render_inventory_import_approval():
         selected_line_ids,
         selected_lines,
     ) = _render_selection_summary(
-        lines,
-        checker_id,
+        lines=lines,
+        checker_id=checker_id,
     )
 
     # ==========================================================================
-    # LINE ACTION PANEL
+    # LINE ACTIONS
     # ==========================================================================
 
     _render_action_panel(
@@ -2079,7 +2296,7 @@ def render_inventory_import_approval():
     )
 
     # ==========================================================================
-    # BATCH CANCEL PANEL
+    # BATCH CANCELLATION
     # ==========================================================================
 
     _render_batch_cancel_panel(
