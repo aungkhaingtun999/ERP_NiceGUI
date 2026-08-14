@@ -8,10 +8,11 @@ from typing import Optional, Dict, Any
 
 from ..base_repo import (
     db,
-    log_error
 )
 
-
+from ..config import (
+    log_error,
+)
 
 def purchase_receive_rpc(
     product_id: int,
