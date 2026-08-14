@@ -1,43 +1,39 @@
 # ==============================================================================
 # erp_pages/inventory/inventory_import_approval.py
 #
-# ERP ENTERPRISE INVENTORY IN
-# CHECKER APPROVAL QUEUE
+# ERP ENTERPRISE INVENTORY IN APPROVAL
 #
-# STEP 1
-# ------------------------------------------------------------------------------
-# Purpose:
-#   - Load PENDING Inventory In batches
-#   - Display batch summary
-#   - Individual batch selection
-#   - Select All
+# Maker-Checker Workflow
+#
+# inventory_import_batches
+#       ↓
+#     PENDING
+#       ↓
+# Checker selects:
+#       - Select All
+#       - Individual batches
+#       ↓
+# Approve Selected
+#       ↓
+# approve_inventory_import_batch()
+#       ↓
+# POSTED
 #
 # IMPORTANT
 # ------------------------------------------------------------------------------
-# This STEP does NOT approve or post anything.
+# Python NEVER directly updates:
 #
-# Workflow:
+#     warehouse_stock
+#     inventory_batches
+#     inventory_cost_layers
 #
-# Maker
-#   ↓
-# inventory_import.py
-#   ↓
-# DRAFT
-#   ↓
-# submit_inventory_import_batch()
-#   ↓
-# PENDING
-#   ↓
-# THIS PAGE
-#   ↓
-# Checker Queue
+# Actual posting is owned by PostgreSQL RPC:
 #
-# Approval RPC will be connected in a later step.
+#     approve_inventory_import_batch()
+#
 # ==============================================================================
 
 from __future__ import annotations
-
-from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
@@ -48,7 +44,7 @@ from database import db
 # CONSTANTS
 # ==============================================================================
 
-PAGE_TITLE = "📥 Inventory In Approval"
+PAGE_TITLE = "Inventory In Approval"
 
 STATUS_PENDING = "PENDING"
 
@@ -57,23 +53,20 @@ STATUS_PENDING = "PENDING"
 # SESSION STATE
 # ==============================================================================
 
-def _init_state():
+def _initialize_state():
     """
-    Initialize only UI state.
+    Initialize approval-page session state.
 
-    We deliberately keep selected batch IDs in session state.
+    IMPORTANT
+    ----------
+    Selection state belongs only to this approval page.
     """
 
-    defaults = {
-        "inventory_in_approval_selected": [],
-        "inventory_in_approval_refresh": False,
-    }
+    if "inventory_import_approval_selected" not in st.session_state:
 
-    for key, value in defaults.items():
-
-        if key not in st.session_state:
-
-            st.session_state[key] = value
+        st.session_state[
+            "inventory_import_approval_selected"
+        ] = set()
 
 
 # ==============================================================================
@@ -82,7 +75,10 @@ def _init_state():
 
 def _get_current_user_id():
     """
-    Get current logged-in user ID from the existing ERP session.
+    Get current logged-in user ID.
+
+    Supports the same session keys used elsewhere
+    in the ERP application.
     """
 
     possible_keys = [
@@ -103,544 +99,235 @@ def _get_current_user_id():
 
 
 # ==============================================================================
-# SAFE HELPERS
-# ==============================================================================
-
-def _safe_int(
-    value: Any,
-    default: int = 0,
-) -> int:
-
-    try:
-
-        return int(value)
-
-    except Exception:
-
-        return default
-
-
-def _safe_float(
-    value: Any,
-    default: float = 0.0,
-) -> float:
-
-    try:
-
-        return float(value)
-
-    except Exception:
-
-        return default
-
-
-def _safe_text(
-    value: Any,
-    default: str = "",
-) -> str:
-
-    if value is None:
-
-        return default
-
-    return str(value)
-
-
-# ==============================================================================
 # LOAD PENDING BATCHES
 # ==============================================================================
 
-def _load_pending_batches(
-    client,
-) -> List[Dict[str, Any]]:
+def _load_pending_batches(client):
     """
-    Load Inventory In batches waiting for Checker approval.
+    Load all PENDING Inventory In batches.
 
-    IMPORTANT
-    ----------
-    This function only READS data.
+    Only batch/header information is loaded here.
 
-    It does NOT:
-        - approve
-        - reject
-        - post stock
-        - modify inventory
+    Actual posting is performed by the approval RPC.
     """
 
-    try:
-
-        response = (
-            client
-            .table("inventory_import_batches")
-            .select(
-                """
-                id,
-                batch_no,
-                transaction_type,
-                status,
-                warehouse_to,
-                requested_by,
-                remarks,
-                total_lines,
-                valid_lines,
-                error_lines,
-                created_at
-                """
-            )
-            .eq(
-                "status",
-                STATUS_PENDING,
-            )
-            .order(
-                "created_at",
-                desc=False,
-            )
-            .execute()
+    response = (
+        client
+        .table("inventory_import_batches")
+        .select(
+            """
+            id,
+            batch_no,
+            transaction_type,
+            status,
+            warehouse_to,
+            requested_by,
+            remarks,
+            total_lines,
+            valid_lines,
+            error_lines,
+            created_at
+            """
         )
-
-        return response.data or []
-
-    except Exception as e:
-
-        st.error(
-            f"Pending Inventory In loading failed: {e}"
+        .eq(
+            "status",
+            STATUS_PENDING,
         )
-
-        return []
-
-
-# ==============================================================================
-# LOAD WAREHOUSES
-# ==============================================================================
-
-def _load_warehouses(
-    client,
-) -> Dict[int, str]:
-    """
-    Load warehouse names once.
-
-    Returns:
-        {
-            warehouse_id: warehouse_name
-        }
-    """
-
-    try:
-
-        response = (
-            client
-            .table("warehouses")
-            .select(
-                "id,name"
-            )
-            .execute()
+        .order(
+            "created_at",
+            desc=False,
         )
-
-        rows = response.data or []
-
-        return {
-            _safe_int(row.get("id")):
-                _safe_text(
-                    row.get("name"),
-                    "Unknown Warehouse",
-                )
-            for row in rows
-        }
-
-    except Exception as e:
-
-        st.error(
-            f"Warehouse loading failed: {e}"
-        )
-
-        return {}
-
-
-# ==============================================================================
-# LOAD USERS
-# ==============================================================================
-
-def _load_users(
-    client,
-) -> Dict[str, str]:
-    """
-    Load maker usernames.
-
-    We only need the display name for the queue.
-    """
-
-    try:
-
-        response = (
-            client
-            .table("users")
-            .select(
-                "id,username"
-            )
-            .execute()
-        )
-
-        rows = response.data or []
-
-        return {
-            str(row.get("id")):
-                _safe_text(
-                    row.get("username"),
-                    "Unknown User",
-                )
-            for row in rows
-            if row.get("id") is not None
-        }
-
-    except Exception as e:
-
-        st.error(
-            f"User loading failed: {e}"
-        )
-
-        return {}
-
-
-# ==============================================================================
-# FORMAT BATCH ROW
-# ==============================================================================
-
-def _format_batch_row(
-    batch: Dict[str, Any],
-    warehouse_map: Dict[int, str],
-    user_map: Dict[str, str],
-) -> Dict[str, Any]:
-    """
-    Convert database batch row into a clean UI row.
-    """
-
-    batch_id = batch.get("id")
-
-    warehouse_id = _safe_int(
-        batch.get("warehouse_to")
+        .execute()
     )
 
-    requested_by = batch.get(
-        "requested_by"
+    return response.data or []
+
+
+# ==============================================================================
+# LOAD WAREHOUSE NAMES
+# ==============================================================================
+
+def _load_warehouse_map(client):
+    """
+    Load warehouse names for display.
+    """
+
+    response = (
+        client
+        .table("warehouses")
+        .select("id,name")
+        .order("id")
+        .execute()
     )
 
-    maker_name = user_map.get(
-        str(requested_by),
-        "Unknown",
-    )
+    warehouses = response.data or []
 
     return {
-        "id": batch_id,
-
-        "Batch No":
-            _safe_text(
-                batch.get("batch_no")
-            ),
-
-        "Warehouse":
-            warehouse_map.get(
-                warehouse_id,
-                f"Warehouse {warehouse_id}",
-            ),
-
-        "Maker":
-            maker_name,
-
-        "Lines":
-            _safe_int(
-                batch.get("total_lines")
-            ),
-
-        "Valid":
-            _safe_int(
-                batch.get("valid_lines")
-            ),
-
-        "Errors":
-            _safe_int(
-                batch.get("error_lines")
-            ),
-
-        "Status":
-            _safe_text(
-                batch.get("status")
-            ),
-
-        "Created":
-            _safe_text(
-                batch.get("created_at")
-            ),
-
-        "Remarks":
-            _safe_text(
-                batch.get("remarks")
-            ),
+        int(row["id"]): row.get(
+            "name",
+            "",
+        )
+        for row in warehouses
+        if row.get("id") is not None
     }
 
 
 # ==============================================================================
-# SELECT ALL / CLEAR ALL
+# FORMAT DATE
 # ==============================================================================
 
-def _select_all(
-    rows: List[Dict[str, Any]],
+def _format_datetime(value):
+    """
+    Safe display formatter.
+    """
+
+    if not value:
+
+        return "-"
+
+    text = str(value)
+
+    if "T" in text:
+
+        text = text.replace(
+            "T",
+            " ",
+            1,
+        )
+
+    if "+" in text:
+
+        text = text.split(
+            "+",
+            1,
+        )[0]
+
+    return text[:19]
+
+
+# ==============================================================================
+# APPROVE ONE BATCH
+# ==============================================================================
+
+def _approve_batch(
+    client,
+    batch_no,
+    checker_id,
 ):
     """
-    Select all currently displayed pending batches.
+    Approve one Inventory In batch through PostgreSQL RPC.
+
+    IMPORTANT
+    ----------
+    This function does NOT perform stock updates directly.
+    """
+
+    response = client.rpc(
+        "approve_inventory_import_batch",
+        {
+            "p_batch_no": batch_no,
+            "p_checker_id": checker_id,
+        },
+    ).execute()
+
+    result = response.data
+
+    if isinstance(result, list):
+
+        if result:
+
+            return result[0]
+
+        return {}
+
+    return result or {}
+
+
+# ==============================================================================
+# SELECTION HELPERS
+# ==============================================================================
+
+def _get_selected_batch_nos():
+    """
+    Return selected batch numbers.
+    """
+
+    selected = st.session_state.get(
+        "inventory_import_approval_selected",
+        set(),
+    )
+
+    if not isinstance(
+        selected,
+        set,
+    ):
+
+        selected = set()
+
+    return selected
+
+
+def _set_selected_batch_nos(values):
+    """
+    Replace selected batch numbers.
     """
 
     st.session_state[
-        "inventory_in_approval_selected"
-    ] = [
-        row["id"]
-        for row in rows
-        if row.get("id") is not None
-    ]
+        "inventory_import_approval_selected"
+    ] = set(values)
+
+
+def _select_all(batch_nos):
+    """
+    Select all currently displayed PENDING batches.
+    """
+
+    _set_selected_batch_nos(
+        batch_nos
+    )
 
 
 def _clear_all():
     """
-    Clear all selected batches.
+    Clear all selections.
     """
 
-    st.session_state[
-        "inventory_in_approval_selected"
-    ] = []
-
-
-# ==============================================================================
-# SELECTION CHECKBOX
-# ==============================================================================
-
-def _render_selection(
-    row: Dict[str, Any],
-) -> bool:
-    """
-    Render one batch checkbox.
-
-    Checkbox state is synchronized with the selected ID list.
-    """
-
-    batch_id = row["id"]
-
-    selected_ids = set(
-        st.session_state.get(
-            "inventory_in_approval_selected",
-            [],
-        )
-    )
-
-    current_value = (
-        batch_id in selected_ids
-    )
-
-    widget_key = (
-        "inventory_in_approval_select_"
-        + str(batch_id)
-    )
-
-    checked = st.checkbox(
-        "Select",
-        value=current_value,
-        key=widget_key,
-    )
-
-    if checked:
-
-        if batch_id not in selected_ids:
-
-            selected_ids.add(
-                batch_id
-            )
-
-    else:
-
-        selected_ids.discard(
-            batch_id
-        )
-
-    st.session_state[
-        "inventory_in_approval_selected"
-    ] = list(
-        selected_ids
-    )
-
-    return checked
-
-
-# ==============================================================================
-# BATCH CARD
-# ==============================================================================
-
-def _render_batch_card(
-    row: Dict[str, Any],
-):
-    """
-    Render one pending Inventory In batch.
-    """
-
-    batch_id = row["id"]
-
-    st.markdown("---")
-
-    col_select, col_main, col_status = st.columns(
-        [0.8, 5.5, 1.5]
-    )
-
-    # --------------------------------------------------------------------------
-    # SELECT
-    # --------------------------------------------------------------------------
-
-    with col_select:
-
-        _render_selection(
-            row
-        )
-
-    # --------------------------------------------------------------------------
-    # MAIN
-    # --------------------------------------------------------------------------
-
-    with col_main:
-
-        st.markdown(
-            f"### 📦 {row['Batch No']}"
-        )
-
-        st.caption(
-            f"Maker: **{row['Maker']}**  |  "
-            f"Warehouse: **{row['Warehouse']}**"
-        )
-
-        c1, c2, c3 = st.columns(3)
-
-        c1.metric(
-            "Lines",
-            row["Lines"],
-        )
-
-        c2.metric(
-            "Valid",
-            row["Valid"],
-        )
-
-        c3.metric(
-            "Errors",
-            row["Errors"],
-        )
-
-        if row["Remarks"]:
-
-            st.caption(
-                f"Remarks: {row['Remarks']}"
-            )
-
-        st.caption(
-            f"Created: {row['Created']}"
-        )
-
-    # --------------------------------------------------------------------------
-    # STATUS
-    # --------------------------------------------------------------------------
-
-    with col_status:
-
-        st.success(
-            row["Status"]
-        )
-
-
-# ==============================================================================
-# SUMMARY
-# ==============================================================================
-
-def _render_summary(
-    rows: List[Dict[str, Any]],
-):
-    """
-    Render queue summary.
-    """
-
-    selected_ids = set(
-        st.session_state.get(
-            "inventory_in_approval_selected",
-            [],
-        )
-    )
-
-    selected_count = len(
-        selected_ids
-    )
-
-    total_batches = len(
-        rows
-    )
-
-    total_lines = sum(
-        _safe_int(
-            row.get("Lines")
-        )
-        for row in rows
-    )
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Pending Batches",
-        total_batches,
-    )
-
-    c2.metric(
-        "Total Lines",
-        total_lines,
-    )
-
-    c3.metric(
-        "Selected",
-        selected_count,
+    _set_selected_batch_nos(
+        set()
     )
 
 
 # ==============================================================================
-# MAIN PAGE
+# MAIN UI
 # ==============================================================================
 
 def render_inventory_import_approval():
-    """
-    Inventory In Checker Queue — STEP 1.
 
-    Only queue + selection are implemented in this step.
-    """
+    # ==========================================================================
+    # SESSION
+    # ==========================================================================
 
-    _init_state()
+    _initialize_state()
 
     # ==========================================================================
     # HEADER
     # ==========================================================================
 
     st.subheader(
-        PAGE_TITLE
+        "✅ Inventory In Approval"
     )
 
     st.caption(
-        "ERP Enterprise | "
-        "Maker-Checker | "
-        "Inventory In Pending Queue"
+        "ERP Enterprise Inventory In | "
+        "Checker Approval | "
+        "Maker-Checker Enabled"
     )
 
-    # ==========================================================================
-    # CURRENT USER
-    # ==========================================================================
-
-    current_user_id = (
-        _get_current_user_id()
+    st.info(
+        "ဒီနေရာမှာ PENDING Inventory In batch များကို "
+        "တစ်ခုချင်း သို့မဟုတ် Select All ဖြင့် ရွေးချယ်ပြီး "
+        "Checker အဖြစ် Approve လုပ်နိုင်ပါတယ်။"
     )
-
-    if not current_user_id:
-
-        st.warning(
-            "Current user session ID was not found."
-        )
 
     # ==========================================================================
     # DATABASE
@@ -659,182 +346,540 @@ def render_inventory_import_approval():
         return
 
     # ==========================================================================
+    # CHECKER
+    # ==========================================================================
+
+    checker_id = _get_current_user_id()
+
+    if not checker_id:
+
+        st.warning(
+            "Current checker user ID was not found. "
+            "Please log in again."
+        )
+
+        return
+
+    # ==========================================================================
     # LOAD DATA
     # ==========================================================================
 
-    warehouse_map = _load_warehouses(
-        client
-    )
+    try:
 
-    user_map = _load_users(
-        client
-    )
-
-    pending_batches = (
-        _load_pending_batches(
+        batches = _load_pending_batches(
             client
         )
-    )
 
-    # ==========================================================================
-    # NORMALIZE
-    # ==========================================================================
-
-    rows = [
-        _format_batch_row(
-            batch,
-            warehouse_map,
-            user_map,
+        warehouse_map = _load_warehouse_map(
+            client
         )
-        for batch in pending_batches
-    ]
 
-    # ==========================================================================
-    # SUMMARY
-    # ==========================================================================
+    except Exception as e:
 
-    _render_summary(
-        rows
-    )
+        st.error(
+            "Inventory In approval queue loading failed."
+        )
+
+        st.exception(e)
+
+        return
 
     # ==========================================================================
     # EMPTY QUEUE
     # ==========================================================================
 
-    if not rows:
+    if not batches:
+
+        _clear_all()
 
         st.success(
-            "✅ No pending Inventory In batches."
+            "🎉 No PENDING Inventory In batches."
         )
 
-        # Clear stale selection
-        _clear_all()
+        st.caption(
+            "All Inventory In requests have been processed."
+        )
 
         return
 
     # ==========================================================================
-    # SELECT ALL CONTROLS
+    # CLEAN OLD SELECTIONS
     # ==========================================================================
 
-    st.markdown(
-        "### Pending Inventory In"
+    available_batch_nos = {
+        str(
+            batch.get("batch_no")
+        ).strip()
+        for batch in batches
+        if batch.get("batch_no")
+    }
+
+    current_selection = _get_selected_batch_nos()
+
+    cleaned_selection = (
+        current_selection
+        & available_batch_nos
     )
 
-    control_col1, control_col2, control_col3 = (
-        st.columns([2, 2, 6])
+    if cleaned_selection != current_selection:
+
+        _set_selected_batch_nos(
+            cleaned_selection
+        )
+
+    # ==========================================================================
+    # KPI
+    # ==========================================================================
+
+    selected_count = len(
+        cleaned_selection
     )
 
-    with control_col1:
+    total_pending = len(
+        batches
+    )
+
+    total_lines = sum(
+        int(
+            batch.get(
+                "total_lines",
+                0,
+            )
+            or 0
+        )
+        for batch in batches
+    )
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Pending Batches",
+        total_pending,
+    )
+
+    c2.metric(
+        "Selected",
+        selected_count,
+    )
+
+    c3.metric(
+        "Pending Lines",
+        total_lines,
+    )
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # SELECT ALL / CLEAR ALL
+    # ==========================================================================
+
+    col1, col2, col3 = st.columns(
+        [1, 1, 4]
+    )
+
+    batch_nos = [
+        str(
+            batch.get("batch_no")
+        ).strip()
+        for batch in batches
+        if batch.get("batch_no")
+    ]
+
+    with col1:
 
         if st.button(
-            "☑ Select All",
+            "☑️ Select All",
+            key="inventory_import_select_all",
             use_container_width=True,
-            key="inventory_in_approval_select_all",
         ):
 
             _select_all(
-                rows
+                batch_nos
             )
 
             st.rerun()
 
-    with control_col2:
+    with col2:
 
         if st.button(
-            "☐ Clear Selection",
+            "⬜ Clear All",
+            key="inventory_import_clear_all",
             use_container_width=True,
-            key="inventory_in_approval_clear_all",
         ):
 
             _clear_all()
 
             st.rerun()
 
-    with control_col3:
-
-        selected_count = len(
-            st.session_state.get(
-                "inventory_in_approval_selected",
-                [],
-            )
-        )
+    with col3:
 
         if selected_count:
 
-            st.info(
+            st.caption(
                 f"{selected_count} batch(es) selected."
             )
 
         else:
 
             st.caption(
-                "Select one or more batches."
+                "Select one or more batches to approve."
             )
 
     # ==========================================================================
-    # BATCH LIST
+    # APPROVAL QUEUE
     # ==========================================================================
 
-    for row in rows:
+    st.markdown(
+        "### 📋 Pending Inventory In Batches"
+    )
 
-        _render_batch_card(
-            row
+    # ==========================================================================
+    # INDIVIDUAL SELECTION
+    # ==========================================================================
+
+    for batch in batches:
+
+        batch_no = str(
+            batch.get(
+                "batch_no",
+                "",
+            )
+        ).strip()
+
+        if not batch_no:
+
+            continue
+
+        is_selected = (
+            batch_no
+            in cleaned_selection
         )
 
+        warehouse_id = batch.get(
+            "warehouse_to"
+        )
+
+        try:
+
+            warehouse_id_int = int(
+                warehouse_id
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            warehouse_id_int = None
+
+        warehouse_name = (
+            warehouse_map.get(
+                warehouse_id_int,
+                f"Warehouse {warehouse_id}",
+            )
+        )
+
+        requested_by = batch.get(
+            "requested_by"
+        )
+
+        total = int(
+            batch.get(
+                "total_lines",
+                0,
+            )
+            or 0
+        )
+
+        valid = int(
+            batch.get(
+                "valid_lines",
+                0,
+            )
+            or 0
+        )
+
+        errors = int(
+            batch.get(
+                "error_lines",
+                0,
+            )
+            or 0
+        )
+
+        created_at = _format_datetime(
+            batch.get(
+                "created_at"
+            )
+        )
+
+        # ----------------------------------------------------------------------
+        # BATCH CARD
+        # ----------------------------------------------------------------------
+
+        with st.container(
+            border=True
+        ):
+
+            col_select, col_info = st.columns(
+                [0.5, 5]
+            )
+
+            with col_select:
+
+                selected = st.checkbox(
+                    "Select",
+                    value=is_selected,
+                    key=(
+                        "inventory_import_select_"
+                        + batch_no
+                    ),
+                    label_visibility="collapsed",
+                )
+
+            with col_info:
+
+                st.markdown(
+                    f"**📦 {batch_no}**"
+                )
+
+                i1, i2, i3, i4 = st.columns(4)
+
+                i1.write(
+                    f"**Warehouse**  \n"
+                    f"{warehouse_name}"
+                )
+
+                i2.write(
+                    f"**Lines**  \n"
+                    f"{total}"
+                )
+
+                i3.write(
+                    f"**Valid**  \n"
+                    f"{valid}"
+                )
+
+                i4.write(
+                    f"**Status**  \n"
+                    f"`PENDING`"
+                )
+
+                st.caption(
+                    f"Maker: {requested_by or '-'} | "
+                    f"Created: {created_at}"
+                )
+
+                if batch.get("remarks"):
+
+                    st.caption(
+                        f"Remarks: {batch.get('remarks')}"
+                    )
+
+                if errors:
+
+                    st.warning(
+                        f"Validation errors: {errors}"
+                    )
+
+            # ------------------------------------------------------------------
+            # UPDATE SELECTION
+            # ------------------------------------------------------------------
+
+            current = _get_selected_batch_nos()
+
+            if selected:
+
+                current.add(
+                    batch_no
+                )
+
+            else:
+
+                current.discard(
+                    batch_no
+                )
+
+            _set_selected_batch_nos(
+                current
+            )
+
     # ==========================================================================
-    # STEP 1 ACTION AREA
+    # APPROVAL ACTION
     # ==========================================================================
 
     st.markdown("---")
 
-    selected_ids = (
-        st.session_state.get(
-            "inventory_in_approval_selected",
-            [],
-        )
+    selected_batches = sorted(
+        _get_selected_batch_nos()
     )
 
-    if selected_ids:
+    st.markdown(
+        "### 🚀 Approval Action"
+    )
+
+    if not selected_batches:
 
         st.info(
-            f"✅ {len(selected_ids)} "
-            "Inventory In batch(es) selected."
+            "Approve လုပ်ရန် Batch တစ်ခုခုကို ရွေးပါ။"
         )
 
-        st.caption(
-            "Approval action will be connected in the next step."
-        )
+        return
 
-    else:
-
-        st.caption(
-            "No Inventory In batch selected."
-        )
-
-    # ==========================================================================
-    # IMPORTANT
-    # ==========================================================================
-
-    st.markdown("---")
-
-    st.caption(
-        "Step 1: Pending Queue + Select All + Individual Selection"
+    st.warning(
+        f"⚠️ {len(selected_batches)} batch(es) "
+        "ကို approve လုပ်မည်။ "
+        "Approval ပြီးပါက stock posting ကို "
+        "database RPC မှ atomic transaction ဖြင့် လုပ်ဆောင်ပါမည်။"
     )
 
-    st.caption(
-        "⚠️ No stock posting or approval is performed on this page yet."
-    )
+    with st.expander(
+        "Selected Batches",
+        expanded=False,
+    ):
 
+        for batch_no in selected_batches:
 
-# ==============================================================================
-# PUBLIC EXPORT
-# ==============================================================================
+            st.write(
+                f"• {batch_no}"
+            )
 
-__all__ = [
-    "render_inventory_import_approval",
-]
+    # ==========================================================================
+    # APPROVE SELECTED
+    # ==========================================================================
 
+    if st.button(
+        "✅ Approve Selected",
+        type="primary",
+        use_container_width=True,
+        key="inventory_import_approve_selected",
+    ):
 
-# ==============================================================================
-# END
-# ==============================================================================
+        success_count = 0
+        failed_count = 0
+
+        successful_batches = []
+        failed_batches = []
+
+        # ----------------------------------------------------------------------
+        # PROCESS EACH SELECTED BATCH
+        # ----------------------------------------------------------------------
+
+        progress = st.progress(
+            0,
+            text="Starting approval...",
+        )
+
+        total_selected = len(
+            selected_batches
+        )
+
+        for index, batch_no in enumerate(
+            selected_batches,
+            start=1,
+        ):
+
+            progress.progress(
+                int(
+                    ((index - 1)
+                    / total_selected)
+                    * 100
+                ),
+                text=(
+                    f"Approving {batch_no} "
+                    f"({index}/{total_selected})..."
+                ),
+            )
+
+            try:
+
+                result = _approve_batch(
+                    client=client,
+                    batch_no=batch_no,
+                    checker_id=checker_id,
+                )
+
+                if result.get(
+                    "success"
+                ):
+
+                    success_count += 1
+
+                    successful_batches.append(
+                        batch_no
+                    )
+
+                else:
+
+                    failed_count += 1
+
+                    failed_batches.append(
+                        {
+                            "batch_no": batch_no,
+                            "message": result.get(
+                                "message",
+                                "Approval failed.",
+                            ),
+                        }
+                    )
+
+            except Exception as e:
+
+                failed_count += 1
+
+                failed_batches.append(
+                    {
+                        "batch_no": batch_no,
+                        "message": str(e),
+                    }
+                )
+
+        progress.progress(
+            100,
+            text="Approval processing completed.",
+        )
+
+        # ----------------------------------------------------------------------
+        # REMOVE SUCCESSFUL SELECTIONS
+        # ----------------------------------------------------------------------
+
+        current = _get_selected_batch_nos()
+
+        for batch_no in successful_batches:
+
+            current.discard(
+                batch_no
+            )
+
+        _set_selected_batch_nos(
+            current
+        )
+
+        # ----------------------------------------------------------------------
+        # RESULT
+        # ----------------------------------------------------------------------
+
+        if success_count:
+
+            st.success(
+                f"✅ {success_count} batch(es) "
+                "approved and posted successfully."
+            )
+
+        if failed_count:
+
+            st.error(
+                f"❌ {failed_count} batch(es) "
+                "failed to approve."
+            )
+
+            for failed in failed_batches:
+
+                st.error(
+                    f"{failed['batch_no']}: "
+                    f"{failed['message']}"
+                )
+
+        if success_count:
+
+            st.rerun()
