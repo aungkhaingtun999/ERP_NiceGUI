@@ -9,6 +9,7 @@
 #   - Original Total displayed once
 #   - Product Name displayed per item
 #   - Product ID is no longer the primary display
+#   - Double-refund protection with Refund History (COMPLETED / PENDING checks)
 #
 # IMPORTANT:
 #   Refund RPC / approval workflow is NOT changed here.
@@ -16,8 +17,8 @@
 
 import streamlit as st
 
-from database import db
 from auth import require_login
+from database import db
 
 
 # ==============================================================================
@@ -32,10 +33,7 @@ def run():
 
     user = require_login()
 
-    st.title(
-        "↩️ Refund System (ERP Mode)"
-    )
-
+    st.title("↩️ Refund System (ERP Mode)")
 
     # ==========================================================================
     # SESSION INITIALIZATION
@@ -45,20 +43,15 @@ def run():
 
         st.session_state.selected_sale = None
 
-
     if "refund_cart" not in st.session_state:
 
         st.session_state.refund_cart = []
-
 
     # ==========================================================================
     # SEARCH SALE
     # ==========================================================================
 
-    st.subheader(
-        "🔍 Search Sale"
-    )
-
+    st.subheader("🔍 Search Sale")
 
     input_id = st.text_input(
         "Enter Sale ID",
@@ -66,31 +59,22 @@ def run():
         placeholder="Enter Sale ID",
     )
 
-
     if st.button(
         "🔎 Search Sale",
         type="secondary",
     ):
 
-        if (
-            not input_id
-            or not input_id.isdigit()
-        ):
+        if not input_id or not input_id.isdigit():
 
-            st.warning(
-                "Please enter a valid numeric Sale ID."
-            )
+            st.warning("Please enter a valid numeric Sale ID.")
 
         else:
 
-            with st.spinner(
-                "Fetching data from ERP..."
-            ):
+            with st.spinner("Fetching data from ERP..."):
 
                 try:
 
                     sale_id = int(input_id)
-
 
                     # ----------------------------------------------------------
                     # SALE HEADER
@@ -107,7 +91,6 @@ def run():
                         .execute()
                     )
 
-
                     if (
                         not response
                         or not hasattr(
@@ -117,14 +100,11 @@ def run():
                         or not response.data
                     ):
 
-                        st.error(
-                            f"Sale ID {input_id} not found."
-                        )
+                        st.error(f"Sale ID {input_id} not found.")
 
                     else:
 
                         sale = response.data[0]
-
 
                         # ------------------------------------------------------
                         # SALE ITEMS
@@ -141,7 +121,6 @@ def run():
                             .execute()
                         )
 
-
                         sale["items"] = (
                             items_resp.data
                             if (
@@ -154,6 +133,43 @@ def run():
                             else []
                         )
 
+                        # ------------------------------------------------------
+                        # LOAD EXISTING REFUND HISTORY
+                        #
+                        # COMPLETED / PENDING refunds are no longer available for refund.
+                        # REJECTED refunds remain refundable.
+                        # ------------------------------------------------------
+
+                        refund_history_resp = (
+                            db()
+                            .table("refund_report_view")
+                            .select(
+                                "refund_id,"
+                                "sale_id,"
+                                "product_id,"
+                                "quantity,"
+                                "status"
+                            )
+                            .eq(
+                                "sale_id",
+                                sale_id,
+                            )
+                            .execute()
+                        )
+
+                        refund_history = (
+                            refund_history_resp.data
+                            if (
+                                refund_history_resp
+                                and hasattr(
+                                    refund_history_resp,
+                                    "data",
+                                )
+                            )
+                            else []
+                        )
+
+                        sale["refund_history"] = refund_history
 
                         # ------------------------------------------------------
                         # LOAD PRODUCT NAMES
@@ -166,42 +182,30 @@ def run():
 
                         for item in sale["items"]:
 
-                            product_id = item.get(
-                                "product_id"
-                            )
+                            product_id = item.get("product_id")
 
                             if product_id is not None:
 
-                                product_ids.append(
-                                    product_id
-                                )
-
+                                product_ids.append(product_id)
 
                         product_map = {}
-
 
                         if product_ids:
 
                             unique_product_ids = list(
-                                dict.fromkeys(
-                                    product_ids
-                                )
+                                dict.fromkeys(product_ids)
                             )
-
 
                             products_resp = (
                                 db()
                                 .table("products")
-                                .select(
-                                    "id,name"
-                                )
+                                .select("id,name")
                                 .in_(
                                     "id",
                                     unique_product_ids,
                                 )
                                 .execute()
                             )
-
 
                             products_data = (
                                 products_resp.data
@@ -215,15 +219,11 @@ def run():
                                 else []
                             )
 
-
                             for product in products_data:
 
-                                product_map[
-                                    product.get("id")
-                                ] = product.get(
+                                product_map[product.get("id")] = product.get(
                                     "name"
                                 )
-
 
                         # ------------------------------------------------------
                         # ATTACH PRODUCT NAME
@@ -231,26 +231,15 @@ def run():
 
                         for item in sale["items"]:
 
-                            product_id = item.get(
-                                "product_id"
-                            )
-
+                            product_id = item.get("product_id")
 
                             product_name = (
-                                product_map.get(
-                                    product_id
-                                )
-                                or item.get(
-                                    "product_name"
-                                )
+                                product_map.get(product_id)
+                                or item.get("product_name")
                                 or f"Product #{product_id}"
                             )
 
-
-                            item[
-                                "display_product_name"
-                            ] = product_name
-
+                            item["display_product_name"] = product_name
 
                         # ------------------------------------------------------
                         # SAVE SESSION
@@ -262,13 +251,9 @@ def run():
 
                         st.rerun()
 
-
                 except Exception as e:
 
-                    st.error(
-                        f"Database Query Error: {e}"
-                    )
-
+                    st.error(f"Database Query Error: {e}")
 
     # ==========================================================================
     # REFUND DISPLAY
@@ -276,11 +261,9 @@ def run():
 
     sale = st.session_state.selected_sale
 
-
     if not sale:
 
         return
-
 
     # ==========================================================================
     # SALE INFORMATION
@@ -288,19 +271,13 @@ def run():
 
     st.divider()
 
-    st.subheader(
-        "🧾 Sale Information"
-    )
-
+    st.subheader("🧾 Sale Information")
 
     # --------------------------------------------------------------------------
     # SALE ID
     # --------------------------------------------------------------------------
 
-    sale_id = sale.get(
-        "id"
-    )
-
+    sale_id = sale.get("id")
 
     # --------------------------------------------------------------------------
     # INVOICE NUMBER
@@ -315,7 +292,6 @@ def run():
         or "-"
     )
 
-
     # --------------------------------------------------------------------------
     # SALE DATE
     #
@@ -323,12 +299,8 @@ def run():
     # --------------------------------------------------------------------------
 
     sale_date = (
-        sale.get("created_at")
-        or sale.get("sale_date")
-        or sale.get("date")
-        or "-"
+        sale.get("created_at") or sale.get("sale_date") or sale.get("date") or "-"
     )
-
 
     # --------------------------------------------------------------------------
     # ORIGINAL TOTAL
@@ -348,59 +320,35 @@ def run():
         or 0
     )
 
-
     # ==========================================================================
     # HEADER INFORMATION
     # ==========================================================================
 
-    info1, info2, info3, info4 = st.columns(
-        [1, 2, 2, 2]
-    )
-
+    info1, info2, info3, info4 = st.columns([1, 2, 2, 2])
 
     with info1:
 
-        st.caption(
-            "Sale ID"
-        )
+        st.caption("Sale ID")
 
-        st.write(
-            f"**{sale_id}**"
-        )
-
+        st.write(f"**{sale_id}**")
 
     with info2:
 
-        st.caption(
-            "Invoice No"
-        )
+        st.caption("Invoice No")
 
-        st.write(
-            f"**{invoice_no}**"
-        )
-
+        st.write(f"**{invoice_no}**")
 
     with info3:
 
-        st.caption(
-            "Sale Date"
-        )
+        st.caption("Sale Date")
 
-        st.write(
-            f"**{sale_date}**"
-        )
-
+        st.write(f"**{sale_date}**")
 
     with info4:
 
-        st.caption(
-            "Original Total"
-        )
+        st.caption("Original Total")
 
-        st.write(
-            f"**{original_total:,.0f} MMK**"
-        )
-
+        st.write(f"**{original_total:,.0f} MMK**")
 
     # ==========================================================================
     # REFUND ITEMS
@@ -408,55 +356,35 @@ def run():
 
     st.divider()
 
-    st.subheader(
-        "📦 Select Refund Items"
-    )
-
+    st.subheader("📦 Select Refund Items")
 
     refund_total = 0
 
     new_cart = []
 
-
     # ==========================================================================
     # TABLE HEADER
     # ==========================================================================
 
-    h1, h2, h3, h4 = st.columns(
-        [4, 1.5, 2, 2]
-    )
-
+    h1, h2, h3, h4 = st.columns([4, 1.5, 2, 2])
 
     with h1:
 
-        st.markdown(
-            "**Product**"
-        )
-
+        st.markdown("**Product**")
 
     with h2:
 
-        st.markdown(
-            "**Sold**"
-        )
-
+        st.markdown("**Sold**")
 
     with h3:
 
-        st.markdown(
-            "**Price**"
-        )
-
+        st.markdown("**Price**")
 
     with h4:
 
-        st.markdown(
-            "**Refund Qty**"
-        )
-
+        st.markdown("**Refund Qty**")
 
     st.divider()
-
 
     # ==========================================================================
     # ITEM ROWS
@@ -467,10 +395,9 @@ def run():
         [],
     ):
 
-        item_id = item.get(
-            "id"
-        )
+        item_id = item.get("id")
 
+        product_id = item.get("product_id")
 
         qty_sold = int(
             item.get(
@@ -483,7 +410,6 @@ def run():
             or 0
         )
 
-
         price = float(
             item.get(
                 "selling_price",
@@ -495,74 +421,126 @@ def run():
             or 0
         )
 
-
         product_name = (
-            item.get(
-                "display_product_name"
-            )
-            or item.get(
-                "product_name"
-            )
-            or f"Product #{item.get('product_id')}"
+            item.get("display_product_name")
+            or item.get("product_name")
+            or f"Product #{product_id}"
         )
 
+        # ======================================================================
+        # CALCULATE ALREADY REFUNDED / PENDING QTY
+        # ======================================================================
 
-        col1, col2, col3, col4 = st.columns(
-            [4, 1.5, 2, 2]
+        completed_qty = 0
+        pending_qty = 0
+
+        for refund in sale.get(
+            "refund_history",
+            [],
+        ):
+
+            if refund.get("product_id") != product_id:
+
+                continue
+
+            refund_status = (
+                str(
+                    refund.get(
+                        "status",
+                        "",
+                    )
+                )
+                .strip()
+                .upper()
+            )
+
+            refund_qty = int(
+                refund.get(
+                    "quantity",
+                    0,
+                )
+                or 0
+            )
+
+            if refund_status == "COMPLETED":
+
+                completed_qty += refund_qty
+
+            elif refund_status == "PENDING":
+
+                pending_qty += refund_qty
+
+        # ======================================================================
+        # AVAILABLE REFUND QTY
+        # ======================================================================
+
+        available_qty = max(
+            0,
+            qty_sold - completed_qty - pending_qty,
         )
 
+        col1, col2, col3, col4 = st.columns([4, 1.5, 2, 2])
 
         with col1:
 
-            st.write(
-                f"**{product_name}**"
-            )
-
+            st.write(f"**{product_name}**")
 
         with col2:
 
-            st.write(
-                f"{qty_sold}"
-            )
+            st.write(f"{qty_sold}")
 
+            if completed_qty > 0:
+
+                st.caption(f"Already Refunded: {completed_qty}")
+
+            if pending_qty > 0:
+
+                st.caption(f"Pending: {pending_qty}")
 
         with col3:
 
-            st.write(
-                f"{price:,.0f} MMK"
-            )
-
+            st.write(f"{price:,.0f} MMK")
 
         with col4:
 
-            qty = st.number_input(
-                "Refund Qty",
-                min_value=0,
-                max_value=qty_sold,
-                value=0,
-                step=1,
-                key=f"ref_{item_id}",
-                label_visibility="collapsed",
-            )
+            if available_qty <= 0:
 
+                if completed_qty >= qty_sold:
+
+                    st.success("✅ Already Refunded")
+
+                elif pending_qty >= qty_sold:
+
+                    st.warning("⏳ Refund Pending")
+
+                else:
+
+                    st.info("No Refund Available")
+
+                qty = 0
+
+            else:
+
+                qty = st.number_input(
+                    "Refund Qty",
+                    min_value=0,
+                    max_value=available_qty,
+                    value=0,
+                    step=1,
+                    key=f"ref_{item_id}",
+                    label_visibility="collapsed",
+                )
 
         if qty > 0:
 
-            refund_total += (
-                qty * price
-            )
-
+            refund_total += qty * price
 
             new_cart.append(
                 {
-                    "sale_item_id":
-                        item_id,
-
-                    "qty":
-                        int(qty),
+                    "sale_item_id": item_id,
+                    "qty": int(qty),
                 }
             )
-
 
     # ==========================================================================
     # SAVE REFUND CART
@@ -570,36 +548,24 @@ def run():
 
     st.session_state.refund_cart = new_cart
 
-
     # ==========================================================================
     # REFUND SUMMARY
     # ==========================================================================
 
     st.divider()
 
-
-    summary_col1, summary_col2 = st.columns(
-        [3, 1]
-    )
-
+    summary_col1, summary_col2 = st.columns([3, 1])
 
     with summary_col1:
 
-        st.info(
-            f"### Total Refund Amount: "
-            f"{refund_total:,.0f} MMK"
-        )
-
+        st.info(f"### Total Refund Amount: {refund_total:,.0f} MMK")
 
     with summary_col2:
 
         st.metric(
             "Selected Items",
-            len(
-                new_cart
-            ),
+            len(new_cart),
         )
-
 
     # ==========================================================================
     # REASON
@@ -610,7 +576,6 @@ def run():
         key="refund_reason",
         placeholder="Enter refund reason...",
     )
-
 
     # ==========================================================================
     # PROCESS REFUND
@@ -624,9 +589,7 @@ def run():
 
         if not st.session_state.refund_cart:
 
-            st.error(
-                "No items selected for refund."
-            )
+            st.error("No items selected for refund.")
 
         else:
 
@@ -643,61 +606,32 @@ def run():
                     .rpc(
                         "refund_sale_rpc",
                         {
-                            "p_sale_id":
-                                int(
-                                    sale["id"]
-                                ),
-
-                            "p_items":
-                                st.session_state.refund_cart,
-
-                            "p_reason":
-                                reason,
-
-                            "p_cashier_id":
-                                user["id"],
+                            "p_sale_id": int(sale["id"]),
+                            "p_items": st.session_state.refund_cart,
+                            "p_reason": reason,
+                            "p_cashier_id": user["id"],
                         },
                     )
                     .execute()
                 )
 
-
                 res_data = result.data
-
 
                 # --------------------------------------------------------------
                 # SUCCESS
                 # --------------------------------------------------------------
 
-                if (
-                    res_data is True
-                    or (
-                        isinstance(
-                            res_data,
-                            dict,
-                        )
-                        and res_data.get(
-                            "success"
-                        )
-                    )
+                if res_data is True or (
+                    isinstance(res_data, dict) and res_data.get("success")
                 ):
 
                     refund_id = (
-                        res_data.get(
-                            "refund_id"
-                        )
-                        if isinstance(
-                            res_data,
-                            dict,
-                        )
+                        res_data.get("refund_id")
+                        if isinstance(res_data, dict)
                         else None
                     )
 
-
-                    st.success(
-                        "✅ Refund Request Created"
-                    )
-
+                    st.success("✅ Refund Request Created")
 
                     st.info(
                         f"Refund ID: {refund_id}\n\n"
@@ -705,24 +639,17 @@ def run():
                         "Waiting for Manager Approval"
                     )
 
-
                     st.session_state.refund_cart = []
 
                     st.session_state.selected_sale = None
 
-
                 else:
 
-                    st.error(
-                        f"Refund failed: {res_data}"
-                    )
-
+                    st.error(f"Refund failed: {res_data}")
 
             except Exception as e:
 
-                st.error(
-                    f"RPC Error: {e}"
-                )
+                st.error(f"RPC Error: {e}")
 
 
 # ==============================================================================
