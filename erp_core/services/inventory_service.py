@@ -1,44 +1,146 @@
 # ==============================================================================
 # erp_core/services/inventory_service.py
-# ERP ENTERPRISE INVENTORY SERVICE
+# ERP ENTERPRISE INVENTORY SERVICE v38.0
+#
 # CLEAN RPC-DRIVEN VERSION
 #
-# Architecture:
+# Responsibilities:
+# - Inventory health
+# - Low stock alerts
+# - Inventory KPI
+# - Warehouse KPI
+# - Inventory valuation
+# - Inventory loss report
+# - Stock card
+# - Product batch settings
+# - FEFO issue planning
+# - Stock adjustment request
+# - Stock adjustment history
+# - FIFO COGS compatibility helper
 #
-# Streamlit
-#     ↓
-# InventoryService
-#     ↓
-# Supabase RPC
-#     ↓
-# get_fefo_issue_plan()
-#     ↓
-# inventory_batches
-#
-# FEFO calculation is owned by Supabase.
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# FEFO calculation remains owned by PostgreSQL / Supabase.
 #
 # Python DOES NOT:
 # - sort batches
-# - calculate allocation
+# - calculate FEFO allocation
 # - calculate shortage
 # - calculate FEFO COGS
 #
-# Supabase is the source of truth.
+# Supabase remains the inventory source of truth.
+#
+# COMPATIBILITY
+# ------------------------------------------------------------------------------
+# erp_core.__init__ imports:
+#
+#     get_fifo_cogs
+#
+# Therefore this module provides a compatibility helper.
+#
+# The helper delegates inventory cost calculation to the existing
+# get_fefo_issue_plan() RPC-driven flow instead of calculating cost in Python.
+#
 # ==============================================================================
 
-from typing import Any, Dict, List, Optional
 
-from ..base_repo import log_error
-from .settings_service import SettingsService
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+)
+
+
+from ..base_repo import (
+    log_error,
+)
+
+
+from .settings_service import (
+    SettingsService,
+)
+
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+DEFAULT_MIN_STOCK_ALERT = 10
+
+
+# ==============================================================================
+# INTERNAL SAFE HELPERS
+# ==============================================================================
+
+
+def _safe_float(
+    value: Any,
+    default: float = 0.0,
+) -> float:
+
+    try:
+
+        return float(value)
+
+    except Exception:
+
+        return float(default)
+
+
+def _safe_int(
+    value: Any,
+    default: int = 0,
+) -> int:
+
+    try:
+
+        return int(value)
+
+    except Exception:
+
+        return int(default)
+
+
+def _normalize_rpc_data(
+    data: Any,
+) -> Any:
+    """
+    Normalize common Supabase RPC response shapes.
+
+    PostgreSQL RPC may return:
+        dict
+        list[dict]
+        scalar
+        None
+    """
+
+    if isinstance(data, list):
+
+        if len(data) == 1:
+
+            return data[0]
+
+        return data
+
+    return data
 
 
 # ==============================================================================
 # INVENTORY SERVICE
 # ==============================================================================
 
+
 class InventoryService:
 
-    def __init__(self, client):
+    # ==========================================================================
+    # INIT
+    # ==========================================================================
+
+    def __init__(
+        self,
+        client,
+    ):
 
         self.client = client
 
@@ -46,19 +148,19 @@ class InventoryService:
             client
         )
 
-
-    # ... existing methods ...
-
-    # ==============================================================================
+    # ==========================================================================
     # HEALTH CHECK
-    # ==============================================================================
-    def health_check(self):
+    # ==========================================================================
+
+    def health_check(
+        self,
+    ) -> Dict[str, Any]:
         """
-        Simple database connectivity check for Inventory module.
-        Returns a dict compatible with UI health checks.
+        Simple database connectivity check.
         """
 
         try:
+
             response = (
                 self.client
                 .table("warehouses")
@@ -67,39 +169,66 @@ class InventoryService:
                 .execute()
             )
 
+            rows = response.data or []
+
             return {
                 "success": True,
-                "message": "Inventory service is healthy",
-                "rows": len(response.data or []),
+                "message":
+                    "Inventory service is healthy",
+                "rows":
+                    len(rows),
             }
 
         except Exception as e:
+
+            log_error(
+                message=
+                    "Inventory health check failed.",
+                exception=e,
+            )
+
             return {
                 "success": False,
                 "message": str(e),
+                "rows": 0,
             }
-            
+
     # ==========================================================================
     # LOW STOCK RULE
     # ==========================================================================
 
-    def get_min_stock_alert(self) -> int:
+    def get_min_stock_alert(
+        self,
+    ) -> int:
+        """
+        Read minimum stock alert from canonical settings.
+
+        IMPORTANT:
+        SettingsService v6.0 exposes get_setting(), not get_int().
+        Therefore we normalize the value here.
+        """
 
         try:
 
-            return self.settings.get_int(
+            value = self.settings.get_setting(
                 "MIN_STOCK_ALERT",
-                10
+                DEFAULT_MIN_STOCK_ALERT,
+            )
+
+            return _safe_int(
+                value,
+                DEFAULT_MIN_STOCK_ALERT,
             )
 
         except Exception as e:
 
             log_error(
-                message="Minimum stock setting load failed.",
-                exception=e
+                message=
+                    "Minimum stock setting load failed.",
+                exception=e,
             )
 
-            return 10
+            return DEFAULT_MIN_STOCK_ALERT
 
     # ==========================================================================
     # LOW STOCK CHECK
@@ -107,8 +236,8 @@ class InventoryService:
 
     def get_low_stock_alerts(
         self,
-        warehouse_id: Optional[int] = None
-    ) -> List[Dict]:
+        warehouse_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
 
         try:
 
@@ -126,26 +255,39 @@ class InventoryService:
 
                 query = query.eq(
                     "warehouse_id",
-                    int(warehouse_id)
+                    int(warehouse_id),
                 )
 
             result = query.execute()
 
             rows = result.data or []
 
-            return [
-                item
-                for item in rows
-                if float(
-                    item.get("qty", 0) or 0
-                ) <= minimum_stock
-            ]
+            alerts = []
+
+            for item in rows:
+
+                qty = _safe_float(
+                    item.get(
+                        "qty",
+                        0,
+                    ),
+                    0,
+                )
+
+                if qty <= minimum_stock:
+
+                    alerts.append(
+                        item
+                    )
+
+            return alerts
 
         except Exception as e:
 
             log_error(
-                message="Low stock alert check failed.",
-                exception=e
+                message=
+                    "Low stock alert check failed.",
+                exception=e,
             )
 
             return []
@@ -155,7 +297,7 @@ class InventoryService:
     # ==========================================================================
 
     def get_inventory_kpi(
-        self
+        self,
     ) -> Dict[str, Any]:
 
         try:
@@ -170,32 +312,73 @@ class InventoryService:
 
             data = result.data or {}
 
+            if isinstance(data, list):
+
+                data = (
+                    data[0]
+                    if data
+                    else {}
+                )
+
+            if not isinstance(data, dict):
+
+                return {
+                    "success": False,
+                    "message":
+                        "Invalid inventory KPI response.",
+                }
+
             return {
                 "success": True,
+
                 "total_products":
-                    data.get("total_products", 0),
+                    data.get(
+                        "total_products",
+                        0,
+                    ),
+
                 "total_warehouses":
-                    data.get("total_warehouses", 0),
+                    data.get(
+                        "total_warehouses",
+                        0,
+                    ),
+
                 "total_stock_qty":
-                    data.get("total_stock_qty", 0),
+                    data.get(
+                        "total_stock_qty",
+                        0,
+                    ),
+
                 "total_inventory_value":
-                    data.get("total_inventory_value", 0),
+                    data.get(
+                        "total_inventory_value",
+                        0,
+                    ),
+
                 "average_unit_value":
-                    data.get("average_unit_value", 0),
+                    data.get(
+                        "average_unit_value",
+                        0,
+                    ),
+
                 "low_stock_items":
-                    data.get("low_stock_items", 0),
+                    data.get(
+                        "low_stock_items",
+                        0,
+                    ),
             }
 
         except Exception as e:
 
             log_error(
-                message="Inventory KPI retrieval failed.",
-                exception=e
+                message=
+                    "Inventory KPI retrieval failed.",
+                exception=e,
             )
 
             return {
                 "success": False,
-                "message": str(e)
+                "message": str(e),
             }
 
     # ==========================================================================
@@ -203,14 +386,16 @@ class InventoryService:
     # ==========================================================================
 
     def get_warehouse_inventory_kpi(
-        self
-    ) -> List[Dict]:
+        self,
+    ) -> List[Dict[str, Any]]:
 
         try:
 
             result = (
                 self.client
-                .table("warehouse_inventory_kpi_view")
+                .table(
+                    "warehouse_inventory_kpi_view"
+                )
                 .select("*")
                 .execute()
             )
@@ -220,8 +405,9 @@ class InventoryService:
         except Exception as e:
 
             log_error(
-                message="Warehouse KPI retrieval failed.",
-                exception=e
+                message=
+                    "Warehouse KPI retrieval failed.",
+                exception=e,
             )
 
             return []
@@ -231,14 +417,16 @@ class InventoryService:
     # ==========================================================================
 
     def get_inventory_valuation(
-        self
-    ) -> List[Dict]:
+        self,
+    ) -> List[Dict[str, Any]]:
 
         try:
 
             result = (
                 self.client
-                .table("inventory_valuation_view")
+                .table(
+                    "inventory_valuation_view"
+                )
                 .select("*")
                 .execute()
             )
@@ -248,8 +436,9 @@ class InventoryService:
         except Exception as e:
 
             log_error(
-                message="Inventory valuation retrieval failed.",
-                exception=e
+                message=
+                    "Inventory valuation retrieval failed.",
+                exception=e,
             )
 
             return []
@@ -259,14 +448,16 @@ class InventoryService:
     # ==========================================================================
 
     def get_inventory_loss_report(
-        self
-    ) -> List[Dict]:
+        self,
+    ) -> List[Dict[str, Any]]:
 
         try:
 
             result = (
                 self.client
-                .table("inventory_loss_kpi_view")
+                .table(
+                    "inventory_loss_kpi_view"
+                )
                 .select("*")
                 .execute()
             )
@@ -276,8 +467,9 @@ class InventoryService:
         except Exception as e:
 
             log_error(
-                message="Inventory loss report retrieval failed.",
-                exception=e
+                message=
+                    "Inventory loss report retrieval failed.",
+                exception=e,
             )
 
             return []
@@ -289,8 +481,8 @@ class InventoryService:
     def get_stock_card(
         self,
         product_id: int,
-        warehouse_id: int
-    ) -> List[Dict]:
+        warehouse_id: int,
+    ) -> List[Dict[str, Any]]:
 
         try:
 
@@ -300,11 +492,11 @@ class InventoryService:
                 .select("*")
                 .eq(
                     "product_id",
-                    int(product_id)
+                    int(product_id),
                 )
                 .eq(
                     "warehouse_id",
-                    int(warehouse_id)
+                    int(warehouse_id),
                 )
                 .order(
                     "created_at"
@@ -317,8 +509,9 @@ class InventoryService:
         except Exception as e:
 
             log_error(
-                message="Stock card loading failed.",
-                exception=e
+                message=
+                    "Stock card loading failed.",
+                exception=e,
             )
 
             return []
@@ -329,34 +522,34 @@ class InventoryService:
 
     def get_product_batch_settings(
         self,
-        product_id: int
+        product_id: int,
     ) -> Dict[str, Any]:
+
+        product_id = int(product_id)
 
         try:
 
             result = (
                 self.client
                 .table("products")
-                .select("""
+                .select(
+                    """
                     id,
                     name,
                     track_batches,
                     track_expiry,
                     shelf_life_days
-                """)
+                    """
+                )
                 .eq(
                     "id",
-                    int(product_id)
+                    product_id,
                 )
                 .single()
                 .execute()
             )
 
             data = result.data
-
-            # ------------------------------------------------------------------
-            # Normalize Supabase / test response
-            # ------------------------------------------------------------------
 
             if isinstance(data, list):
 
@@ -367,7 +560,7 @@ class InventoryService:
                         "message":
                             "Product batch settings not found.",
                         "product_id":
-                            int(product_id),
+                            product_id,
                     }
 
                 data = data[0]
@@ -379,82 +572,90 @@ class InventoryService:
                     "message":
                         "Invalid product batch settings response.",
                     "product_id":
-                        int(product_id),
+                        product_id,
                 }
 
             return {
                 "success": True,
+
                 "product_id":
-                    data.get("id"),
+                    data.get(
+                        "id"
+                    ),
+
                 "product_name":
-                    data.get("name"),
+                    data.get(
+                        "name"
+                    ),
+
                 "track_batches":
                     bool(
                         data.get(
                             "track_batches",
-                            False
+                            False,
                         )
                     ),
+
                 "track_expiry":
                     bool(
                         data.get(
                             "track_expiry",
-                            False
+                            False,
                         )
                     ),
+
                 "shelf_life_days":
                     data.get(
                         "shelf_life_days",
-                        0
+                        0,
                     ),
             }
 
         except Exception as e:
 
             log_error(
-                message="Product batch settings load failed.",
-                exception=e
+                message=
+                    "Product batch settings load failed.",
+                exception=e,
             )
 
             return {
                 "success": False,
                 "message": str(e),
-                "product_id": int(product_id),
+                "product_id":
+                    product_id,
             }
 
     # ==========================================================================
     # FEFO ISSUE PLAN
     #
-    # IMPORTANT:
-    # FEFO calculation is NOT performed in Python.
+    # IMPORTANT
+    # --------------------------------------------------------------------------
+    # Python does NOT calculate FEFO.
     #
-    # Supabase RPC:
-    #
-    #     get_fefo_issue_plan(
-    #         p_product_id,
-    #         p_warehouse_id,
-    #         p_issue_quantity
-    #     )
-    #
-    # owns:
+    # Supabase owns:
     # - batch ordering
     # - allocation
     # - shortage
-    # - total COGS
+    # - cost
     # ==========================================================================
 
     def get_fefo_issue_plan(
         self,
         product_id: int,
         warehouse_id: int,
-        issue_quantity: float
+        issue_quantity: float,
     ) -> Dict[str, Any]:
 
-        try:
+        product_id = int(product_id)
+        warehouse_id = int(warehouse_id)
 
-            requested_qty = float(
-                issue_quantity
-            )
+        requested_qty = _safe_float(
+            issue_quantity,
+            0,
+        )
+
+        try:
 
             if requested_qty <= 0:
 
@@ -463,25 +664,28 @@ class InventoryService:
                     "method": "FEFO",
                     "message":
                         "Issue quantity must be greater than zero.",
+
                     "product_id":
-                        int(product_id),
+                        product_id,
+
                     "warehouse_id":
-                        int(warehouse_id),
+                        warehouse_id,
+
                     "requested_qty":
                         requested_qty,
+
                     "allocated_qty":
                         0,
+
                     "shortage_qty":
                         requested_qty,
+
                     "total_cost":
                         0,
+
                     "allocations":
                         [],
                 }
-
-            # ------------------------------------------------------------------
-            # SUPABASE RPC
-            # ------------------------------------------------------------------
 
             response = (
                 self.client
@@ -489,26 +693,21 @@ class InventoryService:
                     "get_fefo_issue_plan",
                     {
                         "p_product_id":
-                            int(product_id),
+                            product_id,
 
                         "p_warehouse_id":
-                            int(warehouse_id),
+                            warehouse_id,
 
                         "p_issue_quantity":
                             requested_qty,
-                    }
+                    },
                 )
                 .execute()
             )
 
-            result = response.data
-
-            # ------------------------------------------------------------------
-            # Normalize RPC response
-            #
-            # Supabase normally returns JSON object.
-            # Some mocks may return a list.
-            # ------------------------------------------------------------------
+            result = _normalize_rpc_data(
+                response.data
+            )
 
             if isinstance(result, list):
 
@@ -519,85 +718,158 @@ class InventoryService:
                         "method": "FEFO",
                         "message":
                             "Empty FEFO RPC response.",
+
                         "product_id":
-                            int(product_id),
+                            product_id,
+
                         "warehouse_id":
-                            int(warehouse_id),
+                            warehouse_id,
+
                         "requested_qty":
                             requested_qty,
+
                         "allocated_qty":
                             0,
+
                         "shortage_qty":
                             requested_qty,
+
                         "total_cost":
                             0,
+
                         "allocations":
                             [],
                     }
 
                 result = result[0]
 
-            # ------------------------------------------------------------------
-            # Validate response
-            # ------------------------------------------------------------------
-
-            if not isinstance(result, dict):
+            if not isinstance(
+                result,
+                dict,
+            ):
 
                 return {
                     "success": False,
                     "method": "FEFO",
                     "message":
                         "Invalid FEFO RPC response.",
+
                     "product_id":
-                        int(product_id),
+                        product_id,
+
                     "warehouse_id":
-                        int(warehouse_id),
+                        warehouse_id,
+
                     "requested_qty":
                         requested_qty,
+
                     "allocated_qty":
                         0,
+
                     "shortage_qty":
                         requested_qty,
+
                     "total_cost":
                         0,
+
                     "allocations":
                         [],
                 }
-
-            # ------------------------------------------------------------------
-            # Return Supabase result directly
-            #
-            # Database remains source of truth.
-            # ------------------------------------------------------------------
 
             return result
 
         except Exception as e:
 
             log_error(
-                message="FEFO RPC call failed.",
-                exception=e
+                message=
+                    "FEFO RPC call failed.",
+                exception=e,
             )
 
             return {
                 "success": False,
                 "method": "FEFO",
                 "message": str(e),
+
                 "product_id":
-                    int(product_id),
+                    product_id,
+
                 "warehouse_id":
-                    int(warehouse_id),
+                    warehouse_id,
+
                 "requested_qty":
-                    float(issue_quantity),
+                    requested_qty,
+
                 "allocated_qty":
                     0,
+
                 "shortage_qty":
-                    float(issue_quantity),
+                    requested_qty,
+
                 "total_cost":
                     0,
+
                 "allocations":
                     [],
             }
+
+    # ==========================================================================
+    # FIFO COGS COMPATIBILITY
+    #
+    # IMPORTANT
+    # --------------------------------------------------------------------------
+    # This function exists because erp_core.__init__.py publicly imports:
+    #
+    #     get_fifo_cogs
+    #
+    # It does NOT perform FIFO calculations in Python.
+    #
+    # The database remains responsible for inventory cost allocation.
+    #
+    # Current inventory architecture uses get_fefo_issue_plan().
+    # Therefore this compatibility helper obtains total_cost from that
+    # database-owned issue plan.
+    # ==========================================================================
+
+    def calculate_fifo_cogs(
+        self,
+        product_id: int,
+        warehouse_id: int,
+        issue_quantity: float,
+    ) -> float:
+
+        try:
+
+            result = self.get_fefo_issue_plan(
+                product_id=product_id,
+                warehouse_id=warehouse_id,
+                issue_quantity=issue_quantity,
+            )
+
+            if not result.get(
+                "success",
+                False,
+            ):
+
+                return 0.0
+
+            return _safe_float(
+                result.get(
+                    "total_cost",
+                    0,
+                ),
+                0,
+            )
+
+        except Exception as e:
+
+            log_error(
+                message=
+                    "FIFO COGS compatibility calculation failed.",
+                exception=e,
+            )
+
+            return 0.0
 
     # ==========================================================================
     # STOCK ADJUSTMENT
@@ -653,7 +925,10 @@ class InventoryService:
 
             data = response.data
 
-            if isinstance(data, list) and data:
+            if isinstance(
+                data,
+                list,
+            ) and data:
 
                 data = data[0]
 
@@ -661,25 +936,26 @@ class InventoryService:
 
                 return {
                     "success": True,
-                    "data": data
+                    "data": data,
                 }
 
             return {
                 "success": False,
                 "message":
-                    "Stock adjustment insertion failed."
+                    "Stock adjustment insertion failed.",
             }
 
         except Exception as e:
 
             log_error(
-                message="Stock adjustment failed.",
-                exception=e
+                message=
+                    "Stock adjustment failed.",
+                exception=e,
             )
 
             return {
                 "success": False,
-                "message": str(e)
+                "message": str(e),
             }
 
     # ==========================================================================
@@ -688,15 +964,16 @@ class InventoryService:
 
     def get_stock_adjustments(
         self,
-        warehouse_id: int
-    ) -> List[Dict]:
+        warehouse_id: int,
+    ) -> List[Dict[str, Any]]:
 
         try:
 
             result = (
                 self.client
                 .table("stock_adjustments")
-                .select("""
+                .select(
+                    """
                     id,
                     product_id,
                     warehouse_id,
@@ -708,14 +985,15 @@ class InventoryService:
                     approved_by,
                     approved_at,
                     created_at
-                """)
+                    """
+                )
                 .eq(
                     "warehouse_id",
-                    int(warehouse_id)
+                    int(warehouse_id),
                 )
                 .order(
                     "created_at",
-                    desc=True
+                    desc=True,
                 )
                 .execute()
             )
@@ -724,52 +1002,152 @@ class InventoryService:
 
             for row in rows:
 
-                product_result = (
-                    self.client
-                    .table("products")
-                    .select("name")
-                    .eq(
-                        "id",
-                        row["product_id"]
-                    )
-                    .single()
-                    .execute()
+                product_id = row.get(
+                    "product_id"
                 )
 
-                product_data = (
-                    product_result.data
-                )
+                if product_id is None:
 
-                if isinstance(
-                    product_data,
-                    list
-                ):
-
-                    product_data = (
-                        product_data[0]
-                        if product_data
-                        else {}
-                    )
-
-                row["product_name"] = (
-                    product_data.get(
-                        "name",
+                    row["product_name"] = (
                         "Unknown"
                     )
+
+                    continue
+
+                try:
+
+                    product_result = (
+                        self.client
+                        .table("products")
+                        .select("name")
+                        .eq(
+                            "id",
+                            product_id,
+                        )
+                        .single()
+                        .execute()
+                    )
+
+                    product_data = (
+                        product_result.data
+                    )
+
                     if isinstance(
                         product_data,
-                        dict
+                        list,
+                    ):
+
+                        product_data = (
+                            product_data[0]
+                            if product_data
+                            else {}
+                        )
+
+                    if isinstance(
+                        product_data,
+                        dict,
+                    ):
+
+                        row["product_name"] = (
+                            product_data.get(
+                                "name",
+                                "Unknown",
+                            )
+                        )
+
+                    else:
+
+                        row["product_name"] = (
+                            "Unknown"
+                        )
+
+                except Exception:
+
+                    row["product_name"] = (
+                        "Unknown"
                     )
-                    else "Unknown"
-                )
 
             return rows
 
         except Exception as e:
 
             log_error(
-                message="Stock adjustment history load failed.",
-                exception=e
+                message=
+                    "Stock adjustment history load failed.",
+                exception=e,
             )
 
             return []
+
+
+# ==============================================================================
+# MODULE-LEVEL FIFO COGS COMPATIBILITY FUNCTION
+#
+# Required by:
+#
+#     from erp_core.services.inventory_service import get_fifo_cogs
+#
+# ==============================================================================
+
+
+def get_fifo_cogs(
+    product_id: int,
+    warehouse_id: int,
+    issue_quantity: float,
+    client=None,
+) -> float:
+    """
+    Public compatibility helper.
+
+    IMPORTANT:
+    No FIFO/FEFO calculation is performed in Python.
+
+    If a database client is supplied, use it.
+
+    Otherwise obtain the standard ERP database client lazily.
+
+    The actual inventory cost remains database-driven.
+    """
+
+    try:
+
+        if client is None:
+
+            from ..base_repo import db
+
+            client = db()
+
+        service = InventoryService(
+            client
+        )
+
+        return service.calculate_fifo_cogs(
+            product_id=product_id,
+            warehouse_id=warehouse_id,
+            issue_quantity=issue_quantity,
+        )
+
+    except Exception as e:
+
+        log_error(
+            message=
+                "get_fifo_cogs failed.",
+            exception=e,
+        )
+
+        return 0.0
+
+
+# ==============================================================================
+# PUBLIC EXPORTS
+# ==============================================================================
+
+__all__ = [
+    "InventoryService",
+    "get_fifo_cogs",
+]
+
+
+# ==============================================================================
+# END
+# ==============================================================================
