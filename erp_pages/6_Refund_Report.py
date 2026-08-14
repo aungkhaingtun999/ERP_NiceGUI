@@ -568,9 +568,9 @@ def create_refund_pdf(
         ]
     ]
 
-    total_net = 0
-    total_tax = 0
-    total_amount = 0
+    total_net_val = 0
+    total_tax_val = 0
+    total_amount_val = 0
 
     for item in items:
 
@@ -604,9 +604,9 @@ def create_refund_pdf(
             or 0
         )
 
-        total_net += net
-        total_tax += tax
-        total_amount += total
+        total_net_val += net
+        total_tax_val += tax
+        total_amount_val += total
 
         table_data.append(
             [
@@ -630,9 +630,9 @@ def create_refund_pdf(
             "TOTAL",
             "",
             "",
-            f"{total_net:,.2f}",
-            f"{total_tax:,.2f}",
-            f"{total_amount:,.2f}",
+            f"{total_net_val:,.2f}",
+            f"{total_tax_val:,.2f}",
+            f"{total_amount_val:,.2f}",
         ]
     )
 
@@ -689,261 +689,24 @@ def create_refund_pdf(
 
 
 # ==============================================================================
-# REFUND DETAIL DIALOG
+# REFUND SELECTOR
 # ==============================================================================
-
-@st.dialog("Refund Detail")
-def refund_detail_dialog(refund_id):
-
-    response = (
-        db()
-        .table("refund_header_view")
-        .select("*")
-        .eq("refund_id", refund_id)
-        .single()
-        .execute()
-    )
-
-    header = response.data
-
-    if not header:
-
-        st.error(
-            "Refund header not found."
-        )
-
-        return
-
-    st.subheader(
-        f"Refund ID : {header['refund_id']}"
-    )
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-
-        st.write(
-            f"**Invoice:** "
-            f"{header.get('invoice_no', '-')}"
-        )
-
-        st.write(
-            f"**Cashier:** "
-            f"{header.get('cashier_name', '-')}"
-        )
-
-        st.write(
-            f"**Warehouse:** "
-            f"{header.get('warehouse_name', '-')}"
-        )
-
-    with c2:
-
-        st.write(
-            f"**Status:** "
-            f"{header.get('status', '-')}"
-        )
-
-        st.write(
-            f"**Date:** "
-            f"{header.get('refund_date', '-')}"
-        )
-
-        st.write(
-            f"**Reason:** "
-            f"{header.get('reason', '-')}"
-        )
-
-    st.divider()
-
-    items_response = (
-        db()
-        .table("refund_detail_view")
-        .select("*")
-        .eq("refund_id", refund_id)
-        .execute()
-    )
-
-    items = items_response.data or []
-
-    if not items:
-
-        st.warning(
-            "No refund item records found."
-        )
-
-        return
-
-    item_df = pd.DataFrame(items)
-
-    # --------------------------------------------------------------------------
-    # Numeric normalization
-    # --------------------------------------------------------------------------
-
-    for col in [
-        "quantity",
-        "unit_price",
-        "item_total",
-        "refund_net_amount",
-        "refund_tax_amount",
-        "refund_total_amount",
-    ]:
-
-        if col not in item_df.columns:
-
-            item_df[col] = 0
-
-        item_df[col] = pd.to_numeric(
-            item_df[col],
-            errors="coerce",
-        ).fillna(0)
-
-    # --------------------------------------------------------------------------
-    # Display table
-    # --------------------------------------------------------------------------
-
-    display_df = pd.DataFrame(
-        {
-            "Product":
-                item_df["product_name"],
-
-            "Qty":
-                item_df["quantity"],
-
-            "Unit Price":
-                item_df["unit_price"],
-
-            "Refund Net":
-                item_df["refund_net_amount"],
-
-            "Refund Tax":
-                item_df["refund_tax_amount"],
-
-            "Refund Total":
-                item_df["refund_total_amount"],
-        }
-    )
-
-    show_table(
-        display_df
-    )
-
-    # --------------------------------------------------------------------------
-    # Detail totals
-    # --------------------------------------------------------------------------
-
-    detail_net = item_df[
-        "refund_net_amount"
-    ].sum()
-
-    detail_tax = item_df[
-        "refund_tax_amount"
-    ].sum()
-
-    detail_total = item_df[
-        "refund_total_amount"
-    ].sum()
-
-    st.divider()
-
-    d1, d2, d3 = st.columns(3)
-
-    with d1:
-
-        st.metric(
-            "Net",
-            f"{detail_net:,.2f} MMK",
-        )
-
-    with d2:
-
-        st.metric(
-            "Tax",
-            f"{detail_tax:,.2f} MMK",
-        )
-
-    with d3:
-
-        st.metric(
-            "Total",
-            f"{detail_total:,.2f} MMK",
-        )
-
-    # --------------------------------------------------------------------------
-    # PDF
-    # --------------------------------------------------------------------------
-
-    pdf_file = create_refund_pdf(
-        header,
-        items,
-    )
-
-    st.download_button(
-        "📄 PDF",
-        pdf_file,
-        f"refund_{refund_id}.pdf",
-        "application/pdf",
-    )
-
-    # --------------------------------------------------------------------------
-    # HTML
-    # --------------------------------------------------------------------------
-
-    html_table = display_df.to_html(
-        index=False,
-    )
-
-    html_content = f"""
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>Refund {refund_id}</title>
-    </head>
-
-    <body>
-
-        <h2>Refund Report</h2>
-
-        <p>
-            <b>Refund ID:</b> {refund_id}<br>
-            <b>Invoice:</b> {header.get('invoice_no', '')}<br>
-            <b>Status:</b> {header.get('status', '')}
-        </p>
-
-        {html_table}
-
-        <h3>
-            Net: {detail_net:,.2f} MMK
-        </h3>
-
-        <h3>
-            Tax: {detail_tax:,.2f} MMK
-        </h3>
-
-        <h3>
-            Total: {detail_total:,.2f} MMK
-        </h3>
-
-    </body>
-    </html>
-    """
-
-    st.download_button(
-        "🖨️ HTML",
-        html_content,
-        f"refund_{refund_id}.html",
-        "text/html",
-    )
-
-
-# ==============================================================================
-# REFUND LIST
+#
+# UI DESIGN
+#
+# Refund Report
+#      ↓
+# Select Refund ▼
+#      ↓
+# Selected Refund Detail
+#
+# Only the selected refund is displayed.
 # ==============================================================================
 
 st.divider()
 
 st.subheader(
-    "Refund Details"
+    "🔎 Refund Details"
 )
 
 
@@ -955,293 +718,617 @@ if filtered.empty:
 
 else:
 
+    # --------------------------------------------------------------------------
+    # BUILD REFUND SELECTOR
+    # --------------------------------------------------------------------------
+
+    selector_options = []
+
     for _, row in filtered.iterrows():
 
-        c1, c2, c3, c4 = st.columns(
-            [1, 3, 2, 2]
+        refund_id = row["refund_id"]
+
+        invoice_no = row["invoice_no"]
+
+        status = row["status"]
+
+        total = float(
+            row["report_total"] or 0
         )
 
-        with c1:
-
-            st.write(
-                row["refund_id"]
-            )
-
-        with c2:
-
-            st.write(
-                row["invoice_no"]
-            )
-
-        with c3:
-
-            st.write(
-                f"{row['report_total']:,.2f} MMK"
-            )
-
-        with c4:
-
-            if st.button(
-                "👁️ View",
-                key=(
-                    f"view_"
-                    f"{row['refund_id']}_"
-                    f"{row.name}"
+        selector_options.append(
+            (
+                refund_id,
+                (
+                    f"#{refund_id} | "
+                    f"{invoice_no} | "
+                    f"{total:,.2f} MMK | "
+                    f"{status}"
                 ),
+            )
+        )
+
+
+    # --------------------------------------------------------------------------
+    # SELECT REFUND
+    # --------------------------------------------------------------------------
+
+    selected_refund_id = st.selectbox(
+        "Select Refund",
+        options=[
+            item[0]
+            for item in selector_options
+        ],
+        format_func=lambda refund_id: next(
+            (
+                item[1]
+                for item in selector_options
+                if item[0] == refund_id
+            ),
+            str(refund_id),
+        ),
+        key="refund_selector",
+    )
+
+
+    # --------------------------------------------------------------------------
+    # SELECTED REFUND ROW
+    # --------------------------------------------------------------------------
+
+    selected_rows = filtered[
+        filtered["refund_id"]
+        == selected_refund_id
+    ]
+
+
+    if selected_rows.empty:
+
+        st.warning(
+            "Selected refund record was not found."
+        )
+
+    else:
+
+        selected_row = selected_rows.iloc[0]
+
+
+        # ======================================================================
+        # REFUND HEADER SUMMARY
+        # ======================================================================
+
+        st.markdown(
+            f"### Refund #{selected_refund_id}"
+        )
+
+
+        h1, h2, h3, h4 = st.columns(4)
+
+
+        with h1:
+
+            st.write(
+                "**Invoice**"
+            )
+
+            st.write(
+                selected_row["invoice_no"]
+            )
+
+
+        with h2:
+
+            st.write(
+                "**Status**"
+            )
+
+            st.write(
+                selected_row["status"]
+            )
+
+
+        with h3:
+
+            st.write(
+                "**Cashier**"
+            )
+
+            st.write(
+                selected_row["cashier_name"]
+            )
+
+
+        with h4:
+
+            st.write(
+                "**Warehouse**"
+            )
+
+            st.write(
+                selected_row["warehouse_name"]
+            )
+
+
+        # ======================================================================
+        # DATE / REASON
+        # ======================================================================
+
+        d1, d2 = st.columns(2)
+
+
+        with d1:
+
+            refund_date_value = selected_row[
+                "refund_date"
+            ]
+
+            if pd.notna(
+                refund_date_value
             ):
 
-                refund_detail_dialog(
-                    int(row["refund_id"])
+                st.write(
+                    "**Refund Date**"
+                )
+
+                st.write(
+                    refund_date_value.strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                )
+
+            else:
+
+                st.write(
+                    "**Refund Date:** -"
                 )
 
 
-# ==============================================================================
-# ==============================================================================
-# MAIN REPORT TABLE
-# ==============================================================================
+        with d2:
 
-st.divider()
+            st.write(
+                "**Reason**"
+            )
 
-st.subheader(
-    "📋 Refund Report"
-)
+            reason_value = selected_row[
+                "reason"
+            ]
 
-
-# ==============================================================================
-# REPORT DISPLAY AMOUNTS
-#
-# V4:
-#   refund_net_amount
-#   refund_tax_amount
-#   refund_total_amount
-#
-# Legacy:
-#   item_total -> Net / Total
-#   Tax -> 0
-# ==============================================================================
-
-report_table = filtered.copy()
+            st.write(
+                reason_value
+                if reason_value
+                else "-"
+            )
 
 
-# ------------------------------------------------------------------------------
-# Net
-# ------------------------------------------------------------------------------
-
-report_table["display_net"] = report_table[
-    "refund_net_amount"
-]
-
-legacy_net = (
-    report_table["display_net"].isna()
-    |
-    (report_table["display_net"] == 0)
-) & (
-    report_table["item_total"] != 0
-)
-
-report_table.loc[
-    legacy_net,
-    "display_net"
-] = report_table.loc[
-    legacy_net,
-    "item_total"
-]
+        st.divider()
 
 
-# ------------------------------------------------------------------------------
-# Tax
-# ------------------------------------------------------------------------------
+        # ======================================================================
+        # SELECTED REFUND AMOUNTS
+        # ======================================================================
 
-report_table["display_tax"] = (
-    report_table[
-        "refund_tax_amount"
-    ]
-    .fillna(0)
-)
-
-
-# ------------------------------------------------------------------------------
-# Total
-# ------------------------------------------------------------------------------
-
-report_table["display_total"] = report_table[
-    "refund_total_amount"
-]
-
-legacy_total = (
-    report_table["display_total"].isna()
-    |
-    (report_table["display_total"] == 0)
-) & (
-    report_table["item_total"] != 0
-)
-
-report_table.loc[
-    legacy_total,
-    "display_total"
-] = report_table.loc[
-    legacy_total,
-    "item_total"
-]
-
-
-# ==============================================================================
-# DISPLAY COLUMNS
-# ==============================================================================
-
-display_df = pd.DataFrame(
-    {
-        "Refund ID":
-            report_table["refund_id"],
-
-        "Invoice No":
-            report_table["invoice_no"],
-
-        "Refund Date":
-            report_table[
-                "refund_date"
-            ].dt.strftime(
-                "%Y-%m-%d %H:%M"
-            ),
-
-        "Product":
-            report_table["product_name"],
-
-        "Qty":
-            report_table["quantity"],
-
-        "Refund Net":
-            report_table["display_net"],
-
-        "Refund Tax":
-            report_table["display_tax"],
-
-        "Refund Total":
-            report_table["display_total"],
-
-        "Status":
-            report_table["status"],
-
-        "Cashier":
-            report_table["cashier_name"],
-
-        "Warehouse":
-            report_table["warehouse_name"],
-    }
-)
-
-
-# ==============================================================================
-# NUMERIC FORMATTING
-# ==============================================================================
-
-display_df["Qty"] = (
-    pd.to_numeric(
-        display_df["Qty"],
-        errors="coerce",
-    )
-    .fillna(0)
-)
-
-
-for col in [
-    "Refund Net",
-    "Refund Tax",
-    "Refund Total",
-]:
-
-    display_df[col] = (
-        pd.to_numeric(
-            display_df[col],
-            errors="coerce",
+        selected_net = float(
+            selected_row["report_net"]
+            or 0
         )
-        .fillna(0)
-    )
+
+        selected_tax = float(
+            selected_row["report_tax"]
+            or 0
+        )
+
+        selected_total = float(
+            selected_row["report_total"]
+            or 0
+        )
 
 
-# ==============================================================================
-# SHOW TABLE
-# ==============================================================================
-
-st.dataframe(
-    display_df,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Refund ID": st.column_config.NumberColumn(
-            "Refund ID",
-            format="%d",
-        ),
-
-        "Qty": st.column_config.NumberColumn(
-            "Qty",
-            format="%.2f",
-        ),
-
-        "Refund Net": st.column_config.NumberColumn(
-            "Refund Net",
-            format="%,.2f MMK",
-        ),
-
-        "Refund Tax": st.column_config.NumberColumn(
-            "Refund Tax",
-            format="%,.2f MMK",
-        ),
-
-        "Refund Total": st.column_config.NumberColumn(
-            "Refund Total",
-            format="%,.2f MMK",
-        ),
-    },
-)
+        a1, a2, a3 = st.columns(3)
 
 
-# ==============================================================================
-# TABLE SUMMARY
-# ==============================================================================
+        with a1:
 
-st.divider()
-
-s1, s2, s3 = st.columns(3)
-
-
-table_net = report_table[
-    "display_net"
-].sum()
+            st.metric(
+                "Refund Net",
+                f"{selected_net:,.2f} MMK",
+            )
 
 
-table_tax = report_table[
-    "display_tax"
-].sum()
+        with a2:
+
+            st.metric(
+                "Refund Tax",
+                f"{selected_tax:,.2f} MMK",
+            )
 
 
-table_total = report_table[
-    "display_total"
-].sum()
+        with a3:
+
+            st.metric(
+                "Refund Total",
+                f"{selected_total:,.2f} MMK",
+            )
 
 
-with s1:
-
-    st.metric(
-        "Report Net",
-        f"{table_net:,.2f} MMK",
-    )
+        st.divider()
 
 
-with s2:
+        # ======================================================================
+        # LOAD SELECTED REFUND ITEMS
+        # ======================================================================
 
-    st.metric(
-        "Report Tax",
-        f"{table_tax:,.2f} MMK",
-    )
+        try:
+
+            items_response = (
+                db()
+                .table("refund_detail_view")
+                .select("*")
+                .eq(
+                    "refund_id",
+                    selected_refund_id,
+                )
+                .execute()
+            )
+
+            selected_items = (
+                items_response.data
+                or []
+            )
+
+        except Exception as e:
+
+            selected_items = []
+
+            st.error(
+                f"Unable to load refund details: {e}"
+            )
 
 
-with s3:
+        # ======================================================================
+        # DETAIL ITEMS
+        # ======================================================================
 
-    st.metric(
-        "Report Total",
-        f"{table_total:,.2f} MMK",
-    )
+        if selected_items:
+
+            detail_df = pd.DataFrame(
+                selected_items
+            )
+
+
+            # ------------------------------------------------------------------
+            # SAFE NUMERIC COLUMNS
+            # ------------------------------------------------------------------
+
+            detail_numeric_columns = [
+                "quantity",
+                "unit_price",
+                "item_total",
+                "refund_net_amount",
+                "refund_tax_amount",
+                "refund_total_amount",
+            ]
+
+
+            for col in detail_numeric_columns:
+
+                if col not in detail_df.columns:
+
+                    detail_df[col] = 0
+
+                detail_df[col] = pd.to_numeric(
+                    detail_df[col],
+                    errors="coerce",
+                ).fillna(0)
+
+
+            # ------------------------------------------------------------------
+            # LEGACY FALLBACK
+            # ------------------------------------------------------------------
+
+            detail_df["display_net"] = (
+                detail_df[
+                    "refund_net_amount"
+                ]
+            )
+
+
+            legacy_detail_net = (
+                detail_df["display_net"].isna()
+                |
+                (
+                    detail_df[
+                        "display_net"
+                    ] == 0
+                )
+            ) & (
+                detail_df[
+                    "item_total"
+                ] != 0
+            )
+
+
+            detail_df.loc[
+                legacy_detail_net,
+                "display_net",
+            ] = detail_df.loc[
+                legacy_detail_net,
+                "item_total",
+            ]
+
+
+            detail_df["display_tax"] = (
+                detail_df[
+                    "refund_tax_amount"
+                ]
+                .fillna(0)
+            )
+
+
+            detail_df["display_total"] = (
+                detail_df[
+                    "refund_total_amount"
+                ]
+            )
+
+
+            legacy_detail_total = (
+                detail_df[
+                    "display_total"
+                ].isna()
+                |
+                (
+                    detail_df[
+                        "display_total"
+                    ] == 0
+                )
+            ) & (
+                detail_df[
+                    "item_total"
+                ] != 0
+            )
+
+
+            detail_df.loc[
+                legacy_detail_total,
+                "display_total",
+            ] = detail_df.loc[
+                legacy_detail_total,
+                "item_total",
+            ]
+
+
+            # ------------------------------------------------------------------
+            # DISPLAY TABLE
+            # ------------------------------------------------------------------
+
+            selected_detail_display = pd.DataFrame(
+                {
+                    "Product":
+                        detail_df[
+                            "product_name"
+                        ],
+
+                    "Qty":
+                        detail_df[
+                            "quantity"
+                        ],
+
+                    "Unit Price":
+                        detail_df[
+                            "unit_price"
+                        ],
+
+                    "Refund Net":
+                        detail_df[
+                            "display_net"
+                        ],
+
+                    "Refund Tax":
+                        detail_df[
+                            "display_tax"
+                        ],
+
+                    "Refund Total":
+                        detail_df[
+                            "display_total"
+                        ],
+                }
+            )
+
+
+            st.subheader(
+                "📦 Refund Items"
+            )
+
+
+            st.dataframe(
+                selected_detail_display,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Qty":
+                        st.column_config.NumberColumn(
+                            "Qty",
+                            format="%.2f",
+                        ),
+
+                    "Unit Price":
+                        st.column_config.NumberColumn(
+                            "Unit Price",
+                            format="%,.2f MMK",
+                        ),
+
+                    "Refund Net":
+                        st.column_config.NumberColumn(
+                            "Refund Net",
+                            format="%,.2f MMK",
+                        ),
+
+                    "Refund Tax":
+                        st.column_config.NumberColumn(
+                            "Refund Tax",
+                            format="%,.2f MMK",
+                        ),
+
+                    "Refund Total":
+                        st.column_config.NumberColumn(
+                            "Refund Total",
+                            format="%,.2f MMK",
+                        ),
+                },
+            )
+
+
+            # ------------------------------------------------------------------
+            # DETAIL TOTALS
+            # ------------------------------------------------------------------
+
+            detail_net = detail_df[
+                "display_net"
+            ].sum()
+
+            detail_tax = detail_df[
+                "display_tax"
+            ].sum()
+
+            detail_total = detail_df[
+                "display_total"
+            ].sum()
+
+
+            t1, t2, t3 = st.columns(3)
+
+
+            with t1:
+
+                st.metric(
+                    "Net",
+                    f"{detail_net:,.2f} MMK",
+                )
+
+
+            with t2:
+
+                st.metric(
+                    "Tax",
+                    f"{detail_tax:,.2f} MMK",
+                )
+
+
+            with t3:
+
+                st.metric(
+                    "Total",
+                    f"{detail_total:,.2f} MMK",
+                )
+
+
+            # ------------------------------------------------------------------
+            # PDF / HTML
+            # ------------------------------------------------------------------
+
+            pdf_file = create_refund_pdf(
+                selected_row.to_dict(),
+                selected_items,
+            )
+
+
+            e1, e2 = st.columns(2)
+
+
+            with e1:
+
+                st.download_button(
+                    "📄 PDF",
+                    pdf_file,
+                    (
+                        f"refund_"
+                        f"{selected_refund_id}.pdf"
+                    ),
+                    "application/pdf",
+                    key=(
+                        f"pdf_"
+                        f"{selected_refund_id}"
+                    ),
+                )
+
+
+            html_table = (
+                selected_detail_display
+                .to_html(
+                    index=False,
+                )
+            )
+
+
+            html_content = f"""
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>
+                    Refund {selected_refund_id}
+                </title>
+            </head>
+
+            <body>
+
+                <h2>Refund Report</h2>
+
+                <p>
+                    <b>Refund ID:</b>
+                    {selected_refund_id}<br>
+
+                    <b>Invoice:</b>
+                    {selected_row["invoice_no"]}<br>
+
+                    <b>Status:</b>
+                    {selected_row["status"]}
+                </p>
+
+                {html_table}
+
+                <h3>
+                    Net:
+                    {detail_net:,.2f} MMK
+                </h3>
+
+                <h3>
+                    Tax:
+                    {detail_tax:,.2f} MMK
+                </h3>
+
+                <h3>
+                    Total:
+                    {detail_total:,.2f} MMK
+                </h3>
+
+            </body>
+            </html>
+            """
+
+
+            with e2:
+
+                st.download_button(
+                    "🖨️ HTML",
+                    html_content,
+                    (
+                        f"refund_"
+                        f"{selected_refund_id}.html"
+                    ),
+                    "text/html",
+                    key=(
+                        f"html_"
+                        f"{selected_refund_id}"
+                    ),
+                )
+
+
+        else:
+
+            st.warning(
+                "No refund item records found."
+            )
+
 
 # ==============================================================================
 # ANALYTICS
