@@ -2,35 +2,36 @@
 # erp_pages/inventory/inventory_import_approval.py
 #
 # ERP ENTERPRISE INVENTORY IN APPROVAL
+# STEP 3 - LINE LEVEL SELECTION
 #
-# Maker-Checker Workflow
+# Workflow
+# ------------------------------------------------------------------------------
 #
 # inventory_import_batches
-#       ↓
-#     PENDING
-#       ↓
-# Checker selects:
-#       - Select All
-#       - Individual batches
-#       ↓
-# Approve Selected
-#       ↓
-# approve_inventory_import_batch()
-#       ↓
-# POSTED
+#          ↓
+#        PENDING
+#          ↓
+#      Select Batch
+#          ↓
+#   Load Import Lines
+#          ↓
+# Select All / Individual Lines
 #
 # IMPORTANT
 # ------------------------------------------------------------------------------
-# Python NEVER directly updates:
+# STEP 3 ONLY
 #
-#     warehouse_stock
-#     inventory_batches
-#     inventory_cost_layers
+# This module prepares LINE-LEVEL selection.
 #
-# Actual posting is owned by PostgreSQL RPC:
+# It DOES NOT post stock.
+#
+# It DOES NOT call:
 #
 #     approve_inventory_import_batch()
 #
+# because the current RPC approves the ENTIRE batch.
+#
+# Line-level approval RPC will be implemented in the next step.
 # ==============================================================================
 
 from __future__ import annotations
@@ -44,8 +45,6 @@ from database import db
 # CONSTANTS
 # ==============================================================================
 
-PAGE_TITLE = "Inventory In Approval"
-
 STATUS_PENDING = "PENDING"
 
 
@@ -54,19 +53,22 @@ STATUS_PENDING = "PENDING"
 # ==============================================================================
 
 def _initialize_state():
-    """
-    Initialize approval-page session state.
 
-    IMPORTANT
-    ----------
-    Selection state belongs only to this approval page.
-    """
+    defaults = {
 
-    if "inventory_import_approval_selected" not in st.session_state:
+        # Currently opened PENDING batch
+        "inventory_import_approval_batch_no": None,
 
-        st.session_state[
-            "inventory_import_approval_selected"
-        ] = set()
+        # Selected line IDs
+        "inventory_import_approval_selected_lines": set(),
+
+    }
+
+    for key, value in defaults.items():
+
+        if key not in st.session_state:
+
+            st.session_state[key] = value
 
 
 # ==============================================================================
@@ -74,12 +76,6 @@ def _initialize_state():
 # ==============================================================================
 
 def _get_current_user_id():
-    """
-    Get current logged-in user ID.
-
-    Supports the same session keys used elsewhere
-    in the ERP application.
-    """
 
     possible_keys = [
         "user_id",
@@ -103,13 +99,6 @@ def _get_current_user_id():
 # ==============================================================================
 
 def _load_pending_batches(client):
-    """
-    Load all PENDING Inventory In batches.
-
-    Only batch/header information is loaded here.
-
-    Actual posting is performed by the approval RPC.
-    """
 
     response = (
         client
@@ -144,161 +133,529 @@ def _load_pending_batches(client):
 
 
 # ==============================================================================
-# LOAD WAREHOUSE NAMES
+# LOAD WAREHOUSES
 # ==============================================================================
 
 def _load_warehouse_map(client):
-    """
-    Load warehouse names for display.
-    """
 
     response = (
         client
         .table("warehouses")
-        .select("id,name")
-        .order("id")
+        .select(
+            "id,name"
+        )
+        .order(
+            "id"
+        )
         .execute()
     )
 
-    warehouses = response.data or []
+    rows = response.data or []
 
     return {
         int(row["id"]): row.get(
             "name",
             "",
         )
-        for row in warehouses
+        for row in rows
         if row.get("id") is not None
     }
 
 
 # ==============================================================================
-# FORMAT DATE
+# LOAD IMPORT LINES
 # ==============================================================================
 
-def _format_datetime(value):
+def _load_import_lines(
+    client,
+    batch_id,
+):
     """
-    Safe display formatter.
+    Load all lines belonging to one Inventory In batch.
     """
 
-    if not value:
+    response = (
+        client
+        .table("inventory_import_lines")
+        .select(
+            """
+            id,
+            batch_id,
+            line_no,
+            warehouse_id,
+            sku,
+            product_id,
+            qty,
+            unit_cost,
+            lot_no,
+            mfg_date,
+            expiry_date,
+            reference_no,
+            supplier_code,
+            is_valid,
+            error_message
+            """
+        )
+        .eq(
+            "batch_id",
+            batch_id,
+        )
+        .order(
+            "line_no",
+        )
+        .execute()
+    )
+
+    return response.data or []
+
+
+# ==============================================================================
+# FORMAT VALUE
+# ==============================================================================
+
+def _display(value):
+
+    if value is None:
 
         return "-"
 
-    text = str(value)
+    text = str(value).strip()
 
-    if "T" in text:
+    return text if text else "-"
 
-        text = text.replace(
-            "T",
-            " ",
-            1,
+
+# ==============================================================================
+# FORMAT NUMBER
+# ==============================================================================
+
+def _format_number(value):
+
+    if value is None:
+
+        return "-"
+
+    try:
+
+        number = float(value)
+
+        if number.is_integer():
+
+            return f"{int(number):,}"
+
+        return f"{number:,.2f}"
+
+    except Exception:
+
+        return str(value)
+
+
+# ==============================================================================
+# BATCH SUMMARY
+# ==============================================================================
+
+def _render_batch_summary(
+    batch,
+    warehouse_map,
+):
+
+    warehouse_id = batch.get(
+        "warehouse_to"
+    )
+
+    try:
+
+        warehouse_id = int(
+            warehouse_id
         )
 
-    if "+" in text:
+    except (
+        TypeError,
+        ValueError,
+    ):
 
-        text = text.split(
-            "+",
-            1,
-        )[0]
+        pass
 
-    return text[:19]
+    warehouse_name = warehouse_map.get(
+        warehouse_id,
+        f"Warehouse {_display(warehouse_id)}",
+    )
+
+    st.markdown(
+        f"### 📦 {batch.get('batch_no', '-')}"
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "Status",
+        _display(
+            batch.get("status")
+        ),
+    )
+
+    c2.metric(
+        "Total Lines",
+        batch.get(
+            "total_lines",
+            0,
+        ),
+    )
+
+    c3.metric(
+        "Valid Lines",
+        batch.get(
+            "valid_lines",
+            0,
+        ),
+    )
+
+    c4.metric(
+        "Error Lines",
+        batch.get(
+            "error_lines",
+            0,
+        ),
+    )
+
+    st.caption(
+        f"Warehouse: {warehouse_name} | "
+        f"Maker: {_display(batch.get('requested_by'))}"
+    )
+
+    if batch.get("remarks"):
+
+        st.caption(
+            f"Remarks: {batch.get('remarks')}"
+        )
 
 
 # ==============================================================================
-# APPROVE ONE BATCH
+# SELECT ALL LINES
 # ==============================================================================
 
-def _approve_batch(
-    client,
-    batch_no,
-    checker_id,
+def _select_all_lines(
+    lines,
 ):
     """
-    Approve one Inventory In batch through PostgreSQL RPC.
+    Select all VALID lines.
 
-    IMPORTANT
-    ----------
-    This function does NOT perform stock updates directly.
+    Invalid lines are never selectable for posting.
     """
 
-    response = client.rpc(
-        "approve_inventory_import_batch",
-        {
-            "p_batch_no": batch_no,
-            "p_checker_id": checker_id,
-        },
-    ).execute()
+    selected = {
+        int(line["id"])
+        for line in lines
+        if line.get("is_valid") is True
+        and line.get("id") is not None
+    }
 
-    result = response.data
-
-    if isinstance(result, list):
-
-        if result:
-
-            return result[0]
-
-        return {}
-
-    return result or {}
+    st.session_state[
+        "inventory_import_approval_selected_lines"
+    ] = selected
 
 
 # ==============================================================================
-# SELECTION HELPERS
+# CLEAR ALL LINES
 # ==============================================================================
 
-def _get_selected_batch_nos():
-    """
-    Return selected batch numbers.
-    """
+def _clear_all_lines():
 
-    selected = st.session_state.get(
-        "inventory_import_approval_selected",
+    st.session_state[
+        "inventory_import_approval_selected_lines"
+    ] = set()
+
+
+# ==============================================================================
+# LINE SELECTION
+# ==============================================================================
+
+def _render_line_selection(
+    lines,
+):
+
+    st.markdown(
+        "### 📋 Import Lines"
+    )
+
+    valid_line_ids = {
+        int(line["id"])
+        for line in lines
+        if line.get("is_valid") is True
+        and line.get("id") is not None
+    }
+
+    current_selection = st.session_state.get(
+        "inventory_import_approval_selected_lines",
         set(),
     )
 
     if not isinstance(
-        selected,
+        current_selection,
         set,
     ):
 
-        selected = set()
+        current_selection = set()
 
-    return selected
+    # --------------------------------------------------------------------------
+    # Remove stale selections
+    # --------------------------------------------------------------------------
 
-
-def _set_selected_batch_nos(values):
-    """
-    Replace selected batch numbers.
-    """
+    current_selection = (
+        current_selection
+        & valid_line_ids
+    )
 
     st.session_state[
-        "inventory_import_approval_selected"
-    ] = set(values)
+        "inventory_import_approval_selected_lines"
+    ] = current_selection
 
+    # --------------------------------------------------------------------------
+    # Selection controls
+    # --------------------------------------------------------------------------
 
-def _select_all(batch_nos):
-    """
-    Select all currently displayed PENDING batches.
-    """
-
-    _set_selected_batch_nos(
-        batch_nos
+    select_col, clear_col, info_col = st.columns(
+        [1.3, 1.3, 4]
     )
 
+    with select_col:
 
-def _clear_all():
-    """
-    Clear all selections.
-    """
+        if st.button(
+            "☑️ Select All Lines",
+            key="inventory_import_select_all_lines",
+            use_container_width=True,
+        ):
 
-    _set_selected_batch_nos(
-        set()
-    )
+            _select_all_lines(
+                lines
+            )
+
+            st.rerun()
+
+    with clear_col:
+
+        if st.button(
+            "⬜ Clear All",
+            key="inventory_import_clear_all_lines",
+            use_container_width=True,
+        ):
+
+            _clear_all_lines()
+
+            st.rerun()
+
+    with info_col:
+
+        st.caption(
+            f"Selected: {len(current_selection)} "
+            f"/ {len(valid_line_ids)} valid lines"
+        )
+
+    st.markdown("---")
+
+    # --------------------------------------------------------------------------
+    # Line-by-line selection
+    # --------------------------------------------------------------------------
+
+    for line in lines:
+
+        line_id = line.get(
+            "id"
+        )
+
+        if line_id is None:
+
+            continue
+
+        try:
+
+            line_id = int(
+                line_id
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            continue
+
+        is_valid = (
+            line.get("is_valid")
+            is True
+        )
+
+        is_selected = (
+            line_id
+            in current_selection
+        )
+
+        # ----------------------------------------------------------------------
+        # LINE CARD
+        # ----------------------------------------------------------------------
+
+        with st.container(
+            border=True
+        ):
+
+            select_col, data_col = st.columns(
+                [1.3, 6]
+            )
+
+            with select_col:
+
+                if is_valid:
+
+                    selected = st.checkbox(
+                        f"Line {line.get('line_no', '-')}",
+                        value=is_selected,
+                        key=(
+                            "inventory_import_line_select_"
+                            f"{line_id}"
+                        ),
+                    )
+
+                    current = st.session_state.get(
+                        "inventory_import_approval_selected_lines",
+                        set(),
+                    )
+
+                    if not isinstance(
+                        current,
+                        set,
+                    ):
+
+                        current = set()
+
+                    if selected:
+
+                        current.add(
+                            line_id
+                        )
+
+                    else:
+
+                        current.discard(
+                            line_id
+                        )
+
+                    st.session_state[
+                        "inventory_import_approval_selected_lines"
+                    ] = current
+
+                else:
+
+                    st.checkbox(
+                        f"Line {line.get('line_no', '-')}",
+                        value=False,
+                        disabled=True,
+                        key=(
+                            "inventory_import_line_invalid_"
+                            f"{line_id}"
+                        ),
+                    )
+
+            with data_col:
+
+                sku = _display(
+                    line.get("sku")
+                )
+
+                qty = _format_number(
+                    line.get("qty")
+                )
+
+                unit_cost = _format_number(
+                    line.get("unit_cost")
+                )
+
+                lot_no = _display(
+                    line.get("lot_no")
+                )
+
+                mfg_date = _display(
+                    line.get("mfg_date")
+                )
+
+                expiry_date = _display(
+                    line.get("expiry_date")
+                )
+
+                reference_no = _display(
+                    line.get("reference_no")
+                )
+
+                supplier_code = _display(
+                    line.get("supplier_code")
+                )
+
+                c1, c2, c3 = st.columns(3)
+
+                c1.write(
+                    f"**SKU**  \n{sku}"
+                )
+
+                c2.write(
+                    f"**Quantity**  \n{qty}"
+                )
+
+                c3.write(
+                    f"**Unit Cost**  \n{unit_cost}"
+                )
+
+                c4, c5, c6 = st.columns(3)
+
+                c4.write(
+                    f"**Lot No**  \n{lot_no}"
+                )
+
+                c5.write(
+                    f"**MFG Date**  \n{mfg_date}"
+                )
+
+                c6.write(
+                    f"**Expiry Date**  \n{expiry_date}"
+                )
+
+                c7, c8 = st.columns(2)
+
+                c7.write(
+                    f"**Reference No**  \n"
+                    f"{reference_no}"
+                )
+
+                c8.write(
+                    f"**Supplier Code**  \n"
+                    f"{supplier_code}"
+                )
+
+                if is_valid:
+
+                    st.success(
+                        "VALID"
+                    )
+
+                else:
+
+                    st.error(
+                        "INVALID"
+                    )
+
+                    if line.get(
+                        "error_message"
+                    ):
+
+                        st.caption(
+                            "Error: "
+                            + str(
+                                line.get(
+                                    "error_message"
+                                )
+                            )
+                        )
 
 
 # ==============================================================================
-# MAIN UI
+# MAIN
 # ==============================================================================
 
 def render_inventory_import_approval():
@@ -318,15 +675,14 @@ def render_inventory_import_approval():
     )
 
     st.caption(
-        "ERP Enterprise Inventory In | "
-        "Checker Approval | "
-        "Maker-Checker Enabled"
+        "Checker | Select individual import lines or Select All Lines"
     )
 
     st.info(
-        "ဒီနေရာမှာ PENDING Inventory In batch များကို "
-        "တစ်ခုချင်း သို့မဟုတ် Select All ဖြင့် ရွေးချယ်ပြီး "
-        "Checker အဖြစ် Approve လုပ်နိုင်ပါတယ်။"
+        "ဒီအဆင့်မှာ Batch တစ်ခုအတွင်းရှိတဲ့ "
+        "Import Line တွေကို ရွေးချယ်ခြင်းပဲ ပြုလုပ်ထားပါတယ်။ "
+        "Approve လုပ်တဲ့ Database RPC ကို နောက်အဆင့်မှာ "
+        "Selected Line ID များအတိုင်း ပြောင်းလဲပါမယ်။"
     )
 
     # ==========================================================================
@@ -346,7 +702,7 @@ def render_inventory_import_approval():
         return
 
     # ==========================================================================
-    # CHECKER
+    # CURRENT USER
     # ==========================================================================
 
     checker_id = _get_current_user_id()
@@ -354,14 +710,13 @@ def render_inventory_import_approval():
     if not checker_id:
 
         st.warning(
-            "Current checker user ID was not found. "
-            "Please log in again."
+            "Current user session ID was not found."
         )
 
         return
 
     # ==========================================================================
-    # LOAD DATA
+    # LOAD BATCHES
     # ==========================================================================
 
     try:
@@ -377,7 +732,7 @@ def render_inventory_import_approval():
     except Exception as e:
 
         st.error(
-            "Inventory In approval queue loading failed."
+            "Approval queue loading failed."
         )
 
         st.exception(e)
@@ -385,501 +740,229 @@ def render_inventory_import_approval():
         return
 
     # ==========================================================================
-    # EMPTY QUEUE
+    # NO PENDING
     # ==========================================================================
 
     if not batches:
-
-        _clear_all()
 
         st.success(
             "🎉 No PENDING Inventory In batches."
         )
 
-        st.caption(
-            "All Inventory In requests have been processed."
+        st.session_state[
+            "inventory_import_approval_batch_no"
+        ] = None
+
+        _clear_all_lines()
+
+        return
+
+    # ==========================================================================
+    # SELECT BATCH
+    # ==========================================================================
+
+    batch_options = {
+        str(
+            batch["batch_no"]
+        ): batch
+        for batch in batches
+        if batch.get("batch_no")
+    }
+
+    batch_nos = list(
+        batch_options.keys()
+    )
+
+    current_batch_no = st.session_state.get(
+        "inventory_import_approval_batch_no"
+    )
+
+    if (
+        current_batch_no not in batch_options
+    ):
+
+        current_batch_no = batch_nos[0]
+
+        st.session_state[
+            "inventory_import_approval_batch_no"
+        ] = current_batch_no
+
+        _clear_all_lines()
+
+    selected_batch_no = st.selectbox(
+        "Select PENDING Inventory In Batch",
+        batch_nos,
+        index=batch_nos.index(
+            current_batch_no
+        ),
+        key="inventory_import_approval_batch_selector",
+    )
+
+    if selected_batch_no != current_batch_no:
+
+        st.session_state[
+            "inventory_import_approval_batch_no"
+        ] = selected_batch_no
+
+        _clear_all_lines()
+
+        st.rerun()
+
+    # ==========================================================================
+    # SELECTED BATCH
+    # ==========================================================================
+
+    selected_batch = batch_options[
+        selected_batch_no
+    ]
+
+    _render_batch_summary(
+        selected_batch,
+        warehouse_map,
+    )
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # LOAD LINES
+    # ==========================================================================
+
+    try:
+
+        lines = _load_import_lines(
+            client,
+            selected_batch["id"],
+        )
+
+    except Exception as e:
+
+        st.error(
+            "Import line loading failed."
+        )
+
+        st.exception(e)
+
+        return
+
+    # ==========================================================================
+    # NO LINES
+    # ==========================================================================
+
+    if not lines:
+
+        st.warning(
+            "No import lines found in this batch."
         )
 
         return
 
     # ==========================================================================
-    # CLEAN OLD SELECTIONS
+    # LINE SELECTION
     # ==========================================================================
 
-    available_batch_nos = {
-        str(
-            batch.get("batch_no")
-        ).strip()
-        for batch in batches
-        if batch.get("batch_no")
-    }
-
-    current_selection = _get_selected_batch_nos()
-
-    cleaned_selection = (
-        current_selection
-        & available_batch_nos
+    _render_line_selection(
+        lines
     )
-
-    if cleaned_selection != current_selection:
-
-        _set_selected_batch_nos(
-            cleaned_selection
-        )
 
     # ==========================================================================
-    # KPI
+    # SELECTED SUMMARY
     # ==========================================================================
 
-    selected_count = len(
-        cleaned_selection
+    selected_line_ids = st.session_state.get(
+        "inventory_import_approval_selected_lines",
+        set(),
     )
 
-    total_pending = len(
-        batches
+    if not isinstance(
+        selected_line_ids,
+        set,
+    ):
+
+        selected_line_ids = set()
+
+    valid_lines = [
+        line
+        for line in lines
+        if line.get("is_valid") is True
+    ]
+
+    selected_lines = [
+        line
+        for line in valid_lines
+        if int(line["id"])
+        in selected_line_ids
+    ]
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 📊 Selection Summary"
     )
 
-    total_lines = sum(
-        int(
-            batch.get(
-                "total_lines",
+    total_selected_qty = sum(
+        float(
+            line.get(
+                "qty",
                 0,
             )
             or 0
         )
-        for batch in batches
+        for line in selected_lines
     )
 
     c1, c2, c3 = st.columns(3)
 
     c1.metric(
-        "Pending Batches",
-        total_pending,
+        "Valid Lines",
+        len(valid_lines),
     )
 
     c2.metric(
-        "Selected",
-        selected_count,
+        "Selected Lines",
+        len(selected_lines),
     )
 
     c3.metric(
-        "Pending Lines",
-        total_lines,
+        "Selected Quantity",
+        _format_number(
+            total_selected_qty
+        ),
     )
 
-    st.markdown("---")
+    if selected_lines:
 
-    # ==========================================================================
-    # SELECT ALL / CLEAR ALL
-    # ==========================================================================
-
-    col1, col2, col3 = st.columns(
-        [1, 1, 4]
-    )
-
-    batch_nos = [
-        str(
-            batch.get("batch_no")
-        ).strip()
-        for batch in batches
-        if batch.get("batch_no")
-    ]
-
-    with col1:
-
-        if st.button(
-            "☑️ Select All",
-            key="inventory_import_select_all",
-            use_container_width=True,
-        ):
-
-            _select_all(
-                batch_nos
-            )
-
-            st.rerun()
-
-    with col2:
-
-        if st.button(
-            "⬜ Clear All",
-            key="inventory_import_clear_all",
-            use_container_width=True,
-        ):
-
-            _clear_all()
-
-            st.rerun()
-
-    with col3:
-
-        if selected_count:
-
-            st.caption(
-                f"{selected_count} batch(es) selected."
-            )
-
-        else:
-
-            st.caption(
-                "Select one or more batches to approve."
-            )
-
-    # ==========================================================================
-    # APPROVAL QUEUE
-    # ==========================================================================
-
-    st.markdown(
-        "### 📋 Pending Inventory In Batches"
-    )
-
-    # ==========================================================================
-    # INDIVIDUAL SELECTION
-    # ==========================================================================
-
-    for batch in batches:
-
-        batch_no = str(
-            batch.get(
-                "batch_no",
-                "",
-            )
-        ).strip()
-
-        if not batch_no:
-
-            continue
-
-        is_selected = (
-            batch_no
-            in cleaned_selection
+        st.success(
+            f"{len(selected_lines)} line(s) selected."
         )
 
-        warehouse_id = batch.get(
-            "warehouse_to"
-        )
-
-        try:
-
-            warehouse_id_int = int(
-                warehouse_id
-            )
-
-        except (
-            TypeError,
-            ValueError,
-        ):
-
-            warehouse_id_int = None
-
-        warehouse_name = (
-            warehouse_map.get(
-                warehouse_id_int,
-                f"Warehouse {warehouse_id}",
-            )
-        )
-
-        requested_by = batch.get(
-            "requested_by"
-        )
-
-        total = int(
-            batch.get(
-                "total_lines",
-                0,
-            )
-            or 0
-        )
-
-        valid = int(
-            batch.get(
-                "valid_lines",
-                0,
-            )
-            or 0
-        )
-
-        errors = int(
-            batch.get(
-                "error_lines",
-                0,
-            )
-            or 0
-        )
-
-        created_at = _format_datetime(
-            batch.get(
-                "created_at"
-            )
-        )
-
-        # ----------------------------------------------------------------------
-        # BATCH CARD
-        # ----------------------------------------------------------------------
-
-        with st.container(
-            border=True
-        ):
-
-            col_select, col_info = st.columns(
-                [0.5, 5]
-            )
-
-            with col_select:
-
-                selected = st.checkbox(
-                    "Select",
-                    value=is_selected,
-                    key=(
-                        "inventory_import_select_"
-                        + batch_no
-                    ),
-                    label_visibility="collapsed",
-                )
-
-            with col_info:
-
-                st.markdown(
-                    f"**📦 {batch_no}**"
-                )
-
-                i1, i2, i3, i4 = st.columns(4)
-
-                i1.write(
-                    f"**Warehouse**  \n"
-                    f"{warehouse_name}"
-                )
-
-                i2.write(
-                    f"**Lines**  \n"
-                    f"{total}"
-                )
-
-                i3.write(
-                    f"**Valid**  \n"
-                    f"{valid}"
-                )
-
-                i4.write(
-                    f"**Status**  \n"
-                    f"`PENDING`"
-                )
-
-                st.caption(
-                    f"Maker: {requested_by or '-'} | "
-                    f"Created: {created_at}"
-                )
-
-                if batch.get("remarks"):
-
-                    st.caption(
-                        f"Remarks: {batch.get('remarks')}"
-                    )
-
-                if errors:
-
-                    st.warning(
-                        f"Validation errors: {errors}"
-                    )
-
-            # ------------------------------------------------------------------
-            # UPDATE SELECTION
-            # ------------------------------------------------------------------
-
-            current = _get_selected_batch_nos()
-
-            if selected:
-
-                current.add(
-                    batch_no
-                )
-
-            else:
-
-                current.discard(
-                    batch_no
-                )
-
-            _set_selected_batch_nos(
-                current
-            )
-
-    # ==========================================================================
-    # APPROVAL ACTION
-    # ==========================================================================
-
-    st.markdown("---")
-
-    selected_batches = sorted(
-        _get_selected_batch_nos()
-    )
-
-    st.markdown(
-        "### 🚀 Approval Action"
-    )
-
-    if not selected_batches:
-
-        st.info(
-            "Approve လုပ်ရန် Batch တစ်ခုခုကို ရွေးပါ။"
-        )
-
-        return
-
-    st.warning(
-        f"⚠️ {len(selected_batches)} batch(es) "
-        "ကို approve လုပ်မည်။ "
-        "Approval ပြီးပါက stock posting ကို "
-        "database RPC မှ atomic transaction ဖြင့် လုပ်ဆောင်ပါမည်။"
-    )
-
-    with st.expander(
-        "Selected Batches",
-        expanded=False,
-    ):
-
-        for batch_no in selected_batches:
+        for line in selected_lines:
 
             st.write(
-                f"• {batch_no}"
+                f"• Line {line.get('line_no')} | "
+                f"{line.get('sku')} | "
+                f"Qty {_format_number(line.get('qty'))}"
             )
 
+    else:
+
+        st.info(
+            "Approve လုပ်မည့် Line များကို အပေါ်မှ ရွေးချယ်ပါ။"
+        )
+
     # ==========================================================================
-    # APPROVE SELECTED
+    # APPROVE BUTTON
     # ==========================================================================
 
-    if st.button(
-        "✅ Approve Selected",
-        type="primary",
+    st.markdown("---")
+
+    st.warning(
+        "⚠️ Approve button ကို နောက်အဆင့်မှာ "
+        "Selected Lines အတိုင်း Database RPC နှင့် ချိတ်ဆက်ပါမယ်။"
+    )
+
+    st.button(
+        "✅ Approve Selected Lines",
+        disabled=True,
         use_container_width=True,
-        key="inventory_import_approve_selected",
-    ):
-
-        success_count = 0
-        failed_count = 0
-
-        successful_batches = []
-        failed_batches = []
-
-        # ----------------------------------------------------------------------
-        # PROCESS EACH SELECTED BATCH
-        # ----------------------------------------------------------------------
-
-        progress = st.progress(
-            0,
-            text="Starting approval...",
-        )
-
-        total_selected = len(
-            selected_batches
-        )
-
-        for index, batch_no in enumerate(
-            selected_batches,
-            start=1,
-        ):
-
-            progress.progress(
-                int(
-                    ((index - 1)
-                    / total_selected)
-                    * 100
-                ),
-                text=(
-                    f"Approving {batch_no} "
-                    f"({index}/{total_selected})..."
-                ),
-            )
-
-            try:
-
-                result = _approve_batch(
-                    client=client,
-                    batch_no=batch_no,
-                    checker_id=checker_id,
-                )
-
-                if result.get(
-                    "success"
-                ):
-
-                    success_count += 1
-
-                    successful_batches.append(
-                        batch_no
-                    )
-
-                else:
-
-                    failed_count += 1
-
-                    failed_batches.append(
-                        {
-                            "batch_no": batch_no,
-                            "message": result.get(
-                                "message",
-                                "Approval failed.",
-                            ),
-                        }
-                    )
-
-            except Exception as e:
-
-                failed_count += 1
-
-                failed_batches.append(
-                    {
-                        "batch_no": batch_no,
-                        "message": str(e),
-                    }
-                )
-
-        progress.progress(
-            100,
-            text="Approval processing completed.",
-        )
-
-        # ----------------------------------------------------------------------
-        # REMOVE SUCCESSFUL SELECTIONS
-        # ----------------------------------------------------------------------
-
-        current = _get_selected_batch_nos()
-
-        for batch_no in successful_batches:
-
-            current.discard(
-                batch_no
-            )
-
-        _set_selected_batch_nos(
-            current
-        )
-
-        # ----------------------------------------------------------------------
-        # RESULT
-        # ----------------------------------------------------------------------
-
-        if success_count:
-
-            st.success(
-                f"✅ {success_count} batch(es) "
-                "approved and posted successfully."
-            )
-
-        if failed_count:
-
-            st.error(
-                f"❌ {failed_count} batch(es) "
-                "failed to approve."
-            )
-
-            for failed in failed_batches:
-
-                st.error(
-                    f"{failed['batch_no']}: "
-                    f"{failed['message']}"
-                )
-
-        if success_count:
-
-            st.rerun()
+        key="inventory_import_approve_selected_lines",
+    )
