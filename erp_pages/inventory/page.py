@@ -146,6 +146,9 @@ from .product_import import (
 from .inventory_import import (
     render_inventory_import,
 )
+from .inventory_import_approval import (
+    render_inventory_import_approval,
+)
 
 from .stock_adjustment import (
     render_stock_adjustment,
@@ -177,10 +180,10 @@ INVENTORY_TABS = [
     "Edit Product",
     "Product Import",
     "Inventory In",
+    "Inventory In Approval",
     "Stock Adjustment",
     "Dashboard",
 ]
-
 
 # ==============================================================================
 # TAB ICONS
@@ -194,10 +197,10 @@ INVENTORY_TAB_ICONS = [
     "✏️",
     "📦",
     "📥",
+    "✅",
     "🔧",
     "📊",
 ]
-
 
 # ==============================================================================
 # SESSION STATE
@@ -734,7 +737,41 @@ def _render_inventory_in_tab():
     # --------------------------------------------------------------------------
 
     render_inventory_import()
+# ==============================================================================
+# INVENTORY IN APPROVAL
+# ==============================================================================
 
+def _render_inventory_in_approval_tab():
+
+    # --------------------------------------------------------------------------
+    # IMPORTANT
+    # --------------------------------------------------------------------------
+    # Inventory In Approval is the Checker side of Inventory In.
+    #
+    # Maker:
+    #     Excel / CSV
+    #         ↓
+    #     inventory_import_batches
+    #         ↓
+    #     PENDING
+    #
+    # Checker:
+    #     Select All / Individual Select
+    #         ↓
+    #     Approve Selected
+    #         ↓
+    #     approve_inventory_import_batch()
+    #
+    # Actual stock posting is performed by the PostgreSQL approval RPC.
+    # Python UI must NOT directly update:
+    #
+    #     warehouse_stock
+    #     inventory_batches
+    #     inventory_cost_layers
+    #
+    # --------------------------------------------------------------------------
+
+    render_inventory_import_approval()
 
 # ==============================================================================
 # STOCK ADJUSTMENT
@@ -947,6 +984,9 @@ def run_inventory_page():
     elif active_tab == "Inventory In":
 
         _render_inventory_in_tab()
+    elif active_tab == "Inventory In Approval":
+
+    _render_inventory_in_approval_tab()
 
     # ==========================================================================
     # STOCK ADJUSTMENT
