@@ -1,16 +1,16 @@
 # ==============================================================================
 # REFUND REPORT
-# ERP ENTERPRISE REFUND REPORT v4.0
+# ERP ENTERPRISE REFUND REPORT v4.1
 #
 # Tax-aware Refund Reporting
 #
-# Supports:
+# Compatible with:
+#   refund_process_rpc_v4
+#
+# Uses:
 #   refund_net_amount
 #   refund_tax_amount
 #   refund_total_amount
-#
-# Compatible with:
-#   refund_process_rpc_v4
 # ==============================================================================
 
 import io
@@ -49,7 +49,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("📊 Refund Report v4.0")
+st.title("📊 Refund Report v4.1")
 
 
 # ==============================================================================
@@ -75,7 +75,9 @@ def get_refund_report():
         .execute()
     )
 
-    return pd.DataFrame(response.data or [])
+    return pd.DataFrame(
+        response.data or []
+    )
 
 
 df = get_refund_report()
@@ -90,6 +92,7 @@ if df.empty:
     st.info("No refund records found.")
 
     if st.button("🔄 Refresh"):
+
         st.cache_data.clear()
         st.rerun()
 
@@ -104,16 +107,17 @@ numeric_columns = [
     "quantity",
     "unit_price",
     "item_total",
+    "refund_amount",
     "refund_net_amount",
     "refund_tax_amount",
     "refund_total_amount",
-    "refund_amount",
 ]
 
 
 for col in numeric_columns:
 
     if col not in df.columns:
+
         df[col] = 0
 
     df[col] = pd.to_numeric(
@@ -133,22 +137,25 @@ df["refund_date"] = pd.to_datetime(
 
 
 # ==============================================================================
-# NORMALIZE STATUS
+# STATUS NORMALIZATION
 # ==============================================================================
 
 if "status" not in df.columns:
+
     df["status"] = "COMPLETED"
+
 
 df["status"] = (
     df["status"]
     .fillna("")
     .astype(str)
+    .str.strip()
     .str.upper()
 )
 
 
 # ==============================================================================
-# NORMALIZE TEXT COLUMNS
+# TEXT NORMALIZATION
 # ==============================================================================
 
 text_columns = [
@@ -160,20 +167,35 @@ text_columns = [
     "reason",
 ]
 
+
 for col in text_columns:
 
     if col not in df.columns:
+
         df[col] = ""
 
-    df[col] = df[col].fillna("").astype(str)
+    df[col] = (
+        df[col]
+        .fillna("")
+        .astype(str)
+    )
 
 
 # ==============================================================================
-# REFUND TOTAL FALLBACK
+# V4 REPORT AMOUNTS
 # ==============================================================================
 
-# v4 uses refund_total_amount.
-# Older records may only have item_total.
+# ------------------------------------------------------------------------------
+# IMPORTANT
+#
+# V4 refund amount calculation:
+#
+#   Net   = refund_net_amount
+#   Tax   = refund_tax_amount
+#   Total = refund_total_amount
+#
+# Do NOT use item_total as the primary refund amount.
+# ------------------------------------------------------------------------------
 
 df["report_net"] = df["refund_net_amount"]
 
@@ -182,24 +204,48 @@ df["report_tax"] = df["refund_tax_amount"]
 df["report_total"] = df["refund_total_amount"]
 
 
-# Legacy fallback
+# ==============================================================================
+# LEGACY FALLBACK
+# ==============================================================================
+
+# Old refund rows may not have V4 amount columns populated.
+#
+# For those old rows:
+#
+#   Net   -> item_total
+#   Tax   -> 0
+#   Total -> item_total
+#
+# New V4 rows are NOT affected.
+
+legacy_total_mask = (
+    df["report_total"] == 0
+) & (
+    df["item_total"] != 0
+)
+
+
 df.loc[
-    df["report_total"] == 0,
+    legacy_total_mask,
     "report_total"
 ] = df.loc[
-    df["report_total"] == 0,
+    legacy_total_mask,
     "item_total"
 ]
 
 
-# If old rows do not contain net amount,
-# use item_total as net fallback.
+legacy_net_mask = (
+    df["report_net"] == 0
+) & (
+    df["item_total"] != 0
+)
+
 
 df.loc[
-    df["report_net"] == 0,
+    legacy_net_mask,
     "report_net"
 ] = df.loc[
-    df["report_net"] == 0,
+    legacy_net_mask,
     "item_total"
 ]
 
@@ -240,13 +286,19 @@ warehouse_filter = st.sidebar.multiselect(
 
 status_filter = st.sidebar.multiselect(
     "Status",
-    ["PENDING", "COMPLETED", "REJECTED"],
+    [
+        "PENDING",
+        "COMPLETED",
+        "REJECTED",
+    ],
 )
 
 
 min_date = df["refund_date"].min()
 
+
 if pd.isna(min_date):
+
     min_date = pd.Timestamp.today()
 
 
@@ -334,7 +386,9 @@ if st.sidebar.button("🔄 Refresh Data"):
 # KPI
 # ==============================================================================
 
-total_refunds = filtered["refund_id"].nunique()
+total_refunds = filtered[
+    "refund_id"
+].nunique()
 
 
 pending = (
@@ -352,11 +406,19 @@ rejected = (
 ).sum()
 
 
-total_net = filtered["report_net"].sum()
+total_net = filtered[
+    "report_net"
+].sum()
 
-total_tax = filtered["report_tax"].sum()
 
-total_refund = filtered["report_total"].sum()
+total_tax = filtered[
+    "report_tax"
+].sum()
+
+
+total_refund = filtered[
+    "report_total"
+].sum()
 
 
 # ==============================================================================
@@ -412,7 +474,9 @@ with c5:
 
 st.divider()
 
-st.subheader("💰 Refund Financial Summary")
+st.subheader(
+    "💰 Refund Financial Summary"
+)
 
 
 f1, f2, f3 = st.columns(3)
@@ -453,18 +517,14 @@ def create_refund_pdf(
 
     buffer = io.BytesIO()
 
-
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
     )
 
-
     styles = getSampleStyleSheet()
 
-
     content = []
-
 
     content.append(
         Paragraph(
@@ -473,11 +533,9 @@ def create_refund_pdf(
         )
     )
 
-
     content.append(
         Spacer(1, 12)
     )
-
 
     header_text = f"""
     <b>Refund ID:</b> {header.get('refund_id', '')}<br/>
@@ -488,7 +546,6 @@ def create_refund_pdf(
     <b>Reason:</b> {header.get('reason', '')}
     """
 
-
     content.append(
         Paragraph(
             header_text,
@@ -496,11 +553,9 @@ def create_refund_pdf(
         )
     )
 
-
     content.append(
         Spacer(1, 12)
     )
-
 
     table_data = [
         [
@@ -513,22 +568,22 @@ def create_refund_pdf(
         ]
     ]
 
-
     total_net = 0
     total_tax = 0
     total_amount = 0
-
 
     for item in items:
 
         net = float(
             item.get(
                 "refund_net_amount",
-                item.get("item_total", 0),
+                item.get(
+                    "item_total",
+                    0,
+                ),
             )
             or 0
         )
-
 
         tax = float(
             item.get(
@@ -538,20 +593,20 @@ def create_refund_pdf(
             or 0
         )
 
-
         total = float(
             item.get(
                 "refund_total_amount",
-                item.get("item_total", 0),
+                item.get(
+                    "item_total",
+                    0,
+                ),
             )
             or 0
         )
 
-
         total_net += net
         total_tax += tax
         total_amount += total
-
 
         table_data.append(
             [
@@ -570,7 +625,6 @@ def create_refund_pdf(
             ]
         )
 
-
     table_data.append(
         [
             "TOTAL",
@@ -582,12 +636,10 @@ def create_refund_pdf(
         ]
     )
 
-
     table = Table(
         table_data,
         repeatRows=1,
     )
-
 
     table.setStyle(
         TableStyle(
@@ -627,12 +679,9 @@ def create_refund_pdf(
         )
     )
 
-
     content.append(table)
 
-
     doc.build(content)
-
 
     buffer.seek(0)
 
@@ -655,24 +704,21 @@ def refund_detail_dialog(refund_id):
         .execute()
     )
 
-
     header = response.data
-
 
     if not header:
 
-        st.error("Refund header not found.")
+        st.error(
+            "Refund header not found."
+        )
 
         return
-
 
     st.subheader(
         f"Refund ID : {header['refund_id']}"
     )
 
-
     c1, c2 = st.columns(2)
-
 
     with c1:
 
@@ -691,7 +737,6 @@ def refund_detail_dialog(refund_id):
             f"{header.get('warehouse_name', '-')}"
         )
 
-
     with c2:
 
         st.write(
@@ -709,9 +754,7 @@ def refund_detail_dialog(refund_id):
             f"{header.get('reason', '-')}"
         )
 
-
     st.divider()
-
 
     items_response = (
         db()
@@ -721,9 +764,7 @@ def refund_detail_dialog(refund_id):
         .execute()
     )
 
-
     items = items_response.data or []
-
 
     if not items:
 
@@ -733,13 +774,11 @@ def refund_detail_dialog(refund_id):
 
         return
 
-
     item_df = pd.DataFrame(items)
 
-
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # Numeric normalization
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     for col in [
         "quantity",
@@ -754,16 +793,14 @@ def refund_detail_dialog(refund_id):
 
             item_df[col] = 0
 
-
         item_df[col] = pd.to_numeric(
             item_df[col],
             errors="coerce",
         ).fillna(0)
 
-
-    # --------------------------------------------------
-    # Display
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
+    # Display table
+    # --------------------------------------------------------------------------
 
     display_df = pd.DataFrame(
         {
@@ -787,30 +824,29 @@ def refund_detail_dialog(refund_id):
         }
     )
 
+    show_table(
+        display_df
+    )
 
-    show_table(display_df)
-
+    # --------------------------------------------------------------------------
+    # Detail totals
+    # --------------------------------------------------------------------------
 
     detail_net = item_df[
         "refund_net_amount"
     ].sum()
 
-
     detail_tax = item_df[
         "refund_tax_amount"
     ].sum()
-
 
     detail_total = item_df[
         "refund_total_amount"
     ].sum()
 
-
     st.divider()
 
-
     d1, d2, d3 = st.columns(3)
-
 
     with d1:
 
@@ -819,14 +855,12 @@ def refund_detail_dialog(refund_id):
             f"{detail_net:,.2f} MMK",
         )
 
-
     with d2:
 
         st.metric(
             "Tax",
             f"{detail_tax:,.2f} MMK",
         )
-
 
     with d3:
 
@@ -835,16 +869,14 @@ def refund_detail_dialog(refund_id):
             f"{detail_total:,.2f} MMK",
         )
 
-
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # PDF
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     pdf_file = create_refund_pdf(
         header,
         items,
     )
-
 
     st.download_button(
         "📄 PDF",
@@ -853,15 +885,13 @@ def refund_detail_dialog(refund_id):
         "application/pdf",
     )
 
-
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # HTML
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     html_table = display_df.to_html(
         index=False,
     )
-
 
     html_content = f"""
     <html>
@@ -898,7 +928,6 @@ def refund_detail_dialog(refund_id):
     </html>
     """
 
-
     st.download_button(
         "🖨️ HTML",
         html_content,
@@ -913,7 +942,9 @@ def refund_detail_dialog(refund_id):
 
 st.divider()
 
-st.subheader("Refund Details")
+st.subheader(
+    "Refund Details"
+)
 
 
 if filtered.empty:
@@ -930,13 +961,11 @@ else:
             [1, 3, 2, 2]
         )
 
-
         with c1:
 
             st.write(
                 row["refund_id"]
             )
-
 
         with c2:
 
@@ -944,13 +973,11 @@ else:
                 row["invoice_no"]
             )
 
-
         with c3:
 
             st.write(
                 f"{row['report_total']:,.2f} MMK"
             )
-
 
         with c4:
 
@@ -969,7 +996,7 @@ else:
 
 
 # ==============================================================================
-# MAIN TABLE
+# MAIN REPORT TABLE
 # ==============================================================================
 
 display_columns = [
@@ -1004,25 +1031,54 @@ report_table = filtered[
 
 report_table = report_table.rename(
     columns={
-        "refund_id": "Refund ID",
-        "invoice_no": "Invoice",
-        "refund_date": "Date",
-        "status": "Status",
-        "product_name": "Product",
-        "quantity": "Qty",
-        "unit_price": "Unit Price",
-        "refund_net_amount": "Refund Net",
-        "refund_tax_amount": "Refund Tax",
-        "refund_total_amount": "Refund Total",
-        "cashier_name": "Cashier",
-        "processed_by": "Processed By",
-        "warehouse_name": "Warehouse",
-        "reason": "Reason",
+        "refund_id":
+            "Refund ID",
+
+        "invoice_no":
+            "Invoice",
+
+        "refund_date":
+            "Date",
+
+        "status":
+            "Status",
+
+        "product_name":
+            "Product",
+
+        "quantity":
+            "Qty",
+
+        "unit_price":
+            "Unit Price",
+
+        "refund_net_amount":
+            "Refund Net",
+
+        "refund_tax_amount":
+            "Refund Tax",
+
+        "refund_total_amount":
+            "Refund Total",
+
+        "cashier_name":
+            "Cashier",
+
+        "processed_by":
+            "Processed By",
+
+        "warehouse_name":
+            "Warehouse",
+
+        "reason":
+            "Reason",
     }
 )
 
 
-show_table(report_table)
+show_table(
+    report_table
+)
 
 
 # ==============================================================================
@@ -1031,35 +1087,36 @@ show_table(report_table)
 
 st.divider()
 
-st.subheader("📊 Refund Analytics")
+st.subheader(
+    "📊 Refund Analytics"
+)
 
 
 if not filtered.empty:
 
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # Daily Refund Total
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     daily = (
         filtered
         .groupby(
-            filtered["refund_date"].dt.date
+            filtered[
+                "refund_date"
+            ].dt.date
         )["report_total"]
         .sum()
     )
-
 
     st.line_chart(
         daily
     )
 
-
     col1, col2 = st.columns(2)
 
-
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # Top Products
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     with col1:
 
@@ -1067,12 +1124,11 @@ if not filtered.empty:
             "🏆 Top 10 Products"
         )
 
-
         top_products = (
             filtered
-            .groupby("product_name")[
-                "quantity"
-            ]
+            .groupby(
+                "product_name"
+            )["quantity"]
             .sum()
             .sort_values(
                 ascending=False
@@ -1080,15 +1136,13 @@ if not filtered.empty:
             .head(10)
         )
 
-
         st.bar_chart(
             top_products
         )
 
-
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # Status
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     with col2:
 
@@ -1096,15 +1150,13 @@ if not filtered.empty:
             "📊 Status"
         )
 
-
         status_data = (
             filtered
-            .groupby("status")[
-                "refund_id"
-            ]
+            .groupby(
+                "status"
+            )["refund_id"]
             .nunique()
         )
-
 
         if not status_data.empty:
 
@@ -1117,21 +1169,19 @@ if not filtered.empty:
                 use_container_width=True,
             )
 
-
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
     # Cashier Ranking
-    # --------------------------------------------------
+    # --------------------------------------------------------------------------
 
     st.subheader(
         "👤 Cashier Ranking (Top 5)"
     )
 
-
     cashier_ranking = (
         filtered
-        .groupby("cashier_name")[
-            "report_total"
-        ]
+        .groupby(
+            "cashier_name"
+        )["report_total"]
         .sum()
         .sort_values(
             ascending=False
@@ -1139,11 +1189,9 @@ if not filtered.empty:
         .head(5)
     )
 
-
     st.bar_chart(
         cashier_ranking
     )
-
 
 else:
 
@@ -1158,30 +1206,100 @@ else:
 
 st.divider()
 
-st.subheader("📥 Export")
+st.subheader(
+    "📥 Export"
+)
 
 
-export_df = filtered.copy()
+export_columns = [
+    "refund_id",
+    "sale_id",
+    "invoice_no",
+    "refund_date",
+    "status",
+    "reason",
+    "product_id",
+    "product_name",
+    "quantity",
+    "unit_price",
+    "item_total",
+    "refund_net_amount",
+    "refund_tax_amount",
+    "refund_total_amount",
+    "cashier_name",
+    "processed_by",
+    "approved_at",
+    "warehouse_name",
+]
 
 
-# Human-readable export names
+for col in export_columns:
+
+    if col not in filtered.columns:
+
+        filtered[col] = ""
+
+
+export_df = filtered[
+    export_columns
+].copy()
+
 
 export_df = export_df.rename(
     columns={
-        "refund_id": "Refund ID",
-        "invoice_no": "Invoice",
-        "refund_date": "Refund Date",
-        "status": "Status",
-        "product_name": "Product",
-        "quantity": "Quantity",
-        "unit_price": "Unit Price",
-        "refund_net_amount": "Refund Net",
-        "refund_tax_amount": "Refund Tax",
-        "refund_total_amount": "Refund Total",
-        "cashier_name": "Cashier",
-        "processed_by": "Processed By",
-        "warehouse_name": "Warehouse",
-        "reason": "Reason",
+        "refund_id":
+            "Refund ID",
+
+        "sale_id":
+            "Sale ID",
+
+        "invoice_no":
+            "Invoice",
+
+        "refund_date":
+            "Refund Date",
+
+        "status":
+            "Status",
+
+        "reason":
+            "Reason",
+
+        "product_id":
+            "Product ID",
+
+        "product_name":
+            "Product",
+
+        "quantity":
+            "Quantity",
+
+        "unit_price":
+            "Unit Price",
+
+        "item_total":
+            "Item Price Total",
+
+        "refund_net_amount":
+            "Refund Net",
+
+        "refund_tax_amount":
+            "Refund Tax",
+
+        "refund_total_amount":
+            "Refund Total",
+
+        "cashier_name":
+            "Cashier",
+
+        "processed_by":
+            "Processed By",
+
+        "approved_at":
+            "Approved At",
+
+        "warehouse_name":
+            "Warehouse",
     }
 )
 
