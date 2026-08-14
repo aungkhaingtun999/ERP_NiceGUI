@@ -1,9 +1,35 @@
 # ==============================================================================
 # erp_core/__init__.py
-# ERP ENTERPRISE CORE EXPORT HUB v36.0 FINAL
+# ERP ENTERPRISE CORE EXPORT HUB v37.0
 #
-# PUBLIC API GATEWAY
+# DEBUG-SAFE PUBLIC API GATEWAY
+#
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# This file is the public export gateway of ERP Core.
+#
+# During debugging:
+#
+# - Core imports MUST NOT silently fail.
+# - RPC imports MUST NOT be replaced by fallback functions.
+# - Service imports MUST expose the real exception.
+# - Loader imports MUST expose the real exception.
+#
+# The purpose of this version is to identify the exact broken module.
 # ==============================================================================
+
+
+print(
+    "============================================================"
+)
+
+print(
+    "ERP CORE START"
+)
+
+print(
+    "============================================================"
+)
 
 
 # ==============================================================================
@@ -16,6 +42,10 @@ from .config import (
     DEFAULT_PAGE_SIZE,
     ERP_VERSION,
     log_error,
+)
+
+print(
+    "ERP CORE CONFIG: OK"
 )
 
 
@@ -39,6 +69,10 @@ from .base_repo import (
     safe_execute,
 )
 
+print(
+    "ERP CORE DATABASE: OK"
+)
+
 
 # ==============================================================================
 # CONTEXT
@@ -48,181 +82,120 @@ from .context import (
     CacheManager,
 )
 
+print(
+    "ERP CORE CONTEXT: OK"
+)
+
 
 # ==============================================================================
 # PRODUCT LOADERS
 # ==============================================================================
 
-try:
+from .loaders.product_loader import (
+    get_products,
+    get_pos_products,
+    get_active_products,
+    refresh_products_cache,
+)
 
-    from .loaders.product_loader import (
-        get_products,
-        get_pos_products,
-        get_active_products,
-        refresh_products_cache,
-    )
-
-except Exception as e:
-
-    log_error(
-        message=
-            "Product loader import failed",
-        exception=e,
-    )
-
-    def get_products(*args, **kwargs):
-        return []
-
-    def get_pos_products(*args, **kwargs):
-        return []
-
-    def get_active_products(*args, **kwargs):
-        return []
-
-    def refresh_products_cache():
-        pass
+print(
+    "ERP CORE PRODUCT LOADER: OK"
+)
 
 
 # ==============================================================================
-# INVENTORY
+# INVENTORY LOADER
 # ==============================================================================
 
-try:
+from .loaders.inventory_loader import (
+    get_inventory_view,
+)
 
-    from .loaders.inventory_loader import (
-        get_inventory_view,
-    )
-
-except Exception:
-
-    def get_inventory_view(*args, **kwargs):
-        return []
+print(
+    "ERP CORE INVENTORY LOADER: OK"
+)
 
 
 # ==============================================================================
-# CUSTOMER
+# CUSTOMER LOADER
 # ==============================================================================
 
-try:
+from .loaders.customer_loader import (
+    get_customers,
+)
 
-    from .loaders.customer_loader import (
-        get_customers,
-    )
-
-except Exception:
-
-    def get_customers(*args, **kwargs):
-        return []
+print(
+    "ERP CORE CUSTOMER LOADER: OK"
+)
 
 
 # ==============================================================================
-# SUPPLIER
+# SUPPLIER LOADER
 # ==============================================================================
 
-try:
+from .loaders.supplier_loader import (
+    get_suppliers,
+)
 
-    from .loaders.supplier_loader import (
-        get_suppliers,
-    )
-
-except Exception:
-
-    def get_suppliers(*args, **kwargs):
-        return []
+print(
+    "ERP CORE SUPPLIER LOADER: OK"
+)
 
 
 # ==============================================================================
-# CATEGORY
+# CATEGORY LOADER
 # ==============================================================================
 
-try:
+from .loaders.category_loader import (
+    get_categories,
+)
 
-    from .loaders.category_loader import (
-        get_categories,
-    )
-
-except Exception:
-
-    def get_categories(*args, **kwargs):
-        return []
+print(
+    "ERP CORE CATEGORY LOADER: OK"
+)
 
 
 # ==============================================================================
-# SETTINGS
+# SETTINGS LOADER
 # ==============================================================================
 
-try:
+from .loaders.settings_loader import (
+    get_setting,
+)
 
-    from .loaders.settings_loader import (
-        get_setting,
-    )
-
-except Exception:
-
-    def get_setting(
-        key,
-        default=None,
-    ):
-        return default
+print(
+    "ERP CORE SETTINGS LOADER: OK"
+)
 
 
 # ==============================================================================
-# WAREHOUSE
+# WAREHOUSE LOADER
 # ==============================================================================
 
-try:
+from .loaders.warehouse_loader import (
+    get_default_warehouse_id,
+    get_warehouses,
+)
 
-    from .loaders.warehouse_loader import (
-        get_default_warehouse_id,
-        get_warehouses,
-    )
-
-except Exception as e:
-
-    log_error(
-        message=
-            "Warehouse loader import failed",
-        exception=e,
-    )
-
-    def get_default_warehouse_id():
-        return None
-
-    def get_warehouses():
-        return []
+print(
+    "ERP CORE WAREHOUSE LOADER: OK"
+)
 
 
 # ==============================================================================
-# RECEIPT
+# RECEIPT LOADER
 # ==============================================================================
 
-try:
+from .loaders.receipt_loader import (
+    get_receipt,
+    get_sale_items,
+    get_full_receipt,
+    search_receipts,
+)
 
-    from .loaders.receipt_loader import (
-        get_receipt,
-        get_sale_items,
-        get_full_receipt,
-        search_receipts,
-    )
-
-except Exception:
-
-    def get_receipt(*args, **kwargs):
-        return None
-
-    def get_sale_items(*args, **kwargs):
-        return []
-
-    def get_full_receipt(*args, **kwargs):
-
-        return {
-            "success": False,
-            "sale": {},
-            "items": [],
-        }
-
-    def search_receipts(*args, **kwargs):
-        return []
+print(
+    "ERP CORE RECEIPT LOADER: OK"
+)
 
 
 # ==============================================================================
@@ -240,116 +213,98 @@ from .rpc import (
     approve_product_create_rpc,
 )
 
-print("ERP CORE RPC IMPORT: OK")
+print(
+    "ERP CORE RPC: OK"
+)
 
 
 # ==============================================================================
 # SERVICES
 # ==============================================================================
 
-try:
+from .services.sales_service import (
+    SalesService,
+)
 
-    from .services.sales_service import (
-        SalesService,
-    )
-
-except Exception:
-
-    SalesService = None
+print(
+    "ERP CORE SALES SERVICE: OK"
+)
 
 
-try:
+from .services.purchase_service import (
+    PurchaseService,
+)
 
-    from .services.purchase_service import (
-        PurchaseService,
-    )
-
-except Exception:
-
-    PurchaseService = None
+print(
+    "ERP CORE PURCHASE SERVICE: OK"
+)
 
 
-try:
+from .services.inventory_service import (
+    InventoryService,
+)
 
-    from .services.inventory_service import (
-        InventoryService,
-    )
-
-except Exception:
-
-    InventoryService = None
+print(
+    "ERP CORE INVENTORY SERVICE: OK"
+)
 
 
-try:
+from .services.refund_service import (
+    RefundService,
+)
 
-    from .services.refund_service import (
-        RefundService,
-    )
-
-except Exception:
-
-    RefundService = None
+print(
+    "ERP CORE REFUND SERVICE: OK"
+)
 
 
-try:
+from .services.receipt_service import (
+    ReceiptService,
+)
 
-    from .services.receipt_service import (
-        ReceiptService,
-    )
-
-except Exception:
-
-    ReceiptService = None
+print(
+    "ERP CORE RECEIPT SERVICE: OK"
+)
 
 
-try:
+from .services.payment_service import (
+    PaymentService,
+)
 
-    from .services.payment_service import (
-        PaymentService,
-    )
-
-except Exception:
-
-    PaymentService = None
+print(
+    "ERP CORE PAYMENT SERVICE: OK"
+)
 
 
-try:
+from .services.payment_qr_service import (
+    PaymentQRService,
+)
 
-    from .services.payment_qr_service import (
-        PaymentQRService,
-    )
-
-except Exception:
-
-    PaymentQRService = None
+print(
+    "ERP CORE PAYMENT QR SERVICE: OK"
+)
 
 
 # ==============================================================================
 # HELPERS
 # ==============================================================================
 
-try:
+from .services.inventory_service import (
+    get_fifo_cogs,
+)
 
-    from .services.inventory_service import (
-        get_fifo_cogs,
-    )
-
-except Exception:
-
-    def get_fifo_cogs(*args, **kwargs):
-        return 0
+print(
+    "ERP CORE FIFO COGS: OK"
+)
 
 
-try:
+from .services.audit_service import (
+    create_audit_log,
+)
 
-    from .services.audit_service import (
-        create_audit_log,
-    )
-
-except Exception:
-
-    def create_audit_log(*args, **kwargs):
-        return None
+print(
+    "ERP CORE AUDIT SERVICE: OK"
+)
 
 
 # ==============================================================================
@@ -358,17 +313,23 @@ except Exception:
 
 __all__ = [
 
+    # --------------------------------------------------------------------------
     # DATABASE
+    # --------------------------------------------------------------------------
 
     "db",
     "privileged_db",
     "get_supabase",
     "get_service_supabase",
     "get_connection",
+
     "DatabaseHealth",
     "database_health_check",
 
+
+    # --------------------------------------------------------------------------
     # CONFIG
+    # --------------------------------------------------------------------------
 
     "Tables",
     "CACHE_KEYS",
@@ -376,47 +337,80 @@ __all__ = [
     "ERP_VERSION",
     "log_error",
 
+
+    # --------------------------------------------------------------------------
     # CONTEXT
+    # --------------------------------------------------------------------------
 
     "CacheManager",
 
+
+    # --------------------------------------------------------------------------
     # PRODUCT
+    # --------------------------------------------------------------------------
 
     "get_products",
     "get_pos_products",
     "get_active_products",
     "refresh_products_cache",
+
+
+    # --------------------------------------------------------------------------
+    # INVENTORY
+    # --------------------------------------------------------------------------
+
     "get_inventory_view",
 
-    # SUPPLIER
 
-    "get_suppliers",
-
-    # CATEGORY
-
-    "get_categories",
-
+    # --------------------------------------------------------------------------
     # CUSTOMER
+    # --------------------------------------------------------------------------
 
     "get_customers",
 
+
+    # --------------------------------------------------------------------------
+    # SUPPLIER
+    # --------------------------------------------------------------------------
+
+    "get_suppliers",
+
+
+    # --------------------------------------------------------------------------
+    # CATEGORY
+    # --------------------------------------------------------------------------
+
+    "get_categories",
+
+
+    # --------------------------------------------------------------------------
     # SETTINGS
+    # --------------------------------------------------------------------------
 
     "get_setting",
 
+
+    # --------------------------------------------------------------------------
     # WAREHOUSE
+    # --------------------------------------------------------------------------
 
     "get_default_warehouse_id",
     "get_warehouses",
 
+
+    # --------------------------------------------------------------------------
     # RECEIPT
+    # --------------------------------------------------------------------------
 
     "get_receipt",
     "get_sale_items",
     "get_full_receipt",
     "search_receipts",
 
+
+    # --------------------------------------------------------------------------
     # RPC
+    # --------------------------------------------------------------------------
 
     "checkout_sale_rpc",
     "purchase_receive_rpc",
@@ -428,7 +422,10 @@ __all__ = [
     "request_product_bulk_create_rpc",
     "approve_product_create_rpc",
 
+
+    # --------------------------------------------------------------------------
     # SERVICES
+    # --------------------------------------------------------------------------
 
     "SalesService",
     "PurchaseService",
@@ -438,12 +435,18 @@ __all__ = [
     "PaymentService",
     "PaymentQRService",
 
+
+    # --------------------------------------------------------------------------
     # HELPERS
+    # --------------------------------------------------------------------------
 
     "get_fifo_cogs",
     "create_audit_log",
 
+
+    # --------------------------------------------------------------------------
     # UTILITIES
+    # --------------------------------------------------------------------------
 
     "money",
     "money_float",
@@ -458,9 +461,17 @@ __all__ = [
 # VERSION
 # ==============================================================================
 
-ERP_CORE_EXPORT_VERSION = "36.0"
+ERP_CORE_EXPORT_VERSION = "37.0"
 
 
 print(
+    "============================================================"
+)
+
+print(
     f"ERP CORE HUB v{ERP_CORE_EXPORT_VERSION} LOADED"
+)
+
+print(
+    "============================================================"
 )
