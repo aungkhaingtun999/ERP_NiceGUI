@@ -13,17 +13,15 @@ from typing import (
 
 from ..base_repo import (
     db,
-    log_error
 )
 
-
-from ..services import (
-    RefundService
+from ..config import (
+    log_error,
 )
 
-
-
-
+from ..services.refund_service import (
+    RefundService,
+)
 
 def refund_sale_rpc(
     sale_id: int,
