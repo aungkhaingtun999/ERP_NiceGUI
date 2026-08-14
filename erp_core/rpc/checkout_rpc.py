@@ -1,741 +1,802 @@
-==============================================================================
+# ==============================================================================
+# erp_core/rpc/checkout_rpc.py
+# ERP ENTERPRISE CHECKOUT RPC ENGINE v13.0
+#
+# Responsibilities:
+# - Validate checkout request
+# - Normalize cart payload
+# - Validate numeric values
+# - Call Supabase RPC
+# - Normalize RPC response safely
+# - Refresh ERP cache after successful checkout
+#
+# Database Function:
+#
+# checkout_sale_rpc(
+#     p_cart,
+#     p_paid_amount,
+#     p_warehouse_id,
+#     p_cashier_id,
+#     p_counter_id,
+#     p_payment_method,
+#     p_tax_rate,
+#     p_discount
+# )
+#
+# Architecture:
+#
+# POS
+#   ↓
+# erp_core.rpc.checkout_rpc
+#   ↓
+# Supabase RPC
+#   ↓
+# checkout_sale_rpc
+#
+# IMPORTANT:
+# - This Python wrapper does NOT calculate stock.
+# - This Python wrapper does NOT calculate FIFO / FEFO.
+# - Database RPC remains the transaction source of truth.
+# ==============================================================================
 
-erp_core/rpc/checkout_rpc.py
-
-ERP ENTERPRISE CHECKOUT RPC ENGINE v12.2 FINAL
-
-
-
-Responsibilities:
-
-- Validate checkout request
-
-- Normalize cart payload
-
-- Call Supabase RPC
-
-- Handle response safely
-
-- Refresh ERP cache
-
-
-
-Database Function:
-
-
-
-checkout_sale_rpc(
-
-p_cart,
-
-p_paid_amount,
-
-p_warehouse_id,
-
-p_cashier_id,
-
-p_counter_id,
-
-p_payment_method,
-
-p_tax_rate,
-
-p_discount
-
-)
-
-
-
-==============================================================================
 
 from typing import (
-
-Any,  
-Dict,  
-List,  
-Optional
-
+    Any,
+    Dict,
+    List,
+    Optional,
 )
+
+
+# ==============================================================================
+# DATABASE
+# ==============================================================================
 
 from ..base_repo import (
     db,
 )
+
+
+# ==============================================================================
+# CONFIG / LOGGING
+#
+# IMPORTANT:
+# log_error is owned by config.py.
+# Do not import log_error from base_repo.
+# ==============================================================================
 
 from ..config import (
     CACHE_KEYS,
     log_error,
 )
 
+
+# ==============================================================================
+# CACHE
+# ==============================================================================
+
 from ..context import (
-
-CacheManager
-
+    CacheManager,
 )
 
 
-==============================================================================
+# ==============================================================================
+# SAFE CONVERTERS
+# ==============================================================================
 
-SAFE CONVERTER
-
-==============================================================================
 
 def safe_float(
+    value: Any,
+    default: float = 0.0,
+) -> float:
+    """
+    Safely convert a value to float.
 
-value,  
+    Invalid values return default.
+    """
 
-default=0
+    try:
 
-):
+        if value is None:
 
-try:  
+            return float(default)
 
-    return float(value)  
+        return float(value)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return float(default)
 
 
-except Exception:  
+# ------------------------------------------------------------------------------
 
-    return float(default)
 
 def safe_int(
+    value: Any,
+    default: int = 0,
+) -> int:
+    """
+    Safely convert a value to int.
 
-value,  
+    Invalid values return default.
+    """
 
-default=0
+    try:
 
-):
+        if value is None:
 
-try:  
+            return int(default)
 
-    return int(value)  
+        return int(value)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return int(default)
 
 
-except Exception:  
+# ==============================================================================
+# CART NORMALIZER
+# ==============================================================================
 
-    return int(default)
-
-==============================================================================
-
-CART NORMALIZER
-
-==============================================================================
 
 def normalize_cart(
+    cart: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Normalize POS cart into the exact payload expected by
+    checkout_sale_rpc.
 
-cart: List[Dict[str, Any]]
+    Input example:
 
-):
+        {
+            "id": 10,
+            "qty": 2,
+            "selling_price": 1500
+        }
 
-result = []  
+    Output:
 
+        {
+            "id": 10,
+            "qty": 2,
+            "selling_price": 1500.0
+        }
 
+    Invalid items are skipped.
+    """
 
-for item in cart:  
+    result: List[Dict[str, Any]] = []
 
+    if not isinstance(
+        cart,
+        list,
+    ):
 
+        return result
 
-    if not item.get(  
 
-        "id"  
+    for item in cart:
 
-    ):  
+        # ----------------------------------------------------------------------
+        # Item must be a dictionary
+        # ----------------------------------------------------------------------
 
-        continue  
+        if not isinstance(
+            item,
+            dict,
+        ):
 
+            continue
 
 
+        # ----------------------------------------------------------------------
+        # Product ID
+        # ----------------------------------------------------------------------
 
+        product_id = safe_int(
+            item.get("id"),
+            0,
+        )
 
-    result.append(  
+        if product_id <= 0:
 
-        {  
+            continue
 
 
-            "id":  
+        # ----------------------------------------------------------------------
+        # Quantity
+        # ----------------------------------------------------------------------
 
-                safe_int(  
+        qty = safe_int(
+            item.get(
+                "qty",
+                0,
+            ),
+            0,
+        )
 
-                    item.get(  
+        if qty <= 0:
 
-                        "id"  
+            continue
 
-                    )  
 
-                ),  
+        # ----------------------------------------------------------------------
+        # Selling price
+        #
+        # Support both:
+        #
+        # selling_price
+        # unit_price
+        # ----------------------------------------------------------------------
 
+        selling_price = safe_float(
+            item.get(
+                "selling_price",
+                item.get(
+                    "unit_price",
+                    0,
+                ),
+            ),
+            0.0,
+        )
 
+        if selling_price < 0:
 
-            "qty":  
+            continue
 
-                safe_int(  
 
-                    item.get(  
+        # ----------------------------------------------------------------------
+        # Normalized item
+        # ----------------------------------------------------------------------
 
-                        "qty",  
+        result.append(
+            {
+                "id":
+                    product_id,
 
-                        0  
+                "qty":
+                    qty,
 
-                    )  
+                "selling_price":
+                    selling_price,
+            }
+        )
 
-                ),  
 
+    return result
 
 
-            "selling_price":  
+# ==============================================================================
+# CACHE REFRESH
+# ==============================================================================
 
-                safe_float(  
 
-                    item.get(  
+def refresh_checkout_cache() -> None:
+    """
+    Bump ERP cache versions after successful checkout.
 
-                        "selling_price",  
+    Checkout changes:
+    - Inventory
+    - Product stock
+    - Sales
 
-                        item.get(  
+    CacheManager only changes version numbers.
+    It does not directly manipulate database data.
+    """
 
-                            "unit_price",  
+    # --------------------------------------------------------------------------
+    # INVENTORY
+    # --------------------------------------------------------------------------
 
-                            0  
+    try:
 
-                        )  
+        CacheManager.bump(
+            CACHE_KEYS["inventory"]
+        )
 
-                    )  
+    except Exception as e:
 
-                )  
+        log_error(
+            message="Checkout inventory cache refresh failed.",
+            exception=e,
+        )
 
 
-        }  
+    # --------------------------------------------------------------------------
+    # PRODUCTS
+    # --------------------------------------------------------------------------
 
-    )  
+    try:
 
+        CacheManager.bump(
+            CACHE_KEYS["products"]
+        )
 
+    except Exception as e:
 
-return result
+        log_error(
+            message="Checkout product cache refresh failed.",
+            exception=e,
+        )
 
-==============================================================================
 
-CACHE REFRESH
+    # --------------------------------------------------------------------------
+    # SALES
+    # --------------------------------------------------------------------------
 
-==============================================================================
+    try:
 
-def refresh_checkout_cache():
+        CacheManager.bump(
+            CACHE_KEYS["sales"]
+        )
 
-try:  
+    except Exception as e:
 
+        log_error(
+            message="Checkout sales cache refresh failed.",
+            exception=e,
+        )
 
-    CacheManager.bump(  
 
-        CACHE_KEYS["inventory"]  
+# ==============================================================================
+# RPC RESPONSE NORMALIZER
+# ==============================================================================
 
-    )  
 
+def _normalize_rpc_response(
+    result: Any,
+) -> Dict[str, Any]:
+    """
+    Normalize different Supabase RPC response shapes.
 
+    Supported:
 
-except Exception:  
+        dict
+        [dict]
+        list
+        scalar
+        None
+    """
 
-    pass  
+    # --------------------------------------------------------------------------
+    # EMPTY
+    # --------------------------------------------------------------------------
 
+    if result is None:
 
+        return {
+            "success":
+                False,
 
+            "message":
+                "Empty RPC response.",
+        }
 
 
-try:  
+    # --------------------------------------------------------------------------
+    # DICT
+    # --------------------------------------------------------------------------
 
+    if isinstance(
+        result,
+        dict,
+    ):
 
-    CacheManager.bump(  
+        return result
 
-        CACHE_KEYS["products"]  
 
-    )  
+    # --------------------------------------------------------------------------
+    # LIST
+    # --------------------------------------------------------------------------
 
+    if isinstance(
+        result,
+        list,
+    ):
 
+        # Supabase may return:
+        #
+        # [
+        #     {
+        #         "success": true
+        #     }
+        # ]
 
-except Exception:  
+        if (
+            len(result) == 1
+            and isinstance(
+                result[0],
+                dict,
+            )
+        ):
 
-    pass  
+            return result[0]
 
 
+        # Multiple rows / records
 
+        return {
+            "success":
+                True,
 
+            "data":
+                result,
+        }
 
-try:  
 
+    # --------------------------------------------------------------------------
+    # OTHER
+    # --------------------------------------------------------------------------
 
-    CacheManager.bump(  
+    return {
+        "success":
+            True,
 
-        CACHE_KEYS["sales"]  
+        "data":
+            result,
+    }
 
-    )  
 
+# ==============================================================================
+# CHECKOUT RPC
+# ==============================================================================
 
-
-except Exception:  
-
-    pass
-
-==============================================================================
-
-CHECKOUT RPC
-
-==============================================================================
 
 def checkout_sale_rpc(
+    cart: List[Dict[str, Any]],
+    paid_amount: Any = 0,
+    warehouse_id: Optional[int] = None,
+    cashier_id: Optional[str] = None,
+    counter_id: int = 1,
+    payment_method: str = "CASH",
+    tax_rate: Any = 0,
+    discount: Any = 0,
+) -> Dict[str, Any]:
+    """
+    Execute checkout_sale_rpc through Supabase.
 
-cart: List[Dict[str, Any]],  
+    Python responsibilities:
+    - Validate request
+    - Normalize payload
+    - Call database RPC
+    - Normalize response
+    - Refresh cache after success
 
+    Database responsibilities:
+    - Transaction
+    - Stock deduction
+    - Sale creation
+    - Sale items
+    - Inventory accounting
+    - FIFO / FEFO logic where applicable
+    - Payment validation
+    """
 
-paid_amount: Any = 0,  
 
+    try:
 
-warehouse_id: Optional[int] = None,  
+        # ======================================================================
+        # BASIC VALIDATION
+        # ======================================================================
 
+        if not cart:
 
-cashier_id: Optional[str] = None,  
+            return {
+                "success":
+                    False,
 
+                "message":
+                    "Cart is empty.",
+            }
 
-counter_id: int = 1,  
 
+        if warehouse_id is None:
 
-payment_method: str = "CASH",  
+            return {
+                "success":
+                    False,
 
+                "message":
+                    "Warehouse not selected.",
+            }
 
-tax_rate: Any = 0,  
 
+        normalized_warehouse_id = safe_int(
+            warehouse_id,
+            0,
+        )
 
-discount: Any = 0
+        if normalized_warehouse_id <= 0:
 
-):
+            return {
+                "success":
+                    False,
 
-try:  
+                "message":
+                    "Invalid warehouse ID.",
+            }
 
 
+        if not cashier_id:
 
-    # ----------------------------------------------------------  
-    # VALIDATION  
-    # ----------------------------------------------------------  
+            return {
+                "success":
+                    False,
 
+                "message":
+                    "Cashier not found.",
+            }
 
-    if not cart:  
 
+        # ======================================================================
+        # NORMALIZE CART
+        # ======================================================================
 
+        rpc_cart = normalize_cart(
+            cart
+        )
 
-        return {  
 
+        if not rpc_cart:
 
-            "success":  
+            return {
+                "success":
+                    False,
 
-                False,  
+                "message":
+                    "Invalid cart data.",
+            }
 
 
-            "message":  
+        # ======================================================================
+        # NUMERIC VALUES
+        # ======================================================================
 
-                "Cart is empty."  
+        normalized_paid_amount = safe_float(
+            paid_amount,
+            0.0,
+        )
 
-        }  
 
+        normalized_tax_rate = safe_float(
+            tax_rate,
+            0.0,
+        )
 
 
+        normalized_discount = safe_float(
+            discount,
+            0.0,
+        )
 
 
+        normalized_counter_id = safe_int(
+            counter_id,
+            1,
+        )
 
-    if warehouse_id is None:  
 
+        # ----------------------------------------------------------------------
+        # Basic numeric validation
+        # ----------------------------------------------------------------------
 
+        if normalized_paid_amount < 0:
 
-        return {  
+            return {
+                "success":
+                    False,
 
+                "message":
+                    "Paid amount cannot be negative.",
+            }
 
-            "success":  
 
-                False,  
+        if normalized_tax_rate < 0:
 
+            return {
+                "success":
+                    False,
 
-            "message":  
+                "message":
+                    "Tax rate cannot be negative.",
+            }
 
-                "Warehouse not selected."  
 
-        }  
+        if normalized_discount < 0:
 
+            return {
+                "success":
+                    False,
 
+                "message":
+                    "Discount cannot be negative.",
+            }
 
 
+        if normalized_counter_id <= 0:
 
+            return {
+                "success":
+                    False,
 
-    if not cashier_id:  
+                "message":
+                    "Invalid counter ID.",
+            }
 
 
+        # ======================================================================
+        # PAYMENT METHOD
+        # ======================================================================
 
-        return {  
+        normalized_payment_method = str(
+            payment_method
+            if payment_method is not None
+            else "CASH"
+        ).strip().upper()
 
 
-            "success":  
+        if not normalized_payment_method:
 
-                False,  
+            normalized_payment_method = "CASH"
 
 
-            "message":  
+        # ======================================================================
+        # CASHIER
+        # ======================================================================
 
-                "Cashier not found."  
+        normalized_cashier_id = str(
+            cashier_id
+        ).strip()
 
-        }  
 
+        if not normalized_cashier_id:
 
+            return {
+                "success":
+                    False,
 
+                "message":
+                    "Cashier not found.",
+            }
 
 
+        # ======================================================================
+        # RPC PAYLOAD
+        # ======================================================================
 
+        payload: Dict[str, Any] = {
 
-    # ----------------------------------------------------------  
-    # CART  
-    # ----------------------------------------------------------  
+            "p_cart":
+                rpc_cart,
 
+            "p_paid_amount":
+                normalized_paid_amount,
 
-    rpc_cart = normalize_cart(  
+            "p_warehouse_id":
+                normalized_warehouse_id,
 
-        cart  
+            "p_cashier_id":
+                normalized_cashier_id,
 
-    )  
+            "p_counter_id":
+                normalized_counter_id,
 
+            "p_payment_method":
+                normalized_payment_method,
 
+            "p_tax_rate":
+                normalized_tax_rate,
 
-    if not rpc_cart:  
+            "p_discount":
+                normalized_discount,
+        }
 
 
+        # ======================================================================
+        # EXECUTE SUPABASE RPC
+        # ======================================================================
 
-        return {  
+        response = (
+            db()
+            .rpc(
+                "checkout_sale_rpc",
+                payload,
+            )
+            .execute()
+        )
 
 
-            "success":  
+        # ======================================================================
+        # EXTRACT RESPONSE DATA
+        # ======================================================================
 
-                False,  
+        result = getattr(
+            response,
+            "data",
+            None,
+        )
 
 
-            "message":  
+        # ======================================================================
+        # NORMALIZE RESPONSE
+        # ======================================================================
 
-                "Invalid cart data."  
+        normalized_result = _normalize_rpc_response(
+            result
+        )
 
-        }  
 
+        # ======================================================================
+        # CACHE REFRESH
+        # ======================================================================
+        #
+        # IMPORTANT:
+        #
+        # Only refresh cache when database RPC explicitly reports success.
+        #
+        # Do NOT refresh cache merely because a list/scalar was returned.
+        #
+        # ======================================================================
 
+        if normalized_result.get(
+            "success",
+            False,
+        ):
 
+            refresh_checkout_cache()
 
 
+        return normalized_result
 
 
-    # ----------------------------------------------------------  
-    # PAYLOAD  
-    # ----------------------------------------------------------  
+    # ==========================================================================
+    # ERROR HANDLING
+    # ==========================================================================
 
+    except Exception as e:
 
-    payload = {  
+        log_error(
+            message=
+                "checkout_sale_rpc execution failed.",
+            exception=e,
+            rpc=
+                "checkout_sale_rpc",
+        )
 
 
+        return {
+            "success":
+                False,
 
-        "p_cart":  
+            "message":
+                str(e),
 
-            rpc_cart,  
+            "data":
+                None,
+        }
 
 
+# ==============================================================================
+# PUBLIC EXPORTS
+# ==============================================================================
 
-        "p_paid_amount":  
 
-            safe_float(  
+__all__ = [
 
-                paid_amount  
+    "safe_float",
 
-            ),  
+    "safe_int",
 
+    "normalize_cart",
 
+    "refresh_checkout_cache",
 
-        "p_warehouse_id":  
+    "checkout_sale_rpc",
 
-            safe_int(  
-
-                warehouse_id  
-
-            ),  
-
-
-
-        "p_cashier_id":  
-
-            cashier_id,  
-
-
-
-        "p_counter_id":  
-
-            safe_int(  
-
-                counter_id  
-
-            ),  
-
-
-
-        "p_payment_method":  
-
-            str(  
-
-                payment_method  
-
-            ).upper(),  
-
-
-
-        "p_tax_rate":  
-
-            safe_float(  
-
-                tax_rate  
-
-            ),  
-
-
-
-        "p_discount":  
-
-            safe_float(  
-
-                discount  
-
-            )  
-
-    }  
-
-
-
-
-
-
-
-
-    # ----------------------------------------------------------  
-    # EXECUTE SUPABASE RPC  
-    # ----------------------------------------------------------  
-
-
-    response = (  
-
-        db()  
-
-        .rpc(  
-
-            "checkout_sale_rpc",  
-
-            payload  
-
-        )  
-
-        .execute()  
-
-    )  
-
-
-
-
-
-
-
-    result = getattr(  
-
-        response,  
-
-        "data",  
-
-        response  
-
-    )  
-
-
-
-
-
-
-
-    # ----------------------------------------------------------  
-    # DICT RESPONSE  
-    # ----------------------------------------------------------  
-
-
-    if isinstance(  
-
-        result,  
-
-        dict  
-
-    ):  
-
-
-
-        if result.get(  
-
-            "success",  
-
-            False  
-
-        ):  
-
-
-            refresh_checkout_cache()  
-
-
-
-        return result  
-
-
-
-
-
-
-
-    # ----------------------------------------------------------  
-    # LIST RESPONSE  
-    # ----------------------------------------------------------  
-
-
-    if isinstance(  
-
-        result,  
-
-        list  
-
-    ):  
-
-
-
-        if len(result) == 1 and isinstance(  
-
-            result[0],  
-
-            dict  
-
-        ):  
-
-
-
-            if result[0].get(  
-
-                "success",  
-
-                False  
-
-            ):  
-
-
-                refresh_checkout_cache()  
-
-
-
-            return result[0]  
-
-
-
-
-
-        return {  
-
-
-            "success":  
-
-                True,  
-
-
-            "data":  
-
-                result  
-
-        }  
-
-
-
-
-
-
-
-    # ----------------------------------------------------------  
-    # EMPTY  
-    # ----------------------------------------------------------  
-
-
-    if result is None:  
-
-
-
-        return {  
-
-
-            "success":  
-
-                False,  
-
-
-            "message":  
-
-                "Empty RPC response."  
-
-        }  
-
-
-
-
-
-
-
-    # ----------------------------------------------------------  
-    # OTHER TYPE  
-    # ----------------------------------------------------------  
-
-
-    return {  
-
-
-        "success":  
-
-            True,  
-
-
-        "data":  
-
-            result  
-
-    }  
-
-
-
-
-
-
-
-except Exception as e:  
-
-
-
-    log_error(  
-
-        message=  
-
-            "checkout_sale_rpc failed",  
-
-        exception=  
-
-            e,  
-
-        rpc=  
-
-            "checkout_sale_rpc"  
-
-    )  
-
-
-
-    return {  
-
-
-        "success":  
-
-            False,  
-
-
-        "message":  
-
-            str(e)  
-
-    }
+]
