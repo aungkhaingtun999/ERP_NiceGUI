@@ -13,13 +13,16 @@ from typing import (
 
 from ..base_repo import (
     db,
-    log_error
 )
 
-
-from ..services import (
-    InventoryService
+from ..config import (
+    log_error,
 )
+
+from ..services.inventory_service import (
+    InventoryService,
+)
+
 
 
 
