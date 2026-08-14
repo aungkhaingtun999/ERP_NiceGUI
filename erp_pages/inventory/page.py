@@ -986,7 +986,7 @@ def run_inventory_page():
         _render_inventory_in_tab()
     elif active_tab == "Inventory In Approval":
 
-    _render_inventory_in_approval_tab()
+        _render_inventory_in_approval_tab()
 
     # ==========================================================================
     # STOCK ADJUSTMENT
