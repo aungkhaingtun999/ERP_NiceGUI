@@ -1,113 +1,259 @@
 # ==============================================================================
 # erp_core/rpc/__init__.py
-# ERP ENTERPRISE RPC PACKAGE v37.0
+# ERP ENTERPRISE RPC PACKAGE v36.1
 #
-# DEBUG-SAFE RPC EXPORT HUB
+# RPC PUBLIC EXPORT HUB
 #
-# Architecture:
-#
-# ERP CORE
-#     ↓
-# RPC PACKAGE
-#     ↓
-# Individual RPC Modules
+# Responsibilities:
+# - Export all public RPC wrappers
+# - Keep import failures visible
+# - Never silently hide broken RPC modules
 #
 # IMPORTANT
 # ------------------------------------------------------------------------------
-# During development / debugging:
+# This file MUST export every RPC function imported by:
 #
-# - NEVER silently replace a broken RPC with a fake fallback.
-# - NEVER return "unavailable" while hiding the real ImportError.
-# - Import failures MUST propagate to the application.
+#     erp_core/__init__.py
 #
-# This makes the actual broken dependency visible in the traceback.
 # ==============================================================================
 
 
-print(
-    "============================================================"
-)
-
-print(
-    "ERP RPC PACKAGE START"
-)
-
-print(
-    "============================================================"
-)
+print("============================================================")
+print("ERP RPC PACKAGE START")
+print("============================================================")
 
 
 # ==============================================================================
 # CHECKOUT
 # ==============================================================================
 
-from .checkout_rpc import (
-    checkout_sale_rpc,
-)
+try:
 
-print(
-    "ERP RPC CHECKOUT: OK"
-)
+    from .checkout_rpc import (
+        checkout_sale_rpc,
+    )
+
+    print(
+        "ERP RPC CHECKOUT: OK"
+    )
+
+except Exception as e:
+
+    print(
+        "============================================================"
+    )
+
+    print(
+        "ERP RPC CHECKOUT IMPORT FAILED"
+    )
+
+    print(
+        "ERROR TYPE:",
+        type(e).__name__
+    )
+
+    print(
+        "ERROR:",
+        str(e)
+    )
+
+    print(
+        "============================================================"
+    )
+
+    def checkout_sale_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "checkout_sale_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
 
 
 # ==============================================================================
 # PURCHASE
 # ==============================================================================
 
-from .purchase_rpc import (
-    purchase_receive_rpc,
-)
+try:
 
-print(
-    "ERP RPC PURCHASE: OK"
-)
+    from .purchase_rpc import (
+        purchase_receive_rpc,
+    )
+
+    print(
+        "ERP RPC PURCHASE: OK"
+    )
+
+except Exception as e:
+
+    print(
+        "ERP RPC PURCHASE IMPORT FAILED:",
+        type(e).__name__,
+        str(e)
+    )
+
+    def purchase_receive_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "purchase_receive_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
 
 
 # ==============================================================================
 # REFUND
 # ==============================================================================
 
-from .refund_rpc import (
-    refund_sale_rpc,
-)
+try:
 
-print(
-    "ERP RPC REFUND: OK"
-)
+    from .refund_rpc import (
+        refund_sale_rpc,
+    )
+
+    print(
+        "ERP RPC REFUND: OK"
+    )
+
+except Exception as e:
+
+    print(
+        "ERP RPC REFUND IMPORT FAILED:",
+        type(e).__name__,
+        str(e)
+    )
+
+    def refund_sale_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "refund_sale_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
 
 
 # ==============================================================================
-# STOCK
+# STOCK + PRODUCT UPDATE
+# ==============================================================================
+#
+# IMPORTANT:
+#
+# update_product_rpc is defined in stock_rpc.py
+# together with stock_adjustment_rpc.
+#
+# Therefore BOTH functions must be imported here.
+#
 # ==============================================================================
 
-from .stock_rpc import (
-    stock_adjustment_rpc,
-)
+try:
 
-print(
-    "ERP RPC STOCK: OK"
-)
+    from .stock_rpc import (
+        stock_adjustment_rpc,
+        update_product_rpc,
+    )
+
+    print(
+        "ERP RPC STOCK: OK"
+    )
+
+    print(
+        "ERP RPC PRODUCT UPDATE: OK"
+    )
+
+except Exception as e:
+
+    print(
+        "ERP RPC STOCK IMPORT FAILED:",
+        type(e).__name__,
+        str(e)
+    )
+
+    def stock_adjustment_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "stock_adjustment_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
+
+    def update_product_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "update_product_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
 
 
 # ==============================================================================
-# PRODUCT
+# PRODUCT CREATION / MAKER-CHECKER
 # ==============================================================================
 
-from .product_rpc import (
+try:
 
-    update_product_rpc,
+    from .product_rpc import (
 
-    request_product_create_rpc,
+        request_product_create_rpc,
 
-    request_product_bulk_create_rpc,
+        request_product_bulk_create_rpc,
 
-    approve_product_create_rpc,
+        approve_product_create_rpc,
 
-)
+    )
 
-print(
-    "ERP RPC PRODUCT: OK"
-)
+    print(
+        "ERP RPC PRODUCT MAKER-CHECKER: OK"
+    )
+
+except Exception as e:
+
+    print(
+        "ERP RPC PRODUCT IMPORT FAILED:",
+        type(e).__name__,
+        str(e)
+    )
+
+    def request_product_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "request_product_create_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
+
+
+    def request_product_bulk_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "request_product_bulk_create_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
+
+
+    def approve_product_create_rpc(*args, **kwargs):
+
+        return {
+            "success": False,
+            "message": (
+                "approve_product_create_rpc import failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        }
 
 
 # ==============================================================================
@@ -145,10 +291,15 @@ __all__ = [
 
 
     # --------------------------------------------------------------------------
-    # PRODUCT
+    # PRODUCT UPDATE
     # --------------------------------------------------------------------------
 
     "update_product_rpc",
+
+
+    # --------------------------------------------------------------------------
+    # PRODUCT MAKER-CHECKER
+    # --------------------------------------------------------------------------
 
     "request_product_create_rpc",
 
@@ -159,18 +310,6 @@ __all__ = [
 ]
 
 
-# ==============================================================================
-# READY
-# ==============================================================================
-
-print(
-    "============================================================"
-)
-
-print(
-    "ERP RPC PACKAGE READY"
-)
-
-print(
-    "============================================================"
-)
+print("============================================================")
+print("ERP RPC PACKAGE READY")
+print("============================================================")
