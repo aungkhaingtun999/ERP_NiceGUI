@@ -45,9 +45,7 @@ class InventoryService:
         self.settings = SettingsService(
             client
         )
-class InventoryService:
-    def __init__(self, client):
-        self.client = client
+
 
     # ... existing methods ...
 
