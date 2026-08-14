@@ -199,23 +199,118 @@ print(
 
 
 # ==============================================================================
-# ==============================================================================
 # RPC
 # ==============================================================================
+#
+# IMPORTANT
+# ------------------------------------------------------------------------------
+# RPC imports are intentionally separated.
+#
+# This allows deployment logs to identify the exact RPC wrapper that fails.
+#
+# Do NOT use:
+#
+#     from .rpc import (...)
+#
+# while debugging the RPC package.
+#
+# ==============================================================================
 
-from .rpc import (
-    checkout_sale_rpc,
-    purchase_receive_rpc,
-    refund_sale_rpc,
-    stock_adjustment_rpc,
-    update_product_rpc,
-    request_product_create_rpc,
-    request_product_bulk_create_rpc,
-    approve_product_create_rpc,
-)
+
+# ------------------------------------------------------------------------------
+# CHECKOUT
+# ------------------------------------------------------------------------------
+
+try:
+
+    from .rpc.checkout_rpc import (
+        checkout_sale_rpc,
+    )
+
+except Exception as e:
+
+    raise ImportError(
+        "ERP CORE: checkout_rpc import failed: "
+        f"{type(e).__name__}: {e}"
+    ) from e
+
+
+# ------------------------------------------------------------------------------
+# PURCHASE
+# ------------------------------------------------------------------------------
+
+try:
+
+    from .rpc.purchase_rpc import (
+        purchase_receive_rpc,
+    )
+
+except Exception as e:
+
+    raise ImportError(
+        "ERP CORE: purchase_rpc import failed: "
+        f"{type(e).__name__}: {e}"
+    ) from e
+
+
+# ------------------------------------------------------------------------------
+# REFUND
+# ------------------------------------------------------------------------------
+
+try:
+
+    from .rpc.refund_rpc import (
+        refund_sale_rpc,
+    )
+
+except Exception as e:
+
+    raise ImportError(
+        "ERP CORE: refund_rpc import failed: "
+        f"{type(e).__name__}: {e}"
+    ) from e
+
+
+# ------------------------------------------------------------------------------
+# STOCK
+# ------------------------------------------------------------------------------
+
+try:
+
+    from .rpc.stock_rpc import (
+        stock_adjustment_rpc,
+        update_product_rpc,
+    )
+
+except Exception as e:
+
+    raise ImportError(
+        "ERP CORE: stock_rpc import failed: "
+        f"{type(e).__name__}: {e}"
+    ) from e
+
+
+# ------------------------------------------------------------------------------
+# PRODUCT
+# ------------------------------------------------------------------------------
+
+try:
+
+    from .rpc.product_rpc import (
+        request_product_create_rpc,
+        request_product_bulk_create_rpc,
+        approve_product_create_rpc,
+    )
+
+except Exception as e:
+
+    raise ImportError(
+        "ERP CORE: product_rpc import failed: "
+        f"{type(e).__name__}: {e}"
+    ) from e
+
 
 print("ERP CORE RPC IMPORT: OK")
-
 # ==============================================================================
 # SERVICES
 # ==============================================================================
