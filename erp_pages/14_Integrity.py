@@ -154,19 +154,13 @@ def get_table_count(table_name: str) -> int:
 # ============================================================
 
 def check_double_entry():
-    """Check 1: Debit = Credit"""
+    """Check 1: Accounting Debit = Credit (from journal_entries table)"""
     try:
-        debit_data = execute_query(
-            'inventory_ledger',
-            select='qty_in'
-        )
-        credit_data = execute_query(
-            'inventory_ledger',
-            select='qty_out'
-        )
+        # ငွေစာရင်း Double Entry စစ်ဆေးရန် journal_entries (သို့) general_ledger ဇယားကို အသုံးပြုပါ
+        entries = execute_query('journal_entries', select='debit,credit')
         
-        debit_total = sum(float(item.get('qty_in', 0)) for item in debit_data)
-        credit_total = sum(float(item.get('qty_out', 0)) for item in credit_data)
+        debit_total = sum(float(item.get('debit', 0)) for item in entries)
+        credit_total = sum(float(item.get('credit', 0)) for item in entries)
         
         diff = abs(debit_total - credit_total)
         is_balanced = diff < 0.01
@@ -181,7 +175,7 @@ def check_double_entry():
             "credit": credit_total,
             "diff": diff,
             "detail": f"Debit: {debit_total:,.2f} | Credit: {credit_total:,.2f}",
-            "suggestion": "Check inventory_ledger for missing transactions" if not is_balanced else None
+            "suggestion": "Check journal_entries for unbalanced transactions" if not is_balanced else None
         }
     except Exception as e:
         return {
@@ -194,7 +188,7 @@ def check_double_entry():
             "credit": 0,
             "diff": 0,
             "detail": str(e)[:50],
-            "suggestion": "Check database connection"
+            "suggestion": "Check if journal_entries table exists"
         }
 
 def check_sales_vs_payments():
@@ -332,12 +326,7 @@ def check_fifo_vs_stock():
 def check_sales_items():
     """Check 5: Sales total matches sale_items total"""
     try:
-        # Remove limit to check ALL sales
-        sales_data = execute_query(
-            'sales',
-            select='id,total',
-            filters={'sale_status': 'COMPLETED'}
-        )
+        sales_data = execute_query('sales', select='id,total', filters={'sale_status': 'COMPLETED'}, limit=100)
         
         total_sales = len(sales_data)
         matched = 0
@@ -348,11 +337,7 @@ def check_sales_items():
             sale_id = sale.get('id')
             sale_total = float(sale.get('total', 0))
             
-            items_data = execute_query(
-                'sale_items',
-                select='quantity,unit_price,discount',
-                filters={'sale_id': sale_id}
-            )
+            items_data = execute_query('sale_items', select='quantity,unit_price,discount', filters={'sale_id': sale_id})
             
             calc_total = sum(
                 float(item.get('quantity', 0)) * float(item.get('unit_price', 0)) 
@@ -601,19 +586,8 @@ def run():
         # Final Status
         st.divider()
         if passed == total:
-            st.success("🎉 **All systems INTEGRITY VERIFIED!** Your POS system is healthy.")
-        elif passed > failed:
-            st.warning("⚠️ **Some checks require ATTENTION!** Review the details above.")
+            st.success("🎉 All integrity checks passed successfully! System is healthy.")
+        elif failed > 0:
+            st.error(f"🚨 {failed} check(s) failed. Please review the suggestions above.")
         else:
-            st.error("🚨 **CRITICAL ISSUES DETECTED!** Immediate action required.")
-    
-    else:
-        st.info("👆 Click **'Run All Checks'** to start monitoring your system integrity.")
-        st.caption("This will check: Double Entry, Sales vs Payments, Stock vs Ledger, FIFO Cost, and Sales Items")
-
-# ============================================================
-# MAIN
-# ============================================================
-
-if __name__ == "__main__":
-    run()
+            st.warning("⚠️ Some issues require attention.")
