@@ -1,15 +1,10 @@
 # erp_pages/14_Integrity.py
-# ERP Integrity Check Dashboard - Advanced Version
+# ERP Integrity Check Dashboard - With Icons
 # Double Entry & FIFO Cost Monitoring
-# Features: Real-time monitoring, Excel export, Charts, History
 
 import streamlit as st
 import pandas as pd
 import datetime
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import io
-import base64
 
 # Import from your project
 from supabase_client import get_supabase
@@ -25,26 +20,93 @@ st.set_page_config(
 )
 
 # ============================================================
-# CUSTOM CSS
+# CUSTOM CSS - Clean and Minimal
 # ============================================================
 
 st.markdown("""
 <style>
-    .status-card {
-        padding: 20px;
-        border-radius: 10px;
-        margin: 5px 0;
-        text-align: center;
+    /* Main container */
+    .main { padding: 0 1rem; }
+    
+    /* Check item cards */
+    .check-card {
+        padding: 12px 16px;
+        margin: 8px 0;
+        border-radius: 8px;
+        border-left: 4px solid #ccc;
+        background-color: #f8f9fa;
     }
-    .status-passed { background-color: #d4edda; border: 2px solid #28a745; }
-    .status-failed { background-color: #f8d7da; border: 2px solid #dc3545; }
-    .status-error { background-color: #e2e3e5; border: 2px solid #6c757d; }
-    .status-warning { background-color: #fff3cd; border: 2px solid #ffc107; }
-    .big-icon { font-size: 48px; }
-    .metric-value { font-size: 24px; font-weight: bold; }
-    .metric-label { font-size: 14px; color: #6c757d; }
+    .check-passed { border-left-color: #28a745; background-color: #f0fff4; }
+    .check-failed { border-left-color: #dc3545; background-color: #fff5f5; }
+    .check-error { border-left-color: #6c757d; background-color: #f8f9fa; }
+    
+    /* Icon styles */
+    .icon-lg { font-size: 28px; margin-right: 8px; }
+    .icon-md { font-size: 20px; margin-right: 6px; }
+    
+    /* Status badge */
+    .badge {
+        display: inline-block;
+        padding: 2px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .badge-passed { background-color: #28a745; color: white; }
+    .badge-failed { background-color: #dc3545; color: white; }
+    .badge-error { background-color: #6c757d; color: white; }
+    .badge-warning { background-color: #ffc107; color: #212529; }
+    
+    /* Metric cards */
+    .metric-card {
+        text-align: center;
+        padding: 16px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+    }
+    .metric-value { font-size: 28px; font-weight: 700; }
+    .metric-label { font-size: 13px; color: #6c757d; }
+    
+    /* Suggestion text */
+    .suggestion {
+        font-size: 13px;
+        color: #856404;
+        background-color: #fff3cd;
+        padding: 6px 12px;
+        border-radius: 4px;
+        margin-top: 4px;
+    }
+    
+    /* Divider */
+    .section-divider { margin: 16px 0; border-top: 1px solid #e9ecef; }
 </style>
 """, unsafe_allow_html=True)
+
+# ============================================================
+# ICON MAPPING
+# ============================================================
+
+ICONS = {
+    "double_entry": "📊",
+    "sales_payments": "💰",
+    "stock_ledger": "📦",
+    "fifo_stock": "📈",
+    "sales_items": "🧾",
+    "passed": "✅",
+    "failed": "❌",
+    "error": "⚠️",
+    "warning": "⚡",
+    "critical": "🚨",
+    "all_good": "🎉",
+    "database": "🗄️",
+    "export": "📥",
+    "settings": "⚙️",
+    "time": "🕐",
+    "check": "🔍",
+    "report": "📋",
+    "summary": "📊",
+}
 
 # ============================================================
 # DATABASE FUNCTIONS
@@ -117,8 +179,9 @@ def check_double_entry():
         
         return {
             "name": "Double Entry",
+            "icon": "📊",
             "status": "BALANCED" if is_balanced else "IMBALANCED",
-            "icon": "🟢" if is_balanced else "🔴",
+            "status_icon": "✅" if is_balanced else "❌",
             "passed": is_balanced,
             "debit": debit_total,
             "credit": credit_total,
@@ -129,8 +192,9 @@ def check_double_entry():
     except Exception as e:
         return {
             "name": "Double Entry",
+            "icon": "📊",
             "status": "ERROR",
-            "icon": "⚠️",
+            "status_icon": "⚠️",
             "passed": False,
             "debit": 0,
             "credit": 0,
@@ -161,8 +225,9 @@ def check_sales_vs_payments():
         
         return {
             "name": "Sales ↔ Payments",
+            "icon": "💰",
             "status": "MATCHED" if is_matched else "MISMATCHED",
-            "icon": "🟢" if is_matched else "🔴",
+            "status_icon": "✅" if is_matched else "❌",
             "passed": is_matched,
             "sales": sales_total,
             "payments": payments_total,
@@ -173,8 +238,9 @@ def check_sales_vs_payments():
     except Exception as e:
         return {
             "name": "Sales ↔ Payments",
+            "icon": "💰",
             "status": "ERROR",
-            "icon": "⚠️",
+            "status_icon": "⚠️",
             "passed": False,
             "sales": 0,
             "payments": 0,
@@ -204,8 +270,9 @@ def check_stock_vs_ledger():
         
         return {
             "name": "Stock ↔ Inventory Ledger",
+            "icon": "📦",
             "status": "MATCHED" if is_matched else "MISMATCHED",
-            "icon": "🟢" if is_matched else "🔴",
+            "status_icon": "✅" if is_matched else "❌",
             "passed": is_matched,
             "stock": stock_total,
             "ledger": ledger_total,
@@ -216,8 +283,9 @@ def check_stock_vs_ledger():
     except Exception as e:
         return {
             "name": "Stock ↔ Inventory Ledger",
+            "icon": "📦",
             "status": "ERROR",
-            "icon": "⚠️",
+            "status_icon": "⚠️",
             "passed": False,
             "stock": 0,
             "ledger": 0,
@@ -242,8 +310,9 @@ def check_fifo_vs_stock():
         
         return {
             "name": "FIFO Cost ↔ Stock",
+            "icon": "📈",
             "status": "MATCHED" if is_matched else "MISMATCHED",
-            "icon": "🟢" if is_matched else "🔴",
+            "status_icon": "✅" if is_matched else "❌",
             "passed": is_matched,
             "fifo_cost": fifo_cost,
             "stock_value": stock_value,
@@ -256,8 +325,9 @@ def check_fifo_vs_stock():
     except Exception as e:
         return {
             "name": "FIFO Cost ↔ Stock",
+            "icon": "📈",
             "status": "ERROR",
-            "icon": "⚠️",
+            "status_icon": "⚠️",
             "passed": False,
             "fifo_cost": 0,
             "stock_value": 0,
@@ -301,8 +371,9 @@ def check_sales_items():
         
         return {
             "name": "Sales Total ↔ Items",
+            "icon": "🧾",
             "status": "MATCHED" if is_matched else "MISMATCHED",
-            "icon": "🟢" if is_matched else "🔴",
+            "status_icon": "✅" if is_matched else "❌",
             "passed": is_matched,
             "total_sales": total_sales,
             "matched": matched,
@@ -314,8 +385,9 @@ def check_sales_items():
     except Exception as e:
         return {
             "name": "Sales Total ↔ Items",
+            "icon": "🧾",
             "status": "ERROR",
-            "icon": "⚠️",
+            "status_icon": "⚠️",
             "passed": False,
             "total_sales": 0,
             "matched": 0,
@@ -330,7 +402,7 @@ def check_sales_items():
 # ============================================================
 
 def run_all_checks():
-    """Execute all integrity checks with progress"""
+    """Execute all integrity checks"""
     checks = [
         check_double_entry(),
         check_sales_vs_payments(),
@@ -357,18 +429,12 @@ def export_to_csv(results):
     df = pd.DataFrame(data)
     return df.to_csv(index=False)
 
-def get_download_link(csv_data, filename="integrity_report.csv"):
-    """Generate download link for CSV"""
-    b64 = base64.b64encode(csv_data.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 Download CSV</a>'
-    return href
-
 # ============================================================
 # MAIN RENDER FUNCTION
 # ============================================================
 
 def run():
-    """Main render function for the page"""
+    """Main render function"""
     
     st.title("🔐 ERP Integrity Check Dashboard")
     st.caption("Double Entry & FIFO Cost Monitoring")
@@ -377,7 +443,6 @@ def run():
     with st.sidebar:
         st.header("⚙️ Settings")
         
-        # Check Supabase connection
         supabase = get_supabase()
         if supabase:
             st.success("✅ Database Connected")
@@ -387,24 +452,24 @@ def run():
         
         st.divider()
         
-        # Quick Stats
         st.subheader("📊 Database Stats")
-        col1, col2 = st.columns(2)
-        with col1:
-            sales_count = get_table_count('sales')
-            st.metric("Sales", sales_count)
-        with col2:
-            products_count = get_table_count('products')
-            st.metric("Products", products_count)
+        sales_count = get_table_count('sales')
+        products_count = get_table_count('products')
+        st.metric("Sales", sales_count)
+        st.metric("Products", products_count)
         
         st.divider()
         
-        # Export
         st.subheader("📤 Export")
         if st.button("📥 Export Report", use_container_width=True):
             if "integrity_results" in st.session_state:
                 csv_data = export_to_csv(st.session_state.integrity_results)
-                st.markdown(get_download_link(csv_data), unsafe_allow_html=True)
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv_data,
+                    file_name="integrity_report.csv",
+                    mime="text/csv"
+                )
             else:
                 st.warning("Run checks first!")
     
@@ -427,93 +492,111 @@ def run():
     if "integrity_results" in st.session_state:
         results = st.session_state.integrity_results
         
-        # Summary Metrics
+        # Summary
         total = len(results)
         passed = sum(1 for r in results if r.get("passed", False))
         failed = total - passed - sum(1 for r in results if r["status"] == "ERROR")
         errors = sum(1 for r in results if r["status"] == "ERROR")
         
-        # Status Cards
+        st.markdown("### 📊 Summary")
+        
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.markdown(f"""
-            <div class="status-card status-passed">
-                <div class="big-icon">✅</div>
-                <div class="metric-value">{passed}/{total}</div>
+            <div class="metric-card">
+                <div style="font-size:32px;">✅</div>
+                <div class="metric-value" style="color:#28a745;">{passed}/{total}</div>
                 <div class="metric-label">Passed</div>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
             st.markdown(f"""
-            <div class="status-card status-failed">
-                <div class="big-icon">❌</div>
-                <div class="metric-value">{failed}</div>
+            <div class="metric-card">
+                <div style="font-size:32px;">❌</div>
+                <div class="metric-value" style="color:#dc3545;">{failed}</div>
                 <div class="metric-label">Failed</div>
             </div>
             """, unsafe_allow_html=True)
         
         with col3:
             st.markdown(f"""
-            <div class="status-card status-error">
-                <div class="big-icon">⚠️</div>
-                <div class="metric-value">{errors}</div>
+            <div class="metric-card">
+                <div style="font-size:32px;">⚠️</div>
+                <div class="metric-value" style="color:#6c757d;">{errors}</div>
                 <div class="metric-label">Errors</div>
             </div>
             """, unsafe_allow_html=True)
         
         with col4:
             if passed == total:
-                st.markdown(f"""
-                <div class="status-card status-passed">
-                    <div class="big-icon">🎉</div>
-                    <div class="metric-value">ALL GOOD</div>
-                    <div class="metric-label">100% Verified</div>
-                </div>
-                """, unsafe_allow_html=True)
+                icon = "🎉"
+                label = "ALL GOOD"
+                color = "#28a745"
             elif passed > failed:
-                st.markdown(f"""
-                <div class="status-card status-warning">
-                    <div class="big-icon">⚡</div>
-                    <div class="metric-value">WARNING</div>
-                    <div class="metric-label">Needs Review</div>
-                </div>
-                """, unsafe_allow_html=True)
+                icon = "⚡"
+                label = "WARNING"
+                color = "#ffc107"
             else:
-                st.markdown(f"""
-                <div class="status-card status-failed">
-                    <div class="big-icon">🚨</div>
-                    <div class="metric-value">CRITICAL</div>
-                    <div class="metric-label">Fix Required</div>
-                </div>
-                """, unsafe_allow_html=True)
+                icon = "🚨"
+                label = "CRITICAL"
+                color = "#dc3545"
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <div style="font-size:32px;">{icon}</div>
+                <div class="metric-value" style="color:{color};">{label}</div>
+                <div class="metric-label">Status</div>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.divider()
         
         # Display each check
+        st.markdown("### 📋 Detailed Results")
+        
         for check in results:
             if check.get("passed", False):
-                bg_color, border_color = "#d4edda", "#28a745"
+                card_class = "check-passed"
+                badge_class = "badge-passed"
+                badge_text = "✅ PASSED"
             elif check["status"] == "ERROR":
-                bg_color, border_color = "#e2e3e5", "#6c757d"
+                card_class = "check-error"
+                badge_class = "badge-error"
+                badge_text = "⚠️ ERROR"
             else:
-                bg_color, border_color = "#f8d7da", "#dc3545"
+                card_class = "check-failed"
+                badge_class = "badge-failed"
+                badge_text = "❌ FAILED"
             
-            with st.container():
-                st.markdown(f"""
-                <div style="background-color:{bg_color}; padding:15px; border-radius:10px; border-left:5px solid {border_color}; margin-bottom:10px;">
-                    <table style="width:100%;">
-                        <tr>
-                            <td style="width:5%; font-size:30px;">{check['icon']}</td>
-                            <td style="width:20%; font-weight:bold;">{check['name']}</td>
-                            <td style="width:15%; font-weight:bold; color:{border_color};">{check['status']}</td>
-                            <td style="width:60%; font-size:14px;">{check['detail']}</td>
-                        </tr>
-                    </table>
-                    {f"<div style='margin-top:5px; font-size:12px; color:#856404;'>💡 {check['suggestion']}</div>" if check.get('suggestion') else ""}
-                </div>
-                """, unsafe_allow_html=True)
+            suggestion_html = f"""
+            <div class="suggestion">
+                💡 {check['suggestion']}
+            </div>
+            """ if check.get('suggestion') else ""
+            
+            st.markdown(f"""
+            <div class="check-card {card_class}">
+                <table style="width:100%; border-collapse:collapse;">
+                    <tr>
+                        <td style="width:5%; font-size:28px; vertical-align:middle;">
+                            {check['icon']}
+                        </td>
+                        <td style="width:25%; font-weight:600; vertical-align:middle;">
+                            {check['name']}
+                        </td>
+                        <td style="width:20%; vertical-align:middle;">
+                            <span class="badge {badge_class}">{badge_text}</span>
+                        </td>
+                        <td style="width:50%; font-size:14px; vertical-align:middle;">
+                            {check['detail']}
+                        </td>
+                    </tr>
+                </table>
+                {suggestion_html}
+            </div>
+            """, unsafe_allow_html=True)
         
         # Final Status
         st.divider()
