@@ -242,6 +242,7 @@ def get_sales(
             .select(
                 """
                 id,
+                total,
                 total_amount,
                 discount,
                 tax,
@@ -935,8 +936,22 @@ def run():
     # ==========================================================================
     # NORMALIZE TOTAL
     # ==========================================================================
+    #
+    # sales.total is the canonical sale total.
+    # total_amount is currently 0 in existing records.
+    #
 
-    if "total_amount" in df.columns:
+    if "total" in df.columns:
+
+        df["total"] = (
+            pd.to_numeric(
+                df["total"],
+                errors="coerce",
+            )
+            .fillna(0.0)
+        )
+
+    elif "total_amount" in df.columns:
 
         df["total"] = (
             pd.to_numeric(
