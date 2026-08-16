@@ -156,23 +156,17 @@ def get_table_count(table_name: str) -> int:
 def check_double_entry():
     """Check 1: Debit = Credit"""
     try:
-        debit_types = ["PURCHASE", "RETURN", "OPENING", "RECEIVE"]
-        credit_types = ["SALE", "ADJUSTMENT_OUT", "TRANSFER_OUT", "ISSUE"]
-        
         debit_data = execute_query(
             'inventory_ledger',
-            select='quantity',
-            filters={'transaction_type': debit_types}
+            select='qty_in'
         )
-        
         credit_data = execute_query(
             'inventory_ledger',
-            select='quantity',
-            filters={'transaction_type': credit_types}
+            select='qty_out'
         )
         
-        debit_total = sum(float(item.get('quantity', 0)) for item in debit_data)
-        credit_total = sum(float(item.get('quantity', 0)) for item in credit_data)
+        debit_total = sum(float(item.get('qty_in', 0)) for item in debit_data)
+        credit_total = sum(float(item.get('qty_out', 0)) for item in credit_data)
         
         diff = abs(debit_total - credit_total)
         is_balanced = diff < 0.01
@@ -256,14 +250,11 @@ def check_stock_vs_ledger():
         stock_total = sum(float(item.get('qty', 0)) for item in stock_data)
         
         ledger_total = 0
-        ledger_data = execute_query('inventory_ledger', select='transaction_type,quantity')
+        ledger_data = execute_query('inventory_ledger', select='qty_in,qty_out')
         for item in ledger_data:
-            txn_type = item.get('transaction_type', '')
-            qty = float(item.get('quantity', 0))
-            if txn_type in ['PURCHASE', 'RETURN', 'OPENING', 'RECEIVE']:
-                ledger_total += qty
-            elif txn_type in ['SALE', 'ADJUSTMENT_OUT', 'TRANSFER_OUT', 'ISSUE']:
-                ledger_total -= qty
+            qty_in = float(item.get('qty_in', 0))
+            qty_out = float(item.get('qty_out', 0))
+            ledger_total += (qty_in - qty_out)
         
         diff = abs(stock_total - ledger_total)
         is_matched = diff < 0.01
