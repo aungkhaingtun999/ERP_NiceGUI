@@ -5,6 +5,11 @@
 
 from pathlib import Path
 import streamlit as st
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # ==========================================
 # APP INFORMATION
@@ -22,6 +27,14 @@ TIMEZONE = "Asia/Yangon"
 DATE_FORMAT = "%d-%m-%Y"
 
 DATETIME_FORMAT = "%d-%m-%Y %H:%M:%S"
+
+# ==========================================
+# SUPABASE CONFIGURATION
+# ==========================================
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://your-project.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "your-supabase-anon-key-here")
+
 # ==========================================
 # TIMEZONE MANAGEMENT
 # ==========================================
@@ -183,7 +196,12 @@ SESSION_DEFAULTS = {
 
     "theme": "light",
 
-    "company": COMPANY_NAME
+    "company": COMPANY_NAME,
+    
+    # Integrity Check Session States
+    "integrity_results": None,
+    "last_integrity_run": None,
+    "active_page": "1_POS"
 }
 
 # ==========================================
@@ -255,7 +273,9 @@ ADMIN_MENU = [
 
     "Users",
 
-    "Refund"
+    "Refund",
+
+    "Integrity Check"  # NEW
 
 ]
 
@@ -267,7 +287,9 @@ MANAGER_MENU = [
 
     "Inventory",
 
-    "Reports"
+    "Reports",
+
+    "Integrity Check"  # NEW
 
 ]
 
@@ -277,12 +299,73 @@ CASHIER_MENU = [
 
     "Receipt",
 
-    "Refund"
+    "Refund",
+
+    "Integrity Check"  # NEW
 
 ]
+
+# ==========================================
+# INTEGRITY CHECK CONFIGURATION
+# ==========================================
+
+# FIFO Cost Alert Threshold
+FIFO_DEFAULT_COST_ALERT = 1.00
+
+# Max days to check for FIFO data quality
+FIFO_CHECK_DAYS = 30
+
+# Enable/Disable specific checks
+ENABLE_DOUBLE_ENTRY_CHECK = True
+ENABLE_SALES_PAYMENTS_CHECK = True
+ENABLE_STOCK_LEDGER_CHECK = True
+ENABLE_FIFO_STOCK_CHECK = True
+ENABLE_SALES_ITEMS_CHECK = True
+ENABLE_FIFO_DATA_QUALITY_CHECK = True
 
 # ==========================================
 # DEBUG
 # ==========================================
 
 DEBUG = True
+
+# ==========================================
+# GET SUPABASE CONFIG
+# ==========================================
+
+def get_supabase_config():
+    """Return Supabase configuration"""
+    return {
+        "url": SUPABASE_URL,
+        "key": SUPABASE_KEY
+    }
+
+# ==========================================
+# VALIDATE CONFIG
+# ==========================================
+
+def validate_config():
+    """Validate configuration settings"""
+    errors = []
+    
+    if not SUPABASE_URL or SUPABASE_URL == "https://your-project.supabase.co":
+        errors.append("SUPABASE_URL is not configured")
+    
+    if not SUPABASE_KEY or SUPABASE_KEY == "your-supabase-anon-key-here":
+        errors.append("SUPABASE_KEY is not configured")
+    
+    return errors
+
+# ==========================================
+# PRINT CONFIG (Debug only)
+# ==========================================
+
+if DEBUG:
+    print("=" * 50)
+    print("📋 ERP CONFIGURATION")
+    print("=" * 50)
+    print(f"✅ APP_NAME: {APP_NAME}")
+    print(f"✅ SUPABASE_URL: {SUPABASE_URL[:30]}..." if SUPABASE_URL else "❌ SUPABASE_URL: Not Set")
+    print(f"✅ SUPABASE_KEY: {SUPABASE_KEY[:15]}..." if SUPABASE_KEY else "❌ SUPABASE_KEY: Not Set")
+    print(f"✅ DEBUG: {DEBUG}")
+    print("=" * 50)
