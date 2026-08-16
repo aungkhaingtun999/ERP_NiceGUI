@@ -332,7 +332,12 @@ def check_fifo_vs_stock():
 def check_sales_items():
     """Check 5: Sales total matches sale_items total"""
     try:
-        sales_data = execute_query('sales', select='id,total', filters={'sale_status': 'COMPLETED'}, limit=100)
+        # Remove limit to check ALL sales
+        sales_data = execute_query(
+            'sales',
+            select='id,total',
+            filters={'sale_status': 'COMPLETED'}
+        )
         
         total_sales = len(sales_data)
         matched = 0
@@ -343,7 +348,11 @@ def check_sales_items():
             sale_id = sale.get('id')
             sale_total = float(sale.get('total', 0))
             
-            items_data = execute_query('sale_items', select='quantity,unit_price,discount', filters={'sale_id': sale_id})
+            items_data = execute_query(
+                'sale_items',
+                select='quantity,unit_price,discount',
+                filters={'sale_id': sale_id}
+            )
             
             calc_total = sum(
                 float(item.get('quantity', 0)) * float(item.get('unit_price', 0)) 
