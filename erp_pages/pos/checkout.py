@@ -1,63 +1,45 @@
 # ==============================================================================
 # erp_pages/pos/checkout.py
-# ERP ENTERPRISE POS CHECKOUT ENGINE v13.0 FINAL
+# ERP ENTERPRISE POS CHECKOUT ENGINE v13.0
 #
-# Responsibilities:
-# - Cart validation
-# - RPC checkout bridge
-# - Canonical RPC totals
-# - Receipt data builder
-# - Cache refresh
+# SINGLE SOURCE OF TRUTH
 #
 # IMPORTANT:
-# Supabase checkout_sale_rpc is the canonical source for:
-#   subtotal
-#   tax
-#   discount
-#   total
-#   paid_amount
-#   change
+#   Supabase checkout_sale_rpc owns:
+#       subtotal
+#       tax
+#       discount
+#       total
+#       paid_amount
+#       change_amount
 #
+#   Python NEVER recalculates the final sale total.
 # ==============================================================================
-
 
 from datetime import datetime
 
-
 from erp_core import checkout_sale_rpc
 
+from erp_core.context import CacheManager
 
-from erp_core.context import (
-    CacheManager
-)
+from erp_core.config import CACHE_KEYS
 
-
-from erp_core.config import (
-    CACHE_KEYS
-)
-
-
-from .engine import (
-    get_default_tax_rate
-)
+from .engine import get_default_tax_rate
 
 
 # ==============================================================================
 # SAFE NUMBER
 # ==============================================================================
 
-
 def safe_float(value, default=0):
 
     try:
-
         if value is None:
             return float(default)
 
         return float(value)
 
     except Exception:
-
         return float(default)
 
 
@@ -65,67 +47,112 @@ def safe_float(value, default=0):
 # CART PAYLOAD
 # ==============================================================================
 
-
 def build_cart_payload(cart):
 
     payload = []
 
     for item in cart:
 
-        product_id = item.get(
-            "id",
-            0
-        )
+        payload.append({
 
-        qty = item.get(
-            "qty",
-            0
-        )
+            "id": int(
+                item.get("id", 0)
+            ),
 
-        selling_price = item.get(
-            "selling_price",
-            item.get(
-                "unit_price",
-                0
-            )
-        )
+            "qty": int(
+                item.get("qty", 0)
+            ),
 
-        payload.append(
-            {
-                "id": int(product_id),
-
-                "qty": int(qty),
-
-                "selling_price": safe_float(
-                    selling_price
+            "selling_price": safe_float(
+                item.get(
+                    "selling_price",
+                    item.get(
+                        "unit_price",
+                        0
+                    )
                 )
-            }
-        )
+            )
+
+        })
 
     return payload
 
 
 # ==============================================================================
 # RECEIPT BUILDER
+#
+# IMPORTANT:
+# Final monetary totals MUST come from RPC.
+# Python only builds line display data.
 # ==============================================================================
-
 
 def build_receipt_data(
     cart,
     rpc_data,
-    paid_amount,
-    tax_rate,
-    discount
+    paid_amount=None,
+    tax_rate=None,
+    discount=None
 ):
 
-    # ==========================================================================
-    # LOCAL FALLBACK CALCULATION
-    #
-    # Used only if RPC does not return a value.
-    # RPC remains the canonical source.
-    # ==========================================================================
+    if not isinstance(rpc_data, dict):
+        rpc_data = {}
 
-    calculated_subtotal = 0
+
+    # --------------------------------------------------------------------------
+    # RPC IS THE AUTHORITY
+    # --------------------------------------------------------------------------
+
+    subtotal = safe_float(
+        rpc_data.get("subtotal"),
+        0
+    )
+
+    tax_amount = safe_float(
+        rpc_data.get("tax"),
+        0
+    )
+
+    discount_amount = safe_float(
+        rpc_data.get("discount"),
+        0
+    )
+
+    grand_total = safe_float(
+        rpc_data.get("total"),
+        0
+    )
+
+    paid = safe_float(
+        rpc_data.get(
+            "paid_amount",
+            paid_amount
+        ),
+        0
+    )
+
+    change = safe_float(
+        rpc_data.get("change"),
+        rpc_data.get(
+            "change_amount",
+            max(0, paid - grand_total)
+        )
+    )
+
+    rpc_tax_rate = safe_float(
+        rpc_data.get(
+            "tax_rate",
+            tax_rate
+        ),
+        0
+    )
+
+
+    # --------------------------------------------------------------------------
+    # ITEMS
+    #
+    # Line amounts are display-only.
+    # They do NOT determine grand total.
+    # --------------------------------------------------------------------------
 
     items = []
 
@@ -150,106 +177,42 @@ def build_receipt_data(
 
         amount = price * qty
 
-        calculated_subtotal += amount
+        items.append({
 
-        items.append(
-            {
-                "name":
-                    item.get(
-                        "name",
-                        "Unknown"
-                    ),
+            "name": item.get(
+                "name",
+                "Unknown"
+            ),
 
-                "product_id":
-                    item.get(
-                        "id"
-                    ),
+            "product_id": item.get(
+                "id"
+            ),
 
-                "quantity":
-                    qty,
+            "quantity": qty,
 
-                "unit_price":
-                    price,
+            "unit_price": price,
 
-                "selling_price":
-                    price,
+            "selling_price": price,
 
-                "price_source":
-                    item.get(
-                        "price_source",
-                        "SYSTEM"
-                    ),
+            "price_source": item.get(
+                "price_source",
+                "SYSTEM"
+            ),
 
-                "total":
-                    round(
-                        amount,
-                        2
-                    )
-            }
-        )
+            "total": round(
+                amount,
+                2
+            )
 
-    # ==========================================================================
-    # RPC CANONICAL VALUES
-    # ==========================================================================
+        })
 
-    subtotal = safe_float(
-        rpc_data.get(
-            "subtotal",
-            calculated_subtotal
-        )
-    )
 
-    tax_amount = safe_float(
-        rpc_data.get(
-            "tax",
-            subtotal
-            * safe_float(tax_rate)
-            / 100
-        )
-    )
-
-    rpc_discount = safe_float(
-        rpc_data.get(
-            "discount",
-            discount
-        )
-    )
-
-    grand_total = safe_float(
-        rpc_data.get(
-            "total",
-            subtotal
-            + tax_amount
-            - rpc_discount
-        )
-    )
-
-    rpc_paid_amount = safe_float(
-        rpc_data.get(
-            "paid_amount",
-            paid_amount
-        )
-    )
-
-    rpc_change = safe_float(
-        rpc_data.get(
-            "change",
-            rpc_paid_amount
-            - grand_total
-        )
-    )
-
-    # Never allow negative change in receipt.
-    rpc_change = max(
-        0,
-        rpc_change
-    )
-
-    # ==========================================================================
+    # --------------------------------------------------------------------------
     # INVOICE
-    # ==========================================================================
+    # --------------------------------------------------------------------------
 
     invoice_no = (
+
         rpc_data.get(
             "invoice_no"
         )
@@ -268,120 +231,69 @@ def build_receipt_data(
                 "%Y%m%d%H%M%S"
             )
         )
+
     )
 
-    # ==========================================================================
-    # SALE ID
-    # ==========================================================================
 
-    sale_id = rpc_data.get(
-        "sale_id"
-    )
-
-    # ==========================================================================
-    # FINAL RECEIPT DATA
-    # ==========================================================================
+    # --------------------------------------------------------------------------
+    # RECEIPT DATA
+    # --------------------------------------------------------------------------
 
     return {
 
-        "invoice_no":
-            invoice_no,
+        "invoice_no": invoice_no,
 
-        "date":
-            datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
-            ),
+        "date": datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
 
-        "cashier":
-            "Admin",
+        "cashier": "Admin",
 
-        "items":
-            items,
+        "items": items,
 
         # ----------------------------------------------------------------------
-        # TOTALS
+        # AUTHORITATIVE RPC VALUES
         # ----------------------------------------------------------------------
 
-        "subtotal":
-            round(
-                subtotal,
-                2
-            ),
+        "subtotal": round(
+            subtotal,
+            2
+        ),
 
-        "tax_rate":
-            safe_float(
-                tax_rate
-            ),
+        "tax_rate": round(
+            rpc_tax_rate,
+            4
+        ),
 
-        "tax_amount":
-            round(
-                tax_amount,
-                2
-            ),
+        "tax_amount": round(
+            tax_amount,
+            2
+        ),
 
-        "discount":
-            round(
-                rpc_discount,
-                2
-            ),
+        "discount": round(
+            discount_amount,
+            2
+        ),
 
-        # IMPORTANT:
-        # Both keys are provided for UI compatibility.
-        "grand_total":
-            round(
-                grand_total,
-                2
-            ),
+        "grand_total": round(
+            grand_total,
+            2
+        ),
 
-        "total":
-            round(
-                grand_total,
-                2
-            ),
+        "paid": round(
+            paid,
+            2
+        ),
 
-        # ----------------------------------------------------------------------
-        # PAYMENT
-        # ----------------------------------------------------------------------
+        "change": round(
+            change,
+            2
+        ),
 
-        "paid":
-            round(
-                rpc_paid_amount,
-                2
-            ),
+        "sale_id": rpc_data.get(
+            "sale_id"
+        )
 
-        "paid_amount":
-            round(
-                rpc_paid_amount,
-                2
-            ),
-
-        "change":
-            round(
-                rpc_change,
-                2
-            ),
-
-        # ----------------------------------------------------------------------
-        # SALE
-        # ----------------------------------------------------------------------
-
-        "sale_id":
-            sale_id,
-
-        "warehouse_id":
-            rpc_data.get(
-                "warehouse_id"
-            ),
-
-        "counter_id":
-            rpc_data.get(
-                "counter_id"
-            ),
-
-        "payment_method":
-            rpc_data.get(
-                "payment_method"
-            )
     }
 
 
@@ -389,14 +301,14 @@ def build_receipt_data(
 # PROCESS CHECKOUT
 # ==============================================================================
 
-
 def process_checkout(
     cart,
     paid_amount,
     warehouse_id,
     cashier_id,
     payment_method="CASH",
-    discount=0
+    discount=0,
+    counter_id=None
 ):
 
     try:
@@ -408,12 +320,10 @@ def process_checkout(
         if not cart:
 
             return {
-                "success":
-                    False,
-
-                "message":
-                    "Cart is empty."
+                "success": False,
+                "message": "Cart is empty."
             }
+
 
         # ======================================================================
         # 2. TAX
@@ -421,58 +331,54 @@ def process_checkout(
 
         tax_rate = get_default_tax_rate()
 
+
         # ======================================================================
-        # 3. BUILD RPC CART
+        # 3. BUILD PAYLOAD
         # ======================================================================
 
         cart_payload = build_cart_payload(
             cart
         )
 
+
         # ======================================================================
-        # 4. CHECKOUT RPC
+        # 4. SUPABASE CHECKOUT RPC
+        #
+        # THIS IS THE ONLY TRANSACTION AUTHORITY.
         # ======================================================================
 
         result = checkout_sale_rpc(
 
-            cart=
-                cart_payload,
+            cart=cart_payload,
 
-            paid_amount=
-                paid_amount,
+            paid_amount=paid_amount,
 
-            warehouse_id=
-                warehouse_id,
+            warehouse_id=warehouse_id,
 
-            cashier_id=
-                cashier_id,
+            cashier_id=cashier_id,
 
-            payment_method=
-                payment_method,
+            counter_id=counter_id,
 
-            tax_rate=
-                tax_rate,
+            payment_method=payment_method,
 
-            discount=
-                discount
+            tax_rate=tax_rate,
+
+            discount=discount
+
         )
+
 
         # ======================================================================
         # 5. RPC FAILURE
         # ======================================================================
 
-        if not isinstance(
-            result,
-            dict
-        ):
+        if not isinstance(result, dict):
 
             return {
-                "success":
-                    False,
-
-                "message":
-                    "Invalid checkout response."
+                "success": False,
+                "message": "Invalid checkout RPC response."
             }
+
 
         if not result.get(
             "success",
@@ -480,18 +386,98 @@ def process_checkout(
         ):
 
             return {
-                "success":
-                    False,
 
-                "message":
-                    result.get(
-                        "message",
-                        "Checkout failed."
-                    )
+                "success": False,
+
+                "message": result.get(
+                    "message",
+                    "Checkout failed."
+                )
+
             }
 
+
         # ======================================================================
-        # 6. CACHE REFRESH
+        # 6. RPC DATA
+        # ======================================================================
+
+        rpc_data = result.get(
+            "data",
+            {}
+        )
+
+
+        if isinstance(
+            rpc_data,
+            list
+        ):
+
+            rpc_data = (
+                rpc_data[0]
+                if rpc_data
+                else {}
+            )
+
+
+        if not isinstance(
+            rpc_data,
+            dict
+        ):
+
+            return {
+
+                "success": False,
+
+                "message":
+                    "Checkout succeeded but RPC returned invalid sale data."
+
+            }
+
+
+        # ======================================================================
+        # 7. AUTHORITATIVE TOTAL VALIDATION
+        #
+        # Ensure RPC actually returned total.
+        # ======================================================================
+
+        required_fields = (
+            "sale_id",
+            "invoice_no",
+            "subtotal",
+            "tax",
+            "discount",
+            "total"
+        )
+
+
+        missing_fields = [
+
+            field
+
+            for field in required_fields
+
+            if field not in rpc_data
+
+        ]
+
+
+        if missing_fields:
+
+            return {
+
+                "success": False,
+
+                "message":
+                    "Checkout RPC returned incomplete sale totals: "
+                    + ", ".join(
+                        missing_fields
+                    )
+
+            }
+
+
+        # ======================================================================
+        # 8. CACHE INVALIDATION
         # ======================================================================
 
         try:
@@ -510,46 +496,14 @@ def process_checkout(
 
         except Exception:
 
-            # Cache failure must never
-            # make a successful sale fail.
             pass
 
-        # ======================================================================
-        # 7. EXTRACT RPC DATA
-        # ======================================================================
-
-        rpc_data = result.get(
-            "data",
-            {}
-        )
-
-        if rpc_data is None:
-
-            rpc_data = {}
-
-        if isinstance(
-            rpc_data,
-            list
-        ):
-
-            rpc_data = (
-                rpc_data[0]
-                if rpc_data
-                else {}
-            )
-
-        if not isinstance(
-            rpc_data,
-            dict
-        ):
-
-            rpc_data = {}
 
         # ======================================================================
-        # 8. BUILD RECEIPT
+        # 9. RECEIPT
         #
         # IMPORTANT:
-        # RPC total is now the canonical total.
+        # No recalculation of grand total.
         # ======================================================================
 
         receipt_data = build_receipt_data(
@@ -563,38 +517,29 @@ def process_checkout(
             tax_rate,
 
             discount
+
         )
 
+
         # ======================================================================
-        # 9. FINAL SUCCESS RESPONSE
+        # 10. FINAL RESULT
         # ======================================================================
 
         return {
 
-            "success":
-                True,
+            "success": True,
 
-            "message":
-                result.get(
-                    "message",
-                    "Sale completed"
-                ),
+            "data": receipt_data
 
-            "data":
-                receipt_data
         }
 
-    # ==========================================================================
-    # GLOBAL PYTHON ERROR
-    # ==========================================================================
 
     except Exception as e:
 
         return {
 
-            "success":
-                False,
+            "success": False,
 
-            "message":
-                str(e)
+            "message": str(e)
+
         }
