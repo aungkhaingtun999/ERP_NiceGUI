@@ -954,9 +954,6 @@ def main():
             st.cache_data.clear()
             st.rerun()
     
-    st.session_state['integrity_start_date'] = start_date
-    st.session_state['integrity_end_date'] = end_date
-    
     st.markdown("---")
 
     # ------------------------------------------------
