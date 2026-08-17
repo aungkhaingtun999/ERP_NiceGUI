@@ -350,7 +350,16 @@ Change : {money(change)}
             )
 
             if result.get("success", False):
-                sale_data = result.get("data", {})
+                raw_data = result.get("data", {})
+                
+                # Supabase က List (သို့) Dict ထွက်လာသည်ကို အလိုအလျောက် စစ်ဆေးခြင်း
+                if isinstance(raw_data, list) and len(raw_data) > 0:
+                    sale_data = raw_data[0]
+                elif isinstance(raw_data, dict):
+                    sale_data = raw_data
+                else:
+                    sale_data = {}
+
                 sale_id = sale_data.get("id")
 
                 # ဂျာနယ်စာရင်း (Double Entry) အလိုအလျောက် ထည့်သွင်းခြင်း
@@ -360,6 +369,20 @@ Change : {money(change)}
                         total_amount=float(grand_total),
                         payment_method=str(payment_method)
                     )
+                else:
+                    # sale_id သေချာမရလျှင် sales ဇယားမှ ID အသစ်ဆုံးကို ယူ၍ ဂျာနယ်သွင်းရန် Fallback
+                    try:
+                        supabase = get_supabase()
+                        latest_sale = supabase.table("sales").select("id").order("id", desc=True).limit(1).execute()
+                        if latest_sale.data:
+                            fallback_sale_id = latest_sale.data[0]["id"]
+                            post_sale_journal_entry(
+                                sale_id=int(fallback_sale_id),
+                                total_amount=float(grand_total),
+                                payment_method=str(payment_method)
+                            )
+                    except Exception:
+                        pass
 
                 sale_data.update({
                     "subtotal": subtotal,
