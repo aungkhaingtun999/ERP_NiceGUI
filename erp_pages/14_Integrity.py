@@ -867,13 +867,18 @@ def check_sales_items():
             "discrepancy": discrepancy,
             "mismatched_sales": mismatched_sales,
             "detail": (
-                f"Checked {total_sales} sales | "
+                f"Sales checked: {total_sales} | "
                 f"Matched: {matched} | "
                 f"Discrepancy: {money_fmt(discrepancy)}"
+                + (
+                    f" | Mismatched: {mismatch_text}"
+                    if mismatched_sales
+                    else ""
+                )
             ),
             "suggestion": (
-                f"Check sale_items / tax calculation for: "
-                f"{mismatch_text}"
+                "Check sale_items totals and sales.tax for "
+                "mismatched sales."
                 if not passed
                 else None
             ),
@@ -895,116 +900,48 @@ def check_sales_items():
 
 
 # ==============================================================================
-# RUN ALL
+# RENDER CHECK CARD
 # ==============================================================================
 
-def run_all_checks():
+def render_check_card(result):
 
-    return [
-        check_double_entry(),
-        check_sales_vs_payments(),
-        check_stock_vs_ledger(),
-        check_fifo_vs_stock(),
-        check_sales_items(),
-    ]
+    status_class = "check-passed" if result["passed"] else (
+        "check-failed" if result["status"] != "ERROR" else "check-error"
+    )
 
+    with st.container():
 
-# ==============================================================================
-# EXPORT
-# ==============================================================================
-
-def export_to_csv(results):
-
-    rows = []
-
-    for result in results:
-
-        rows.append(
-            {
-                "Check": result.get("name"),
-                "Status": result.get("status"),
-                "Detail": result.get("detail"),
-                "Passed": result.get("passed", False),
-                "Suggestion": result.get("suggestion") or "",
-            }
+        st.markdown(
+            f"""
+            <div class="check-card {status_class}">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 24px;">{result['icon']}</span>
+                    <span style="font-weight: 600; font-size: 16px;">
+                        {result['name']}
+                    </span>
+                    <span style="margin-left: auto; font-weight: 500;">
+                        {result['status_icon']} {result['status']}
+                    </span>
+                </div>
+                <div style="margin-top: 6px; font-size: 14px;">
+                    {result['detail']}
+                </div>
+        """,
+            unsafe_allow_html=True,
         )
 
-    return (
-        pd.DataFrame(rows)
-        .to_csv(index=False)
-    )
+        if result.get("suggestion"):
 
+            st.markdown(
+                f"""
+                <div class="suggestion">
+                    💡 {result['suggestion']}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-# ==============================================================================
-# DISPLAY
-# ==============================================================================
-
-def render_check_card(check):
-
-    if check.get("passed"):
-
-        card_class = "check-passed"
-        badge_text = "✅ PASSED"
-        badge_class = "badge-passed"
-
-    elif check.get("status") == "ERROR":
-
-        card_class = "check-error"
-        badge_text = "⚠️ ERROR"
-        badge_class = "badge-error"
-
-    else:
-
-        card_class = "check-failed"
-        badge_text = "❌ FAILED"
-        badge_class = "badge-failed"
-
-    suggestion_html = ""
-
-    if check.get("suggestion"):
-
-        suggestion_html = f"""
-        <div class="suggestion">
-            💡 {check["suggestion"]}
-        </div>
-        """
-
-    st.markdown(
-        f"""
-        <div class="check-card {card_class}">
-
-            <table style="width:100%; border-collapse:collapse;">
-
-                <tr>
-
-                    <td style="width:5%; font-size:28px;">
-                        {check.get("icon", "🔍")}
-                    </td>
-
-                    <td style="width:25%; font-weight:600;">
-                        {check.get("name", "")}
-                    </td>
-
-                    <td style="width:20%;">
-                        <span class="badge {badge_class}">
-                            {badge_text}
-                        </span>
-                    </td>
-
-                    <td style="width:50%; font-size:14px;">
-                        {check.get("detail", "")}
-                    </td>
-
-                </tr>
-
-            </table>
-
-            {suggestion_html}
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ==============================================================================
@@ -1013,343 +950,108 @@ def render_check_card(check):
 
 def run():
 
-    st.title(
-        "🔐 ERP Integrity Check Dashboard"
-    )
+    st.title("🔐 ERP Integrity Check Dashboard")
 
     st.caption(
-        "Double Entry & FIFO Cost Monitoring"
+        "Read‑only diagnostics verifying internal ERP consistency."
     )
-
-    # ==========================================================================
-    # SIDEBAR
-    # ==========================================================================
-
-    with st.sidebar:
-
-        st.header(
-            "⚙️ Settings"
-        )
-
-        supabase = get_supabase()
-
-        if supabase:
-
-            st.success(
-                "✅ Database Connected"
-            )
-
-        else:
-
-            st.error(
-                "❌ Database Disconnected"
-            )
-
-            return
-
-        st.divider()
-
-        st.subheader(
-            "📊 Database Stats"
-        )
-
-        sales_count = get_table_count(
-            "sales"
-        )
-
-        products_count = get_table_count(
-            "products"
-        )
-
-        st.metric(
-            "Sales",
-            sales_count,
-        )
-
-        st.metric(
-            "Products",
-            products_count,
-        )
-
-        st.divider()
-
-        st.subheader(
-            "📤 Export"
-        )
-
-        if st.button(
-            "📥 Export Report",
-            use_container_width=True,
-        ):
-
-            if "integrity_results" in st.session_state:
-
-                csv_data = export_to_csv(
-                    st.session_state.integrity_results
-                )
-
-                st.download_button(
-                    "⬇ Download CSV",
-                    data=csv_data,
-                    file_name="integrity_report.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-
-            else:
-
-                st.warning(
-                    "Run checks first."
-                )
-
-    # ==========================================================================
-    # RUN BUTTON
-    # ==========================================================================
-
-    col1, col2 = st.columns(
-        [1, 3]
-    )
-
-    with col1:
-
-        if st.button(
-            "🔄 Run All Checks",
-            type="primary",
-            use_container_width=True,
-        ):
-
-            with st.spinner(
-                "Running integrity checks..."
-            ):
-
-                results = run_all_checks()
-
-                st.session_state.integrity_results = (
-                    results
-                )
-
-                st.session_state.last_integrity_run = (
-                    datetime.datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                )
-
-    with col2:
-
-        if "last_integrity_run" in st.session_state:
-
-            st.caption(
-                "🕐 Last Check: "
-                + st.session_state.last_integrity_run
-            )
 
     st.divider()
 
     # ==========================================================================
-    # RESULTS
+    # RUN CHECKS
     # ==========================================================================
 
-    if "integrity_results" not in st.session_state:
+    with st.spinner("Running integrity checks..."):
 
-        st.info(
-            "🔍 Click **Run All Checks** to start the ERP integrity verification."
-        )
+        results = [
+            check_double_entry(),
+            check_sales_vs_payments(),
+            check_stock_vs_ledger(),
+            check_fifo_vs_stock(),
+            check_sales_items(),
+        ]
 
-        return
+    # ==========================================================================
+    # OVERVIEW METRICS
+    # ==========================================================================
 
-    results = (
-        st.session_state.integrity_results
-    )
-
-    total = len(results)
-
-    passed = sum(
+    total_checks = len(results)
+    passed_checks = sum(
         1
-        for result in results
-        if result.get("passed", False)
+        for r in results
+        if r["passed"]
     )
+    failed_checks = total_checks - passed_checks
 
-    errors = sum(
-        1
-        for result in results
-        if result.get("status") == "ERROR"
-    )
-
-    failed = (
-        total
-        - passed
-        - errors
-    )
-
-    # ==========================================================================
-    # SUMMARY
-    # ==========================================================================
-
-    st.markdown(
-        "### 📊 Summary"
-    )
-
-    col1, col2, col3, col4 = st.columns(
-        4
-    )
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-
-        st.metric(
-            "✅ Passed",
-            f"{passed}/{total}",
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-value">{total_checks}</div>
+                <div class="metric-label">Total Checks</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
     with col2:
-
-        st.metric(
-            "❌ Failed",
-            failed,
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-value" style="color: #28a745;">
+                    {passed_checks}
+                </div>
+                <div class="metric-label">✅ Passed</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
     with col3:
-
-        st.metric(
-            "⚠️ Errors",
-            errors,
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-value" style="color: #dc3545;">
+                    {failed_checks}
+                </div>
+                <div class="metric-label">❌ Failed</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
     with col4:
-
-        if errors > 0:
-
-            status = "ERROR"
-
-        elif failed > 0:
-
-            status = "WARNING"
-
-        else:
-
-            status = "ALL GOOD"
-
-        st.metric(
-            "Status",
-            status,
-        )
-
-    st.divider()
-
-    # ==========================================================================
-    # DETAILS
-    # ==========================================================================
-
-    st.markdown(
-        "### 📋 Detailed Results"
-    )
-
-    for check in results:
-
-        render_check_card(
-            check
-        )
-
-    # ==========================================================================
-    # FAILED DETAIL
-    # ==========================================================================
-
-    failed_items = []
-
-    for check in results:
-
-        if (
-            check.get("status") == "MISMATCHED"
-            and check.get("mismatched_sales")
-        ):
-
-            failed_items.extend(
-                check["mismatched_sales"]
-            )
-
-    if failed_items:
-
-        st.divider()
-
         st.markdown(
-            "### 🔎 Mismatch Details"
+            f"""
+            <div class="metric-card">
+                <div class="metric-value">
+                    {int((passed_checks / total_checks) * 100)}%
+                </div>
+                <div class="metric-label">Pass Rate</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-
-        detail_rows = []
-
-        for row in failed_items:
-
-            detail_rows.append(
-                {
-                    "Sale ID": row.get(
-                        "sale_id"
-                    ),
-                    "Sale Total": money_fmt(
-                        row.get(
-                            "sale_total"
-                        )
-                    ),
-                    "Item Total": money_fmt(
-                        row.get(
-                            "item_total"
-                        )
-                    ),
-                    "Tax": money_fmt(
-                        row.get(
-                            "tax"
-                        )
-                    ),
-                    "Calculated Total": money_fmt(
-                        row.get(
-                            "calculated_total"
-                        )
-                    ),
-                    "Difference": money_fmt(
-                        row.get(
-                            "difference"
-                        )
-                    ),
-                }
-            )
-
-        if detail_rows:
-
-            st.dataframe(
-                pd.DataFrame(
-                    detail_rows
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-    # ==========================================================================
-    # FINAL STATUS
-    # ==========================================================================
 
     st.divider()
 
-    if errors > 0:
+    # ==========================================================================
+    # DETAILED RESULTS
+    # ==========================================================================
 
-        st.error(
-            f"⚠️ {errors} integrity check(s) returned an ERROR."
-        )
+    for result in results:
 
-    elif failed > 0:
+        render_check_card(result)
 
-        st.warning(
-            f"🚨 {failed} integrity check(s) failed. "
-            "Please review the details above."
-        )
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    else:
+    # ==========================================================================
+    # TIMESTAMP
+    # ==========================================================================
 
-        st.success(
-            "🎉 All integrity checks passed."
-        )
-
-
-# ==============================================================================
-# DIRECT ENTRY
-# ==============================================================================
-
-if __name__ == "__main__":
-    run()
+    st.caption(
+        f"Checked at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
