@@ -819,6 +819,402 @@ def check_fifo_vs_stock():
 # ============================================================
 # CHECK 5
 # SALES <-> SALE ITEMS (ONLY subtotal check)
-# =======
+# ============================================================
 
-##ဘယ်ကာလအတွက် စစ်ဆေးတယ်ဆိုတာ UI. မှာ စာသားနဲ့ဖော်ပြပေးပါ
+def check_sales_vs_items():
+
+    try:
+        # Get date range from session state or use default (last 30 days)
+        today = datetime.date.today()
+        default_start = today - datetime.timedelta(days=30)
+        
+        # Use session state if available, otherwise use default
+        start_date = st.session_state.get('integrity_start_date', default_start)
+        end_date = st.session_state.get('integrity_end_date', today)
+        
+        # Convert to string for query
+        start_str = start_date.strftime('%Y-%m-%d')
+        end_str = end_date.strftime('%Y-%m-%d')
+        
+        # Get all sales in date range
+        # Note: Since we can't do range queries easily with the current execute_query,
+        # we'll get all sales and filter in Python
+        all_sales = execute_query(
+            "sales",
+            select="id,subtotal,total,created_at,sale_status",
+        )
+        
+        # Filter by date range and status
+        sales = []
+        for sale in all_sales:
+            try:
+                created_at = sale.get('created_at')
+                if created_at:
+                    # Handle different date formats
+                    if isinstance(created_at, str):
+                        sale_date = datetime.datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                    else:
+                        sale_date = created_at.date() if hasattr(created_at, 'date') else created_at
+                    
+                    if start_date <= sale_date <= end_date and sale.get('sale_status') == 'COMPLETED':
+                        sales.append(sale)
+            except Exception:
+                continue
+
+        if not sales:
+            return {
+                "name": "Sales ↔ Sale Items",
+                "icon": "🧾",
+                "status": "NO DATA",
+                "status_type": "warning",
+                "passed": True,
+                "detail": f"No completed sales found for period {start_str} to {end_str}",
+                "suggestion": None,
+                "period": f"{start_str} to {end_str}",
+            }
+
+        sale_ids = [int(x["id"]) for x in sales if x.get("id") is not None]
+
+        # Get all sale items for these sales
+        sale_items = execute_query(
+            "sale_items",
+            select="sale_id,subtotal",
+            filters={"sale_id": sale_ids},
+        )
+
+        # Group items by sale_id
+        items_by_sale = {}
+        for item in sale_items:
+            sale_id = item.get("sale_id")
+            if sale_id is None:
+                continue
+            try:
+                sale_id = int(sale_id)
+            except Exception:
+                continue
+            
+            items_by_sale[sale_id] = items_by_sale.get(sale_id, 0.0) + money(item.get("subtotal"))
+
+        mismatches = []
+        total_sales = 0.0
+        total_items = 0.0
+
+        for sale in sales:
+            sale_id = int(sale["id"])
+            sale_subtotal = money(sale.get("subtotal", 0))
+            items_subtotal = money(items_by_sale.get(sale_id, 0))
+
+            total_sales += sale_subtotal
+            total_items += items_subtotal
+
+            # Check if subtotals match
+            if abs(sale_subtotal - items_subtotal) >= 0.01:
+                mismatches.append({
+                    "sale_id": sale_id,
+                    "sale_subtotal": sale_subtotal,
+                    "items_subtotal": items_subtotal,
+                    "difference": sale_subtotal - items_subtotal,
+                })
+
+        passed = len(mismatches) == 0
+
+        # Determine status
+        if passed:
+            status = "MATCHED"
+            status_type = "passed"
+            suggestion = None
+        else:
+            status = "MISMATCHED"
+            status_type = "failed"
+            mismatch_ids = ", ".join(f"#{x['sale_id']}" for x in mismatches[:5])
+            suggestion = f"Subtotal mismatch for sale(s): {mismatch_ids}"
+
+        return {
+            "name": "Sales ↔ Sale Items",
+            "icon": "🧾",
+            "status": status,
+            "status_type": status_type,
+            "passed": passed,
+            "detail": f"Sales: {total_sales:,.2f} | Items: {total_items:,.2f}",
+            "suggestion": suggestion,
+            "period": f"{start_str} to {end_str}",
+            "mismatches": mismatches,
+            "total_sales_checked": len(sales),
+            "total_items_checked": len(sale_items),
+        }
+
+    except Exception as e:
+        return {
+            "name": "Sales ↔ Sale Items",
+            "icon": "🧾",
+            "status": "ERROR",
+            "status_type": "error",
+            "passed": False,
+            "detail": str(e)[:100],
+            "suggestion": "Verify sale_items table and sale_id relationships.",
+            "period": "Error retrieving period",
+        }
+
+
+# ============================================================
+# MAIN PAGE
+# ============================================================
+
+def main():
+
+    st.title("🔐 Enterprise Integrity Check")
+    st.markdown("---")
+
+    # ------------------------------------------------
+    # DATE RANGE SELECTOR FOR SALES ITEMS CHECK
+    # ------------------------------------------------
+    
+    st.markdown("### 📅 Check Period Selection")
+    st.caption("Select the date range for Sales ↔ Sale Items verification")
+    
+    col1, col2, col3 = st.columns([2, 2, 1])
+    
+    with col1:
+        start_date = st.date_input(
+            "Start Date",
+            value=datetime.date.today() - datetime.timedelta(days=30),
+            key="integrity_start_date"
+        )
+    
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=datetime.date.today(),
+            key="integrity_end_date"
+        )
+    
+    with col3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔄 Refresh Checks", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
+    # Store in session state for use in check functions
+    st.session_state['integrity_start_date'] = start_date
+    st.session_state['integrity_end_date'] = end_date
+    
+    st.markdown("---")
+
+    # ------------------------------------------------
+    # METRICS ROW
+    # ------------------------------------------------
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        sales_count = get_table_count("sales")
+        st.metric(
+            label="Total Sales Records",
+            value=f"{sales_count:,}",
+        )
+
+    with col2:
+        product_count = get_table_count("products")
+        st.metric(
+            label="Total Products",
+            value=f"{product_count:,}",
+        )
+
+    with col3:
+        stock_count = get_table_count("warehouse_stock")
+        st.metric(
+            label="Stock Records",
+            value=f"{stock_count:,}",
+        )
+
+    st.markdown("---")
+
+    # ------------------------------------------------
+    # RUN CHECKS
+    # ------------------------------------------------
+
+    checks = [
+        check_double_entry(),
+        check_sales_vs_payments(),
+        check_stock_vs_ledger(),
+        check_fifo_vs_stock(),
+        check_sales_vs_items(),
+    ]
+
+    # ------------------------------------------------
+    # SUMMARY BADGE
+    # ------------------------------------------------
+
+    total_checks = len(checks)
+    passed_checks = sum(1 for c in checks if c.get("passed", False))
+    failed_checks = total_checks - passed_checks
+
+    summary_color = (
+        "✅"
+        if failed_checks == 0
+        else "⚠️"
+        if failed_checks <= 2
+        else "❌"
+    )
+
+    st.markdown(
+        f"""
+        <div style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        ">
+            <div>
+                <span style="font-size: 28px; margin-right: 12px;">{summary_color}</span>
+                <span style="font-size: 18px; font-weight: 600;">
+                    {passed_checks} / {total_checks} Checks Passed
+                </span>
+            </div>
+            <div style="font-size: 14px; color: #6c757d;">
+                Last checked: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ------------------------------------------------
+    # RENDER CHECKS
+    # ------------------------------------------------
+
+    for check in checks:
+
+        status_type = check.get("status_type", "error")
+        icon = check.get("icon", "📋")
+        name = check.get("name", "Unknown Check")
+        status = check.get("status", "UNKNOWN")
+        detail = check.get("detail", "")
+        suggestion = check.get("suggestion")
+
+        # Special handling for period display
+        period_info = ""
+        if name == "Sales ↔ Sale Items" and "period" in check:
+            period_info = f" <span style='font-size:12px; color:#6c757d;'>({check['period']})</span>"
+
+        # Card class
+        card_class = "check-card"
+        if status_type == "passed":
+            card_class += " check-passed"
+        elif status_type == "failed":
+            card_class += " check-failed"
+        elif status_type == "warning":
+            card_class += " check-warning"
+        else:
+            card_class += " check-error"
+
+        # Badge
+        badge_class = "badge"
+        if status_type == "passed":
+            badge_class += " badge-passed"
+        elif status_type == "failed":
+            badge_class += " badge-failed"
+        elif status_type == "warning":
+            badge_class += " badge-warning"
+        else:
+            badge_class += " badge-error"
+
+        st.markdown(
+            f"""
+            <div class="{card_class}">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="font-size: 20px; margin-right: 8px;">{icon}</span>
+                        <strong>{name}</strong>
+                        {period_info}
+                    </div>
+                    <span class="{badge_class}">{status}</span>
+                </div>
+                <div style="margin-top: 6px; font-size: 14px; color: #495057;">
+                    {detail}
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Show suggestion if exists
+        if suggestion:
+            st.markdown(
+                f"""
+                <div class="suggestion">
+                    💡 {suggestion}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # Show mismatches for sales vs items
+        if name == "Sales ↔ Sale Items" and check.get("mismatches"):
+            mismatches = check["mismatches"]
+            if mismatches:
+                st.markdown("#### Mismatch Details")
+                df = pd.DataFrame(mismatches)
+                df["sale_id"] = df["sale_id"].apply(lambda x: f"#{x}")
+                df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
+                df["sale_subtotal"] = df["sale_subtotal"].apply(lambda x: f"{x:,.2f}")
+                df["items_subtotal"] = df["items_subtotal"].apply(lambda x: f"{x:,.2f}")
+                df.columns = ["Sale ID", "Sale Subtotal", "Items Subtotal", "Difference"]
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        # Show mismatches for sales vs payments
+        if name == "Sales ↔ Payments" and check.get("mismatches"):
+            mismatches = check["mismatches"]
+            if mismatches:
+                st.markdown("#### Payment Mismatch Details")
+                df = pd.DataFrame(mismatches)
+                df["sale_id"] = df["sale_id"].apply(lambda x: f"#{x}")
+                df["sale"] = df["sale"].apply(lambda x: f"{x:,.2f}")
+                df["payment"] = df["payment"].apply(lambda x: f"{x:,.2f}")
+                df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
+                df.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Difference", "Payment Method"]
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        # Show cash overpayments for sales vs payments
+        if name == "Sales ↔ Payments" and check.get("cash_overpayments"):
+            cash_over = check["cash_overpayments"]
+            if cash_over:
+                st.markdown("#### Cash Change Details")
+                df_cash = pd.DataFrame(cash_over)
+                df_cash["sale_id"] = df_cash["sale_id"].apply(lambda x: f"#{x}")
+                df_cash["sale_amount"] = df_cash["sale_amount"].apply(lambda x: f"{x:,.2f}")
+                df_cash["payment_amount"] = df_cash["payment_amount"].apply(lambda x: f"{x:,.2f}")
+                df_cash["change"] = df_cash["change"].apply(lambda x: f"{x:,.2f}")
+                df_cash.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Change", "Payment Method"]
+                st.dataframe(df_cash, use_container_width=True, hide_index=True)
+
+        # Show product mismatches for FIFO vs Stock
+        if name == "FIFO Cost ↔ Stock" and check.get("product_mismatches"):
+            product_mismatches = check["product_mismatches"]
+            if product_mismatches:
+                st.markdown("#### Product-level Quantity Mismatches")
+                df = pd.DataFrame(product_mismatches)
+                df["fifo_qty"] = df["fifo_qty"].apply(lambda x: f"{x:,.0f}")
+                df["stock_qty"] = df["stock_qty"].apply(lambda x: f"{x:,.0f}")
+                df["qty_diff"] = df["qty_diff"].apply(lambda x: f"{x:,.0f}")
+                df.columns = ["Product ID", "Product Name", "FIFO Qty", "Stock Qty", "Qty Difference"]
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ------------------------------------------------
+    # FOOTER
+    # ------------------------------------------------
+
+    st.markdown("---")
+    st.caption(
+        "🔐 This page is READ-ONLY. "
+        "All checks are performed against the database "
+        "without modifying any data."
+    )
+
+
+if __name__ == "__main__":
+    main()
