@@ -139,7 +139,6 @@ def execute_query(table_name: str, select: str = "*", filters: dict = None, limi
         if filters:
             for key, value in filters.items():
                 if isinstance(value, list) and len(value) > 0:
-                    # For list filters, use in_ operator
                     if len(value) == 1:
                         query = query.eq(key, value[0])
                     else:
@@ -235,7 +234,6 @@ def check_sales_vs_payments():
                 "cash_overpayments": []
             }
         
-        # Filter completed sales
         completed_sales = [s for s in sales if s.get("sale_status") == "COMPLETED"]
         
         if not completed_sales:
@@ -259,7 +257,7 @@ def check_sales_vs_payments():
         )
         
         payment_map = {}
-        for payment in payments:
+        for payment in payments if payments else []:
             if payment.get("status") != "COMPLETED":
                 continue
             sale_id = payment.get("sale_id")
@@ -286,7 +284,6 @@ def check_sales_vs_payments():
             
             payment_method = str(sale.get("payment_method") or "UNKNOWN").upper()
             
-            # CASH: Allow overpayment
             if payment_method in ["CASH", "CASH_MMK"]:
                 if payment_amount >= sale_amount:
                     change = payment_amount - sale_amount
@@ -300,7 +297,6 @@ def check_sales_vs_payments():
                         })
                     continue
             
-            # NON-CASH: Exact match
             if abs(sale_amount - payment_amount) >= 0.01:
                 mismatches.append({
                     "sale_id": sale_id,
@@ -407,7 +403,6 @@ def check_stock_vs_ledger():
 
 def check_fifo_vs_stock():
     try:
-        # FIFO COST LAYERS
         fifo_data = execute_query(
             "inventory_cost_layers",
             select="product_id,qty_remaining,unit_cost"
@@ -432,11 +427,9 @@ def check_fifo_vs_stock():
         fifo_qty = sum(qty(row.get("qty_remaining")) for row in fifo_data)
         fifo_value = sum(qty(row.get("qty_remaining")) * money(row.get("unit_cost")) for row in fifo_data)
         
-        # WAREHOUSE STOCK
         stock_data = execute_query("warehouse_stock", select="product_id,qty")
         stock_qty = sum(qty(row.get("qty")) for row in stock_data) if stock_data else 0
         
-        # Group FIFO by product
         fifo_by_product = {}
         for row in fifo_data:
             product_id = row.get("product_id")
@@ -453,7 +446,6 @@ def check_fifo_vs_stock():
             fifo_by_product[product_id]["qty"] += qty(row.get("qty_remaining"))
             fifo_by_product[product_id]["value"] += qty(row.get("qty_remaining")) * money(row.get("unit_cost"))
         
-        # Group Stock by product
         stock_by_product = {}
         for row in stock_data if stock_data else []:
             product_id = row.get("product_id")
@@ -465,7 +457,6 @@ def check_fifo_vs_stock():
                 continue
             stock_by_product[product_id] = qty(row.get("qty"))
         
-        # Find mismatches
         product_mismatches = []
         all_product_ids = set(list(fifo_by_product.keys()) + list(stock_by_product.keys()))
         
@@ -475,7 +466,6 @@ def check_fifo_vs_stock():
             qty_diff_prod = abs(fifo_qty_prod - stock_qty_prod)
             
             if qty_diff_prod >= 0.01:
-                # Get product name
                 product = execute_query(
                     "products",
                     select="id,name",
@@ -546,19 +536,11 @@ def check_fifo_vs_stock():
 # CHECK 5: SALES <-> SALE ITEMS
 # ============================================================
 
-def check_sales_vs_items():
+def check_sales_vs_items(start_date, end_date):
     try:
-        # Get date range from session state
-        today = datetime.date.today()
-        default_start = today - datetime.timedelta(days=30)
-        
-        start_date = st.session_state.get('integrity_start_date', default_start)
-        end_date = st.session_state.get('integrity_end_date', today)
-        
         start_str = start_date.strftime('%Y-%m-%d')
         end_str = end_date.strftime('%Y-%m-%d')
         
-        # Get all sales
         all_sales = execute_query(
             "sales",
             select="id,subtotal,total,created_at,sale_status"
@@ -577,13 +559,11 @@ def check_sales_vs_items():
                 "mismatches": []
             }
         
-        # Filter by date range and status
         sales = []
         for sale in all_sales:
             try:
                 created_at = sale.get('created_at')
                 if created_at:
-                    # Parse date
                     if isinstance(created_at, str):
                         if 'T' in created_at:
                             sale_date = datetime.datetime.fromisoformat(
@@ -596,8 +576,7 @@ def check_sales_vs_items():
                     
                     if start_date <= sale_date <= end_date and sale.get('sale_status') == 'COMPLETED':
                         sales.append(sale)
-            except Exception as e:
-                print(f"Error parsing date: {e}")
+            except Exception:
                 continue
         
         if not sales:
@@ -615,14 +594,12 @@ def check_sales_vs_items():
         
         sale_ids = [int(s["id"]) for s in sales if s.get("id") is not None]
         
-        # Get sale items
         sale_items = execute_query(
             "sale_items",
             select="sale_id,subtotal",
             filters={"sale_id": sale_ids}
         )
         
-        # Group items by sale
         items_by_sale = {}
         for item in sale_items if sale_items else []:
             sale_id = item.get("sale_id")
@@ -702,6 +679,12 @@ def main():
     st.title("🔐 Enterprise Integrity Check")
     st.markdown("---")
     
+    # Initialize session state for dates if not exists
+    if 'integrity_start_date' not in st.session_state:
+        st.session_state.integrity_start_date = datetime.date.today() - datetime.timedelta(days=30)
+    if 'integrity_end_date' not in st.session_state:
+        st.session_state.integrity_end_date = datetime.date.today()
+    
     # Date Range Selector
     st.markdown("### 📅 Check Period Selection")
     st.caption("Select the date range for Sales ↔ Sale Items verification")
@@ -711,25 +694,26 @@ def main():
     with col1:
         start_date = st.date_input(
             "Start Date",
-            value=datetime.date.today() - datetime.timedelta(days=30),
-            key="integrity_start_date"
+            value=st.session_state.integrity_start_date,
+            key="integrity_start_date_widget"
         )
+        # Update session state
+        st.session_state.integrity_start_date = start_date
     
     with col2:
         end_date = st.date_input(
             "End Date",
-            value=datetime.date.today(),
-            key="integrity_end_date"
+            value=st.session_state.integrity_end_date,
+            key="integrity_end_date_widget"
         )
+        # Update session state
+        st.session_state.integrity_end_date = end_date
     
     with col3:
         st.write("")
         if st.button("🔄 Refresh Checks", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
-    
-    st.session_state['integrity_start_date'] = start_date
-    st.session_state['integrity_end_date'] = end_date
     
     st.markdown("---")
     
@@ -757,7 +741,7 @@ def main():
             check_sales_vs_payments(),
             check_stock_vs_ledger(),
             check_fifo_vs_stock(),
-            check_sales_vs_items(),
+            check_sales_vs_items(start_date, end_date),
         ]
     
     # Summary
