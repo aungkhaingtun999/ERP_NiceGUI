@@ -926,49 +926,40 @@ def run():
         return
 
     # ==========================================================================
-    # SALES DATAFRAME
+    # DEBUG — REPORT SALES DATA
     # ==========================================================================
 
-    df = pd.DataFrame(
-        sales
+    df = pd.DataFrame(sales)
+
+    st.write("### DEBUG — REPORT SALES DATA")
+
+    st.dataframe(
+        df[
+            [
+                "id",
+                "total",
+                "subtotal",
+                "discount",
+                "tax",
+                "total_amount",
+                "created_at",
+            ]
+        ],
+        use_container_width=True,
+    )
+
+    st.write(
+        "DEBUG Revenue:",
+        df["total"].sum()
     )
 
     # ==========================================================================
-    # NORMALIZE TOTAL
-    # ==========================================================================
-    #
-    # sales.total is the canonical sale total.
-    # total_amount is currently 0 in existing records.
-    #
-
-    if "total" in df.columns:
-
-        df["total"] = (
-            pd.to_numeric(
-                df["total"],
-                errors="coerce",
-            )
-            .fillna(0.0)
-        )
-
-    elif "total_amount" in df.columns:
-
-        df["total"] = (
-            pd.to_numeric(
-                df["total_amount"],
-                errors="coerce",
-            )
-            .fillna(0.0)
-        )
-
-    else:
-
-        df["total"] = 0.0
-
-    # ==========================================================================
-    # MONEY
+    # SALES DATAFRAME
     # ==========================================================================
 
+    sales_df = df.copy()
+
+    # Convert numeric columns
     for col in [
         "total",
         "total_amount",
@@ -977,631 +968,441 @@ def run():
         "subtotal",
         "paid_amount",
     ]:
+        if col in sales_df.columns:
+            sales_df[col] = pd.to_numeric(
+                sales_df[col],
+                errors="coerce",
+            ).fillna(0)
 
-        if col in df.columns:
+    # Cashier name
+    sales_df["Cashier"] = sales_df["users"].apply(
+        lambda u: cashier_name(u) if isinstance(u, dict) else "Unknown"
+    )
 
-            df[col] = (
-                pd.to_numeric(
-                    df[col],
-                    errors="coerce",
-                )
-                .fillna(0.0)
-            )
-
-    # ==========================================================================
-    # CREATED AT
-    # ==========================================================================
-
-    if "created_at" not in df.columns:
-
-        st.error(
-            "Sales data does not contain created_at."
-        )
-
-        return
-
-    df["created_at"] = pd.to_datetime(
-        df["created_at"],
+    # Date
+    sales_df["created_at"] = pd.to_datetime(
+        sales_df["created_at"],
         errors="coerce",
         utc=True,
     )
 
-    df = df[
-        df["created_at"].notna()
-    ].copy()
+    if not sales_df.empty:
 
-    if df.empty:
-
-        st.warning(
-            "Sales records were found, but created_at values are invalid."
-        )
-
-        return
-
-    # ==========================================================================
-    # MYANMAR TIME
-    # ==========================================================================
-
-    df["created_at"] = (
-        df["created_at"]
-        .dt.tz_convert(
-            "Asia/Yangon"
-        )
-        .dt.tz_localize(None)
-    )
-
-    # ==========================================================================
-    # CASHIER
-    # ==========================================================================
-
-    if "users" in df.columns:
-
-        df["Cashier"] = (
-            df["users"]
-            .apply(
-                cashier_name
+        sales_df["created_at"] = (
+            sales_df["created_at"]
+            .dt.tz_convert(
+                "Asia/Yangon"
             )
+            .dt.tz_localize(None)
         )
 
-    else:
-
-        df["Cashier"] = "SYSTEM"
-
     # ==========================================================================
-    # CASHIER FILTER
+    # SALES SUMMARY
     # ==========================================================================
 
-    st.sidebar.subheader(
-        "🔎 Filters"
+    st.subheader(
+        "📊 Sales Summary"
     )
 
-    cashier_values = (
-        df["Cashier"]
-        .fillna("Unknown")
-        .astype(str)
-        .str.strip()
-        .replace(
-            "",
-            "Unknown",
-        )
-        .unique()
-        .tolist()
+    total_sales = safe_number(
+        sales_df["total"].sum()
     )
 
-    cashier_options = [
-        "All"
-    ] + sorted(
-        cashier_values
+    total_subtotal = safe_number(
+        sales_df["subtotal"].sum()
     )
 
-    selected_cashier = (
-        st.sidebar.selectbox(
-            "Cashier",
-            cashier_options,
-            key="reports_cashier_filter",
-        )
+    total_discount = safe_number(
+        sales_df["discount"].sum()
     )
 
-    if selected_cashier != "All":
-
-        df = df[
-            df["Cashier"]
-            == selected_cashier
-        ].copy()
-
-    if df.empty:
-
-        st.warning(
-            "No data after filter."
-        )
-
-        return
-
-    # ==========================================================================
-    # LOAD SALE ITEMS
-    # ==========================================================================
-
-    sale_ids = [
-        sale.get("id")
-        for sale in sales
-        if sale.get("id") is not None
-    ]
-
-    sale_items = get_sale_items(
-        sale_ids
+    total_tax = safe_number(
+        sales_df["tax"].sum()
     )
 
-    # ==========================================================================
-    # LOAD PRODUCT MASTER
-    # ==========================================================================
-
-    product_ids = [
-        item.get("product_id")
-        for item in sale_items
-        if item.get("product_id") is not None
-    ]
-
-    products = get_products(
-        product_ids
+    total_amount = safe_number(
+        sales_df["total_amount"].sum()
     )
 
-    # ==========================================================================
-    # BUILD PRODUCT DATA
-    # ==========================================================================
+    transaction_count = len(sales_df)
 
-    product_df = (
-        build_product_sales_dataframe(
-            sales=sales,
-            sale_items=sale_items,
-            products=products,
-        )
-    )
-
-    # ==========================================================================
-    # IMPORTANT:
-    # Apply cashier filter to product report too.
-    # ==========================================================================
-
-    if (
-        not product_df.empty
-        and selected_cashier != "All"
-    ):
-
-        product_df = product_df[
-            product_df["Cashier"]
-            == selected_cashier
-        ].copy()
-
-    # ==========================================================================
-    # KPI
-    # ==========================================================================
-
-    revenue = safe_number(
-        df["total"].sum()
-    )
-
-    discount = safe_number(
-        df["discount"].sum()
-        if "discount" in df.columns
-        else 0
-    )
-
-    tax = safe_number(
-        df["tax"].sum()
-        if "tax" in df.columns
-        else 0
-    )
-
-    bills = len(df)
-
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric(
-        "💰 Revenue",
-        f"{revenue:,.0f} MMK",
+        "🧾 Transactions",
+        transaction_count,
     )
 
     c2.metric(
-        "🧾 Bills",
-        bills,
+        "💰 Total Sales",
+        f"{total_sales:,.0f} MMK",
     )
 
     c3.metric(
         "🏷 Discount",
-        f"{discount:,.0f} MMK",
+        f"{total_discount:,.0f} MMK",
     )
 
     c4.metric(
-        "🧮 Tax",
-        f"{tax:,.0f} MMK",
+        "🧾 Subtotal",
+        f"{total_subtotal:,.0f} MMK",
+    )
+
+    c5.metric(
+        "📊 Total Amount",
+        f"{total_amount:,.0f} MMK",
     )
 
     st.divider()
 
     # ==========================================================================
-    # TABS
+    # PAYMENT METHOD BREAKDOWN
     # ==========================================================================
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    st.subheader(
+        "💳 Payment Method Breakdown"
+    )
+
+    payment_df = (
+        sales_df
+        .groupby("payment_method", dropna=False)
+        .agg(
+            Count=("id", "count"),
+            Total=("total", "sum"),
+        )
+        .reset_index()
+        .sort_values("Total", ascending=False)
+    )
+
+    if not payment_df.empty:
+
+        payment_display = payment_df.copy()
+
+        payment_display["payment_method"] = (
+            payment_display["payment_method"]
+            .fillna("Unknown")
+        )
+
+        payment_display["Total"] = payment_display["Total"].apply(
+            lambda x: f"{safe_number(x):,.0f} MMK"
+        )
+
+        show_table(
+            payment_display
+        )
+
+    st.divider()
+
+    # ==========================================================================
+    # CASHIER PERFORMANCE
+    # ==========================================================================
+
+    st.subheader(
+        "👤 Cashier Performance"
+    )
+
+    cashier_df = (
+        sales_df
+        .groupby("Cashier", dropna=False)
+        .agg(
+            Transactions=("id", "count"),
+            Total=("total", "sum"),
+        )
+        .reset_index()
+        .sort_values("Total", ascending=False)
+    )
+
+    if not cashier_df.empty:
+
+        cashier_display = cashier_df.copy()
+
+        cashier_display["Cashier"] = (
+            cashier_display["Cashier"]
+            .fillna("Unknown")
+        )
+
+        cashier_display["Total"] = cashier_display["Total"].apply(
+            lambda x: f"{safe_number(x):,.0f} MMK"
+        )
+
+        show_table(
+            cashier_display
+        )
+
+    st.divider()
+
+    # ==========================================================================
+    # TRANSACTION DETAIL
+    # ==========================================================================
+
+    st.subheader(
+        "📋 Transaction Detail"
+    )
+
+    detail_columns = [
+        "created_at",
+        "id",
+        "Cashier",
+        "payment_method",
+        "subtotal",
+        "discount",
+        "tax",
+        "total",
+    ]
+
+    detail_df = sales_df[
         [
-            "📈 Sales Summary",
-            "📦 Product Sales",
-            "👨‍💼 Cashier",
-            "💳 Payment",
-            "📥 Export",
+            col
+            for col in detail_columns
+            if col in sales_df.columns
         ]
+    ].copy()
+
+    if "created_at" in detail_df.columns:
+
+        detail_df["created_at"] = (
+            detail_df["created_at"]
+            .dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        )
+
+    for col in [
+        "subtotal",
+        "discount",
+        "tax",
+        "total",
+    ]:
+
+        if col in detail_df.columns:
+
+            detail_df[col] = detail_df[col].apply(
+                lambda x: f"{safe_number(x):,.0f}"
+            )
+
+    detail_df.columns = [
+        "Date",
+        "Sale ID",
+        "Cashier",
+        "Payment Method",
+        "Subtotal",
+        "Discount",
+        "Tax",
+        "Total",
+    ]
+
+    show_table(
+        detail_df
     )
 
     # ==========================================================================
-    # TAB 1 - SALES SUMMARY
+    # PRODUCT SALES
     # ==========================================================================
 
-    with tab1:
+    # Load sale items
+    sale_ids = sales_df["id"].tolist()
 
-        st.subheader(
-            "Daily Sales"
+    if sale_ids:
+
+        sale_items = get_sale_items(
+            sale_ids
         )
 
-        daily = (
-            df.groupby(
-                df["created_at"].dt.date
-            )["total"]
-            .sum()
-            .reset_index()
-        )
+        if sale_items:
 
-        daily.columns = [
-            "Date",
-            "Sales",
-        ]
+            product_ids = []
 
-        show_table(
-            daily
-        )
+            for item in sale_items:
 
-        st.subheader(
-            "Monthly Sales"
-        )
+                pid = item.get(
+                    "product_id"
+                )
 
-        monthly = (
-            df.groupby(
-                df["created_at"]
-                .dt.to_period("M")
-                .astype(str)
-            )["total"]
-            .sum()
-            .reset_index()
-        )
+                if pid is not None:
 
-        monthly.columns = [
-            "Month",
-            "Sales",
-        ]
+                    try:
 
-        show_table(
-            monthly
-        )
-
-    # ==========================================================================
-    # TAB 2 - PRODUCT SALES
-    # ==========================================================================
-
-    with tab2:
-
-        render_product_sales_report(
-            product_df
-        )
-
-    # ==========================================================================
-    # TAB 3 - CASHIER
-    # ==========================================================================
-
-    with tab3:
-
-        st.subheader(
-            "Cashier Performance"
-        )
-
-        cashier = (
-            df.groupby(
-                "Cashier"
-            )
-            .agg(
-                Bills=(
-                    "id",
-                    "count",
-                ),
-                Sales=(
-                    "total",
-                    "sum",
-                ),
-            )
-            .reset_index()
-            .sort_values(
-                "Sales",
-                ascending=False,
-            )
-        )
-
-        show_table(
-            cashier
-        )
-
-    # ==========================================================================
-    # TAB 4 - PAYMENT
-    # ==========================================================================
-
-    with tab4:
-
-        st.subheader(
-            "Payment Method"
-        )
-
-        if "payment_method" in df.columns:
-
-            payment = (
-                df.assign(
-                    payment_method=(
-                        df[
-                            "payment_method"
-                        ]
-                        .fillna(
-                            "Unknown"
+                        product_ids.append(
+                            int(pid)
                         )
-                        .astype(str)
-                        .replace(
-                            "",
-                            "Unknown",
-                        )
-                    )
-                )
-                .groupby(
-                    "payment_method"
-                )
-                .agg(
-                    Bills=(
-                        "id",
-                        "count",
-                    ),
-                    Amount=(
-                        "total",
-                        "sum",
-                    ),
-                )
-                .reset_index()
-                .sort_values(
-                    "Amount",
-                    ascending=False,
-                )
+
+                    except Exception:
+
+                        pass
+
+            products = get_products(
+                product_ids
             )
 
-            show_table(
-                payment
+            product_df = build_product_sales_dataframe(
+                sales,
+                sale_items,
+                products,
+            )
+
+            render_product_sales_report(
+                product_df
             )
 
         else:
 
             st.info(
-                "Payment method data is not available."
+                "No sale items found for this date range."
             )
 
     # ==========================================================================
-    # TAB 5 - EXPORT
+    # EXPORT
     # ==========================================================================
 
-    with tab5:
+    st.divider()
 
-        st.subheader(
-            "📥 Export Sales Report"
-        )
+    st.subheader(
+        "📤 Export Data"
+    )
 
-        # ----------------------------------------------------------------------
-        # Sales Export
-        # ----------------------------------------------------------------------
+    export_col1, export_col2, export_col3 = st.columns(3)
 
-        export_sales_df = df.copy()
+    # Export Sales Data
+    with export_col1:
 
-        export_sales_df.drop(
-            columns=[
-                "cashier_id",
-                "users",
-            ],
-            errors="ignore",
-            inplace=True,
-        )
-
-        if "created_at" in export_sales_df.columns:
-
-            export_sales_df[
-                "created_at"
-            ] = pd.to_datetime(
-                export_sales_df[
-                    "created_at"
-                ],
-                errors="coerce",
-            )
-
-        for col in export_sales_df.columns:
-
-            if (
-                export_sales_df[
-                    col
-                ].dtype
-                == "object"
-            ):
-
-                export_sales_df[
-                    col
-                ] = export_sales_df[
-                    col
-                ].apply(
-                    lambda x:
-                    json.dumps(
-                        x,
-                        ensure_ascii=False,
-                    )
-                    if isinstance(
-                        x,
-                        (
-                            dict,
-                            list,
-                        ),
-                    )
-                    else x
-                )
-
-        export_sales_df = (
-            export_sales_df
-            .fillna("")
-        )
-
-        # ----------------------------------------------------------------------
-        # Product Export
-        # ----------------------------------------------------------------------
-
-        export_product_df = (
-            product_df.copy()
-        )
-
-        if (
-            not export_product_df.empty
-            and "Date"
-            in export_product_df.columns
+        if st.button(
+            "📊 Export Sales Data (Excel)",
+            use_container_width=True,
         ):
 
-            export_product_df[
-                "Date"
-            ] = pd.to_datetime(
-                export_product_df[
-                    "Date"
-                ],
-                errors="coerce",
-            )
+            export_df = sales_df.copy()
 
-        export_product_df = (
-            export_product_df
-            .fillna("")
-        )
+            if "created_at" in export_df.columns:
 
-        # ----------------------------------------------------------------------
-        # CSV - Sales
-        # ----------------------------------------------------------------------
-
-        csv_sales = (
-            export_sales_df
-            .to_csv(
-                index=False
-            )
-            .encode(
-                "utf-8-sig"
-            )
-        )
-
-        st.download_button(
-            "⬇ Download Sales CSV",
-            data=csv_sales,
-            file_name=(
-                "ERP_Sales_Report.csv"
-            ),
-            mime="text/csv",
-            key=(
-                "reports_download_sales_csv"
-            ),
-        )
-
-        # ----------------------------------------------------------------------
-        # CSV - Product
-        # ----------------------------------------------------------------------
-
-        if not export_product_df.empty:
-
-            csv_products = (
-                export_product_df
-                .to_csv(
-                    index=False
+                export_df["created_at"] = (
+                    export_df["created_at"]
+                    .dt.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
                 )
-                .encode(
-                    "utf-8-sig"
+
+            output = BytesIO()
+
+            with pd.ExcelWriter(
+                output,
+                engine="xlsxwriter",
+            ) as writer:
+
+                export_df.to_excel(
+                    writer,
+                    sheet_name="Sales",
+                    index=False,
                 )
+
+            output.seek(0)
+
+            st.download_button(
+                label="Download Sales Excel",
+                data=output,
+                file_name=(
+                    f"sales_report_"
+                    f"{start_date}_to_{end_date}.xlsx"
+                ),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_sales_excel",
+            )
+
+    # Export Product Data
+    with export_col2:
+
+        if st.button(
+            "📦 Export Product Data (Excel)",
+            use_container_width=True,
+        ):
+
+            if "product_df" in locals() and not product_df.empty:
+
+                export_df = product_df.copy()
+
+                if "Date" in export_df.columns:
+
+                    export_df["Date"] = (
+                        export_df["Date"]
+                        .dt.strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    )
+
+                output = BytesIO()
+
+                with pd.ExcelWriter(
+                    output,
+                    engine="xlsxwriter",
+                ) as writer:
+
+                    export_df.to_excel(
+                        writer,
+                        sheet_name="Product Sales",
+                        index=False,
+                    )
+
+                output.seek(0)
+
+                st.download_button(
+                    label="Download Product Excel",
+                    data=output,
+                    file_name=(
+                        f"product_sales_report_"
+                        f"{start_date}_to_{end_date}.xlsx"
+                    ),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="download_product_excel",
+                )
+
+            else:
+
+                st.warning(
+                    "No product data to export."
+                )
+
+    # Export Summary JSON
+    with export_col3:
+
+        if st.button(
+            "📄 Export Summary (JSON)",
+            use_container_width=True,
+        ):
+
+            summary = {
+                "date_range": {
+                    "start": str(start_date),
+                    "end": str(end_date),
+                },
+                "transactions": transaction_count,
+                "total_sales": total_sales,
+                "total_discount": total_discount,
+                "total_tax": total_tax,
+                "total_amount": total_amount,
+                "payment_breakdown": (
+                    payment_df.to_dict("records")
+                    if not payment_df.empty
+                    else []
+                ),
+                "cashier_performance": (
+                    cashier_df.to_dict("records")
+                    if not cashier_df.empty
+                    else []
+                ),
+            }
+
+            json_output = json.dumps(
+                summary,
+                indent=2,
+                default=str,
             )
 
             st.download_button(
-                "⬇ Download Product Sales CSV",
-                data=csv_products,
+                label="Download Summary JSON",
+                data=json_output,
                 file_name=(
-                    "ERP_Product_Sales_Report.csv"
+                    f"summary_report_"
+                    f"{start_date}_to_{end_date}.json"
                 ),
-                mime="text/csv",
-                key=(
-                    "reports_download_product_csv"
-                ),
+                mime="application/json",
+                key="download_summary_json",
             )
-
-        # ----------------------------------------------------------------------
-        # Excel
-        # ----------------------------------------------------------------------
-
-        output = BytesIO()
-
-        with pd.ExcelWriter(
-            output,
-            engine="openpyxl",
-        ) as writer:
-
-            export_sales_df.to_excel(
-                writer,
-                index=False,
-                sheet_name="Sales",
-            )
-
-            if not export_product_df.empty:
-
-                export_product_df.to_excel(
-                    writer,
-                    index=False,
-                    sheet_name="Product Sales",
-                )
-
-                # --------------------------------------------------------------
-                # Product Summary Sheet
-                # --------------------------------------------------------------
-
-                product_summary_export = (
-                    product_df
-                    .groupby(
-                        [
-                            "Product Name",
-                            "SKU",
-                            "Barcode",
-                        ],
-                        dropna=False,
-                    )
-                    .agg(
-                        Quantity=(
-                            "Quantity",
-                            "sum",
-                        ),
-                        Discount=(
-                            "Discount",
-                            "sum",
-                        ),
-                        Sales=(
-                            "Sales",
-                            "sum",
-                        ),
-                    )
-                    .reset_index()
-                    .sort_values(
-                        "Sales",
-                        ascending=False,
-                    )
-                )
-
-                product_summary_export.to_excel(
-                    writer,
-                    index=False,
-                    sheet_name="Product Summary",
-                )
-
-        st.download_button(
-            "⬇ Download Excel",
-            data=output.getvalue(),
-            file_name=(
-                "ERP_Sales_Report.xlsx"
-            ),
-            mime=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
-            key=(
-                "reports_download_excel"
-            ),
-        )
-
-
-# ==============================================================================
-# DIRECT ENTRY
-# ==============================================================================
-
-if __name__ == "__main__":
-    run()
