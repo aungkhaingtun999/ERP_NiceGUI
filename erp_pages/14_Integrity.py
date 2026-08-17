@@ -749,33 +749,21 @@ def main():
     passed_checks = sum(1 for c in checks if c.get("passed", False))
     failed_checks = total_checks - passed_checks
     
-    summary_color = "✅" if failed_checks == 0 else "⚠️" if failed_checks <= 2 else "❌"
+    if failed_checks == 0:
+        summary_color = "✅"
+    elif failed_checks <= 2:
+        summary_color = "⚠️"
+    else:
+        summary_color = "❌"
     
-    st.markdown(
-        f"""
-        <div style="
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px;
-            background-color: #f8f9fa;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border: 1px solid #e9ecef;
-        ">
-            <div>
-                <span style="font-size: 28px; margin-right: 12px;">{summary_color}</span>
-                <span style="font-size: 18px; font-weight: 600;">
-                    {passed_checks} / {total_checks} Checks Passed
-                </span>
-            </div>
-            <div style="font-size: 14px; color: #6c757d;">
-                Last checked: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Use st.columns for summary instead of HTML to avoid code display
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(f"### {summary_color} {passed_checks} / {total_checks} Checks Passed")
+    with col2:
+        st.caption(f"Last checked: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    st.markdown("---")
     
     # Render Checks
     for check in checks:
@@ -788,105 +776,136 @@ def main():
         
         period_info = ""
         if name == "Sales ↔ Sale Items" and "period" in check:
-            period_info = f" <span style='font-size:12px; color:#6c757d;'>({check['period']})</span>"
+            period_info = f" ({check['period']})"
         
-        card_class = "check-card"
+        # Determine card style
         if status_type == "passed":
-            card_class += " check-passed"
+            card_color = "#28a745"
+            bg_color = "#f0fff4"
         elif status_type == "failed":
-            card_class += " check-failed"
+            card_color = "#dc3545"
+            bg_color = "#fff5f5"
         elif status_type == "warning":
-            card_class += " check-warning"
+            card_color = "#ffc107"
+            bg_color = "#fffcf0"
         else:
-            card_class += " check-error"
+            card_color = "#6c757d"
+            bg_color = "#f8f9fa"
         
-        badge_class = "badge"
+        # Badge style
         if status_type == "passed":
-            badge_class += " badge-passed"
+            badge_bg = "#28a745"
+            badge_text = "white"
         elif status_type == "failed":
-            badge_class += " badge-failed"
+            badge_bg = "#dc3545"
+            badge_text = "white"
         elif status_type == "warning":
-            badge_class += " badge-warning"
+            badge_bg = "#ffc107"
+            badge_text = "#856404"
         else:
-            badge_class += " badge-error"
+            badge_bg = "#6c757d"
+            badge_text = "white"
         
+        # Render card using st.markdown with properly formatted HTML
         st.markdown(
             f"""
-            <div class="{card_class}">
+            <div style="
+                padding: 14px 16px;
+                margin: 8px 0;
+                border-radius: 10px;
+                border-left: 5px solid {card_color};
+                background-color: {bg_color};
+            ">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div>
                         <span style="font-size: 20px; margin-right: 8px;">{icon}</span>
                         <strong>{name}</strong>
-                        {period_info}
+                        <span style="font-size: 12px; color: #6c757d;">{period_info}</span>
                     </div>
-                    <span class="{badge_class}">{status}</span>
+                    <span style="
+                        display: inline-block;
+                        padding: 5px 10px;
+                        border-radius: 14px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        white-space: nowrap;
+                        background-color: {badge_bg};
+                        color: {badge_text};
+                    ">{status}</span>
                 </div>
                 <div style="margin-top: 6px; font-size: 14px; color: #495057;">
                     {detail}
                 </div>
+            </div>
             """,
             unsafe_allow_html=True,
         )
         
+        # Show suggestion if exists
         if suggestion:
             st.markdown(
                 f"""
-                <div class="suggestion">
+                <div style="
+                    margin-top: 10px;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    background-color: #fff3cd;
+                    color: #856404;
+                ">
                     💡 {suggestion}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         
-        # Show mismatch details
+        # Show mismatch details using st.expander
         if name == "Sales ↔ Sale Items" and check.get("mismatches"):
             mismatches = check["mismatches"]
             if mismatches:
-                st.markdown("#### 📋 Mismatch Details")
-                df = pd.DataFrame(mismatches)
-                df["sale_id"] = df["sale_id"].apply(lambda x: f"#{x}")
-                df["sale_subtotal"] = df["sale_subtotal"].apply(lambda x: f"{x:,.2f}")
-                df["items_subtotal"] = df["items_subtotal"].apply(lambda x: f"{x:,.2f}")
-                df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
-                df.columns = ["Sale ID", "Sale Subtotal", "Items Subtotal", "Difference"]
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                with st.expander("📋 View Mismatch Details"):
+                    df = pd.DataFrame(mismatches)
+                    df["sale_id"] = df["sale_id"].apply(lambda x: f"#{x}")
+                    df["sale_subtotal"] = df["sale_subtotal"].apply(lambda x: f"{x:,.2f}")
+                    df["items_subtotal"] = df["items_subtotal"].apply(lambda x: f"{x:,.2f}")
+                    df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
+                    df.columns = ["Sale ID", "Sale Subtotal", "Items Subtotal", "Difference"]
+                    st.dataframe(df, use_container_width=True, hide_index=True)
         
         if name == "Sales ↔ Payments" and check.get("mismatches"):
             mismatches = check["mismatches"]
             if mismatches:
-                st.markdown("#### 📋 Payment Mismatch Details")
-                df = pd.DataFrame(mismatches)
-                df["sale_id"] = df["sale_id"].apply(lambda x: f"#{x}")
-                df["sale_amount"] = df["sale_amount"].apply(lambda x: f"{x:,.2f}")
-                df["payment_amount"] = df["payment_amount"].apply(lambda x: f"{x:,.2f}")
-                df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
-                df.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Difference", "Payment Method"]
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                with st.expander("📋 View Payment Mismatch Details"):
+                    df = pd.DataFrame(mismatches)
+                    df["sale_id"] = df["sale_id"].apply(lambda x: f"#{x}")
+                    df["sale_amount"] = df["sale_amount"].apply(lambda x: f"{x:,.2f}")
+                    df["payment_amount"] = df["payment_amount"].apply(lambda x: f"{x:,.2f}")
+                    df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
+                    df.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Difference", "Payment Method"]
+                    st.dataframe(df, use_container_width=True, hide_index=True)
         
         if name == "Sales ↔ Payments" and check.get("cash_overpayments"):
             cash_over = check["cash_overpayments"]
             if cash_over:
-                st.markdown("#### 💰 Cash Change Details")
-                df_cash = pd.DataFrame(cash_over)
-                df_cash["sale_id"] = df_cash["sale_id"].apply(lambda x: f"#{x}")
-                df_cash["sale_amount"] = df_cash["sale_amount"].apply(lambda x: f"{x:,.2f}")
-                df_cash["payment_amount"] = df_cash["payment_amount"].apply(lambda x: f"{x:,.2f}")
-                df_cash["change"] = df_cash["change"].apply(lambda x: f"{x:,.2f}")
-                df_cash.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Change", "Payment Method"]
-                st.dataframe(df_cash, use_container_width=True, hide_index=True)
+                with st.expander("💰 View Cash Change Details"):
+                    df_cash = pd.DataFrame(cash_over)
+                    df_cash["sale_id"] = df_cash["sale_id"].apply(lambda x: f"#{x}")
+                    df_cash["sale_amount"] = df_cash["sale_amount"].apply(lambda x: f"{x:,.2f}")
+                    df_cash["payment_amount"] = df_cash["payment_amount"].apply(lambda x: f"{x:,.2f}")
+                    df_cash["change"] = df_cash["change"].apply(lambda x: f"{x:,.2f}")
+                    df_cash.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Change", "Payment Method"]
+                    st.dataframe(df_cash, use_container_width=True, hide_index=True)
         
         if name == "FIFO Cost ↔ Stock" and check.get("product_mismatches"):
             product_mismatches = check["product_mismatches"]
             if product_mismatches:
-                st.markdown("#### 📦 Product-level Quantity Mismatches")
-                df = pd.DataFrame(product_mismatches)
-                df["fifo_qty"] = df["fifo_qty"].apply(lambda x: f"{x:,.0f}")
-                df["stock_qty"] = df["stock_qty"].apply(lambda x: f"{x:,.0f}")
-                df["qty_diff"] = df["qty_diff"].apply(lambda x: f"{x:,.0f}")
-                df.columns = ["Product ID", "Product Name", "FIFO Qty", "Stock Qty", "Qty Difference"]
-                st.dataframe(df, use_container_width=True, hide_index=True)
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+                with st.expander("📦 View Product-level Quantity Mismatches"):
+                    df = pd.DataFrame(product_mismatches)
+                    df["fifo_qty"] = df["fifo_qty"].apply(lambda x: f"{x:,.0f}")
+                    df["stock_qty"] = df["stock_qty"].apply(lambda x: f"{x:,.0f}")
+                    df["qty_diff"] = df["qty_diff"].apply(lambda x: f"{x:,.0f}")
+                    df.columns = ["Product ID", "Product Name", "FIFO Qty", "Stock Qty", "Qty Difference"]
+                    st.dataframe(df, use_container_width=True, hide_index=True)
     
     # Footer
     st.markdown("---")
