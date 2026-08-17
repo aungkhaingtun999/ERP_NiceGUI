@@ -1,20 +1,20 @@
-#==============================================================================
+==============================================================================
 
-#erp_pages/3_Reports.py
-
-
-
-#ERP ENTERPRISE SALES ANALYTICS REPORT v5.0
+erp_pages/3_Reports.py
 
 
 
-#Sales Summary + Product Sales + Cashier + Payment + Export
+ERP ENTERPRISE SALES ANALYTICS REPORT v5.0
 
 
 
-#PRODUCT NAME SUPPORT
+Sales Summary + Product Sales + Cashier + Payment + Export
 
-#------------------------------------------------------------------------------
+
+
+PRODUCT NAME SUPPORT
+
+------------------------------------------------------------------------------
 
 
 
