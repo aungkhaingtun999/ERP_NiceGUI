@@ -1,9 +1,10 @@
-# ============================================================
+# ==============================================================================
 # erp_pages/POS/journal_helper.py
 # POS Journal Entry Helper for Double Entry System
-# ============================================================
+# ==============================================================================
 
 import datetime
+import streamlit as st
 from supabase_client import get_supabase
 
 def post_sale_journal_entry(sale_id: int, total_amount: float, payment_method: str = "CASH"):
@@ -14,44 +15,48 @@ def post_sale_journal_entry(sale_id: int, total_amount: float, payment_method: s
     try:
         supabase = get_supabase()
         if not supabase:
-            print("Supabase connection failed.")
+            st.error("Journal Error: Supabase connection failed.")
             return False
 
         if total_amount <= 0:
             return True
 
-        # ငွေပေးချေမှုပုံစံအလိုက် Account ID သတ်မှတ်ခြင်း (လိုအပ်ပါက မိမိစနစ်အလျောက် ပြင်ရန်)
-        debit_account_id = 1 if "CASH" in payment_method.upper() else 2  # 1: Cash, 2: Accounts Receivable
-        credit_account_id = 4  # Sales Revenue
+        debit_account_id = 1 if "CASH" in payment_method.upper() else 2  
+        credit_account_id = 4  
 
         journal_rows = [
             {
-                "sale_id": sale_id,
-                "account_id": debit_account_id,
-                "debit": total_amount,
+                "sale_id": int(sale_id),
+                "account_id": int(debit_account_id),
+                "debit": float(total_amount),
                 "credit": 0.00,
                 "description": f"Sale #{sale_id} - Payment via {payment_method}",
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
             },
             {
-                "sale_id": sale_id,
-                "account_id": credit_account_id,
+                "sale_id": int(sale_id),
+                "account_id": int(credit_account_id),
                 "debit": 0.00,
-                "credit": total_amount,
+                "credit": float(total_amount),
                 "description": f"Sale #{sale_id} - Revenue",
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
             }
         ]
 
+        # Supabase သို့ insert လုပ်ခြင်းနှင့် Error တက်ပါက တိုက်ရိုက်ဖော်ပြရန်
         response = supabase.table("journal_entries").insert(journal_rows).execute()
         
+        # Supabase v2 တွင် error ရှိမရှိ စစ်ဆေးခြင်း
+        if hasattr(response, 'error') and response.error:
+            st.error(f"Supabase Journal Insert Error: {response.error}")
+            return False
+
         if response.data:
-            print(f"Successfully posted journal entries for Sale #{sale_id}")
             return True
         else:
-            print(f"Failed to post journal entries: {response}")
+            st.warning(f"Journal inserted but no data returned: {response}")
             return False
 
     except Exception as e:
-        print(f"Error posting journal entry: {str(e)}")
+        st.error(f"Exception in post_sale_journal_entry: {str(e)}")
         return False
