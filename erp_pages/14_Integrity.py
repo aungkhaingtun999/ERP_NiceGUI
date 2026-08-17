@@ -178,8 +178,6 @@ def check_sales_vs_payments():
                 "cash_overpayments": []
             }
         
-        sale_ids = [int(s["id"]) for s in completed_sales if s.get("id") is not None]
-        
         payments = execute_query(
             "payment_transactions",
             select="sale_id,amount,status"
@@ -612,13 +610,10 @@ def render_summary(checks):
     
     if failed_checks == 0:
         summary_icon = "✅"
-        border_color = "#28a745"
     elif failed_checks <= 2:
         summary_icon = "⚠️"
-        border_color = "#ffc107"
     else:
         summary_icon = "❌"
-        border_color = "#dc3545"
     
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -639,28 +634,6 @@ def render_check_card(check):
     detail = check.get("detail", "")
     suggestion = check.get("suggestion")
     
-    # Determine colors
-    if status_type == "passed":
-        border_color = "#28a745"
-        bg_color = "#f0fff4"
-        badge_bg = "#28a745"
-        badge_color = "white"
-    elif status_type == "failed":
-        border_color = "#dc3545"
-        bg_color = "#fff5f5"
-        badge_bg = "#dc3545"
-        badge_color = "white"
-    elif status_type == "warning":
-        border_color = "#ffc107"
-        bg_color = "#fffcf0"
-        badge_bg = "#ffc107"
-        badge_color = "#856404"
-    else:
-        border_color = "#6c757d"
-        bg_color = "#f8f9fa"
-        badge_bg = "#6c757d"
-        badge_color = "white"
-    
     # Period info for sales items check
     period_info = ""
     if name == "Sales ↔ Sale Items" and "period" in check:
@@ -668,21 +641,17 @@ def render_check_card(check):
     
     # Card using st.container with simple markdown
     with st.container():
-        # Header row with columns
         col1, col2 = st.columns([4, 1])
         with col1:
             st.markdown(f"**{icon} {name}**{period_info}")
         with col2:
             st.markdown(f"**{status}**")
         
-        # Detail
         st.markdown(f"*{detail}*")
         
-        # Suggestion
         if suggestion:
             st.info(f"💡 {suggestion}")
         
-        # Mismatch details
         if name == "Sales ↔ Sale Items" and check.get("mismatches"):
             mismatches = check["mismatches"]
             if mismatches:
@@ -741,13 +710,11 @@ def main():
     st.title("🔐 Enterprise Integrity Check")
     st.markdown("---")
     
-    # Initialize session state for dates if not exists
     if 'integrity_start_date' not in st.session_state:
         st.session_state.integrity_start_date = datetime.date.today() - datetime.timedelta(days=30)
     if 'integrity_end_date' not in st.session_state:
         st.session_state.integrity_end_date = datetime.date.today()
     
-    # Date Range Selector
     st.markdown("### 📅 Check Period Selection")
     st.caption("Select the date range for Sales ↔ Sale Items verification")
     
@@ -777,7 +744,6 @@ def main():
     
     st.markdown("---")
     
-    # Metrics
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -794,7 +760,6 @@ def main():
     
     st.markdown("---")
     
-    # Run Checks
     with st.spinner("Running integrity checks..."):
         checks = [
             check_double_entry(),
@@ -804,14 +769,11 @@ def main():
             check_sales_vs_items(start_date, end_date),
         ]
     
-    # Summary
     render_summary(checks)
     
-    # Render each check
     for check in checks:
         render_check_card(check)
     
-    # Footer
     st.caption(
         "🔐 This page is READ-ONLY. "
         "All checks are performed against the database "
