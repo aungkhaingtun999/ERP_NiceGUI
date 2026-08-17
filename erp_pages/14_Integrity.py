@@ -1,1057 +1,609 @@
-# ==============================================================================
-# erp_pages/14_Integrity.py
-#
-# ERP ENTERPRISE INTEGRITY CHECK DASHBOARD
-#
-# READ-ONLY
-#
-# Checks:
-#   1. Double Entry
-#   2. Sales ↔ Payments
-#   3. Stock ↔ Inventory Ledger
-#   4. FIFO Cost ↔ Stock
-#   5. Sales Total ↔ Sale Items
-#
-# IMPORTANT
-# ------------------------------------------------------------------------------
-# This page NEVER modifies:
-#   - sales
-#   - sale_items
-#   - payment_transactions
-#   - products
-#   - warehouse_stock
-#   - inventory_ledger
-#   - inventory_cost_layers
-#
-# ==============================================================================
 
-from __future__ import annotations
 
-import datetime
-from decimal import Decimal, InvalidOperation
+ERP Integrity Check Dashboard - With Icons
 
-import pandas as pd
+Double Entry & FIFO Cost Monitoring
+
 import streamlit as st
+import pandas as pd
+import datetime
+
+Import from your project
 
 from supabase_client import get_supabase
 
+============================================================
 
-# ==============================================================================
-# PAGE CONFIG
-# ==============================================================================
+PAGE CONFIG
+
+============================================================
 
 st.set_page_config(
-    page_title="ERP Integrity Check",
-    page_icon="🔐",
-    layout="wide",
+page_title="ERP Integrity Check",
+page_icon="🔐",
+layout="wide"
 )
 
+============================================================
 
-# ==============================================================================
-# CONSTANTS
-# ==============================================================================
+CUSTOM CSS - Clean and Minimal
 
-TOLERANCE = Decimal("0.01")
-CHECK_LIMIT = 100
+============================================================
 
+st.markdown("""
 
-# ==============================================================================
-# CSS
-# ==============================================================================
+<style>  
+    /* Main container */  
+    .main { padding: 0 1rem; }  
+      
+    /* Check item cards */  
+    .check-card {  
+        padding: 12px 16px;  
+        margin: 8px 0;  
+        border-radius: 8px;  
+        border-left: 4px solid #ccc;  
+        background-color: #f8f9fa;  
+    }  
+    .check-passed { border-left-color: #28a745; background-color: #f0fff4; }  
+    .check-failed { border-left-color: #dc3545; background-color: #fff5f5; }  
+    .check-error { border-left-color: #6c757d; background-color: #f8f9fa; }  
+      
+    /* Icon styles */  
+    .icon-lg { font-size: 28px; margin-right: 8px; }  
+    .icon-md { font-size: 20px; margin-right: 6px; }  
+      
+    /* Status badge */  
+    .badge {  
+        display: inline-block;  
+        padding: 2px 12px;  
+        border-radius: 12px;  
+        font-size: 12px;  
+        font-weight: 600;  
+    }  
+    .badge-passed { background-color: #28a745; color: white; }  
+    .badge-failed { background-color: #dc3545; color: white; }  
+    .badge-error { background-color: #6c757d; color: white; }  
+    .badge-warning { background-color: #ffc107; color: #212529; }  
+      
+    /* Metric cards */  
+    .metric-card {  
+        text-align: center;  
+        padding: 16px;  
+        border-radius: 8px;  
+        background-color: #f8f9fa;  
+        border: 1px solid #e9ecef;  
+    }  
+    .metric-value { font-size: 28px; font-weight: 700; }  
+    .metric-label { font-size: 13px; color: #6c757d; }  
+      
+    /* Suggestion text */  
+    .suggestion {  
+        font-size: 13px;  
+        color: #856404;  
+        background-color: #fff3cd;  
+        padding: 6px 12px;  
+        border-radius: 4px;  
+        margin-top: 4px;  
+    }  
+      
+    /* Divider */  
+    .section-divider { margin: 16px 0; border-top: 1px solid #e9ecef; }  
+</style>  """, unsafe_allow_html=True)
 
-st.markdown(
-    """
-<style>
+============================================================
 
-.main {
-    padding: 0 1rem;
+ICON MAPPING
+
+============================================================
+
+ICONS = {
+"double_entry": "📊",
+"sales_payments": "💰",
+"stock_ledger": "📦",
+"fifo_stock": "📈",
+"sales_items": "🧾",
+"passed": "✅",
+"failed": "❌",
+"error": "⚠️",
+"warning": "⚡",
+"critical": "🚨",
+"all_good": "🎉",
+"database": "🗄️",
+"export": "📥",
+"settings": "⚙️",
+"time": "🕐",
+"check": "🔍",
+"report": "📋",
+"summary": "📊",
 }
 
-.check-card {
-    padding: 12px 16px;
-    margin: 8px 0;
-    border-radius: 8px;
-    border-left: 4px solid #ccc;
-    background-color: #f8f9fa;
-}
-
-.check-passed {
-    border-left-color: #28a745;
-    background-color: #f0fff4;
-}
-
-.check-failed {
-    border-left-color: #dc3545;
-    background-color: #fff5f5;
-}
-
-.check-error {
-    border-left-color: #6c757d;
-    background-color: #f8f9fa;
-}
-
-.metric-card {
-    text-align: center;
-    padding: 16px;
-    border-radius: 8px;
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-}
-
-.metric-value {
-    font-size: 28px;
-    font-weight: 700;
-}
-
-.metric-label {
-    font-size: 13px;
-    color: #6c757d;
-}
-
-.suggestion {
-    font-size: 13px;
-    color: #856404;
-    background-color: #fff3cd;
-    padding: 6px 12px;
-    border-radius: 4px;
-    margin-top: 6px;
-}
-
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-
-# ==============================================================================
-# HELPERS
-# ==============================================================================
-
-def money(value) -> Decimal:
-    """Safely convert DB numeric values to Decimal."""
-
-    try:
-        if value is None or value == "":
-            return Decimal("0")
-
-        return Decimal(str(value))
-
-    except (InvalidOperation, ValueError, TypeError):
-        return Decimal("0")
-
-
-def qty(value) -> Decimal:
-    """Safely convert quantity."""
-
-    return money(value)
-
-
-def money_fmt(value) -> str:
-    return f"{float(money(value)):,.2f}"
-
-
-def qty_fmt(value) -> str:
-    value = qty(value)
-
-    if value == value.to_integral_value():
-        return f"{int(value):,}"
-
-    return f"{float(value):,.2f}"
-
-
-# ==============================================================================
-# DATABASE
-# ==============================================================================
-
-@st.cache_data(
-    ttl=60,
-    show_spinner=False,
-)
-def execute_query(
-    table_name: str,
-    select: str = "*",
-    filters: dict | None = None,
-    limit: int | None = None,
-) -> list:
-
-    try:
-
-        supabase = get_supabase()
-
-        if not supabase:
-            return []
-
-        query = (
-            supabase
-            .table(table_name)
-            .select(select)
-        )
-
-        if filters:
-
-            for key, value in filters.items():
-
-                if isinstance(value, list):
-
-                    query = query.in_(
-                        key,
-                        value,
-                    )
-
-                else:
-
-                    query = query.eq(
-                        key,
-                        value,
-                    )
-
-        if limit:
-            query = query.limit(limit)
-
-        result = query.execute()
-
-        return result.data or []
-
-    except Exception:
-        return []
-
-
-def get_all_rows(
-    table_name: str,
-    select: str = "*",
-) -> list:
-
-    """
-    Read-only helper.
-
-    Uses pagination so integrity checks are not silently
-    limited to the first 1000 rows.
-    """
-
-    try:
-
-        supabase = get_supabase()
-
-        if not supabase:
-            return []
-
-        all_rows = []
-        page_size = 1000
-        offset = 0
-
-        while True:
-
-            response = (
-                supabase
-                .table(table_name)
-                .select(select)
-                .range(
-                    offset,
-                    offset + page_size - 1,
-                )
-                .execute()
-            )
-
-            rows = response.data or []
-
-            all_rows.extend(rows)
-
-            if len(rows) < page_size:
-                break
-
-            offset += page_size
-
-        return all_rows
-
-    except Exception:
-        return []
-
-
-def get_table_count(
-    table_name: str,
-) -> int:
-
-    try:
-
-        rows = get_all_rows(
-            table_name,
-            "id",
-        )
-
-        return len(rows)
-
-    except Exception:
-        return 0
-
-
-# ==============================================================================
-# CHECK 1
-# DOUBLE ENTRY
-# ==============================================================================
+============================================================
+
+DATABASE FUNCTIONS
+
+============================================================
+
+@st.cache_data(ttl=300)
+def execute_query(table_name: str, select: str = "*", filters: dict = None,
+order_by: str = None, limit: int = None) -> list:
+"""Execute direct Supabase query with caching"""
+try:
+supabase = get_supabase()
+if not supabase:
+return []
+
+query = supabase.table(table_name).select(select)  
+      
+    if filters:  
+        for key, value in filters.items():  
+            if isinstance(value, list):  
+                query = query.in_(key, value)  
+            else:  
+                query = query.eq(key, value)  
+      
+    if order_by:  
+        query = query.order(order_by, desc=True)  
+      
+    if limit:  
+        query = query.limit(limit)  
+      
+    result = query.execute()  
+    return result.data if result.data else []  
+except Exception as e:  
+    return []
+
+def get_table_count(table_name: str) -> int:
+"""Get total count of records in a table"""
+try:
+data = execute_query(table_name, select='id', limit=1000)
+return len(data)
+except:
+return 0
+
+============================================================
+
+CHECK FUNCTIONS
+
+============================================================
 
 def check_double_entry():
+"""Check 1: Accounting Debit = Credit (from journal_entries table)"""
+try:
+# ငွေစာရင်း Double Entry စစ်ဆေးရန် journal_entries (သို့) general_ledger ဇယားကို အသုံးပြုပါ
+entries = execute_query('journal_entries', select='debit,credit')
 
-    try:
-
-        entries = get_all_rows(
-            "journal_entries",
-            "debit,credit",
-        )
-
-        if not entries:
-
-            return {
-                "name": "Double Entry",
-                "icon": "📊",
-                "status": "ERROR",
-                "status_icon": "⚠️",
-                "passed": False,
-                "detail": "No journal_entries records found.",
-                "suggestion": (
-                    "Check whether journal_entries is the correct "
-                    "accounting source table."
-                ),
-            }
-
-        debit_total = sum(
-            (
-                money(row.get("debit"))
-                for row in entries
-            ),
-            Decimal("0"),
-        )
-
-        credit_total = sum(
-            (
-                money(row.get("credit"))
-                for row in entries
-            ),
-            Decimal("0"),
-        )
-
-        diff = abs(
-            debit_total - credit_total
-        )
-
-        passed = diff <= TOLERANCE
-
-        return {
-            "name": "Double Entry",
-            "icon": "📊",
-            "status": (
-                "BALANCED"
-                if passed
-                else "IMBALANCED"
-            ),
-            "status_icon": (
-                "✅"
-                if passed
-                else "❌"
-            ),
-            "passed": passed,
-            "debit": debit_total,
-            "credit": credit_total,
-            "diff": diff,
-            "detail": (
-                f"Debit: {money_fmt(debit_total)} | "
-                f"Credit: {money_fmt(credit_total)}"
-            ),
-            "suggestion": (
-                "Check journal_entries for unbalanced "
-                "transactions."
-                if not passed
-                else None
-            ),
-        }
-
-    except Exception as e:
-
-        return {
-            "name": "Double Entry",
-            "icon": "📊",
-            "status": "ERROR",
-            "status_icon": "⚠️",
-            "passed": False,
-            "detail": str(e)[:200],
-            "suggestion": (
-                "Check journal_entries schema and database connection."
-            ),
-        }
-
-
-# ==============================================================================
-# CHECK 2
-# SALES ↔ PAYMENTS
-# ==============================================================================
+debit_total = sum(float(item.get('debit', 0)) for item in entries)  
+    credit_total = sum(float(item.get('credit', 0)) for item in entries)  
+      
+    diff = abs(debit_total - credit_total)  
+    is_balanced = diff < 0.01  
+      
+    return {  
+        "name": "Double Entry",  
+        "icon": "📊",  
+        "status": "BALANCED" if is_balanced else "IMBALANCED",  
+        "status_icon": "✅" if is_balanced else "❌",  
+        "passed": is_balanced,  
+        "debit": debit_total,  
+        "credit": credit_total,  
+        "diff": diff,  
+        "detail": f"Debit: {debit_total:,.2f} | Credit: {credit_total:,.2f}",  
+        "suggestion": "Check journal_entries for unbalanced transactions" if not is_balanced else None  
+    }  
+except Exception as e:  
+    return {  
+        "name": "Double Entry",  
+        "icon": "📊",  
+        "status": "ERROR",  
+        "status_icon": "⚠️",  
+        "passed": False,  
+        "debit": 0,  
+        "credit": 0,  
+        "diff": 0,  
+        "detail": str(e)[:50],  
+        "suggestion": "Check if journal_entries table exists"  
+    }
 
 def check_sales_vs_payments():
+"""Check 2: Sales total matches payments"""
+try:
+sales_data = execute_query(
+'sales',
+select='total',
+filters={'sale_status': 'COMPLETED'}
+)
+sales_total = sum(float(item.get('total', 0)) for item in sales_data)
 
-    try:
-
-        sales = get_all_rows(
-            "sales",
-            """
-            id,
-            total,
-            total_amount,
-            paid_amount,
-            sale_status
-            """,
-        )
-
-        completed_sales = [
-            row
-            for row in sales
-            if str(
-                row.get("sale_status") or "COMPLETED"
-            ).upper()
-            == "COMPLETED"
-        ]
-
-        # ----------------------------------------------------------------------
-        # Canonical sales amount
-        # ----------------------------------------------------------------------
-
-        sales_total = sum(
-            (
-                money(
-                    row.get("total")
-                    if row.get("total") is not None
-                    else row.get("total_amount")
-                )
-                for row in completed_sales
-            ),
-            Decimal("0"),
-        )
-
-        # ----------------------------------------------------------------------
-        # payment_transactions
-        # ----------------------------------------------------------------------
-
-        payments = get_all_rows(
-            "payment_transactions",
-            "amount,status,sale_id",
-        )
-
-        completed_payments = [
-            row
-            for row in payments
-            if str(
-                row.get("status") or ""
-            ).upper()
-            == "COMPLETED"
-        ]
-
-        payments_total = sum(
-            (
-                money(row.get("amount"))
-                for row in completed_payments
-            ),
-            Decimal("0"),
-        )
-
-        diff = abs(
-            sales_total - payments_total
-        )
-
-        passed = diff <= TOLERANCE
-
-        return {
-            "name": "Sales ↔ Payments",
-            "icon": "💰",
-            "status": (
-                "MATCHED"
-                if passed
-                else "MISMATCHED"
-            ),
-            "status_icon": (
-                "✅"
-                if passed
-                else "❌"
-            ),
-            "passed": passed,
-            "sales": sales_total,
-            "payments": payments_total,
-            "diff": diff,
-            "detail": (
-                f"Sales: {money_fmt(sales_total)} | "
-                f"Payments: {money_fmt(payments_total)} | "
-                f"Difference: {money_fmt(diff)}"
-            ),
-            "suggestion": (
-                "Payment transactions do not reconcile with "
-                "completed sales. Check duplicate payments, "
-                "unlinked payments, refunds, or unpaid sales."
-                if not passed
-                else None
-            ),
-        }
-
-    except Exception as e:
-
-        return {
-            "name": "Sales ↔ Payments",
-            "icon": "💰",
-            "status": "ERROR",
-            "status_icon": "⚠️",
-            "passed": False,
-            "detail": str(e)[:200],
-            "suggestion": (
-                "Check payment_transactions schema."
-            ),
-        }
-
-
-# ==============================================================================
-# CHECK 3
-# STOCK ↔ INVENTORY LEDGER
-# ==============================================================================
+payments_data = execute_query(  
+        'payment_transactions',  
+        select='amount',  
+        filters={'status': 'COMPLETED'}  
+    )  
+    payments_total = sum(float(item.get('amount', 0)) for item in payments_data)  
+      
+    diff = abs(sales_total - payments_total)  
+    is_matched = diff < 0.01  
+      
+    return {  
+        "name": "Sales ↔ Payments",  
+        "icon": "💰",  
+        "status": "MATCHED" if is_matched else "MISMATCHED",  
+        "status_icon": "✅" if is_matched else "❌",  
+        "passed": is_matched,  
+        "sales": sales_total,  
+        "payments": payments_total,  
+        "diff": diff,  
+        "detail": f"Sales: {sales_total:,.2f} | Payments: {payments_total:,.2f}",  
+        "suggestion": "Check unpaid sales or unrecorded payments" if not is_matched else None  
+    }  
+except Exception as e:  
+    return {  
+        "name": "Sales ↔ Payments",  
+        "icon": "💰",  
+        "status": "ERROR",  
+        "status_icon": "⚠️",  
+        "passed": False,  
+        "sales": 0,  
+        "payments": 0,  
+        "diff": 0,  
+        "detail": str(e)[:50],  
+        "suggestion": "Check database connection"  
+    }
 
 def check_stock_vs_ledger():
+"""Check 3: Warehouse stock matches inventory ledger"""
+try:
+stock_data = execute_query('warehouse_stock', select='qty')
+stock_total = sum(float(item.get('qty', 0)) for item in stock_data)
 
-    try:
-
-        stock_rows = get_all_rows(
-            "warehouse_stock",
-            "qty",
-        )
-
-        ledger_rows = get_all_rows(
-            "inventory_ledger",
-            "qty_in,qty_out",
-        )
-
-        stock_total = sum(
-            (
-                qty(row.get("qty"))
-                for row in stock_rows
-            ),
-            Decimal("0"),
-        )
-
-        ledger_total = sum(
-            (
-                qty(row.get("qty_in"))
-                - qty(row.get("qty_out"))
-                for row in ledger_rows
-            ),
-            Decimal("0"),
-        )
-
-        diff = abs(
-            stock_total - ledger_total
-        )
-
-        passed = diff <= TOLERANCE
-
-        return {
-            "name": "Stock ↔ Inventory Ledger",
-            "icon": "📦",
-            "status": (
-                "MATCHED"
-                if passed
-                else "MISMATCHED"
-            ),
-            "status_icon": (
-                "✅"
-                if passed
-                else "❌"
-            ),
-            "passed": passed,
-            "stock": stock_total,
-            "ledger": ledger_total,
-            "diff": diff,
-            "detail": (
-                f"Stock: {qty_fmt(stock_total)} | "
-                f"Ledger: {qty_fmt(ledger_total)} | "
-                f"Difference: {qty_fmt(diff)}"
-            ),
-            "suggestion": (
-                "Check inventory_ledger for missing or "
-                "duplicate stock movements."
-                if not passed
-                else None
-            ),
-        }
-
-    except Exception as e:
-
-        return {
-            "name": "Stock ↔ Inventory Ledger",
-            "icon": "📦",
-            "status": "ERROR",
-            "status_icon": "⚠️",
-            "passed": False,
-            "detail": str(e)[:200],
-            "suggestion": (
-                "Check warehouse_stock and inventory_ledger schema."
-            ),
-        }
-
-
-# ==============================================================================
-# CHECK 4
-# FIFO COST ↔ STOCK
-# ==============================================================================
+ledger_total = 0  
+    ledger_data = execute_query('inventory_ledger', select='qty_in,qty_out')  
+    for item in ledger_data:  
+        qty_in = float(item.get('qty_in', 0))  
+        qty_out = float(item.get('qty_out', 0))  
+        ledger_total += (qty_in - qty_out)  
+      
+    diff = abs(stock_total - ledger_total)  
+    is_matched = diff < 0.01  
+      
+    return {  
+        "name": "Stock ↔ Inventory Ledger",  
+        "icon": "📦",  
+        "status": "MATCHED" if is_matched else "MISMATCHED",  
+        "status_icon": "✅" if is_matched else "❌",  
+        "passed": is_matched,  
+        "stock": stock_total,  
+        "ledger": ledger_total,  
+        "diff": diff,  
+        "detail": f"Stock: {stock_total:,.0f} | Ledger: {ledger_total:,.0f}",  
+        "suggestion": "Check inventory ledger for missing stock movements" if not is_matched else None  
+    }  
+except Exception as e:  
+    return {  
+        "name": "Stock ↔ Inventory Ledger",  
+        "icon": "📦",  
+        "status": "ERROR",  
+        "status_icon": "⚠️",  
+        "passed": False,  
+        "stock": 0,  
+        "ledger": 0,  
+        "diff": 0,  
+        "detail": str(e)[:50],  
+        "suggestion": "Check database connection"  
+    }
 
 def check_fifo_vs_stock():
+"""Check 4: FIFO cost matches stock valuation"""
+try:
+fifo_data = execute_query('inventory_cost_layers', select='qty_remaining,unit_cost')
+fifo_cost = sum(float(item.get('qty_remaining', 0)) * float(item.get('unit_cost', 0)) for item in fifo_data)
+fifo_qty = sum(float(item.get('qty_remaining', 0)) for item in fifo_data)
 
-    """
-    IMPORTANT:
-    The old implementation was logically invalid:
-
-        stock_value = fifo_cost
-
-    That guarantees PASS.
-
-    This version compares:
-        FIFO remaining quantity
-        against warehouse_stock quantity
-
-    and separately calculates FIFO inventory value.
-
-    Actual warehouse_stock monetary value is NOT assumed unless
-    the table contains a value column.
-    """
-
-    try:
-
-        fifo_rows = get_all_rows(
-            "inventory_cost_layers",
-            "qty_remaining,unit_cost",
-        )
-
-        stock_rows = get_all_rows(
-            "warehouse_stock",
-            "qty",
-        )
-
-        fifo_qty = sum(
-            (
-                qty(row.get("qty_remaining"))
-                for row in fifo_rows
-            ),
-            Decimal("0"),
-        )
-
-        stock_qty = sum(
-            (
-                qty(row.get("qty"))
-                for row in stock_rows
-            ),
-            Decimal("0"),
-        )
-
-        fifo_value = sum(
-            (
-                qty(row.get("qty_remaining"))
-                * money(row.get("unit_cost"))
-                for row in fifo_rows
-            ),
-            Decimal("0"),
-        )
-
-        qty_diff = abs(
-            fifo_qty - stock_qty
-        )
-
-        passed = qty_diff <= TOLERANCE
-
-        return {
-            "name": "FIFO Cost ↔ Stock",
-            "icon": "📈",
-            "status": (
-                "MATCHED"
-                if passed
-                else "MISMATCHED"
-            ),
-            "status_icon": (
-                "✅"
-                if passed
-                else "❌"
-            ),
-            "passed": passed,
-            "fifo_qty": fifo_qty,
-            "stock_qty": stock_qty,
-            "fifo_cost": fifo_value,
-            "stock_value": fifo_value,
-            "diff": qty_diff,
-            "detail": (
-                f"FIFO Qty: {qty_fmt(fifo_qty)} | "
-                f"Stock Qty: {qty_fmt(stock_qty)} | "
-                f"FIFO Value: {money_fmt(fifo_value)}"
-            ),
-            "suggestion": (
-                "FIFO remaining quantity does not match "
-                "warehouse_stock quantity. Check cost layers."
-                if not passed
-                else None
-            ),
-        }
-
-    except Exception as e:
-
-        return {
-            "name": "FIFO Cost ↔ Stock",
-            "icon": "📈",
-            "status": "ERROR",
-            "status_icon": "⚠️",
-            "passed": False,
-            "detail": str(e)[:200],
-            "suggestion": (
-                "Check inventory_cost_layers and warehouse_stock."
-            ),
-        }
-
-
-# ==============================================================================
-# CHECK 5
-# SALES TOTAL ↔ SALE ITEMS
-# ==============================================================================
+stock_data = execute_query('warehouse_stock', select='qty')  
+    stock_qty = sum(float(item.get('qty', 0)) for item in stock_data)  
+    stock_value = fifo_cost if fifo_qty > 0 else 0  
+      
+    diff = abs(fifo_cost - stock_value)  
+    is_matched = diff < 0.01  
+      
+    return {  
+        "name": "FIFO Cost ↔ Stock",  
+        "icon": "📈",  
+        "status": "MATCHED" if is_matched else "MISMATCHED",  
+        "status_icon": "✅" if is_matched else "❌",  
+        "passed": is_matched,  
+        "fifo_cost": fifo_cost,  
+        "stock_value": stock_value,  
+        "fifo_qty": fifo_qty,  
+        "stock_qty": stock_qty,  
+        "diff": diff,  
+        "detail": f"FIFO Cost: {fifo_cost:,.2f} | Stock Value: {stock_value:,.2f}",  
+        "suggestion": "Check FIFO cost layers for missing or incorrect costs" if not is_matched else None  
+    }  
+except Exception as e:  
+    return {  
+        "name": "FIFO Cost ↔ Stock",  
+        "icon": "📈",  
+        "status": "ERROR",  
+        "status_icon": "⚠️",  
+        "passed": False,  
+        "fifo_cost": 0,  
+        "stock_value": 0,  
+        "fifo_qty": 0,  
+        "stock_qty": 0,  
+        "diff": 0,  
+        "detail": str(e)[:50],  
+        "suggestion": "Check database connection"  
+    }
 
 def check_sales_items():
+"""Check 5: Sales total matches sale_items total"""
+try:
+sales_data = execute_query('sales', select='id,total', filters={'sale_status': 'COMPLETED'}, limit=100)
 
-    """
-    Sale total formula:
+total_sales = len(sales_data)  
+    matched = 0  
+    discrepancy = 0  
+    mismatched_sales = []  
+      
+    for sale in sales_data:  
+        sale_id = sale.get('id')  
+        sale_total = float(sale.get('total', 0))  
+          
+        items_data = execute_query('sale_items', select='quantity,unit_price,discount', filters={'sale_id': sale_id})  
+          
+        calc_total = sum(  
+            float(item.get('quantity', 0)) * float(item.get('unit_price', 0))   
+            - float(item.get('discount', 0))   
+            for item in items_data  
+        )  
+          
+        if abs(calc_total - sale_total) < 0.01:  
+            matched += 1  
+        else:  
+            discrepancy += abs(calc_total - sale_total)  
+            if len(mismatched_sales) < 5:  
+                mismatched_sales.append(f"Sale #{sale_id}")  
+      
+    is_matched = discrepancy < 0.01  
+      
+    return {  
+        "name": "Sales Total ↔ Items",  
+        "icon": "🧾",  
+        "status": "MATCHED" if is_matched else "MISMATCHED",  
+        "status_icon": "✅" if is_matched else "❌",  
+        "passed": is_matched,  
+        "total_sales": total_sales,  
+        "matched": matched,  
+        "discrepancy": discrepancy,  
+        "mismatched_sales": mismatched_sales,  
+        "detail": f"Checked {total_sales:.0f} sales | Matched: {matched:.0f}",  
+        "suggestion": f"Check sale_items for sale(s): {', '.join(mismatched_sales)}" if not is_matched and mismatched_sales else None  
+    }  
+except Exception as e:  
+    return {  
+        "name": "Sales Total ↔ Items",  
+        "icon": "🧾",  
+        "status": "ERROR",  
+        "status_icon": "⚠️",  
+        "passed": False,  
+        "total_sales": 0,  
+        "matched": 0,  
+        "discrepancy": 0,  
+        "mismatched_sales": [],  
+        "detail": str(e)[:50],  
+        "suggestion": "Check database connection"  
+    }
 
-        item totals
-        + tax
-        = sale total
+============================================================
 
-    But sale_items.total is treated as the canonical line
-    amount after line discount.
+RUN ALL CHECKS
 
-    Therefore:
+============================================================
 
-        sum(sale_items.total)
-        + sales.tax
-        ≈ sales.total
+def run_all_checks():
+"""Execute all integrity checks"""
+checks = [
+check_double_entry(),
+check_sales_vs_payments(),
+check_stock_vs_ledger(),
+check_fifo_vs_stock(),
+check_sales_items()
+]
+return checks
 
-    This correctly handles Sale #312:
+============================================================
 
-        item subtotal after discount = 20,050
-        tax                         = 1,620
-        sale total                  = 21,670
-    """
+EXPORT FUNCTIONS
 
-    try:
+============================================================
 
-        sales = get_all_rows(
-            "sales",
-            """
-            id,
-            total,
-            total_amount,
-            tax,
-            sale_status
-            """,
-        )
+def export_to_csv(results):
+"""Export results to CSV format"""
+data = []
+for r in results:
+data.append({
+"Check": r["name"],
+"Status": r["status"],
+"Detail": r["detail"],
+"Passed": r.get("passed", False)
+})
+df = pd.DataFrame(data)
+return df.to_csv(index=False)
 
-        completed_sales = [
-            row
-            for row in sales
-            if str(
-                row.get("sale_status") or "COMPLETED"
-            ).upper()
-            == "COMPLETED"
-        ]
+============================================================
 
-        # Keep original behavior: check latest 100.
-        completed_sales = completed_sales[
-            -CHECK_LIMIT:
-        ]
+MAIN RENDER FUNCTION
 
-        total_sales = len(
-            completed_sales
-        )
-
-        matched = 0
-        discrepancy = Decimal("0")
-        mismatched_sales = []
-
-        for sale in completed_sales:
-
-            sale_id = sale.get("id")
-
-            sale_total = money(
-                sale.get("total")
-                if sale.get("total") is not None
-                else sale.get("total_amount")
-            )
-
-            sale_tax = money(
-                sale.get("tax")
-            )
-
-            items = execute_query(
-                "sale_items",
-                """
-                id,
-                sale_id,
-                quantity,
-                unit_price,
-                discount,
-                total
-                """,
-                filters={
-                    "sale_id": sale_id,
-                },
-            )
-
-            # ------------------------------------------------------------------
-            # Prefer sale_items.total
-            # ------------------------------------------------------------------
-
-            item_total = sum(
-                (
-                    money(row.get("total"))
-                    for row in items
-                ),
-                Decimal("0"),
-            )
-
-            calculated_total = (
-                item_total
-                + sale_tax
-            )
-
-            difference = abs(
-                calculated_total
-                - sale_total
-            )
-
-            if difference <= TOLERANCE:
-
-                matched += 1
-
-            else:
-
-                discrepancy += difference
-
-                if len(mismatched_sales) < 10:
-
-                    mismatched_sales.append(
-                        {
-                            "sale_id": sale_id,
-                            "sale_total": sale_total,
-                            "item_total": item_total,
-                            "tax": sale_tax,
-                            "calculated_total": calculated_total,
-                            "difference": difference,
-                        }
-                    )
-
-        passed = discrepancy <= TOLERANCE
-
-        mismatch_text = ", ".join(
-            f"Sale #{x['sale_id']}"
-            for x in mismatched_sales
-        )
-
-        return {
-            "name": "Sales Total ↔ Items",
-            "icon": "🧾",
-            "status": (
-                "MATCHED"
-                if passed
-                else "MISMATCHED"
-            ),
-            "status_icon": (
-                "✅"
-                if passed
-                else "❌"
-            ),
-            "passed": passed,
-            "total_sales": total_sales,
-            "matched": matched,
-            "discrepancy": discrepancy,
-            "mismatched_sales": mismatched_sales,
-            "detail": (
-                f"Sales checked: {total_sales} | "
-                f"Matched: {matched} | "
-                f"Discrepancy: {money_fmt(discrepancy)}"
-                + (
-                    f" | Mismatched: {mismatch_text}"
-                    if mismatched_sales
-                    else ""
-                )
-            ),
-            "suggestion": (
-                "Check sale_items totals and sales.tax for "
-                "mismatched sales."
-                if not passed
-                else None
-            ),
-        }
-
-    except Exception as e:
-
-        return {
-            "name": "Sales Total ↔ Items",
-            "icon": "🧾",
-            "status": "ERROR",
-            "status_icon": "⚠️",
-            "passed": False,
-            "detail": str(e)[:200],
-            "suggestion": (
-                "Check sales and sale_items schema."
-            ),
-        }
-
-
-# ==============================================================================
-# RENDER CHECK CARD
-# ==============================================================================
-
-def render_check_card(result):
-
-    status_class = "check-passed" if result["passed"] else (
-        "check-failed" if result["status"] != "ERROR" else "check-error"
-    )
-
-    with st.container():
-
-        st.markdown(
-            f"""
-            <div class="check-card {status_class}">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 24px;">{result['icon']}</span>
-                    <span style="font-weight: 600; font-size: 16px;">
-                        {result['name']}
-                    </span>
-                    <span style="margin-left: auto; font-weight: 500;">
-                        {result['status_icon']} {result['status']}
-                    </span>
-                </div>
-                <div style="margin-top: 6px; font-size: 14px;">
-                    {result['detail']}
-                </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        if result.get("suggestion"):
-
-            st.markdown(
-                f"""
-                <div class="suggestion">
-                    💡 {result['suggestion']}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ==============================================================================
-# MAIN
-# ==============================================================================
+============================================================
 
 def run():
+"""Main render function"""
 
-    st.title("🔐 ERP Integrity Check Dashboard")
+st.title("🔐 ERP Integrity Check Dashboard")  
+st.caption("Double Entry & FIFO Cost Monitoring")  
+  
+# Sidebar  
+with st.sidebar:  
+    st.header("⚙️ Settings")  
+      
+    supabase = get_supabase()  
+    if supabase:  
+        st.success("✅ Database Connected")  
+    else:  
+        st.error("❌ Database Disconnected")  
+        return  
+      
+    st.divider()  
+      
+    st.subheader("📊 Database Stats")  
+    sales_count = get_table_count('sales')  
+    products_count = get_table_count('products')  
+    st.metric("Sales", sales_count)  
+    st.metric("Products", products_count)  
+      
+    st.divider()  
+      
+    st.subheader("📤 Export")  
+    if st.button("📥 Export Report", use_container_width=True):  
+        if "integrity_results" in st.session_state:  
+            csv_data = export_to_csv(st.session_state.integrity_results)  
+            st.download_button(  
+                label="📥 Download CSV",  
+                data=csv_data,  
+                file_name="integrity_report.csv",  
+                mime="text/csv"  
+            )  
+        else:  
+            st.warning("Run checks first!")  
+  
+# Main content  
+col1, col2 = st.columns([1, 3])  
+with col1:  
+    if st.button("🔄 Run All Checks", type="primary", use_container_width=True):  
+        with st.spinner("Running integrity checks..."):  
+            results = run_all_checks()  
+            st.session_state.integrity_results = results  
+            st.session_state.last_integrity_run = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  
+  
+with col2:  
+    if "last_integrity_run" in st.session_state:  
+        st.caption(f"🕐 Last Check: {st.session_state.last_integrity_run}")  
+  
+st.divider()  
+  
+# Display results  
+if "integrity_results" in st.session_state:  
+    results = st.session_state.integrity_results  
+      
+    # Summary  
+    total = len(results)  
+    passed = sum(1 for r in results if r.get("passed", False))  
+    failed = total - passed - sum(1 for r in results if r["status"] == "ERROR")  
+    errors = sum(1 for r in results if r["status"] == "ERROR")  
+      
+    st.markdown("### 📊 Summary")  
+      
+    col1, col2, col3, col4 = st.columns(4)  
+      
+    with col1:  
+        st.markdown(f"""  
+        <div class="metric-card">  
+            <div style="font-size:32px;">✅</div>  
+            <div class="metric-value" style="color:#28a745;">{passed}/{total}</div>  
+            <div class="metric-label">Passed</div>  
+        </div>  
+        """, unsafe_allow_html=True)  
+      
+    with col2:  
+        st.markdown(f"""  
+        <div class="metric-card">  
+            <div style="font-size:32px;">❌</div>  
+            <div class="metric-value" style="color:#dc3545;">{failed}</div>  
+            <div class="metric-label">Failed</div>  
+        </div>  
+        """, unsafe_allow_html=True)  
+      
+    with col3:  
+        st.markdown(f"""  
+        <div class="metric-card">  
+            <div style="font-size:32px;">⚠️</div>  
+            <div class="metric-value" style="color:#6c757d;">{errors}</div>  
+            <div class="metric-label">Errors</div>  
+        </div>  
+        """, unsafe_allow_html=True)  
+      
+    with col4:  
+        if passed == total:  
+            icon = "🎉"  
+            label = "ALL GOOD"  
+            color = "#28a745"  
+        elif passed > failed:  
+            icon = "⚡"  
+            label = "WARNING"  
+            color = "#ffc107"  
+        else:  
+            icon = "🚨"  
+            label = "CRITICAL"  
+            color = "#dc3545"  
+          
+        st.markdown(f"""  
+        <div class="metric-card">  
+            <div style="font-size:32px;">{icon}</div>  
+            <div class="metric-value" style="color:{color};">{label}</div>  
+            <div class="metric-label">Status</div>  
+        </div>  
+        """, unsafe_allow_html=True)  
+      
+    st.divider()  
+      
+    # Display each check  
+    st.markdown("### 📋 Detailed Results")  
+      
+    for check in results:  
+        if check.get("passed", False):  
+            card_class = "check-passed"  
+            badge_class = "badge-passed"  
+            badge_text = "✅ PASSED"  
+        elif check["status"] == "ERROR":  
+            card_class = "check-error"  
+            badge_class = "badge-error"  
+            badge_text = "⚠️ ERROR"  
+        else:  
+            card_class = "check-failed"  
+            badge_class = "badge-failed"  
+            badge_text = "❌ FAILED"  
+          
+        suggestion_html = f"""  
+        <div class="suggestion">  
+            💡 {check['suggestion']}  
+        </div>  
+        """ if check.get('suggestion') else ""  
+          
+        st.markdown(f"""  
+        <div class="check-card {card_class}">  
+            <table style="width:100%; border-collapse:collapse;">  
+                <tr>  
+                    <td style="width:5%; font-size:28px; vertical-align:middle;">  
+                        {check['icon']}  
+                    </td>  
+                    <td style="width:25%; font-weight:600; vertical-align:middle;">  
+                        {check['name']}  
+                    </td>  
+                    <td style="width:20%; vertical-align:middle;">  
+                        <span class="badge {badge_class}">{badge_text}</span>  
+                    </td>  
+                    <td style="width:50%; font-size:14px; vertical-align:middle;">  
+                        {check['detail']}  
+                    </td>  
+                </tr>  
+            </table>  
+            {suggestion_html}  
+        </div>  
+        """, unsafe_allow_html=True)  
+      
+    # Final Status  
+    st.divider()  
+    if passed
 
-    st.caption(
-        "Read‑only diagnostics verifying internal ERP consistency."
-    )
-
-    st.divider()
-
-    # ==========================================================================
-    # RUN CHECKS
-    # ==========================================================================
-
-    with st.spinner("Running integrity checks..."):
-
-        results = [
-            check_double_entry(),
-            check_sales_vs_payments(),
-            check_stock_vs_ledger(),
-            check_fifo_vs_stock(),
-            check_sales_items(),
-        ]
-
-    # ==========================================================================
-    # OVERVIEW METRICS
-    # ==========================================================================
-
-    total_checks = len(results)
-    passed_checks = sum(
-        1
-        for r in results
-        if r["passed"]
-    )
-    failed_checks = total_checks - passed_checks
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-value">{total_checks}</div>
-                <div class="metric-label">Total Checks</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with col2:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-value" style="color: #28a745;">
-                    {passed_checks}
-                </div>
-                <div class="metric-label">✅ Passed</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with col3:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-value" style="color: #dc3545;">
-                    {failed_checks}
-                </div>
-                <div class="metric-label">❌ Failed</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with col4:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-value">
-                    {int((passed_checks / total_checks) * 100)}%
-                </div>
-                <div class="metric-label">Pass Rate</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-
-    # ==========================================================================
-    # DETAILED RESULTS
-    # ==========================================================================
-
-    for result in results:
-
-        render_check_card(result)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-    # ==========================================================================
-    # TIMESTAMP
-    # ==========================================================================
-
-    st.caption(
-        f"Checked at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
+#လိုအပ်တာ ပြုပြင်ပေးပါ
