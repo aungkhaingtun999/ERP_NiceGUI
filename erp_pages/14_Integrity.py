@@ -6,7 +6,7 @@
 #   1. Double Entry
 #   2. Sales <-> Payments (with Cash Change support)
 #   3. Stock <-> Inventory Ledger
-#   4. FIFO Cost <-> Stock
+#   4. FIFO Cost <-> Stock (Product-level QTY + Value)
 #   5. Sales <-> Sale Items (ONLY subtotal check)
 #
 # READ-ONLY
@@ -334,7 +334,6 @@ def check_sales_vs_payments():
         payments_total = 0.0
         mismatches = []
         cash_overpayments = []
-        warnings = []
 
         for sale in sales:
 
@@ -542,75 +541,278 @@ def check_stock_vs_ledger():
 
 # ============================================================
 # CHECK 4
-# FIFO QTY + VALUE <-> STOCK
+# FIFO QTY + VALUE <-> STOCK (Product-level)
 # ============================================================
 
 def check_fifo_vs_stock():
 
     try:
 
+        # ====================================================
+        # FIFO COST LAYERS
+        # ====================================================
+
         fifo_data = execute_query(
             "inventory_cost_layers",
-            select="qty_remaining,unit_cost",
+            select="product_id,qty_remaining,unit_cost",
         )
 
         fifo_qty = sum(
-            qty(x.get("qty_remaining"))
-            for x in fifo_data
+            qty(row.get("qty_remaining"))
+            for row in fifo_data
         )
 
         fifo_value = sum(
-            qty(x.get("qty_remaining"))
-            * money(x.get("unit_cost"))
-            for x in fifo_data
+            qty(row.get("qty_remaining"))
+            * money(row.get("unit_cost"))
+            for row in fifo_data
         )
+
+        # ====================================================
+        # WAREHOUSE STOCK
+        # ====================================================
 
         stock_data = execute_query(
             "warehouse_stock",
-            select="qty",
+            select="product_id,qty",
         )
 
         stock_qty = sum(
-            qty(x.get("qty"))
-            for x in stock_data
+            qty(row.get("qty"))
+            for row in stock_data
         )
 
-        qty_difference = abs(
+        # ====================================================
+        # PRODUCT-LEVEL DETAILS (for debugging)
+        # ====================================================
+
+        # Group FIFO by product
+        fifo_by_product = {}
+
+        for row in fifo_data:
+
+            product_id = row.get("product_id")
+
+            if product_id is None:
+                continue
+
+            try:
+                product_id = int(product_id)
+            except Exception:
+                continue
+
+            if product_id not in fifo_by_product:
+
+                fifo_by_product[product_id] = {
+                    "qty": 0.0,
+                    "value": 0.0,
+                }
+
+            fifo_by_product[product_id]["qty"] += qty(
+                row.get("qty_remaining")
+            )
+
+            fifo_by_product[product_id]["value"] += (
+                qty(row.get("qty_remaining"))
+                * money(row.get("unit_cost"))
+            )
+
+        # Group Stock by product
+        stock_by_product = {}
+
+        for row in stock_data:
+
+            product_id = row.get("product_id")
+
+            if product_id is None:
+                continue
+
+            try:
+                product_id = int(product_id)
+            except Exception:
+                continue
+
+            stock_by_product[product_id] = qty(
+                row.get("qty")
+            )
+
+        # Find mismatches at product level
+        product_mismatches = []
+
+        all_product_ids = set(
+            list(fifo_by_product.keys())
+            + list(stock_by_product.keys())
+        )
+
+        for product_id in all_product_ids:
+
+            fifo_qty_prod = fifo_by_product.get(
+                product_id,
+                {}
+            ).get("qty", 0.0)
+
+            stock_qty_prod = stock_by_product.get(
+                product_id,
+                0.0
+            )
+
+            qty_diff_prod = abs(fifo_qty_prod - stock_qty_prod)
+
+            if qty_diff_prod >= 0.01:
+
+                # Get product name
+                product = execute_query(
+                    "products",
+                    select="id,name,sku",
+                    filters={"id": product_id},
+                    limit=1,
+                )
+
+                product_name = (
+                    product[0].get("name", f"ID:{product_id}")
+                    if product
+                    else f"ID:{product_id}"
+                )
+
+                product_mismatches.append({
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "fifo_qty": fifo_qty_prod,
+                    "stock_qty": stock_qty_prod,
+                    "qty_diff": qty_diff_prod,
+                })
+
+        # ====================================================
+        # QTY RECONCILIATION
+        # ====================================================
+
+        qty_difference = (
             fifo_qty - stock_qty
         )
 
-        qty_matched = qty_difference < 0.01
+        qty_matched = (
+            abs(qty_difference) < 0.01
+        )
 
-        passed = qty_matched
+        product_level_matched = (
+            len(product_mismatches) == 0
+        )
+
+        passed = qty_matched and product_level_matched
+
+        # ====================================================
+        # IMPORTANT
+        #
+        # warehouse_stock currently stores QTY only.
+        #
+        # Therefore we CANNOT claim that
+        # FIFO VALUE == STOCK VALUE.
+        # ====================================================
+
+        suggestion = None
+
+        if not passed:
+
+            if product_mismatches:
+
+                mismatch_ids = ", ".join(
+                    f"{x['product_name']} "
+                    f"(diff: {x['qty_diff']:,.0f})"
+                    for x in product_mismatches[:5]
+                )
+
+                suggestion = (
+                    f"Product-level quantity mismatch: {mismatch_ids}"
+                )
+
+            else:
+
+                suggestion = (
+                    f"FIFO quantity differs from warehouse "
+                    f"stock by {abs(qty_difference):,.2f} units."
+                )
+
+        else:
+
+            suggestion = (
+                "✅ FIFO quantity matches warehouse stock. "
+                "FIFO value is calculated from remaining cost layers. "
+                "Stock monetary valuation requires a separate stock-value source."
+            )
+
+        # ====================================================
+        # RETURN
+        # ====================================================
 
         return {
+
             "name": "FIFO Cost ↔ Stock",
+
             "icon": "📈",
-            "status": "MATCHED" if passed else "MISMATCHED",
-            "status_type": "passed" if passed else "failed",
+
+            "status": (
+                "MATCHED"
+                if passed
+                else "MISMATCHED"
+            ),
+
+            "status_type": (
+                "passed"
+                if passed
+                else "failed"
+            ),
+
             "passed": passed,
+
+            "fifo_qty": fifo_qty,
+
+            "stock_qty": stock_qty,
+
+            "qty_difference": qty_difference,
+
+            "fifo_value": fifo_value,
+
+            "product_mismatches": product_mismatches,
+
             "detail": (
                 f"FIFO Qty: {fifo_qty:,.0f} | "
                 f"Stock Qty: {stock_qty:,.0f} | "
                 f"FIFO Value: {fifo_value:,.2f}"
             ),
-            "suggestion": (
-                None
-                if passed
-                else f"FIFO quantity differs from warehouse stock by {qty_difference:,.2f}."
-            ),
+
+            "suggestion": suggestion,
         }
 
     except Exception as e:
 
         return {
+
             "name": "FIFO Cost ↔ Stock",
+
             "icon": "📈",
+
             "status": "ERROR",
+
             "status_type": "error",
+
             "passed": False,
-            "detail": str(e)[:100],
-            "suggestion": "Check inventory_cost_layers and warehouse_stock.",
+
+            "fifo_qty": 0,
+
+            "stock_qty": 0,
+
+            "qty_difference": 0,
+
+            "fifo_value": 0,
+
+            "product_mismatches": [],
+
+            "detail": str(e)[:200],
+
+            "suggestion": (
+                "Check inventory_cost_layers "
+                "and warehouse_stock schema."
+            ),
         }
 
 
@@ -931,6 +1133,23 @@ def render_check_card(result):
 
                 st.dataframe(
                     mismatch_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        # Show product mismatches if any
+        if result.get("product_mismatches") and len(result["product_mismatches"]) > 0:
+
+            with st.expander(
+                f"📦 View {len(result['product_mismatches'])} product mismatch details"
+            ):
+
+                product_df = pd.DataFrame(
+                    result["product_mismatches"]
+                )
+
+                st.dataframe(
+                    product_df,
                     use_container_width=True,
                     hide_index=True,
                 )
