@@ -16,7 +16,6 @@
 import datetime
 import streamlit as st
 import pandas as pd
-
 from supabase_client import get_supabase
 
 
@@ -38,11 +37,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-
     .main {
         padding: 0 1rem;
     }
-
     .check-card {
         padding: 14px 16px;
         margin: 8px 0;
@@ -50,27 +47,22 @@ st.markdown(
         border-left: 5px solid #ccc;
         background-color: #f8f9fa;
     }
-
     .check-passed {
         border-left-color: #28a745;
         background-color: #f0fff4;
     }
-
     .check-failed {
         border-left-color: #dc3545;
         background-color: #fff5f5;
     }
-
     .check-warning {
         border-left-color: #ffc107;
         background-color: #fffcf0;
     }
-
     .check-error {
         border-left-color: #6c757d;
         background-color: #f8f9fa;
     }
-
     .badge {
         display: inline-block;
         padding: 5px 10px;
@@ -79,27 +71,22 @@ st.markdown(
         font-weight: 700;
         white-space: nowrap;
     }
-
     .badge-passed {
         background-color: #28a745;
         color: white;
     }
-
     .badge-failed {
         background-color: #dc3545;
         color: white;
     }
-
     .badge-warning {
         background-color: #ffc107;
         color: #856404;
     }
-
     .badge-error {
         background-color: #6c757d;
         color: white;
     }
-
     .suggestion {
         margin-top: 10px;
         padding: 8px 12px;
@@ -108,25 +95,6 @@ st.markdown(
         background-color: #fff3cd;
         color: #856404;
     }
-
-    .metric-card {
-        text-align: center;
-        padding: 16px;
-        border-radius: 10px;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-    }
-
-    .metric-value {
-        font-size: 28px;
-        font-weight: 700;
-    }
-
-    .metric-label {
-        font-size: 13px;
-        color: #6c757d;
-    }
-
     </style>
     """,
     unsafe_allow_html=True,
@@ -156,102 +124,63 @@ def qty(value):
 # ============================================================
 
 @st.cache_data(ttl=60, show_spinner=False)
-def execute_query(
-    table_name: str,
-    select: str = "*",
-    filters: dict | None = None,
-    limit: int | None = None,
-):
+def execute_query(table_name: str, select: str = "*", filters: dict = None, limit: int = None):
     try:
         supabase = get_supabase()
-
         if not supabase:
             return []
-
+        
         query = supabase.table(table_name).select(select)
-
+        
         if filters:
             for key, value in filters.items():
-
                 if isinstance(value, list):
                     query = query.in_(key, value)
-
                 else:
                     query = query.eq(key, value)
-
+        
         if limit:
             query = query.limit(limit)
-
+        
         response = query.execute()
-
         return response.data or []
-
-    except Exception:
+    
+    except Exception as e:
+        print(f"Query error: {e}")
         return []
 
 
 def get_table_count(table_name: str):
     try:
-        rows = execute_query(
-            table_name,
-            select="id",
-            limit=1000,
-        )
-        return len(rows)
-
+        data = execute_query(table_name, select="id", limit=1000)
+        return len(data)
     except Exception:
         return 0
 
 
 # ============================================================
-# CHECK 1
-# DOUBLE ENTRY
+# CHECK 1: DOUBLE ENTRY
 # ============================================================
 
 def check_double_entry():
-
     try:
-
-        entries = execute_query(
-            "journal_entries",
-            select="debit,credit",
-        )
-
-        debit_total = sum(
-            money(x.get("debit"))
-            for x in entries
-        )
-
-        credit_total = sum(
-            money(x.get("credit"))
-            for x in entries
-        )
-
-        difference = abs(
-            debit_total - credit_total
-        )
-
+        entries = execute_query("journal_entries", select="debit,credit")
+        
+        debit_total = sum(money(x.get("debit")) for x in entries)
+        credit_total = sum(money(x.get("credit")) for x in entries)
+        difference = abs(debit_total - credit_total)
         passed = difference < 0.01
-
+        
         return {
             "name": "Double Entry",
             "icon": "📊",
             "status": "BALANCED" if passed else "IMBALANCED",
             "status_type": "passed" if passed else "failed",
             "passed": passed,
-            "detail": (
-                f"Debit: {debit_total:,.2f} | "
-                f"Credit: {credit_total:,.2f}"
-            ),
-            "suggestion": (
-                None
-                if passed
-                else "Check journal_entries for unbalanced transactions."
-            ),
+            "detail": f"Debit: {debit_total:,.2f} | Credit: {credit_total:,.2f}",
+            "suggestion": None if passed else "Check journal_entries for unbalanced transactions."
         }
-
     except Exception as e:
-
         return {
             "name": "Double Entry",
             "icon": "📊",
@@ -259,32 +188,23 @@ def check_double_entry():
             "status_type": "error",
             "passed": False,
             "detail": str(e)[:100],
-            "suggestion": "Check journal_entries table.",
+            "suggestion": "Check journal_entries table."
         }
 
 
 # ============================================================
-# CHECK 2
-# SALES <-> PAYMENTS (with Cash Change support)
+# CHECK 2: SALES <-> PAYMENTS
 # ============================================================
 
 def check_sales_vs_payments():
-
     try:
-
         sales = execute_query(
             "sales",
-            select=(
-                "id,total,total_amount,"
-                "sale_status,payment_method"
-            ),
-            filters={
-                "sale_status": "COMPLETED"
-            },
+            select="id,total,total_amount,sale_status,payment_method",
+            filters={"sale_status": "COMPLETED"}
         )
-
+        
         if not sales:
-
             return {
                 "name": "Sales ↔ Payments",
                 "icon": "💰",
@@ -292,80 +212,49 @@ def check_sales_vs_payments():
                 "status_type": "passed",
                 "passed": True,
                 "detail": "No completed sales found.",
-                "suggestion": None,
+                "suggestion": None
             }
-
-        sale_ids = [
-            int(x["id"])
-            for x in sales
-            if x.get("id") is not None
-        ]
-
+        
+        sale_ids = [int(x["id"]) for x in sales if x.get("id") is not None]
+        
         payments = execute_query(
             "payment_transactions",
-            select=(
-                "id,sale_id,amount,status,payment_method"
-            ),
+            select="id,sale_id,amount,status,payment_method"
         )
-
+        
         payment_map = {}
-
         for payment in payments:
-
             if payment.get("status") != "COMPLETED":
                 continue
-
             sale_id = payment.get("sale_id")
-
             if sale_id is None:
                 continue
-
             try:
                 sale_id = int(sale_id)
             except Exception:
                 continue
-
-            payment_map[sale_id] = (
-                payment_map.get(sale_id, 0.0)
-                + money(payment.get("amount"))
-            )
-
+            payment_map[sale_id] = payment_map.get(sale_id, 0.0) + money(payment.get("amount"))
+        
         sales_total = 0.0
         payments_total = 0.0
         mismatches = []
         cash_overpayments = []
-
+        
         for sale in sales:
-
             sale_id = int(sale["id"])
-
-            sale_amount = money(
-                sale.get("total")
-            )
-
-            payment_amount = money(
-                payment_map.get(sale_id)
-            )
-
+            sale_amount = money(sale.get("total"))
+            payment_amount = money(payment_map.get(sale_id))
+            
             sales_total += sale_amount
             payments_total += payment_amount
-
-            payment_method = str(
-                sale.get("payment_method") or "UNKNOWN"
-            ).upper()
-
-            # ------------------------------------------------
+            
+            payment_method = str(sale.get("payment_method") or "UNKNOWN").upper()
+            
             # CASH: Allow overpayment (change)
-            # ------------------------------------------------
-
             if payment_method in ["CASH", "CASH_MMK"]:
-
                 if payment_amount >= sale_amount:
-
                     change = payment_amount - sale_amount
-
                     if change > 0.01:
-
                         cash_overpayments.append({
                             "sale_id": sale_id,
                             "sale_amount": sale_amount,
@@ -373,15 +262,10 @@ def check_sales_vs_payments():
                             "change": change,
                             "payment_method": payment_method,
                         })
-
                     continue
-
-            # ------------------------------------------------
+            
             # NON-CASH: Exact match required
-            # ------------------------------------------------
-
             if abs(sale_amount - payment_amount) >= 0.01:
-
                 mismatches.append({
                     "sale_id": sale_id,
                     "sale": sale_amount,
@@ -389,65 +273,33 @@ def check_sales_vs_payments():
                     "difference": sale_amount - payment_amount,
                     "payment_method": payment_method,
                 })
-
-        # ------------------------------------------------
-        # STATUS
-        # ------------------------------------------------
-
+        
         has_mismatch = len(mismatches) > 0
         has_cash_change = len(cash_overpayments) > 0
-
+        
         if has_mismatch:
-
             status = "MISMATCHED"
             status_type = "failed"
             passed = False
-
-            ids = ", ".join(
-                f"#{x['sale_id']}"
-                for x in mismatches[:5]
-            )
-
+            ids = ", ".join(f"#{x['sale_id']}" for x in mismatches[:5])
             suggestion = f"Payment mismatch sale(s): {ids}"
-
         elif has_cash_change:
-
             status = "WARNING"
             status_type = "warning"
             passed = True
-
-            ids = ", ".join(
-                f"#{x['sale_id']}"
-                for x in cash_overpayments[:5]
-            )
-
+            ids = ", ".join(f"#{x['sale_id']}" for x in cash_overpayments[:5])
             suggestion = f"CASH overpayment/change: {ids}"
-
         else:
-
             status = "MATCHED"
             status_type = "passed"
             passed = True
             suggestion = None
-
-        # ------------------------------------------------
-        # DETAIL
-        # ------------------------------------------------
-
-        detail = (
-            f"Sales: {sales_total:,.2f} | "
-            f"Applied: {payments_total:,.2f}"
-        )
-
+        
+        detail = f"Sales: {sales_total:,.2f} | Applied: {payments_total:,.2f}"
         if has_cash_change:
-
-            change_total = sum(
-                x["change"]
-                for x in cash_overpayments
-            )
-
+            change_total = sum(x["change"] for x in cash_overpayments)
             detail += f" | Cash Change: {change_total:,.2f}"
-
+        
         return {
             "name": "Sales ↔ Payments",
             "icon": "💰",
@@ -459,9 +311,8 @@ def check_sales_vs_payments():
             "mismatches": mismatches,
             "cash_overpayments": cash_overpayments,
         }
-
+    
     except Exception as e:
-
         return {
             "name": "Sales ↔ Payments",
             "icon": "💰",
@@ -469,65 +320,35 @@ def check_sales_vs_payments():
             "status_type": "error",
             "passed": False,
             "detail": str(e)[:100],
-            "suggestion": "Verify payment_transactions schema and sale_id.",
+            "suggestion": "Verify payment_transactions schema."
         }
 
 
 # ============================================================
-# CHECK 3
-# STOCK <-> INVENTORY LEDGER
+# CHECK 3: STOCK <-> INVENTORY LEDGER
 # ============================================================
 
 def check_stock_vs_ledger():
-
     try:
-
-        stock_data = execute_query(
-            "warehouse_stock",
-            select="qty",
-        )
-
-        stock_total = sum(
-            qty(x.get("qty"))
-            for x in stock_data
-        )
-
-        ledger_data = execute_query(
-            "inventory_ledger",
-            select="qty_in,qty_out",
-        )
-
-        ledger_total = sum(
-            qty(x.get("qty_in"))
-            - qty(x.get("qty_out"))
-            for x in ledger_data
-        )
-
-        difference = abs(
-            stock_total - ledger_total
-        )
-
+        stock_data = execute_query("warehouse_stock", select="qty")
+        stock_total = sum(qty(x.get("qty")) for x in stock_data)
+        
+        ledger_data = execute_query("inventory_ledger", select="qty_in,qty_out")
+        ledger_total = sum(qty(x.get("qty_in")) - qty(x.get("qty_out")) for x in ledger_data)
+        
+        difference = abs(stock_total - ledger_total)
         passed = difference < 0.01
-
+        
         return {
             "name": "Stock ↔ Inventory Ledger",
             "icon": "📦",
             "status": "MATCHED" if passed else "MISMATCHED",
             "status_type": "passed" if passed else "failed",
             "passed": passed,
-            "detail": (
-                f"Stock: {stock_total:,.0f} | "
-                f"Ledger: {ledger_total:,.0f}"
-            ),
-            "suggestion": (
-                None
-                if passed
-                else "Check inventory ledger for missing or duplicated movements."
-            ),
+            "detail": f"Stock: {stock_total:,.0f} | Ledger: {ledger_total:,.0f}",
+            "suggestion": None if passed else "Check inventory ledger for missing or duplicated movements."
         }
-
     except Exception as e:
-
         return {
             "name": "Stock ↔ Inventory Ledger",
             "icon": "📦",
@@ -535,145 +356,76 @@ def check_stock_vs_ledger():
             "status_type": "error",
             "passed": False,
             "detail": str(e)[:100],
-            "suggestion": "Check warehouse_stock and inventory_ledger.",
+            "suggestion": "Check warehouse_stock and inventory_ledger."
         }
 
 
 # ============================================================
-# CHECK 4
-# FIFO QTY + VALUE <-> STOCK (Product-level)
+# CHECK 4: FIFO COST <-> STOCK
 # ============================================================
 
 def check_fifo_vs_stock():
-
     try:
-
-        # ====================================================
         # FIFO COST LAYERS
-        # ====================================================
-
         fifo_data = execute_query(
             "inventory_cost_layers",
-            select="product_id,qty_remaining,unit_cost",
+            select="product_id,qty_remaining,unit_cost"
         )
-
-        fifo_qty = sum(
-            qty(row.get("qty_remaining"))
-            for row in fifo_data
-        )
-
-        fifo_value = sum(
-            qty(row.get("qty_remaining"))
-            * money(row.get("unit_cost"))
-            for row in fifo_data
-        )
-
-        # ====================================================
+        
+        fifo_qty = sum(qty(row.get("qty_remaining")) for row in fifo_data)
+        fifo_value = sum(qty(row.get("qty_remaining")) * money(row.get("unit_cost")) for row in fifo_data)
+        
         # WAREHOUSE STOCK
-        # ====================================================
-
-        stock_data = execute_query(
-            "warehouse_stock",
-            select="product_id,qty",
-        )
-
-        stock_qty = sum(
-            qty(row.get("qty"))
-            for row in stock_data
-        )
-
-        # ====================================================
-        # PRODUCT-LEVEL DETAILS (for debugging)
-        # ====================================================
-
+        stock_data = execute_query("warehouse_stock", select="product_id,qty")
+        stock_qty = sum(qty(row.get("qty")) for row in stock_data)
+        
         # Group FIFO by product
         fifo_by_product = {}
-
         for row in fifo_data:
-
             product_id = row.get("product_id")
-
             if product_id is None:
                 continue
-
             try:
                 product_id = int(product_id)
             except Exception:
                 continue
-
+            
             if product_id not in fifo_by_product:
-
-                fifo_by_product[product_id] = {
-                    "qty": 0.0,
-                    "value": 0.0,
-                }
-
-            fifo_by_product[product_id]["qty"] += qty(
-                row.get("qty_remaining")
-            )
-
-            fifo_by_product[product_id]["value"] += (
-                qty(row.get("qty_remaining"))
-                * money(row.get("unit_cost"))
-            )
-
+                fifo_by_product[product_id] = {"qty": 0.0, "value": 0.0}
+            
+            fifo_by_product[product_id]["qty"] += qty(row.get("qty_remaining"))
+            fifo_by_product[product_id]["value"] += qty(row.get("qty_remaining")) * money(row.get("unit_cost"))
+        
         # Group Stock by product
         stock_by_product = {}
-
         for row in stock_data:
-
             product_id = row.get("product_id")
-
             if product_id is None:
                 continue
-
             try:
                 product_id = int(product_id)
             except Exception:
                 continue
-
-            stock_by_product[product_id] = qty(
-                row.get("qty")
-            )
-
-        # Find mismatches at product level
+            stock_by_product[product_id] = qty(row.get("qty"))
+        
+        # Find mismatches
         product_mismatches = []
-
-        all_product_ids = set(
-            list(fifo_by_product.keys())
-            + list(stock_by_product.keys())
-        )
-
+        all_product_ids = set(list(fifo_by_product.keys()) + list(stock_by_product.keys()))
+        
         for product_id in all_product_ids:
-
-            fifo_qty_prod = fifo_by_product.get(
-                product_id,
-                {}
-            ).get("qty", 0.0)
-
-            stock_qty_prod = stock_by_product.get(
-                product_id,
-                0.0
-            )
-
+            fifo_qty_prod = fifo_by_product.get(product_id, {}).get("qty", 0.0)
+            stock_qty_prod = stock_by_product.get(product_id, 0.0)
             qty_diff_prod = abs(fifo_qty_prod - stock_qty_prod)
-
+            
             if qty_diff_prod >= 0.01:
-
-                # Get product name
                 product = execute_query(
                     "products",
                     select="id,name,sku",
                     filters={"id": product_id},
-                    limit=1,
+                    limit=1
                 )
-
-                product_name = (
-                    product[0].get("name", f"ID:{product_id}")
-                    if product
-                    else f"ID:{product_id}"
-                )
-
+                product_name = product[0].get("name", f"ID:{product_id}") if product else f"ID:{product_id}"
+                
                 product_mismatches.append({
                     "product_id": product_id,
                     "product_name": product_name,
@@ -681,167 +433,77 @@ def check_fifo_vs_stock():
                     "stock_qty": stock_qty_prod,
                     "qty_diff": qty_diff_prod,
                 })
-
-        # ====================================================
-        # QTY RECONCILIATION
-        # ====================================================
-
-        qty_difference = (
-            fifo_qty - stock_qty
-        )
-
-        qty_matched = (
-            abs(qty_difference) < 0.01
-        )
-
-        product_level_matched = (
-            len(product_mismatches) == 0
-        )
-
+        
+        qty_difference = fifo_qty - stock_qty
+        qty_matched = abs(qty_difference) < 0.01
+        product_level_matched = len(product_mismatches) == 0
         passed = qty_matched and product_level_matched
-
-        # ====================================================
-        # IMPORTANT
-        #
-        # warehouse_stock currently stores QTY only.
-        #
-        # Therefore we CANNOT claim that
-        # FIFO VALUE == STOCK VALUE.
-        # ====================================================
-
+        
         suggestion = None
-
         if not passed:
-
             if product_mismatches:
-
                 mismatch_ids = ", ".join(
-                    f"{x['product_name']} "
-                    f"(diff: {x['qty_diff']:,.0f})"
+                    f"{x['product_name']} (diff: {x['qty_diff']:,.0f})"
                     for x in product_mismatches[:5]
                 )
-
-                suggestion = (
-                    f"Product-level quantity mismatch: {mismatch_ids}"
-                )
-
+                suggestion = f"Product-level quantity mismatch: {mismatch_ids}"
             else:
-
-                suggestion = (
-                    f"FIFO quantity differs from warehouse "
-                    f"stock by {abs(qty_difference):,.2f} units."
-                )
-
+                suggestion = f"FIFO quantity differs from warehouse stock by {abs(qty_difference):,.2f} units."
         else:
-
-            suggestion = (
-                "✅ FIFO quantity matches warehouse stock. "
-                "FIFO value is calculated from remaining cost layers. "
-                "Stock monetary valuation requires a separate stock-value source."
-            )
-
-        # ====================================================
-        # RETURN
-        # ====================================================
-
+            suggestion = "✅ FIFO quantity matches warehouse stock. FIFO value is calculated from remaining cost layers."
+        
         return {
-
             "name": "FIFO Cost ↔ Stock",
-
             "icon": "📈",
-
-            "status": (
-                "MATCHED"
-                if passed
-                else "MISMATCHED"
-            ),
-
-            "status_type": (
-                "passed"
-                if passed
-                else "failed"
-            ),
-
+            "status": "MATCHED" if passed else "MISMATCHED",
+            "status_type": "passed" if passed else "failed",
             "passed": passed,
-
             "fifo_qty": fifo_qty,
-
             "stock_qty": stock_qty,
-
             "qty_difference": qty_difference,
-
             "fifo_value": fifo_value,
-
             "product_mismatches": product_mismatches,
-
-            "detail": (
-                f"FIFO Qty: {fifo_qty:,.0f} | "
-                f"Stock Qty: {stock_qty:,.0f} | "
-                f"FIFO Value: {fifo_value:,.2f}"
-            ),
-
+            "detail": f"FIFO Qty: {fifo_qty:,.0f} | Stock Qty: {stock_qty:,.0f} | FIFO Value: {fifo_value:,.2f}",
             "suggestion": suggestion,
         }
-
+    
     except Exception as e:
-
         return {
-
             "name": "FIFO Cost ↔ Stock",
-
             "icon": "📈",
-
             "status": "ERROR",
-
             "status_type": "error",
-
             "passed": False,
-
             "fifo_qty": 0,
-
             "stock_qty": 0,
-
             "qty_difference": 0,
-
             "fifo_value": 0,
-
             "product_mismatches": [],
-
             "detail": str(e)[:200],
-
-            "suggestion": (
-                "Check inventory_cost_layers "
-                "and warehouse_stock schema."
-            ),
+            "suggestion": "Check inventory_cost_layers and warehouse_stock schema."
         }
 
 
 # ============================================================
-# CHECK 5
-# SALES <-> SALE ITEMS (ONLY subtotal check)
+# CHECK 5: SALES <-> SALE ITEMS
 # ============================================================
 
 def check_sales_vs_items():
-
     try:
-        # Get date range from session state or use default (last 30 days)
+        # Get date range from session state
         today = datetime.date.today()
         default_start = today - datetime.timedelta(days=30)
         
-        # Use session state if available, otherwise use default
         start_date = st.session_state.get('integrity_start_date', default_start)
         end_date = st.session_state.get('integrity_end_date', today)
         
-        # Convert to string for query
         start_str = start_date.strftime('%Y-%m-%d')
         end_str = end_date.strftime('%Y-%m-%d')
         
-        # Get all sales in date range
-        # Note: Since we can't do range queries easily with the current execute_query,
-        # we'll get all sales and filter in Python
+        # Get all sales
         all_sales = execute_query(
             "sales",
-            select="id,subtotal,total,created_at,sale_status",
+            select="id,subtotal,total,created_at,sale_status"
         )
         
         # Filter by date range and status
@@ -850,9 +512,10 @@ def check_sales_vs_items():
             try:
                 created_at = sale.get('created_at')
                 if created_at:
-                    # Handle different date formats
                     if isinstance(created_at, str):
-                        sale_date = datetime.datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                        sale_date = datetime.datetime.fromisoformat(
+                            created_at.replace('Z', '+00:00')
+                        ).date()
                     else:
                         sale_date = created_at.date() if hasattr(created_at, 'date') else created_at
                     
@@ -860,7 +523,7 @@ def check_sales_vs_items():
                         sales.append(sale)
             except Exception:
                 continue
-
+        
         if not sales:
             return {
                 "name": "Sales ↔ Sale Items",
@@ -872,17 +535,17 @@ def check_sales_vs_items():
                 "suggestion": None,
                 "period": f"{start_str} to {end_str}",
             }
-
+        
         sale_ids = [int(x["id"]) for x in sales if x.get("id") is not None]
-
-        # Get all sale items for these sales
+        
+        # Get sale items
         sale_items = execute_query(
             "sale_items",
             select="sale_id,subtotal",
             filters={"sale_id": sale_ids},
         )
-
-        # Group items by sale_id
+        
+        # Group items by sale
         items_by_sale = {}
         for item in sale_items:
             sale_id = item.get("sale_id")
@@ -892,22 +555,20 @@ def check_sales_vs_items():
                 sale_id = int(sale_id)
             except Exception:
                 continue
-            
             items_by_sale[sale_id] = items_by_sale.get(sale_id, 0.0) + money(item.get("subtotal"))
-
+        
         mismatches = []
         total_sales = 0.0
         total_items = 0.0
-
+        
         for sale in sales:
             sale_id = int(sale["id"])
             sale_subtotal = money(sale.get("subtotal", 0))
             items_subtotal = money(items_by_sale.get(sale_id, 0))
-
+            
             total_sales += sale_subtotal
             total_items += items_subtotal
-
-            # Check if subtotals match
+            
             if abs(sale_subtotal - items_subtotal) >= 0.01:
                 mismatches.append({
                     "sale_id": sale_id,
@@ -915,10 +576,9 @@ def check_sales_vs_items():
                     "items_subtotal": items_subtotal,
                     "difference": sale_subtotal - items_subtotal,
                 })
-
+        
         passed = len(mismatches) == 0
-
-        # Determine status
+        
         if passed:
             status = "MATCHED"
             status_type = "passed"
@@ -928,7 +588,7 @@ def check_sales_vs_items():
             status_type = "failed"
             mismatch_ids = ", ".join(f"#{x['sale_id']}" for x in mismatches[:5])
             suggestion = f"Subtotal mismatch for sale(s): {mismatch_ids}"
-
+        
         return {
             "name": "Sales ↔ Sale Items",
             "icon": "🧾",
@@ -942,7 +602,7 @@ def check_sales_vs_items():
             "total_sales_checked": len(sales),
             "total_items_checked": len(sale_items),
         }
-
+    
     except Exception as e:
         return {
             "name": "Sales ↔ Sale Items",
@@ -961,14 +621,10 @@ def check_sales_vs_items():
 # ============================================================
 
 def main():
-
     st.title("🔐 Enterprise Integrity Check")
     st.markdown("---")
-
-    # ------------------------------------------------
-    # DATE RANGE SELECTOR FOR SALES ITEMS CHECK
-    # ------------------------------------------------
     
+    # Date Range Selector
     st.markdown("### 📅 Check Period Selection")
     st.caption("Select the date range for Sales ↔ Sale Items verification")
     
@@ -994,45 +650,29 @@ def main():
             st.cache_data.clear()
             st.rerun()
     
-    # Store in session state for use in check functions
     st.session_state['integrity_start_date'] = start_date
     st.session_state['integrity_end_date'] = end_date
     
     st.markdown("---")
-
-    # ------------------------------------------------
-    # METRICS ROW
-    # ------------------------------------------------
-
+    
+    # Metrics
     col1, col2, col3 = st.columns(3)
-
+    
     with col1:
         sales_count = get_table_count("sales")
-        st.metric(
-            label="Total Sales Records",
-            value=f"{sales_count:,}",
-        )
-
+        st.metric(label="Total Sales Records", value=f"{sales_count:,}")
+    
     with col2:
         product_count = get_table_count("products")
-        st.metric(
-            label="Total Products",
-            value=f"{product_count:,}",
-        )
-
+        st.metric(label="Total Products", value=f"{product_count:,}")
+    
     with col3:
         stock_count = get_table_count("warehouse_stock")
-        st.metric(
-            label="Stock Records",
-            value=f"{stock_count:,}",
-        )
-
+        st.metric(label="Stock Records", value=f"{stock_count:,}")
+    
     st.markdown("---")
-
-    # ------------------------------------------------
-    # RUN CHECKS
-    # ------------------------------------------------
-
+    
+    # Run Checks
     checks = [
         check_double_entry(),
         check_sales_vs_payments(),
@@ -1040,23 +680,14 @@ def main():
         check_fifo_vs_stock(),
         check_sales_vs_items(),
     ]
-
-    # ------------------------------------------------
-    # SUMMARY BADGE
-    # ------------------------------------------------
-
+    
+    # Summary
     total_checks = len(checks)
     passed_checks = sum(1 for c in checks if c.get("passed", False))
     failed_checks = total_checks - passed_checks
-
-    summary_color = (
-        "✅"
-        if failed_checks == 0
-        else "⚠️"
-        if failed_checks <= 2
-        else "❌"
-    )
-
+    
+    summary_color = "✅" if failed_checks == 0 else "⚠️" if failed_checks <= 2 else "❌"
+    
     st.markdown(
         f"""
         <div style="
@@ -1081,26 +712,20 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-
-    # ------------------------------------------------
-    # RENDER CHECKS
-    # ------------------------------------------------
-
+    
+    # Render Checks
     for check in checks:
-
         status_type = check.get("status_type", "error")
         icon = check.get("icon", "📋")
         name = check.get("name", "Unknown Check")
         status = check.get("status", "UNKNOWN")
         detail = check.get("detail", "")
         suggestion = check.get("suggestion")
-
-        # Special handling for period display
+        
         period_info = ""
         if name == "Sales ↔ Sale Items" and "period" in check:
             period_info = f" <span style='font-size:12px; color:#6c757d;'>({check['period']})</span>"
-
-        # Card class
+        
         card_class = "check-card"
         if status_type == "passed":
             card_class += " check-passed"
@@ -1110,8 +735,7 @@ def main():
             card_class += " check-warning"
         else:
             card_class += " check-error"
-
-        # Badge
+        
         badge_class = "badge"
         if status_type == "passed":
             badge_class += " badge-passed"
@@ -1121,7 +745,7 @@ def main():
             badge_class += " badge-warning"
         else:
             badge_class += " badge-error"
-
+        
         st.markdown(
             f"""
             <div class="{card_class}">
@@ -1139,8 +763,7 @@ def main():
             """,
             unsafe_allow_html=True,
         )
-
-        # Show suggestion if exists
+        
         if suggestion:
             st.markdown(
                 f"""
@@ -1150,8 +773,8 @@ def main():
                 """,
                 unsafe_allow_html=True,
             )
-
-        # Show mismatches for sales vs items
+        
+        # Show mismatches
         if name == "Sales ↔ Sale Items" and check.get("mismatches"):
             mismatches = check["mismatches"]
             if mismatches:
@@ -1163,8 +786,7 @@ def main():
                 df["items_subtotal"] = df["items_subtotal"].apply(lambda x: f"{x:,.2f}")
                 df.columns = ["Sale ID", "Sale Subtotal", "Items Subtotal", "Difference"]
                 st.dataframe(df, use_container_width=True, hide_index=True)
-
-        # Show mismatches for sales vs payments
+        
         if name == "Sales ↔ Payments" and check.get("mismatches"):
             mismatches = check["mismatches"]
             if mismatches:
@@ -1176,8 +798,7 @@ def main():
                 df["difference"] = df["difference"].apply(lambda x: f"{x:,.2f}")
                 df.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Difference", "Payment Method"]
                 st.dataframe(df, use_container_width=True, hide_index=True)
-
-        # Show cash overpayments for sales vs payments
+        
         if name == "Sales ↔ Payments" and check.get("cash_overpayments"):
             cash_over = check["cash_overpayments"]
             if cash_over:
@@ -1189,8 +810,7 @@ def main():
                 df_cash["change"] = df_cash["change"].apply(lambda x: f"{x:,.2f}")
                 df_cash.columns = ["Sale ID", "Sale Amount", "Payment Amount", "Change", "Payment Method"]
                 st.dataframe(df_cash, use_container_width=True, hide_index=True)
-
-        # Show product mismatches for FIFO vs Stock
+        
         if name == "FIFO Cost ↔ Stock" and check.get("product_mismatches"):
             product_mismatches = check["product_mismatches"]
             if product_mismatches:
@@ -1201,13 +821,10 @@ def main():
                 df["qty_diff"] = df["qty_diff"].apply(lambda x: f"{x:,.0f}")
                 df.columns = ["Product ID", "Product Name", "FIFO Qty", "Stock Qty", "Qty Difference"]
                 st.dataframe(df, use_container_width=True, hide_index=True)
-
+        
         st.markdown("</div>", unsafe_allow_html=True)
-
-    # ------------------------------------------------
-    # FOOTER
-    # ------------------------------------------------
-
+    
+    # Footer
     st.markdown("---")
     st.caption(
         "🔐 This page is READ-ONLY. "
