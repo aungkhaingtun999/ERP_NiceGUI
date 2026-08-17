@@ -579,156 +579,132 @@ def check_fifo_vs_stock():
 # ============================================================
 
 def check_sales_items():
+    """
+    Check sale calculation:
 
+        SUM(sale_items.total OR qty * unit_price - item_discount)
+        - sales.discount
+        + sales.tax
+        = sales.total
+
+    IMPORTANT:
+    Do NOT compare raw item subtotal directly to sales.total
+    because sales.total may include header discount and tax.
+    """
     try:
-
-        sales = execute_query(
-            "sales",
-            select=(
-                "id,total,subtotal,"
-                "discount,tax,sale_status"
-            ),
-            filters={
-                "sale_status": "COMPLETED"
-            },
+        sales_data = execute_query(
+            'sales',
+            select='id,subtotal,discount,tax,total',
+            filters={'sale_status': 'COMPLETED'}
         )
 
-        mismatches = []
-
-        checked = 0
+        total_sales = len(sales_data)
         matched = 0
+        mismatched = []
 
-        for sale in sales:
+        total_discrepancy = 0.0
 
+        for sale in sales_data:
             sale_id = sale.get("id")
 
-            if sale_id is None:
-                continue
+            sale_subtotal = float(sale.get("subtotal") or 0)
+            sale_discount = float(sale.get("discount") or 0)
+            sale_tax = float(sale.get("tax") or 0)
+            sale_total = float(sale.get("total") or 0)
 
-            checked += 1
-
-            items = execute_query(
-                "sale_items",
-                select=(
-                    "quantity,"
-                    "unit_price,"
-                    "discount,"
-                    "total"
-                ),
-                filters={
-                    "sale_id": sale_id
-                },
+            items_data = execute_query(
+                'sale_items',
+                select='quantity,unit_price,discount,total',
+                filters={'sale_id': sale_id}
             )
 
-            item_gross = sum(
-                qty(x.get("quantity"))
-                * money(x.get("unit_price"))
-                for x in items
-            )
+            item_subtotal = 0.0
 
-            item_discount = sum(
-                money(x.get("discount"))
-                for x in items
-            )
+            for item in items_data:
+                qty = float(item.get("quantity") or 0)
+                unit_price = float(item.get("unit_price") or 0)
+                item_discount = float(item.get("discount") or 0)
 
-            item_net = (
-                item_gross
-                - item_discount
-            )
+                item_subtotal += (
+                    qty * unit_price
+                ) - item_discount
 
-            sale_subtotal = money(
-                sale.get("subtotal")
-            )
+            # ------------------------------------------------
+            # CHECK 1
+            # Items subtotal == sales.subtotal
+            # ------------------------------------------------
+            subtotal_diff = abs(item_subtotal - sale_subtotal)
 
-            sale_discount = money(
-                sale.get("discount")
-            )
-
-            sale_tax = money(
-                sale.get("tax")
-            )
-
-            sale_total = money(
-                sale.get("total")
-            )
-
+            # ------------------------------------------------
+            # CHECK 2
+            # subtotal - discount + tax == total
+            # ------------------------------------------------
             calculated_total = (
                 sale_subtotal
                 - sale_discount
                 + sale_tax
             )
 
-            subtotal_diff = abs(
-                item_net
-                - sale_subtotal
-            )
+            total_diff = abs(calculated_total - sale_total)
 
-            final_diff = abs(
-                calculated_total
-                - sale_total
-            )
-
-            discount_diff = abs(
-                item_discount
-                - sale_discount
-            )
-
-            sale_ok = (
-                subtotal_diff < 0.01
-                and final_diff < 0.01
-            )
-
-            if sale_ok:
-
+            # ------------------------------------------------
+            # Final result
+            # ------------------------------------------------
+            if subtotal_diff < 0.01 and total_diff < 0.01:
                 matched += 1
-
             else:
-
-                mismatches.append(
-                    {
-                        "sale_id": sale_id,
-                        "item_net": item_net,
-                        "sale_subtotal": sale_subtotal,
-                        "sale_discount": sale_discount,
-                        "sale_tax": sale_tax,
-                        "sale_total": sale_total,
-                        "calculated_total": calculated_total,
-                        "subtotal_diff": subtotal_diff,
-                        "final_diff": final_diff,
-                        "discount_diff": discount_diff,
-                    }
+                total_discrepancy += max(
+                    subtotal_diff,
+                    total_diff
                 )
 
-        passed = len(mismatches) == 0
+                if len(mismatched) < 10:
+                    mismatched.append({
+                        "sale_id": sale_id,
+                        "item_subtotal": item_subtotal,
+                        "sale_subtotal": sale_subtotal,
+                        "discount": sale_discount,
+                        "tax": sale_tax,
+                        "calculated_total": calculated_total,
+                        "sale_total": sale_total,
+                        "difference": total_diff
+                    })
 
-        suggestion = None
+        is_matched = len(mismatched) == 0
 
-        if mismatches:
-
-            ids = ", ".join(
-                f"#{x['sale_id']}"
-                for x in mismatches[:5]
-            )
-
-            suggestion = (
-                f"Check sale(s): {ids}"
-            )
+        mismatch_ids = [
+            f"#{x['sale_id']}"
+            for x in mismatched
+        ]
 
         return {
             "name": "Sales Total ↔ Items",
             "icon": "🧾",
-            "status": (
-                "MATCHED"
-                if passed
-                else "MISMATCHED"
-            ),
-            "passed": passed,
+            "status": "MATCHED" if is_matched else "MISMATCHED",
+            "status_icon": "✅" if is_matched else "❌",
+            "passed": is_matched,
+
+            "total_sales": total_sales,
+            "matched": matched,
+            "mismatched": total_sales - matched,
+
+            "discrepancy": total_discrepancy,
+
+            "mismatched_sales": mismatch_ids,
+
+            "details": mismatched,
+
             "detail": (
-                f"Checked {checked} sales | "
-                f"Matched: {matched}"
+                f"Checked {total_sales} sales | "
+                f"Matched: {matched} | "
+                f"Mismatched: {total_sales - matched}"
             ),
-            "suggestion": suggestion,
-            "mismatches": mismatches,
+
+            "suggestion": (
+                f"Check sale(s): {', '.join(mismatch_ids)}"
+                if mismatch_ids
+                else None
+            )
         }
 
     except Exception as e:
@@ -737,11 +713,23 @@ def check_sales_items():
             "name": "Sales Total ↔ Items",
             "icon": "🧾",
             "status": "ERROR",
+            "status_icon": "⚠️",
             "passed": False,
+
+            "total_sales": 0,
+            "matched": 0,
+            "mismatched": 0,
+
+            "discrepancy": 0,
+            "mismatched_sales": [],
+            "details": [],
+
             "detail": str(e)[:100],
+
             "suggestion": (
-                "Check sales and sale_items schema."
-            ),
+                "Check sales / sale_items "
+                "columns and database connection"
+            )
         }
 
 
@@ -751,17 +739,17 @@ def check_sales_items():
 
 def render_check_card(result):
 
-    if result["status"] == "ERROR":
+    if result.get("status") == "ERROR":
         status_class = "check-error"
         badge_class = "badge-error"
-    elif result["passed"]:
+    elif result.get("passed", False):
         status_class = "check-passed"
         badge_class = "badge-passed"
     else:
         status_class = "check-failed"
         badge_class = "badge-failed"
 
-    status_display = result["status"]
+    status_display = result.get("status", "UNKNOWN")
 
     with st.container():
 
@@ -769,9 +757,9 @@ def render_check_card(result):
             f"""
             <div class="check-card {status_class}">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 24px;">{result['icon']}</span>
+                    <span style="font-size: 24px;">{result.get('icon', '📋')}</span>
                     <span style="font-weight: 600; font-size: 16px;">
-                        {result['name']}
+                        {result.get('name', 'Check')}
                     </span>
                     <span style="margin-left: auto;">
                         <span class="badge {badge_class}">
@@ -780,7 +768,7 @@ def render_check_card(result):
                     </span>
                 </div>
                 <div style="margin-top: 6px; font-size: 14px;">
-                    {result['detail']}
+                    {result.get('detail', '')}
                 </div>
             """,
             unsafe_allow_html=True,
@@ -798,14 +786,14 @@ def render_check_card(result):
             )
 
         # Show mismatches if any (for check 5)
-        if result.get("mismatches") and len(result["mismatches"]) > 0:
+        if result.get("details") and len(result["details"]) > 0:
 
             with st.expander(
-                f"📋 View {len(result['mismatches'])} mismatch details"
+                f"📋 View {len(result['details'])} mismatch details"
             ):
 
                 mismatch_df = pd.DataFrame(
-                    result["mismatches"]
+                    result["details"]
                 )
 
                 st.dataframe(
@@ -993,7 +981,7 @@ def run():
         passed_checks = sum(
             1
             for r in results
-            if r["passed"]
+            if r.get("passed", False)
         )
         failed_checks = total_checks - passed_checks
 
