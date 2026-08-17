@@ -1390,9 +1390,24 @@ def run():
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-        # Timestamp
+        # ========================================================
+        # TIMESTAMP - Myanmar Time
+        # ========================================================
+
+        try:
+            from zoneinfo import ZoneInfo
+            
+            myanmar_tz = ZoneInfo("Asia/Yangon")
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            now_myanmar = now_utc.astimezone(myanmar_tz)
+            timestamp_display = now_myanmar.strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception:
+            # Fallback if zoneinfo not available
+            timestamp_display = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         st.caption(
-            f"Checked at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"Checked at: {timestamp_display} (MMT)"
         )
 
     else:
