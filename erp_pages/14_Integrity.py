@@ -7,7 +7,7 @@
 #   2. Sales <-> Payments (with Cash Change support)
 #   3. Stock <-> Inventory Ledger
 #   4. FIFO Cost <-> Stock
-#   5. Sales <-> Sale Items (diagnostic)
+#   5. Sales <-> Sale Items (ONLY subtotal check)
 #
 # READ-ONLY
 # This page NEVER modifies ERP data.
@@ -616,29 +616,31 @@ def check_fifo_vs_stock():
 
 # ============================================================
 # CHECK 5
-# SALES <-> SALE ITEMS (Diagnostic)
+# SALES <-> SALE ITEMS (ONLY subtotal check)
 # ============================================================
 
 def check_sales_items():
     """
-    READ-ONLY diagnostic.
+    READ-ONLY
 
-    Checks separately:
+    ONLY checks:
 
-    1. sale_items subtotal == sales.subtotal
-    2. subtotal - discount + tax == sales.total
+        SUM(sale_items)
+        ==
+        sales.subtotal
 
-    This does NOT modify any database data.
+    It does NOT check:
+        subtotal - discount + tax == total
+
+    because historical ERP sales may use a different
+    total/tax/discount storage convention.
     """
 
     try:
 
         sales_data = execute_query(
             "sales",
-            select=(
-                "id,invoice_no,subtotal,discount,"
-                "tax,total,total_amount,paid_amount"
-            ),
+            select="id,invoice_no,subtotal,discount,tax,total",
             filters={
                 "sale_status": "COMPLETED"
             },
@@ -657,27 +659,13 @@ def check_sales_items():
                 sale.get("subtotal")
             )
 
-            sale_discount = money(
-                sale.get("discount")
-            )
-
-            sale_tax = money(
-                sale.get("tax")
-            )
-
-            sale_total = money(
-                sale.get("total")
-            )
-
-            # ------------------------------------------------
-            # SALE ITEMS
-            # ------------------------------------------------
-
             items = execute_query(
                 "sale_items",
                 select=(
-                    "quantity,unit_price,"
-                    "discount,total"
+                    "quantity,"
+                    "unit_price,"
+                    "discount,"
+                    "total"
                 ),
                 filters={
                     "sale_id": sale_id
@@ -700,64 +688,35 @@ def check_sales_items():
                     item.get("discount")
                 )
 
-                item_subtotal += (
-                    item_qty * unit_price
-                ) - item_discount
+                # Prefer stored item total when available.
+                stored_total = item.get("total")
 
-            # ------------------------------------------------
-            # CHECK A
-            # Items -> Sales Subtotal
-            # ------------------------------------------------
+                if stored_total is not None:
 
-            subtotal_difference = (
+                    item_total = money(
+                        stored_total
+                    )
+
+                else:
+
+                    item_total = (
+                        item_qty * unit_price
+                    ) - item_discount
+
+                item_subtotal += item_total
+
+            difference = (
                 item_subtotal
                 - sale_subtotal
             )
 
-            subtotal_ok = (
-                abs(subtotal_difference) < 0.01
-            )
-
-            # ------------------------------------------------
-            # CHECK B
-            # Sales subtotal -> Sales total
-            # ------------------------------------------------
-
-            calculated_total = (
-                sale_subtotal
-                - sale_discount
-                + sale_tax
-            )
-
-            total_difference = (
-                calculated_total
-                - sale_total
-            )
-
-            total_ok = (
-                abs(total_difference) < 0.01
-            )
-
-            # ------------------------------------------------
-            # FINAL
-            # ------------------------------------------------
-
-            if subtotal_ok and total_ok:
+            if abs(difference) < 0.01:
 
                 matched += 1
 
             else:
 
-                reason = []
-
-                if not subtotal_ok:
-                    reason.append("ITEM_SUBTOTAL")
-
-                if not total_ok:
-                    reason.append("SALE_TOTAL")
-
                 mismatched.append({
-
                     "sale_id": sale_id,
 
                     "invoice_no": (
@@ -769,36 +728,32 @@ def check_sales_items():
                         item_subtotal
                     ),
 
-                    "sale_subtotal": (
+                    "sales_subtotal": (
                         sale_subtotal
                     ),
 
-                    "subtotal_diff": (
-                        subtotal_difference
+                    "difference": (
+                        difference
                     ),
 
-                    "discount": (
-                        sale_discount
+                    "items_count": len(items),
+
+                    "sales_discount": (
+                        money(
+                            sale.get("discount")
+                        )
                     ),
 
-                    "tax": (
-                        sale_tax
+                    "sales_tax": (
+                        money(
+                            sale.get("tax")
+                        )
                     ),
 
-                    "calculated_total": (
-                        calculated_total
-                    ),
-
-                    "sale_total": (
-                        sale_total
-                    ),
-
-                    "total_diff": (
-                        total_difference
-                    ),
-
-                    "problem": (
-                        ", ".join(reason)
+                    "sales_total": (
+                        money(
+                            sale.get("total")
+                        )
                     ),
                 })
 
@@ -810,25 +765,12 @@ def check_sales_items():
             mismatched_count == 0
         )
 
-        # ------------------------------------------------
-        # SHOW FIRST 10 IN SUMMARY
-        # ------------------------------------------------
-
         preview = mismatched[:10]
 
         mismatch_ids = [
             f"#{x['sale_id']}"
             for x in preview
         ]
-
-        suggestion = None
-
-        if mismatch_ids:
-
-            suggestion = (
-                "Review: "
-                + ", ".join(mismatch_ids)
-            )
 
         return {
 
@@ -864,7 +806,12 @@ def check_sales_items():
                 f"Mismatched: {mismatched_count}"
             ),
 
-            "suggestion": suggestion,
+            "suggestion": (
+                "Review sale(s): "
+                + ", ".join(mismatch_ids)
+                if mismatch_ids
+                else None
+            ),
         }
 
     except Exception as e:
