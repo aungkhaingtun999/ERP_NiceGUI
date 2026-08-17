@@ -926,32 +926,31 @@ def run():
         return
 
     # ==========================================================================
-    # DEBUG — REPORT SALES DATA
+    # DEBUG — SALES DATA
     # ==========================================================================
 
     df = pd.DataFrame(sales)
 
     st.write("### DEBUG — REPORT SALES DATA")
 
+    st.write("Sales rows:", len(sales))
+
+    st.write("Sales raw data:")
+    st.json(sales)
+
+    st.write("DataFrame:")
     st.dataframe(
-        df[
-            [
-                "id",
-                "total",
-                "subtotal",
-                "discount",
-                "tax",
-                "total_amount",
-                "created_at",
-            ]
-        ],
+        df,
         use_container_width=True,
     )
 
-    st.write(
-        "DEBUG Revenue:",
-        df["total"].sum()
-    )
+    if "total" in df.columns:
+        st.write(
+            "DEBUG Revenue:",
+            df["total"].sum()
+        )
+    else:
+        st.error("❌ total column is missing")
 
     # ==========================================================================
     # SALES DATAFRAME
