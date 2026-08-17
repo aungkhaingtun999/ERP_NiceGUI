@@ -44,10 +44,10 @@ st.markdown(
     }
 
     .check-card {
-        padding: 12px 16px;
+        padding: 14px 16px;
         margin: 8px 0;
-        border-radius: 8px;
-        border-left: 4px solid #ccc;
+        border-radius: 10px;
+        border-left: 5px solid #ccc;
         background-color: #f8f9fa;
     }
 
@@ -68,10 +68,11 @@ st.markdown(
 
     .badge {
         display: inline-block;
-        padding: 2px 12px;
-        border-radius: 12px;
+        padding: 5px 10px;
+        border-radius: 14px;
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 700;
+        white-space: nowrap;
     }
 
     .badge-passed {
@@ -89,10 +90,19 @@ st.markdown(
         color: white;
     }
 
+    .suggestion {
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
     .metric-card {
         text-align: center;
         padding: 16px;
-        border-radius: 8px;
+        border-radius: 10px;
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
     }
@@ -105,15 +115,6 @@ st.markdown(
     .metric-label {
         font-size: 13px;
         color: #6c757d;
-    }
-
-    .suggestion {
-        font-size: 13px;
-        color: #856404;
-        background-color: #fff3cd;
-        padding: 6px 12px;
-        border-radius: 4px;
-        margin-top: 4px;
     }
 
     </style>
@@ -1074,16 +1075,18 @@ def run():
     st.divider()
 
     # ========================================================
-    # DETAILS
+    # DISPLAY DETAILED RESULTS
     # ========================================================
 
-    st.markdown(
-        "### 📋 Detailed Results"
-    )
+    st.markdown("### 📋 Detailed Results")
 
     for check in results:
 
-        if check.get("passed"):
+        # --------------------------------------------------------
+        # STATUS
+        # --------------------------------------------------------
+
+        if check.get("passed", False):
 
             card_class = "check-passed"
             badge_class = "badge-passed"
@@ -1101,11 +1104,13 @@ def run():
             badge_class = "badge-failed"
             badge_text = "❌ FAILED"
 
-        suggestion = check.get(
-            "suggestion"
-        )
+        # --------------------------------------------------------
+        # SUGGESTION
+        # --------------------------------------------------------
 
         suggestion_html = ""
+
+        suggestion = check.get("suggestion")
 
         if suggestion:
 
@@ -1115,66 +1120,71 @@ def run():
             </div>
             """
 
-        st.markdown(
-            f"""
-            <div class="check-card {card_class}">
+        # --------------------------------------------------------
+        # CARD
+        # --------------------------------------------------------
 
-                <table
-                    style="
-                        width:100%;
-                        border-collapse:collapse;
-                    "
-                >
+        card_html = f"""
+        <div class="check-card {card_class}">
 
-                    <tr>
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:14px;
+                width:100%;
+            ">
 
-                        <td
-                            style="
-                                width:5%;
-                                font-size:28px;
-                            "
-                        >
-                            {check.get("icon", "🔍")}
-                        </td>
+                <div style="
+                    width:40px;
+                    font-size:28px;
+                    text-align:center;
+                    flex-shrink:0;
+                ">
+                    {check.get("icon", "🔍")}
+                </div>
 
-                        <td
-                            style="
-                                width:25%;
-                                font-weight:600;
-                            "
-                        >
-                            {check.get("name")}
-                        </td>
+                <div style="
+                    flex:1;
+                    font-weight:600;
+                    font-size:16px;
+                ">
+                    {check.get("name", "Unknown Check")}
+                </div>
 
-                        <td
-                            style="width:20%;"
-                        >
-                            <span
-                                class="badge {badge_class}"
-                            >
-                                {badge_text}
-                            </span>
-                        </td>
+                <div style="
+                    width:110px;
+                    text-align:center;
+                    flex-shrink:0;
+                ">
+                    <span class="badge {badge_class}">
+                        {badge_text}
+                    </span>
+                </div>
 
-                        <td
-                            style="
-                                width:50%;
-                                font-size:14px;
-                            "
-                        >
-                            {check.get("detail")}
-                        </td>
-
-                    </tr>
-
-                </table>
-
-                {suggestion_html}
+                <div style="
+                    flex:2;
+                    font-size:14px;
+                ">
+                    {check.get("detail", "")}
+                </div>
 
             </div>
-            """,
-            unsafe_allow_html=True,
+
+            {suggestion_html}
+
+        </div>
+        """
+
+        # IMPORTANT:
+        # unsafe_allow_html=True is required
+        st.markdown(
+            card_html,
+            unsafe_allow_html=True
         )
+
+        # ----------------------------------------------------
+        # Detailed mismatch information
+        # ----------------------------------------------------
 
         if (
             check.get("name")
