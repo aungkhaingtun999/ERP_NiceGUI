@@ -746,6 +746,78 @@ def check_sales_items():
 
 
 # ============================================================
+# RENDER CHECK CARD
+# ============================================================
+
+def render_check_card(result):
+
+    if result["status"] == "ERROR":
+        status_class = "check-error"
+        badge_class = "badge-error"
+    elif result["passed"]:
+        status_class = "check-passed"
+        badge_class = "badge-passed"
+    else:
+        status_class = "check-failed"
+        badge_class = "badge-failed"
+
+    status_display = result["status"]
+
+    with st.container():
+
+        st.markdown(
+            f"""
+            <div class="check-card {status_class}">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 24px;">{result['icon']}</span>
+                    <span style="font-weight: 600; font-size: 16px;">
+                        {result['name']}
+                    </span>
+                    <span style="margin-left: auto;">
+                        <span class="badge {badge_class}">
+                            {status_display}
+                        </span>
+                    </span>
+                </div>
+                <div style="margin-top: 6px; font-size: 14px;">
+                    {result['detail']}
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if result.get("suggestion"):
+
+            st.markdown(
+                f"""
+                <div class="suggestion">
+                    💡 {result['suggestion']}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # Show mismatches if any (for check 5)
+        if result.get("mismatches") and len(result["mismatches"]) > 0:
+
+            with st.expander(
+                f"📋 View {len(result['mismatches'])} mismatch details"
+            ):
+
+                mismatch_df = pd.DataFrame(
+                    result["mismatches"]
+                )
+
+                st.dataframe(
+                    mismatch_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
 # RUN ALL
 # ============================================================
 
@@ -898,11 +970,7 @@ def run():
             use_container_width=True,
         ):
 
-            execute_query.clear()
-
-            with st.spinner(
-                "Running integrity checks..."
-            ):
+            with st.spinner("Running integrity checks..."):
 
                 results = run_all_checks()
 
@@ -910,334 +978,92 @@ def run():
                     "integrity_results"
                 ] = results
 
-                st.session_state[
-                    "last_integrity_run"
-                ] = (
-                    datetime.datetime.now()
-                    .strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                )
+    # ========================================================
+    # DISPLAY RESULTS
+    # ========================================================
 
-    with col2:
+    if "integrity_results" in st.session_state:
 
-        if (
-            "last_integrity_run"
-            in st.session_state
-        ):
+        results = st.session_state[
+            "integrity_results"
+        ]
 
-            st.caption(
-                "🕐 Last Check: "
-                + st.session_state[
-                    "last_integrity_run"
-                ]
+        # Overview Metrics
+        total_checks = len(results)
+        passed_checks = sum(
+            1
+            for r in results
+            if r["passed"]
+        )
+        failed_checks = total_checks - passed_checks
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-value">{total_checks}</div>
+                    <div class="metric-label">Total Checks</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-    st.divider()
-
-    # ========================================================
-    # RESULTS
-    # ========================================================
-
-    if (
-        "integrity_results"
-        not in st.session_state
-    ):
-
-        st.info(
-            "🔍 Click 'Run All Checks' "
-            "to start the integrity audit."
-        )
-
-        return
-
-    results = st.session_state[
-        "integrity_results"
-    ]
-
-    total = len(results)
-
-    errors = sum(
-        1
-        for r in results
-        if r.get("status") == "ERROR"
-    )
-
-    passed = sum(
-        1
-        for r in results
-        if r.get("passed", False)
-    )
-
-    failed = total - passed - errors
-
-    # ========================================================
-    # SUMMARY
-    # ========================================================
-
-    st.markdown(
-        "### 📊 Summary"
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div style="font-size:32px;">
-                    ✅
+        with col2:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #28a745;">
+                        {passed_checks}
+                    </div>
+                    <div class="metric-label">✅ Passed</div>
                 </div>
-                <div class="metric-value">
-                    {passed}/{total}
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with col3:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #dc3545;">
+                        {failed_checks}
+                    </div>
+                    <div class="metric-label">❌ Failed</div>
                 </div>
-                <div class="metric-label">
-                    Passed
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with col4:
+            pass_rate = int((passed_checks / total_checks) * 100) if total_checks > 0 else 0
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-value">{pass_rate}%</div>
+                    <div class="metric-label">Pass Rate</div>
                 </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
 
-    with c2:
+        st.divider()
 
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div style="font-size:32px;">
-                    ❌
-                </div>
-                <div class="metric-value">
-                    {failed}
-                </div>
-                <div class="metric-label">
-                    Failed
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        # Detailed Results
+        for result in results:
 
-    with c3:
+            render_check_card(result)
 
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div style="font-size:32px;">
-                    ⚠️
-                </div>
-                <div class="metric-value">
-                    {errors}
-                </div>
-                <div class="metric-label">
-                    Errors
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            st.markdown("<br>", unsafe_allow_html=True)
 
-    with c4:
-
-        if errors > 0:
-
-            icon = "⚠️"
-            label = "ERROR"
-
-        elif failed > 0:
-
-            icon = "🚨"
-            label = "CRITICAL"
-
-        else:
-
-            icon = "🎉"
-            label = "ALL GOOD"
-
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div style="font-size:32px;">
-                    {icon}
-                </div>
-                <div class="metric-value">
-                    {label}
-                </div>
-                <div class="metric-label">
-                    Status
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-
-    # ========================================================
-    # DISPLAY DETAILED RESULTS
-    # ========================================================
-
-    st.markdown("### 📋 Detailed Results")
-
-    for check in results:
-
-        # --------------------------------------------------------
-        # STATUS
-        # --------------------------------------------------------
-
-        if check.get("passed", False):
-
-            card_class = "check-passed"
-            badge_class = "badge-passed"
-            badge_text = "✅ PASSED"
-
-        elif check.get("status") == "ERROR":
-
-            card_class = "check-error"
-            badge_class = "badge-error"
-            badge_text = "⚠️ ERROR"
-
-        else:
-
-            card_class = "check-failed"
-            badge_class = "badge-failed"
-            badge_text = "❌ FAILED"
-
-        # --------------------------------------------------------
-        # SUGGESTION
-        # --------------------------------------------------------
-
-        suggestion_html = ""
-
-        suggestion = check.get("suggestion")
-
-        if suggestion:
-
-            suggestion_html = f"""
-            <div class="suggestion">
-                💡 {suggestion}
-            </div>
-            """
-
-        # --------------------------------------------------------
-        # CARD
-        # --------------------------------------------------------
-
-        card_html = f"""
-        <div class="check-card {card_class}">
-
-            <div style="
-                display:flex;
-                align-items:center;
-                gap:14px;
-                width:100%;
-            ">
-
-                <div style="
-                    width:40px;
-                    font-size:28px;
-                    text-align:center;
-                    flex-shrink:0;
-                ">
-                    {check.get("icon", "🔍")}
-                </div>
-
-                <div style="
-                    flex:1;
-                    font-weight:600;
-                    font-size:16px;
-                ">
-                    {check.get("name", "Unknown Check")}
-                </div>
-
-                <div style="
-                    width:110px;
-                    text-align:center;
-                    flex-shrink:0;
-                ">
-                    <span class="badge {badge_class}">
-                        {badge_text}
-                    </span>
-                </div>
-
-                <div style="
-                    flex:2;
-                    font-size:14px;
-                ">
-                    {check.get("detail", "")}
-                </div>
-
-            </div>
-
-            {suggestion_html}
-
-        </div>
-        """
-
-        # IMPORTANT:
-        # unsafe_allow_html=True is required
-        st.markdown(
-            card_html,
-            unsafe_allow_html=True
-        )
-
-        # ----------------------------------------------------
-        # Detailed mismatch information
-        # ----------------------------------------------------
-
-        if (
-            check.get("name")
-            == "Sales Total ↔ Items"
-            and check.get("mismatches")
-        ):
-
-            with st.expander(
-                "🔎 View Sales ↔ Items discrepancies"
-            ):
-
-                mismatch_df = pd.DataFrame(
-                    check["mismatches"]
-                )
-
-                st.dataframe(
-                    mismatch_df,
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-    # ========================================================
-    # FINAL STATUS
-    # ========================================================
-
-    st.divider()
-
-    if errors > 0:
-
-        st.error(
-            f"⚠️ {errors} integrity check(s) "
-            "could not be completed. "
-            "Database/schema requires attention."
-        )
-
-    elif failed > 0:
-
-        st.error(
-            f"🚨 {failed} integrity check(s) "
-            "failed. Review the detailed results above."
+        # Timestamp
+        st.caption(
+            f"Checked at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
     else:
 
-        st.success(
-            "🎉 All integrity checks passed successfully. "
-            "System integrity is healthy."
+        st.info(
+            "👆 Click **Run All Checks** to start integrity verification."
         )
-
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
-
-if __name__ == "__main__":
-    run()
