@@ -5,10 +5,12 @@
 
 import streamlit as str_module  # or keep as st
 import streamlit as st
+import datetime
 
 from database import generate_payment_qr
 from erp_core.repositories.payment_account_repository import \
     get_payment_account
+from supabase_client import get_supabase
 from .cart import calculate_subtotal
 from .checkout import process_checkout
 from .engine import get_default_tax_rate
@@ -24,6 +26,54 @@ def money(value):
         return f"{float(value):,.0f} MMK"
     except Exception:
         return "0 MMK"
+
+
+# ==============================================================================
+# HELPER: POST JOURNAL ENTRY FOR DOUBLE ENTRY SYSTEM
+# ==============================================================================
+
+def post_sale_journal_entry(sale_id: int, total_amount: float, payment_method: str = "CASH"):
+    """
+    အရောင်းအဝယ် (Sale) ပြီးမြောက်ပါက journal_entries ဇယားသို့ 
+    Double Entry (Debit နှင့် Credit) အလိုအလျောက် ထည့်သွင်းပေးသည်။
+    """
+    try:
+        supabase = get_supabase()
+        if not supabase:
+            return False
+
+        if total_amount <= 0:
+            return True
+
+        # ငွေပေးချေမှုပုံစံအလိုက် Account ID သတ်မှတ်ခြင်း
+        debit_account_id = 1 if "CASH" in payment_method.upper() else 2  # 1: Cash, 2: Bank/AR
+        credit_account_id = 4  # Sales Revenue
+
+        journal_rows = [
+            {
+                "sale_id": sale_id,
+                "account_id": debit_account_id,
+                "debit": total_amount,
+                "credit": 0.00,
+                "description": f"Sale #{sale_id} - Payment via {payment_method}",
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            },
+            {
+                "sale_id": sale_id,
+                "account_id": credit_account_id,
+                "debit": 0.00,
+                "credit": total_amount,
+                "description": f"Sale #{sale_id} - Revenue",
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+        ]
+
+        response = supabase.table("journal_entries").insert(journal_rows).execute()
+        return bool(response.data)
+
+    except Exception as e:
+        print(f"Error posting journal entry: {str(e)}")
+        return False
 
 
 # ==============================================================================
@@ -301,6 +351,15 @@ Change : {money(change)}
 
             if result.get("success", False):
                 sale_data = result.get("data", {})
+                sale_id = sale_data.get("id")
+
+                # ဂျာနယ်စာရင်း (Double Entry) အလိုအလျောက် ထည့်သွင်းခြင်း
+                if sale_id:
+                    post_sale_journal_entry(
+                        sale_id=int(sale_id),
+                        total_amount=float(grand_total),
+                        payment_method=str(payment_method)
+                    )
 
                 sale_data.update({
                     "subtotal": subtotal,
