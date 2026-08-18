@@ -1,32 +1,25 @@
 """
 ==============================================================================
-
 REFUND REPORT
-
 ERP ENTERPRISE REFUND REPORT v5.0
-
 Tax-aware Refund Reporting with Enhanced Features
-
 ==============================================================================
 """
 
 import io
 from datetime import date, datetime, timedelta
-from typing import Optional, Tuple
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import inch, mm
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER
 
 from database import db
 from auth import require_login
-from utils.ui import show_table
 
 # ==============================================================================
 # PAGE CONFIGURATION
@@ -39,60 +32,34 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
-    <style>
-    .report-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-    .report-title {
-        color: white;
-        font-size: 2.5em;
-        font-weight: bold;
-        margin: 0;
-    }
-    .report-subtitle {
-        color: #e0e0e0;
-        font-size: 1.2em;
-        margin: 5px 0 0 0;
-    }
-    .kpi-card {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 10px;
-    }
-    .section-header {
-        background-color: #f8f9fa;
-        padding: 10px 15px;
-        border-left: 4px solid #667eea;
-        margin: 20px 0 10px 0;
-        border-radius: 0 5px 5px 0;
-    }
-    .filter-section {
-        background-color: #f0f2f6;
-        padding: 15px;
-        border-radius: 10px;
-    }
-    div[data-testid="stDataFrame"] {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 10px;
-        background: white;
-    }
-    .metric-value {
-        font-size: 1.5em;
-        font-weight: bold;
-        color: #2c3e50;
-    }
-    .download-button {
-        margin: 5px 0;
-    }
-    </style>
+<style>
+.report-header {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+.report-title {
+    color: white;
+    font-size: 2.5em;
+    font-weight: bold;
+    margin: 0;
+}
+.report-subtitle {
+    color: #e0e0e0;
+    font-size: 1.2em;
+    margin: 5px 0 0 0;
+}
+.kpi-card {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 10px;
+}
+</style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
@@ -107,9 +74,6 @@ user = require_login()
 
 if "selected_refund_id" not in st.session_state:
     st.session_state.selected_refund_id = None
-
-if "date_range" not in st.session_state:
-    st.session_state.date_range = "This Month"
 
 # ==============================================================================
 # LOAD REPORT DATA
@@ -183,11 +147,6 @@ def preprocess_data(df):
     legacy_net_mask = (df["report_net"] == 0) & (df["item_total"] != 0)
     df.loc[legacy_net_mask, "report_net"] = df.loc[legacy_net_mask, "item_total"]
     
-    # Add derived columns
-    df["refund_date_date"] = df["refund_date"].dt.date
-    df["refund_month"] = df["refund_date"].dt.to_period("M")
-    df["refund_year"] = df["refund_date"].dt.year
-    
     return df
 
 if not df.empty:
@@ -198,15 +157,15 @@ if not df.empty:
 # ==============================================================================
 
 st.markdown("""
-    <div class="report-header">
-        <h1 class="report-title">📊 Refund Report</h1>
-        <p class="report-subtitle">ERP Enterprise Refund Reporting System v5.0</p>
-    </div>
+<div class="report-header">
+    <h1 class="report-title">📊 Refund Report</h1>
+    <p class="report-subtitle">ERP Enterprise Refund Reporting System v5.0</p>
+</div>
 """, unsafe_allow_html=True)
 
 # Display current date/time
 current_datetime = datetime.now()
-st.caption(f"Generated on: {current_datetime.strftime('%Y-%m-%d %H:%M:%S')} | User: {user.get('username', 'Unknown')}")
+st.caption(f"Generated on: {current_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ==============================================================================
 # EMPTY DATA CHECK
@@ -225,20 +184,15 @@ if df.empty:
 
 with st.sidebar:
     st.markdown("## 🔍 Report Filters")
-    
-    # Date Range Presets
     st.markdown("### 📅 Date Range")
     
+    # Date range presets
     date_presets = {
         "Today": (date.today(), date.today()),
         "Yesterday": (date.today() - timedelta(days=1), date.today() - timedelta(days=1)),
         "Last 7 Days": (date.today() - timedelta(days=7), date.today()),
         "Last 30 Days": (date.today() - timedelta(days=30), date.today()),
         "This Month": (date.today().replace(day=1), date.today()),
-        "Last Month": (
-            (date.today().replace(day=1) - timedelta(days=1)).replace(day=1),
-            date.today().replace(day=1) - timedelta(days=1)
-        ),
         "This Year": (date.today().replace(month=1, day=1), date.today()),
         "Custom Range": None,
     }
@@ -246,70 +200,43 @@ with st.sidebar:
     selected_preset = st.selectbox(
         "Quick Select",
         list(date_presets.keys()),
-        index=6,
+        index=4,
         key="date_preset"
     )
     
     if selected_preset == "Custom Range":
         col1, col2 = st.columns(2)
         with col1:
-            from_date = st.date_input(
-                "From Date",
-                value=date.today().replace(day=1),
-                max_value=date.today()
-            )
+            from_date = st.date_input("From Date", value=date.today().replace(day=1))
         with col2:
-            to_date = st.date_input(
-                "To Date",
-                value=date.today(),
-                max_value=date.today()
-            )
+            to_date = st.date_input("To Date", value=date.today())
     else:
         from_date, to_date = date_presets[selected_preset]
-        st.info(f"**From:** {from_date}\n\n**To:** {to_date}")
+        st.info(f"From: {from_date}\n\nTo: {to_date}")
     
     st.divider()
-    
-    # Quick filters
     st.markdown("### 🏷️ Quick Filters")
     
     # Invoice search
-    invoice_search = st.text_input(
-        "Search Invoice No",
-        placeholder="Enter invoice number...",
-        help="Search by partial invoice number"
-    )
+    invoice_search = st.text_input("Search Invoice No", placeholder="Enter invoice number...")
     
     # Cashier filter
     cashier_options = sorted(df["cashier_name"].dropna().unique().tolist())
     if cashier_options:
-        cashier_filter = st.multiselect(
-            "Cashier",
-            cashier_options,
-            help="Select one or more cashiers"
-        )
+        cashier_filter = st.multiselect("Cashier", cashier_options)
     else:
         cashier_filter = []
     
     # Warehouse filter
     warehouse_options = sorted(df["warehouse_name"].dropna().unique().tolist())
     if warehouse_options:
-        warehouse_filter = st.multiselect(
-            "Warehouse",
-            warehouse_options,
-            help="Select one or more warehouses"
-        )
+        warehouse_filter = st.multiselect("Warehouse", warehouse_options)
     else:
         warehouse_filter = []
     
     # Status filter
     status_options = ["PENDING", "COMPLETED", "REJECTED"]
-    status_filter = st.multiselect(
-        "Status",
-        status_options,
-        default=["COMPLETED"],
-        help="Select refund statuses"
-    )
+    status_filter = st.multiselect("Status", status_options, default=["COMPLETED"])
     
     st.divider()
     
@@ -320,8 +247,7 @@ with st.sidebar:
             st.cache_data.clear()
             st.rerun()
     with col2:
-        if st.button("🗑️ Clear Filters", use_container_width=True):
-            st.session_state.date_preset = "This Month"
+        if st.button("🗑️ Clear", use_container_width=True):
             st.rerun()
 
 # ==============================================================================
@@ -358,9 +284,7 @@ if status_filter:
 # KPI METRICS
 # ==============================================================================
 
-# Calculate KPIs
 total_refunds = filtered["refund_id"].nunique()
-total_items = len(filtered)
 pending = (filtered["status"] == "PENDING").sum()
 completed = (filtered["status"] == "COMPLETED").sum()
 rejected = (filtered["status"] == "REJECTED").sum()
@@ -374,94 +298,35 @@ st.markdown("### 📈 Key Performance Indicators")
 kpi_cols = st.columns(5)
 
 with kpi_cols[0]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Total Refunds",
-        f"{total_refunds:,}",
-        help="Total number of refund transactions"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Total Refunds", f"{total_refunds:,}")
 
 with kpi_cols[1]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Pending",
-        f"{pending:,}",
-        delta=f"{pending/total_refunds*100:.1f}%" if total_refunds > 0 else None,
-        delta_color="inverse",
-        help="Pending refund requests"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Pending", f"{pending:,}")
 
 with kpi_cols[2]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Completed",
-        f"{completed:,}",
-        delta=f"{completed/total_refunds*100:.1f}%" if total_refunds > 0 else None,
-        help="Completed refunds"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Completed", f"{completed:,}")
 
 with kpi_cols[3]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Rejected",
-        f"{rejected:,}",
-        delta=f"{rejected/total_refunds*100:.1f}%" if total_refunds > 0 else None,
-        delta_color="inverse",
-        help="Rejected refund requests"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Rejected", f"{rejected:,}")
 
 with kpi_cols[4]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Total Amount",
-        f"{total_refund:,.2f} MMK",
-        help="Total refund amount"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Total Amount", f"{total_refund:,.2f} MMK")
 
 # Financial Summary
 st.markdown("### 💰 Financial Summary")
 fin_cols = st.columns(4)
 
 with fin_cols[0]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Refund Net",
-        f"{total_net:,.2f} MMK",
-        help="Total net refund amount"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Refund Net", f"{total_net:,.2f} MMK")
 
 with fin_cols[1]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Refund Tax",
-        f"{total_tax:,.2f} MMK",
-        help="Total tax amount"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Refund Tax", f"{total_tax:,.2f} MMK")
 
 with fin_cols[2]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Refund Total",
-        f"{total_refund:,.2f} MMK",
-        help="Total refund including tax"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Refund Total", f"{total_refund:,.2f} MMK")
 
 with fin_cols[3]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric(
-        "Average Refund",
-        f"{avg_refund:,.2f} MMK",
-        help="Average refund per transaction"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.metric("Average Refund", f"{avg_refund:,.2f} MMK")
 
 # ==============================================================================
 # PDF GENERATOR
@@ -471,7 +336,6 @@ def create_refund_pdf(header, items, report_type="detailed"):
     """Generate PDF for refund report"""
     buffer = io.BytesIO()
     
-    # Use landscape for full report, portrait for single refund
     if report_type == "full":
         doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
     else:
@@ -479,7 +343,6 @@ def create_refund_pdf(header, items, report_type="detailed"):
     
     styles = getSampleStyleSheet()
     
-    # Custom styles
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Title'],
@@ -489,22 +352,11 @@ def create_refund_pdf(header, items, report_type="detailed"):
         alignment=TA_CENTER
     )
     
-    header_style = ParagraphStyle(
-        'CustomHeader',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#34495e'),
-        spaceAfter=10
-    )
-    
     content = []
-    
-    # Title
     content.append(Paragraph("REFUND REPORT", title_style))
     content.append(Spacer(1, 10))
     
     if report_type == "detailed":
-        # Single refund detail
         header_text = f"""
         <b>Refund ID:</b> {header.get('refund_id', '')}<br/>
         <b>Invoice:</b> {header.get('invoice_no', '')}<br/>
@@ -513,10 +365,9 @@ def create_refund_pdf(header, items, report_type="detailed"):
         <b>Warehouse:</b> {header.get('warehouse_name', '')}<br/>
         <b>Reason:</b> {header.get('reason', '')}
         """
-        content.append(Paragraph(header_text, header_style))
+        content.append(Paragraph(header_text, styles["Normal"]))
         content.append(Spacer(1, 15))
         
-        # Items table
         table_data = [["Product", "Qty", "Unit Price", "Net", "Tax", "Total"]]
         
         total_net_val = 0
@@ -558,7 +409,6 @@ def create_refund_pdf(header, items, report_type="detailed"):
         content.append(table)
     
     else:
-        # Full report - summary table
         table_data = [["Refund ID", "Invoice", "Date", "Status", "Cashier", 
                        "Warehouse", "Net", "Tax", "Total"]]
         
@@ -595,8 +445,8 @@ def create_refund_pdf(header, items, report_type="detailed"):
 # REFUND SELECTOR
 # ==============================================================================
 
+st.divider()
 st.markdown("### 🔎 Refund Details")
-st.markdown("Select a specific refund to view detailed information")
 
 if filtered.empty:
     st.warning("No refund records match the selected filters.")
@@ -615,7 +465,6 @@ else:
             f"#{refund_id} | {invoice_no} | {date_str} | {total:,.2f} MMK | {status}"
         ))
     
-    # Select refund
     selected_refund_id = st.selectbox(
         "Select Refund",
         options=[item[0] for item in selector_options],
@@ -626,13 +475,11 @@ else:
         key="refund_selector"
     )
     
-    # Selected refund row
     selected_rows = filtered[filtered["refund_id"] == selected_refund_id]
     
     if not selected_rows.empty:
         selected_row = selected_rows.iloc[0]
         
-        # Refund header summary
         st.markdown(f"#### Refund #{selected_refund_id}")
         
         header_cols = st.columns(4)
@@ -641,13 +488,7 @@ else:
             st.write(selected_row["invoice_no"])
         with header_cols[1]:
             st.markdown("**Status**")
-            status_color = {
-                "COMPLETED": "green",
-                "PENDING": "orange",
-                "REJECTED": "red"
-            }.get(selected_row["status"], "grey")
-            st.markdown(f"<span style='color: {status_color}; font-weight: bold;'>{selected_row['status']}</span>", 
-                       unsafe_allow_html=True)
+            st.write(selected_row["status"])
         with header_cols[2]:
             st.markdown("**Cashier**")
             st.write(selected_row["cashier_name"])
@@ -655,7 +496,6 @@ else:
             st.markdown("**Warehouse**")
             st.write(selected_row["warehouse_name"])
         
-        # Date and reason
         detail_cols = st.columns(2)
         with detail_cols[0]:
             if pd.notna(selected_row["refund_date"]):
@@ -663,12 +503,10 @@ else:
                 st.write(selected_row["refund_date"].strftime("%Y-%m-%d %H:%M:%S"))
         with detail_cols[1]:
             st.markdown("**Reason**")
-            reason_value = selected_row["reason"]
-            st.write(reason_value if reason_value else "-")
+            st.write(selected_row["reason"] if selected_row["reason"] else "-")
         
         st.divider()
         
-        # Refund amounts
         selected_net = float(selected_row["report_net"] or 0)
         selected_tax = float(selected_row["report_tax"] or 0)
         selected_total = float(selected_row["report_total"] or 0)
@@ -697,11 +535,9 @@ else:
             selected_items = []
             st.error(f"Unable to load refund details: {e}")
         
-        # Detail items
         if selected_items:
             detail_df = pd.DataFrame(selected_items)
             
-            # Safe numeric columns
             detail_numeric_columns = [
                 "quantity", "unit_price", "item_total",
                 "refund_net_amount", "refund_tax_amount", "refund_total_amount"
@@ -712,7 +548,6 @@ else:
                     detail_df[col] = 0
                 detail_df[col] = pd.to_numeric(detail_df[col], errors="coerce").fillna(0)
             
-            # Legacy fallback
             detail_df["display_net"] = detail_df["refund_net_amount"]
             legacy_net = (detail_df["display_net"].isna() | (detail_df["display_net"] == 0)) & \
                         (detail_df["item_total"] != 0)
@@ -724,7 +559,6 @@ else:
                           (detail_df["item_total"] != 0)
             detail_df.loc[legacy_total, "display_total"] = detail_df.loc[legacy_total, "item_total"]
             
-            # Display table
             selected_detail_display = pd.DataFrame({
                 "Product": detail_df["product_name"],
                 "Qty": detail_df["quantity"],
@@ -736,7 +570,6 @@ else:
             
             st.subheader("📦 Refund Items")
             
-            # Style the dataframe
             st.dataframe(
                 selected_detail_display,
                 use_container_width=True,
@@ -751,7 +584,6 @@ else:
                 }
             )
             
-            # Detail totals
             detail_net = detail_df["display_net"].sum()
             detail_tax = detail_df["display_tax"].sum()
             detail_total = detail_df["display_total"].sum()
@@ -764,13 +596,11 @@ else:
             with total_cols[2]:
                 st.metric("Grand Total", f"{detail_total:,.2f} MMK")
             
-            # Download buttons
             st.markdown("#### 📥 Download Options")
             
             download_cols = st.columns(4)
             
             with download_cols[0]:
-                # PDF download
                 pdf_file = create_refund_pdf(selected_row.to_dict(), selected_items, "detailed")
                 st.download_button(
                     "📄 PDF",
@@ -782,20 +612,37 @@ else:
                 )
             
             with download_cols[1]:
-                # HTML download
+                csv_file = selected_detail_display.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📊 CSV",
+                    csv_file,
+                    f"refund_{selected_refund_id}.csv",
+                    "text/csv",
+                    key=f"csv_{selected_refund_id}",
+                    use_container_width=True
+                )
+            
+            with download_cols[2]:
+                excel_buffer = io.BytesIO()
+                with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                    selected_detail_display.to_excel(writer, index=False, sheet_name="Refund Items")
+                excel_buffer.seek(0)
+                st.download_button(
+                    "📗 Excel",
+                    excel_buffer.getvalue(),
+                    f"refund_{selected_refund_id}.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"excel_{selected_refund_id}",
+                    use_container_width=True
+                )
+            
+            with download_cols[3]:
                 html_table = selected_detail_display.to_html(index=False)
                 html_content = f"""
                 <html>
                 <head>
                     <meta charset="utf-8">
                     <title>Refund {selected_refund_id}</title>
-                    <style>
-                        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                        table {{ border-collapse: collapse; width: 100%; }}
-                        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                        th {{ background-color: #f2f2f2; }}
-                        .total {{ font-weight: bold; }}
-                    </style>
                 </head>
                 <body>
                     <h2>Refund Report</h2>
@@ -819,33 +666,6 @@ else:
                     key=f"html_{selected_refund_id}",
                     use_container_width=True
                 )
-            
-            with download_cols[2]:
-                # CSV download
-                csv_file = selected_detail_display.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "📊 CSV",
-                    csv_file,
-                    f"refund_{selected_refund_id}.csv",
-                    "text/csv",
-                    key=f"csv_{selected_refund_id}",
-                    use_container_width=True
-                )
-            
-            with download_cols[3]:
-                # Excel download
-                excel_buffer = io.BytesIO()
-                with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-                    selected_detail_display.to_excel(writer, index=False, sheet_name="Refund Items")
-                excel_buffer.seek(0)
-                st.download_button(
-                    "📗 Excel",
-                    excel_buffer.getvalue(),
-                    f"refund_{selected_refund_id}.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key=f"excel_{selected_refund_id}",
-                    use_container_width=True
-                )
         else:
             st.warning("No refund item records found.")
 
@@ -857,16 +677,9 @@ st.divider()
 st.markdown("### 📊 Refund Analytics")
 
 if not filtered.empty:
-    # Analytics tabs
-    analytics_tab1, analytics_tab2, analytics_tab3 = st.tabs([
-        "📈 Trends", "🏆 Top Products", "📊 Summary"
-    ])
+    analytics_tab1, analytics_tab2 = st.tabs(["📈 Trends", "🏆 Top Products"])
     
     with analytics_tab1:
-        # Daily refund trend
-        st.subheader("Daily Refund Trend")
-        
-        # Aggregate by date
         daily_refunds = (
             filtered.groupby(filtered["refund_date"].dt.date)
             .agg({
@@ -881,7 +694,6 @@ if not filtered.empty:
             })
         )
         
-        # Create two charts side by side
         trend_col1, trend_col2 = st.columns(2)
         
         with trend_col1:
@@ -893,7 +705,6 @@ if not filtered.empty:
             st.line_chart(daily_refunds.set_index("Date")["Total Amount"])
     
     with analytics_tab2:
-        # Top products
         col1, col2 = st.columns(2)
         
         with col1:
@@ -915,49 +726,26 @@ if not filtered.empty:
                 .head(10)
             )
             st.bar_chart(top_products_value)
-    
-    with analytics_tab3:
-        # Summary analytics
-        col1, col2 = st.columns(2)
         
-        with col1:
-            st.subheader("📊 Refund Status Distribution")
-            status_data = (
-                filtered.groupby("status")["refund_id"]
-                .nunique()
+        st.subheader("📊 Refund Status Distribution")
+        status_data = filtered.groupby("status")["refund_id"].nunique()
+        if not status_data.empty:
+            fig = px.pie(
+                values=status_data.values,
+                names=status_data.index,
+                title="Refund Status",
+                hole=0.4
             )
-            if not status_data.empty:
-                fig = px.pie(
-                    values=status_data.values,
-                    names=status_data.index,
-                    title="Refund Status",
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.qualitative.Set3
-                )
-                st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
         
-        with col2:
-            st.subheader("👤 Top 5 Cashiers by Refund Value")
-            cashier_ranking = (
-                filtered.groupby("cashier_name")["report_total"]
-                .sum()
-                .sort_values(ascending=False)
-                .head(5)
-            )
-            st.bar_chart(cashier_ranking)
-        
-        # Additional summary stats
-        st.subheader("📋 Summary Statistics")
-        
-        summary_cols = st.columns(4)
-        with summary_cols[0]:
-            st.metric("Total Items", f"{len(filtered):,}")
-        with summary_cols[1]:
-            st.metric("Unique Products", f"{filtered['product_id'].nunique():,}")
-        with summary_cols[2]:
-            st.metric("Total Quantity", f"{filtered['quantity'].sum():,.0f}")
-        with summary_cols[3]:
-            st.metric("Avg Item Value", f"{filtered['report_total'].mean():,.2f} MMK")
+        st.subheader("👤 Top 5 Cashiers by Refund Value")
+        cashier_ranking = (
+            filtered.groupby("cashier_name")["report_total"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+        )
+        st.bar_chart(cashier_ranking)
 
 else:
     st.warning("No data available for analytics with current filters.")
@@ -970,10 +758,85 @@ st.divider()
 st.markdown("### 📋 Full Report Table")
 
 if not filtered.empty:
-    # Prepare display dataframe
-    display_df = filtered.copy()
-    
-    # Select and reorder columns for display
     display_columns = [
         "refund_id", "invoice_no", "refund_date", "status",
-        "product
+        "product_name", "quantity", "unit_price", "report_net",
+        "report_tax", "report_total", "cashier_name", "warehouse_name"
+    ]
+    
+    display_df = filtered[display_columns].copy()
+    display_df["refund_date"] = display_df["refund_date"].dt.strftime("%Y-%m-%d %H:%M")
+    
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "refund_id": st.column_config.NumberColumn("Refund ID", format="%d"),
+            "invoice_no": st.column_config.TextColumn("Invoice"),
+            "refund_date": st.column_config.TextColumn("Date"),
+            "status": st.column_config.TextColumn("Status"),
+            "product_name": st.column_config.TextColumn("Product", width="large"),
+            "quantity": st.column_config.NumberColumn("Qty", format="%.2f"),
+            "unit_price": st.column_config.NumberColumn("Unit Price", format="%,.2f"),
+            "report_net": st.column_config.NumberColumn("Net", format="%,.2f"),
+            "report_tax": st.column_config.NumberColumn("Tax", format="%,.2f"),
+            "report_total": st.column_config.NumberColumn("Total", format="%,.2f"),
+            "cashier_name": st.column_config.TextColumn("Cashier"),
+            "warehouse_name": st.column_config.TextColumn("Warehouse"),
+        }
+    )
+    
+    # Export full report
+    st.markdown("#### 📥 Export Full Report")
+    
+    export_col1, export_col2, export_col3 = st.columns(3)
+    
+    with export_col1:
+        # Excel export
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            display_df.to_excel(writer, index=False, sheet_name="Refund Report")
+            # Add summary sheet
+            summary_data = {
+                "Metric": ["Total Refunds", "Total Net", "Total Tax", "Total Amount"],
+                "Value": [total_refunds, total_net, total_tax, total_refund]
+            }
+            pd.DataFrame(summary_data).to_excel(writer, index=False, sheet_name="Summary")
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            "📗 Excel Report",
+            excel_buffer.getvalue(),
+            f"refund_report_{from_date}_to_{to_date}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="full_excel",
+            use_container_width=True
+        )
+    
+    with export_col2:
+        # CSV export
+        csv_file = display_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "📊 CSV Report",
+            csv_file,
+            f"refund_report_{from_date}_to_{to_date}.csv",
+            "text/csv",
+            key="full_csv",
+            use_container_width=True
+        )
+    
+    with export_col3:
+        # PDF export
+        full_pdf = create_refund_pdf(None, filtered.to_dict('records'), "full")
+        st.download_button(
+            "📄 PDF Report",
+            full_pdf,
+            f"refund_report_{from_date}_to_{to_date}.pdf",
+            "application/pdf",
+            key="full_pdf",
+            use_container_width=True
+        )
+
+else:
+    st.warning("No data available for the full report table.")
