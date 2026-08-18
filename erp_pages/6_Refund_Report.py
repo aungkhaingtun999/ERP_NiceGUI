@@ -64,6 +64,7 @@ st.markdown("""
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 10px;
     }
     .section-header {
         background-color: #f8f9fa;
@@ -975,4 +976,4 @@ if not filtered.empty:
     # Select and reorder columns for display
     display_columns = [
         "refund_id", "invoice_no", "refund_date", "status",
-        "product_name", "quantity", "
+        "product
