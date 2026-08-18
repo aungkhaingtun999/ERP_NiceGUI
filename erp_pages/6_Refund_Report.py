@@ -1,13 +1,14 @@
 """
 ==============================================================================
 REFUND REPORT
-ERP ENTERPRISE REFUND REPORT v5.0
-Tax-aware Refund Reporting with Enhanced Features
+ERP ENTERPRISE REFUND REPORT v5.1
+Tax-aware Refund Reporting with Myanmar Time Zone
 ==============================================================================
 """
 
 import io
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo  # Python 3.9+
 
 import pandas as pd
 import plotly.express as px
@@ -22,11 +23,31 @@ from database import db
 from auth import require_login
 
 # ==============================================================================
+# MYANMAR TIME ZONE CONFIGURATION
+# ==============================================================================
+
+MYANMAR_TZ = ZoneInfo("Asia/Yangon")
+
+def get_myanmar_time():
+    """Get current time in Myanmar timezone"""
+    return datetime.now(MYANMAR_TZ)
+
+def convert_to_myanmar_time(dt):
+    """Convert datetime to Myanmar timezone"""
+    if pd.isna(dt) or dt is None:
+        return dt
+    if isinstance(dt, str):
+        dt = pd.to_datetime(dt)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo='UTC')
+    return dt.astimezone(MYANMAR_TZ)
+
+# ==============================================================================
 # PAGE CONFIGURATION
 # ==============================================================================
 
 st.set_page_config(
-    page_title="Refund Report v5.0",
+    page_title="Refund Report v5.1",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -59,6 +80,10 @@ st.markdown("""
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 10px;
 }
+.section-divider {
+    margin: 30px 0;
+    border-top: 2px solid #e0e0e0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,6 +99,12 @@ user = require_login()
 
 if "selected_refund_id" not in st.session_state:
     st.session_state.selected_refund_id = None
+
+if "report_from_date" not in st.session_state:
+    st.session_state.report_from_date = get_myanmar_time().date().replace(day=1)
+    
+if "report_to_date" not in st.session_state:
+    st.session_state.report_to_date = get_myanmar_time().date()
 
 # ==============================================================================
 # LOAD REPORT DATA
@@ -116,8 +147,9 @@ def preprocess_data(df):
             df[col] = 0
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     
-    # Date conversion
+    # Date conversion to Myanmar timezone
     df["refund_date"] = pd.to_datetime(df["refund_date"], errors="coerce")
+    df["refund_date"] = df["refund_date"].apply(convert_to_myanmar_time)
     
     # Status normalization
     if "status" not in df.columns:
@@ -159,13 +191,13 @@ if not df.empty:
 st.markdown("""
 <div class="report-header">
     <h1 class="report-title">📊 Refund Report</h1>
-    <p class="report-subtitle">ERP Enterprise Refund Reporting System v5.0</p>
+    <p class="report-subtitle">ERP Enterprise Refund Reporting System v5.1</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Display current date/time
-current_datetime = datetime.now()
-st.caption(f"Generated on: {current_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+# Display current Myanmar time
+myanmar_now = get_myanmar_time()
+st.caption(f"🕐 မြန်မာစံတော်ချိန်: {myanmar_now.strftime('%Y-%m-%d %H:%M:%S')} | User: {user.get('username', 'Unknown')}")
 
 # ==============================================================================
 # EMPTY DATA CHECK
@@ -179,75 +211,111 @@ if df.empty:
     st.stop()
 
 # ==============================================================================
-# SIDEBAR FILTERS
+# SIDEBAR FILTERS - DATE RANGE SELECTION
 # ==============================================================================
 
 with st.sidebar:
     st.markdown("## 🔍 Report Filters")
-    st.markdown("### 📅 Date Range")
+    st.markdown("### 📅 Date Range Selection")
     
     # Date range presets
     date_presets = {
-        "Today": (date.today(), date.today()),
-        "Yesterday": (date.today() - timedelta(days=1), date.today() - timedelta(days=1)),
-        "Last 7 Days": (date.today() - timedelta(days=7), date.today()),
-        "Last 30 Days": (date.today() - timedelta(days=30), date.today()),
-        "This Month": (date.today().replace(day=1), date.today()),
-        "This Year": (date.today().replace(month=1, day=1), date.today()),
-        "Custom Range": None,
+        "ယနေ့ (Today)": (get_myanmar_time().date(), get_myanmar_time().date()),
+        "မနေ့က (Yesterday)": (
+            get_myanmar_time().date() - timedelta(days=1),
+            get_myanmar_time().date() - timedelta(days=1)
+        ),
+        "ပြီးခဲ့သော ၇ ရက် (Last 7 Days)": (
+            get_myanmar_time().date() - timedelta(days=7),
+            get_myanmar_time().date()
+        ),
+        "ပြီးခဲ့သော ရက် ၃၀ (Last 30 Days)": (
+            get_myanmar_time().date() - timedelta(days=30),
+            get_myanmar_time().date()
+        ),
+        "ယခုလ (This Month)": (
+            get_myanmar_time().date().replace(day=1),
+            get_myanmar_time().date()
+        ),
+        "ယခုနှစ် (This Year)": (
+            get_myanmar_time().date().replace(month=1, day=1),
+            get_myanmar_time().date()
+        ),
+        "စိတ်ကြိုက်ရွေးချယ်ရန် (Custom Range)": None,
     }
     
     selected_preset = st.selectbox(
-        "Quick Select",
+        "အမြန်ရွေးချယ်ရန်",
         list(date_presets.keys()),
         index=4,
         key="date_preset"
     )
     
-    if selected_preset == "Custom Range":
+    if selected_preset == "စိတ်ကြိုက်ရွေးချယ်ရန် (Custom Range)":
         col1, col2 = st.columns(2)
         with col1:
-            from_date = st.date_input("From Date", value=date.today().replace(day=1))
+            from_date = st.date_input(
+                "မှ (From Date)",
+                value=st.session_state.report_from_date,
+                max_value=get_myanmar_time().date(),
+                key="custom_from_date"
+            )
         with col2:
-            to_date = st.date_input("To Date", value=date.today())
+            to_date = st.date_input(
+                "သို့ (To Date)",
+                value=st.session_state.report_to_date,
+                max_value=get_myanmar_time().date(),
+                key="custom_to_date"
+            )
     else:
         from_date, to_date = date_presets[selected_preset]
-        st.info(f"From: {from_date}\n\nTo: {to_date}")
+        st.info(f"**မှ:** {from_date}\n\n**သို့:** {to_date}")
+    
+    # Store in session state
+    st.session_state.report_from_date = from_date
+    st.session_state.report_to_date = to_date
     
     st.divider()
     st.markdown("### 🏷️ Quick Filters")
     
     # Invoice search
-    invoice_search = st.text_input("Search Invoice No", placeholder="Enter invoice number...")
+    invoice_search = st.text_input(
+        "ဘောင်ချာနံပါတ် ရှာရန်",
+        placeholder="ဘောင်ချာနံပါတ် ရိုက်ထည့်ပါ..."
+    )
     
     # Cashier filter
     cashier_options = sorted(df["cashier_name"].dropna().unique().tolist())
     if cashier_options:
-        cashier_filter = st.multiselect("Cashier", cashier_options)
+        cashier_filter = st.multiselect("ငွေကိုင် (Cashier)", cashier_options)
     else:
         cashier_filter = []
     
     # Warehouse filter
     warehouse_options = sorted(df["warehouse_name"].dropna().unique().tolist())
     if warehouse_options:
-        warehouse_filter = st.multiselect("Warehouse", warehouse_options)
+        warehouse_filter = st.multiselect("ဂိုဒေါင် (Warehouse)", warehouse_options)
     else:
         warehouse_filter = []
     
     # Status filter
     status_options = ["PENDING", "COMPLETED", "REJECTED"]
-    status_filter = st.multiselect("Status", status_options, default=["COMPLETED"])
+    status_filter = st.multiselect(
+        "အခြေအနေ (Status)",
+        status_options,
+        default=["COMPLETED"]
+    )
     
     st.divider()
     
     # Action buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🔄 Refresh", type="primary", use_container_width=True):
+        if st.button("🔄 ပြန်စရန် (Refresh)", type="primary", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
     with col2:
-        if st.button("🗑️ Clear", use_container_width=True):
+        if st.button("🗑️ ရှင်းရန် (Clear)", use_container_width=True):
             st.rerun()
 
 # ==============================================================================
@@ -298,19 +366,19 @@ st.markdown("### 📈 Key Performance Indicators")
 kpi_cols = st.columns(5)
 
 with kpi_cols[0]:
-    st.metric("Total Refunds", f"{total_refunds:,}")
+    st.metric("စုစုပေါင်း Refund", f"{total_refunds:,}")
 
 with kpi_cols[1]:
-    st.metric("Pending", f"{pending:,}")
+    st.metric("ဆိုင်းငံ့ (Pending)", f"{pending:,}")
 
 with kpi_cols[2]:
-    st.metric("Completed", f"{completed:,}")
+    st.metric("ပြီးစီး (Completed)", f"{completed:,}")
 
 with kpi_cols[3]:
-    st.metric("Rejected", f"{rejected:,}")
+    st.metric("ငြင်းပယ် (Rejected)", f"{rejected:,}")
 
 with kpi_cols[4]:
-    st.metric("Total Amount", f"{total_refund:,.2f} MMK")
+    st.metric("စုစုပေါင်းငွေ", f"{total_refund:,.2f} MMK")
 
 # Financial Summary
 st.markdown("### 💰 Financial Summary")
@@ -326,7 +394,7 @@ with fin_cols[2]:
     st.metric("Refund Total", f"{total_refund:,.2f} MMK")
 
 with fin_cols[3]:
-    st.metric("Average Refund", f"{avg_refund:,.2f} MMK")
+    st.metric("ပျမ်းမျှ Refund", f"{avg_refund:,.2f} MMK")
 
 # ==============================================================================
 # PDF GENERATOR
@@ -442,11 +510,106 @@ def create_refund_pdf(header, items, report_type="detailed"):
     return buffer
 
 # ==============================================================================
-# REFUND SELECTOR
+# FULL REPORT TABLE (MOVED TO TOP)
+# ==============================================================================
+
+st.divider()
+st.markdown("### 📋 Full Report Table")
+
+if not filtered.empty:
+    # Prepare display dataframe
+    display_columns = [
+        "refund_id", "invoice_no", "refund_date", "status",
+        "product_name", "quantity", "unit_price", "report_net",
+        "report_tax", "report_total", "cashier_name", "warehouse_name"
+    ]
+    
+    display_df = filtered[display_columns].copy()
+    display_df["refund_date"] = display_df["refund_date"].dt.strftime("%Y-%m-%d %H:%M")
+    
+    # Display the table
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        height=400,
+        column_config={
+            "refund_id": st.column_config.NumberColumn("Refund ID", format="%d", width="small"),
+            "invoice_no": st.column_config.TextColumn("Invoice", width="medium"),
+            "refund_date": st.column_config.TextColumn("Date (MM Time)", width="medium"),
+            "status": st.column_config.TextColumn("Status", width="small"),
+            "product_name": st.column_config.TextColumn("Product", width="large"),
+            "quantity": st.column_config.NumberColumn("Qty", format="%.2f", width="small"),
+            "unit_price": st.column_config.NumberColumn("Unit Price", format="%,.2f", width="medium"),
+            "report_net": st.column_config.NumberColumn("Net", format="%,.2f", width="medium"),
+            "report_tax": st.column_config.NumberColumn("Tax", format="%,.2f", width="medium"),
+            "report_total": st.column_config.NumberColumn("Total", format="%,.2f", width="medium"),
+            "cashier_name": st.column_config.TextColumn("Cashier", width="medium"),
+            "warehouse_name": st.column_config.TextColumn("Warehouse", width="medium"),
+        }
+    )
+    
+    # Export full report
+    st.markdown("#### 📥 Export Full Report")
+    
+    export_col1, export_col2, export_col3 = st.columns(3)
+    
+    with export_col1:
+        # Excel export
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+            display_df.to_excel(writer, index=False, sheet_name="Refund Report")
+            # Add summary sheet
+            summary_data = {
+                "Metric": ["Total Refunds", "Total Net", "Total Tax", "Total Amount"],
+                "Value": [total_refunds, total_net, total_tax, total_refund]
+            }
+            pd.DataFrame(summary_data).to_excel(writer, index=False, sheet_name="Summary")
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            "📗 Excel Report",
+            excel_buffer.getvalue(),
+            f"refund_report_{from_date}_to_{to_date}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="full_excel",
+            use_container_width=True
+        )
+    
+    with export_col2:
+        # CSV export
+        csv_file = display_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "📊 CSV Report",
+            csv_file,
+            f"refund_report_{from_date}_to_{to_date}.csv",
+            "text/csv",
+            key="full_csv",
+            use_container_width=True
+        )
+    
+    with export_col3:
+        # PDF export
+        full_pdf = create_refund_pdf(None, filtered.to_dict('records'), "full")
+        st.download_button(
+            "📄 PDF Report",
+            full_pdf,
+            f"refund_report_{from_date}_to_{to_date}.pdf",
+            "application/pdf",
+            key="full_pdf",
+            use_container_width=True
+        )
+
+else:
+    st.warning("No data available for the full report table.")
+
+# ==============================================================================
+# REFUND DETAILS (MOVED BELOW)
 # ==============================================================================
 
 st.divider()
 st.markdown("### 🔎 Refund Details")
+st.markdown("Select a specific refund to view detailed information")
 
 if filtered.empty:
     st.warning("No refund records match the selected filters.")
@@ -458,7 +621,7 @@ else:
         invoice_no = row["invoice_no"]
         status = row["status"]
         total = float(row["report_total"] or 0)
-        date_str = row["refund_date"].strftime("%Y-%m-%d") if pd.notna(row["refund_date"]) else ""
+        date_str = row["refund_date"].strftime("%Y-%m-%d %H:%M") if pd.notna(row["refund_date"]) else ""
         
         selector_options.append((
             refund_id,
@@ -499,7 +662,7 @@ else:
         detail_cols = st.columns(2)
         with detail_cols[0]:
             if pd.notna(selected_row["refund_date"]):
-                st.markdown("**Refund Date**")
+                st.markdown("**Refund Date (Myanmar Time)**")
                 st.write(selected_row["refund_date"].strftime("%Y-%m-%d %H:%M:%S"))
         with detail_cols[1]:
             st.markdown("**Reason**")
@@ -670,11 +833,11 @@ else:
             st.warning("No refund item records found.")
 
 # ==============================================================================
-# ANALYTICS SECTION
+# ANALYTICS SECTION (MOVED TO BOTTOM)
 # ==============================================================================
 
 st.divider()
-st.markdown("### 📊 Refund Analytics")
+st.markdown("### 📊 Refund Analytics (Charts & Graphs)")
 
 if not filtered.empty:
     analytics_tab1, analytics_tab2 = st.tabs(["📈 Trends", "🏆 Top Products"])
@@ -738,105 +901,4 @@ if not filtered.empty:
             )
             st.plotly_chart(fig, use_container_width=True)
         
-        st.subheader("👤 Top 5 Cashiers by Refund Value")
-        cashier_ranking = (
-            filtered.groupby("cashier_name")["report_total"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(5)
-        )
-        st.bar_chart(cashier_ranking)
-
-else:
-    st.warning("No data available for analytics with current filters.")
-
-# ==============================================================================
-# FULL REPORT TABLE
-# ==============================================================================
-
-st.divider()
-st.markdown("### 📋 Full Report Table")
-
-if not filtered.empty:
-    display_columns = [
-        "refund_id", "invoice_no", "refund_date", "status",
-        "product_name", "quantity", "unit_price", "report_net",
-        "report_tax", "report_total", "cashier_name", "warehouse_name"
-    ]
-    
-    display_df = filtered[display_columns].copy()
-    display_df["refund_date"] = display_df["refund_date"].dt.strftime("%Y-%m-%d %H:%M")
-    
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "refund_id": st.column_config.NumberColumn("Refund ID", format="%d"),
-            "invoice_no": st.column_config.TextColumn("Invoice"),
-            "refund_date": st.column_config.TextColumn("Date"),
-            "status": st.column_config.TextColumn("Status"),
-            "product_name": st.column_config.TextColumn("Product", width="large"),
-            "quantity": st.column_config.NumberColumn("Qty", format="%.2f"),
-            "unit_price": st.column_config.NumberColumn("Unit Price", format="%,.2f"),
-            "report_net": st.column_config.NumberColumn("Net", format="%,.2f"),
-            "report_tax": st.column_config.NumberColumn("Tax", format="%,.2f"),
-            "report_total": st.column_config.NumberColumn("Total", format="%,.2f"),
-            "cashier_name": st.column_config.TextColumn("Cashier"),
-            "warehouse_name": st.column_config.TextColumn("Warehouse"),
-        }
-    )
-    
-    # Export full report
-    st.markdown("#### 📥 Export Full Report")
-    
-    export_col1, export_col2, export_col3 = st.columns(3)
-    
-    with export_col1:
-        # Excel export
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-            display_df.to_excel(writer, index=False, sheet_name="Refund Report")
-            # Add summary sheet
-            summary_data = {
-                "Metric": ["Total Refunds", "Total Net", "Total Tax", "Total Amount"],
-                "Value": [total_refunds, total_net, total_tax, total_refund]
-            }
-            pd.DataFrame(summary_data).to_excel(writer, index=False, sheet_name="Summary")
-        excel_buffer.seek(0)
-        
-        st.download_button(
-            "📗 Excel Report",
-            excel_buffer.getvalue(),
-            f"refund_report_{from_date}_to_{to_date}.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="full_excel",
-            use_container_width=True
-        )
-    
-    with export_col2:
-        # CSV export
-        csv_file = display_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "📊 CSV Report",
-            csv_file,
-            f"refund_report_{from_date}_to_{to_date}.csv",
-            "text/csv",
-            key="full_csv",
-            use_container_width=True
-        )
-    
-    with export_col3:
-        # PDF export
-        full_pdf = create_refund_pdf(None, filtered.to_dict('records'), "full")
-        st.download_button(
-            "📄 PDF Report",
-            full_pdf,
-            f"refund_report_{from_date}_to_{to_date}.pdf",
-            "application/pdf",
-            key="full_pdf",
-            use_container_width=True
-        )
-
-else:
-    st.warning("No data available for the full report table.")
+        st.subheader("👤 Top 5 Cash
