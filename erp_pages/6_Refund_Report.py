@@ -8,7 +8,7 @@ Tax-aware Refund Reporting with Myanmar Time Zone
 
 import io
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo  # Python 3.9+
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.express as px
@@ -73,17 +73,6 @@ st.markdown("""
     font-size: 1.2em;
     margin: 5px 0 0 0;
 }
-.kpi-card {
-    background: white;
-    padding: 15px;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 10px;
-}
-.section-divider {
-    margin: 30px 0;
-    border-top: 2px solid #e0e0e0;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -96,9 +85,6 @@ user = require_login()
 # ==============================================================================
 # SESSION STATE
 # ==============================================================================
-
-if "selected_refund_id" not in st.session_state:
-    st.session_state.selected_refund_id = None
 
 if "report_from_date" not in st.session_state:
     st.session_state.report_from_date = get_myanmar_time().date().replace(day=1)
@@ -211,7 +197,7 @@ if df.empty:
     st.stop()
 
 # ==============================================================================
-# SIDEBAR FILTERS - DATE RANGE SELECTION
+# SIDEBAR FILTERS
 # ==============================================================================
 
 with st.sidebar:
@@ -510,7 +496,7 @@ def create_refund_pdf(header, items, report_type="detailed"):
     return buffer
 
 # ==============================================================================
-# FULL REPORT TABLE (MOVED TO TOP)
+# FULL REPORT TABLE (TOP SECTION)
 # ==============================================================================
 
 st.divider()
@@ -604,7 +590,7 @@ else:
     st.warning("No data available for the full report table.")
 
 # ==============================================================================
-# REFUND DETAILS (MOVED BELOW)
+# REFUND DETAILS (BOTTOM SECTION)
 # ==============================================================================
 
 st.divider()
@@ -833,14 +819,14 @@ else:
             st.warning("No refund item records found.")
 
 # ==============================================================================
-# ANALYTICS SECTION (MOVED TO BOTTOM)
+# ANALYTICS SECTION (CHARTS AND GRAPHS AT BOTTOM)
 # ==============================================================================
 
 st.divider()
 st.markdown("### 📊 Refund Analytics (Charts & Graphs)")
 
 if not filtered.empty:
-    analytics_tab1, analytics_tab2 = st.tabs(["📈 Trends", "🏆 Top Products"])
+    analytics_tab1, analytics_tab2 = st.tabs(["📈 Trends", "🏆 Rankings"])
     
     with analytics_tab1:
         daily_refunds = (
@@ -901,4 +887,14 @@ if not filtered.empty:
             )
             st.plotly_chart(fig, use_container_width=True)
         
-        st.subheader("👤 Top 5 Cash
+        st.subheader("👤 Top 5 Cashiers by Refund Value")
+        cashier_ranking = (
+            filtered.groupby("cashier_name")["report_total"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+        )
+        st.bar_chart(cashier_ranking)
+
+else:
+    st.warning("No data available for analytics with current filters.")
