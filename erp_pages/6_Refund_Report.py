@@ -2739,3 +2739,12 @@ st.caption(
     "Tax-aware • Date-range reporting • "
     "PDF / Excel / CSV / HTML"
 )
+# ==============================================================================
+# MAIN FUNCTION
+# ==============================================================================
+
+def main():
+    """Main function to run the refund report application"""
+    
+    # Page configuration
+    st.set_page_config
