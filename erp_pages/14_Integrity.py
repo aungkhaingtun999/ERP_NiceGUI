@@ -460,7 +460,7 @@ def check_fifo_vs_stock():
 
 
 # ============================================================
-# CHECK 5: SALES <-> SALE ITEMS
+# CHECK 5: SALES <-> SALE ITEMS (CORRECTED)
 # ============================================================
 
 def check_sales_vs_items(start_date, end_date):
@@ -468,6 +468,7 @@ def check_sales_vs_items(start_date, end_date):
         start_str = start_date.strftime('%Y-%m-%d')
         end_str = end_date.strftime('%Y-%m-%d')
         
+        # 1. Get all sales
         all_sales = execute_query(
             "sales",
             select="id,subtotal,total,created_at,sale_status"
@@ -486,6 +487,7 @@ def check_sales_vs_items(start_date, end_date):
                 "mismatches": []
             }
         
+        # 2. Filter completed sales within date range
         sales = []
         for sale in all_sales:
             try:
@@ -519,16 +521,24 @@ def check_sales_vs_items(start_date, end_date):
                 "mismatches": []
             }
         
+        # 3. Collect sale IDs and fetch sale_items in chunks (to avoid URL limit)
         sale_ids = [int(s["id"]) for s in sales if s.get("id") is not None]
         
-        sale_items = execute_query(
-            "sale_items",
-            select="sale_id,subtotal",
-            filters={"sale_id": sale_ids}
-        )
+        all_items = []
+        chunk_size = 500
+        for i in range(0, len(sale_ids), chunk_size):
+            chunk = sale_ids[i:i + chunk_size]
+            rows = execute_query(
+                "sale_items",
+                select="sale_id,total",          # ✅ FIXED: use 'total' column, not 'subtotal'
+                filters={"sale_id": chunk}
+            )
+            if rows:
+                all_items.extend(rows)
         
+        # 4. Sum items by sale
         items_by_sale = {}
-        for item in sale_items if sale_items else []:
+        for item in all_items:
             sale_id = item.get("sale_id")
             if sale_id is None:
                 continue
@@ -536,8 +546,9 @@ def check_sales_vs_items(start_date, end_date):
                 sale_id = int(sale_id)
             except (ValueError, TypeError):
                 continue
-            items_by_sale[sale_id] = items_by_sale.get(sale_id, 0.0) + money(item.get("subtotal"))
+            items_by_sale[sale_id] = items_by_sale.get(sale_id, 0.0) + money(item.get("total"))  # ✅ FIXED: use 'total'
         
+        # 5. Compare sales subtotal vs sum of sale_items
         mismatches = []
         total_sales = 0.0
         total_items = 0.0
@@ -567,8 +578,9 @@ def check_sales_vs_items(start_date, end_date):
         else:
             status = "MISMATCHED"
             status_type = "failed"
-            mismatch_ids = ", ".join(f"#{x['sale_id']}" for x in mismatches[:5])
-            suggestion = f"Subtotal mismatch for sale(s): {mismatch_ids}"
+            # Avoid nested f-string issues; build suggestion safely
+            ids = ", ".join(f"#{x['sale_id']}" for x in mismatches[:5])
+            suggestion = f"Subtotal mismatch for sale(s): {ids}"
         
         return {
             "name": "Sales ↔ Sale Items",
@@ -579,9 +591,7 @@ def check_sales_vs_items(start_date, end_date):
             "detail": f"Sales: {total_sales:,.2f} | Items: {total_items:,.2f}",
             "suggestion": suggestion,
             "period": f"{start_str} to {end_str}",
-            "mismatches": mismatches,
-            "total_sales_checked": len(sales),
-            "total_items_checked": len(sale_items) if sale_items else 0,
+            "mismatches": mismatches
         }
     
     except Exception as e:
@@ -592,10 +602,10 @@ def check_sales_vs_items(start_date, end_date):
             "status_type": "error",
             "passed": False,
             "detail": f"Error: {str(e)[:100]}",
-            "suggestion": "Verify sale_items table and sale_id relationships.",
-            "period": "Error retrieving period",
+            "suggestion": "Check sale_items table schema.",
+            "period": f"{start_str} to {end_str}",
             "mismatches": []
-        }
+            }
 
 
 # ============================================================
