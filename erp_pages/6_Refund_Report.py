@@ -294,14 +294,15 @@ def filter_by_date(
     if "refund_date" not in result.columns:
         return result.iloc[0:0].copy()
 
+    # Convert to datetime and remove timezone (make naive)
     result["refund_date"] = pd.to_datetime(
         result["refund_date"],
         errors="coerce",
-    )
-
-    start_datetime = pd.Timestamp(
-        from_date
-    )
+        utc=True,  # First convert to UTC
+    ).dt.tz_localize(None)  # Then remove timezone info
+    
+    # Create naive timestamps for comparison
+    start_datetime = pd.Timestamp(from_date)
     end_datetime = (
         pd.Timestamp(to_date)
         + pd.Timedelta(days=1)
