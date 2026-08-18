@@ -1,15 +1,18 @@
 # ==============================================================================
 # utils/thermal_receipt.py
-# ERP ENTERPRISE THERMAL RECEIPT ENGINE v5.1
-# PART 1/3
-# CONFIG + FORMAT + ITEM NORMALIZER
+# ERP ENTERPRISE THERMAL RECEIPT ENGINE v5.2
+# SALE ID SUPPORTED
+# CONFIG + FORMAT + ITEM NORMALIZER + RECEIPT BUILDER + PRINT ENGINE
 # ==============================================================================
 
 import json
 import os
 import tempfile
+
 import streamlit as st
+
 from utils.timezone import format_db_datetime
+
 
 # ==============================================================================
 # OPTIONAL PRINTER IMPORT
@@ -30,7 +33,6 @@ except ImportError:
     Network = None
 
 
-
 # ==============================================================================
 # SHOP CONFIG
 # ==============================================================================
@@ -43,7 +45,6 @@ def get_shop_info():
         "pages",
         "config.json"
     )
-
 
     default = {
 
@@ -78,7 +79,6 @@ def get_shop_info():
             9100
     }
 
-
     try:
 
         if os.path.exists(config_path):
@@ -96,15 +96,10 @@ def get_shop_info():
                     **user
                 }
 
-
     except Exception:
-
         pass
 
-
     return default
-
-
 
 
 # ==============================================================================
@@ -120,10 +115,9 @@ def get_printer():
         "windows"
     )
 
-
-    # --------------------------
+    # --------------------------------------------------------------------------
     # USB
-    # --------------------------
+    # --------------------------------------------------------------------------
 
     if mode == "usb":
 
@@ -135,7 +129,6 @@ def get_printer():
 
             return None
 
-
         try:
 
             vendor = shop.get(
@@ -146,7 +139,6 @@ def get_printer():
                 "printer_product_id"
             )
 
-
             if vendor and product:
 
                 return Usb(
@@ -154,17 +146,15 @@ def get_printer():
                     int(product, 16)
                 )
 
-
         except Exception as e:
 
             st.error(
                 f"USB ERROR : {e}"
             )
 
-
-    # --------------------------
+    # --------------------------------------------------------------------------
     # NETWORK
-    # --------------------------
+    # --------------------------------------------------------------------------
 
     elif mode == "network":
 
@@ -176,13 +166,11 @@ def get_printer():
 
             return None
 
-
         try:
 
             ip = shop.get(
                 "printer_ip"
             )
-
 
             port = int(
                 shop.get(
@@ -191,7 +179,6 @@ def get_printer():
                 )
             )
 
-
             if ip:
 
                 return Network(
@@ -199,17 +186,13 @@ def get_printer():
                     port
                 )
 
-
         except Exception as e:
 
             st.error(
                 f"NETWORK ERROR : {e}"
             )
 
-
     return None
-
-
 
 
 # ==============================================================================
@@ -221,18 +204,29 @@ def num(value):
     try:
 
         if value is None:
-
             return 0.0
-
 
         return float(value)
 
-
     except Exception:
-
         return 0.0
 
 
+# ==============================================================================
+# SAFE INTEGER CONVERTER
+# ==============================================================================
+
+def safe_int(value, default=0):
+
+    try:
+
+        if value is None:
+            return default
+
+        return int(float(value))
+
+    except Exception:
+        return default
 
 
 # ==============================================================================
@@ -246,9 +240,7 @@ def line(
 ):
 
     left = str(left)
-
     right = str(right)
-
 
     space = (
         width
@@ -258,7 +250,6 @@ def line(
         len(right)
     )
 
-
     return (
         left
         +
@@ -266,8 +257,6 @@ def line(
         +
         right
     )
-
-
 
 
 # ==============================================================================
@@ -281,35 +270,38 @@ def normalize_items(items):
 
     sale_items
     ----------------
+    id
+    sale_id
     product_id
     quantity
     unit_price
     total
 
-
     Output:
 
     {
         name,
+        product_id,
         quantity,
         unit_price,
         total
     }
-
     """
 
-
     result = []
-
 
     for item in items or []:
 
         if not item:
-
             continue
 
+        # ----------------------------------------------------------------------
         # PRODUCT NAME RESOLUTION
-        product = item.get("products")
+        # ----------------------------------------------------------------------
+
+        product = item.get(
+            "products"
+        )
 
         name = (
             item.get("product_name")
@@ -318,10 +310,20 @@ def normalize_items(items):
         )
 
         if not name and isinstance(product, dict):
-            name = product.get("name")
+
+            name = product.get(
+                "name"
+            )
 
         if not name:
-            name = f"Product #{item.get('product_id', '')}"
+
+            name = (
+                f"Product #{item.get('product_id', '')}"
+            )
+
+        # ----------------------------------------------------------------------
+        # QUANTITY
+        # ----------------------------------------------------------------------
 
         quantity = num(
             item.get(
@@ -333,6 +335,9 @@ def normalize_items(items):
             )
         )
 
+        # ----------------------------------------------------------------------
+        # UNIT PRICE
+        # ----------------------------------------------------------------------
 
         unit_price = num(
             item.get(
@@ -344,6 +349,9 @@ def normalize_items(items):
             )
         )
 
+        # ----------------------------------------------------------------------
+        # TOTAL
+        # ----------------------------------------------------------------------
 
         total = num(
             item.get(
@@ -355,8 +363,9 @@ def normalize_items(items):
             )
         )
 
-
-        # fallback calculation
+        # ----------------------------------------------------------------------
+        # FALLBACK CALCULATION
+        # ----------------------------------------------------------------------
 
         if total == 0:
 
@@ -366,12 +375,24 @@ def normalize_items(items):
                 unit_price
             )
 
-
         result.append(
 
             {
 
+                "id":
+                    item.get(
+                        "id"
+                    ),
+
+                "sale_id":
+                    item.get(
+                        "sale_id"
+                    ),
+
                 "name":
+                    name,
+
+                "product_name":
                     name,
 
                 "product_id":
@@ -380,18 +401,18 @@ def normalize_items(items):
                     ),
 
                 "quantity":
-                    int(quantity),
+                    safe_int(
+                        quantity
+                    ),
 
                 "unit_price":
                     unit_price,
 
                 "total":
                     total
-
             }
 
         )
-
 
     return result
 
@@ -400,6 +421,7 @@ def normalize_items(items):
 # RECEIPT DATA BUILDER
 # ERP STANDARD RECEIPT FORMAT
 # FIXED v5.2
+# SALE ID INCLUDED
 # ==============================================================================
 
 def build_receipt_data(
@@ -407,31 +429,31 @@ def build_receipt_data(
     items
 ):
 
-
     try:
 
-
         sale = sale or {}
-
         items = items or []
 
+        # ======================================================================
+        # SALE ID
+        # ======================================================================
+
+        sale_id = (
+            sale.get("sale_id")
+            or
+            sale.get("id")
+        )
+
+        # ======================================================================
+        # NORMALIZE ITEMS
+        # ======================================================================
 
         clean_items = []
 
-
-
-        # ==========================================================
-        # NORMALIZE ITEMS
-        # ==========================================================
-
         for item in items:
 
-
             if not item:
-
                 continue
-
-
 
             quantity = num(
 
@@ -445,8 +467,6 @@ def build_receipt_data(
 
             )
 
-
-
             unit_price = num(
 
                 item.get(
@@ -458,8 +478,6 @@ def build_receipt_data(
                 )
 
             )
-
-
 
             total = num(
 
@@ -473,31 +491,21 @@ def build_receipt_data(
 
             )
 
-
-
             if total == 0:
 
-
                 total = (
-
                     quantity
-
                     *
-
                     unit_price
-
                 )
 
-
-
-            # -----------------------------
+            # ------------------------------------------------------------------
             # PRODUCT NAME
-            # -----------------------------
+            # ------------------------------------------------------------------
 
             product = item.get(
                 "products"
             )
-
 
             name = (
 
@@ -513,71 +521,65 @@ def build_receipt_data(
 
             )
 
-
-            if not name and isinstance(product, dict):
+            if not name and isinstance(
+                product,
+                dict
+            ):
 
                 name = product.get(
                     "name"
                 )
 
-
-
             if not name:
 
                 name = (
-
-                    f"Product #{item.get('product_id','')}"
-
+                    f"Product #{item.get('product_id', '')}"
                 )
-
-
 
             clean_items.append(
 
                 {
 
+                    "id":
+                        item.get(
+                            "id"
+                        ),
+
+                    "sale_id":
+                        item.get(
+                            "sale_id",
+                            sale_id
+                        ),
+
                     "name":
-
                         name,
-
 
                     "product_name":
-
                         name,
 
-
                     "product_id":
-
                         item.get(
                             "product_id"
                         ),
 
-
                     "quantity":
-
-                        int(quantity),
-
+                        safe_int(
+                            quantity
+                        ),
 
                     "unit_price":
-
                         unit_price,
 
-
                     "total":
-
                         total
 
                 }
 
             )
 
-
-
-
-
-        # ==========================================================
+        # ======================================================================
         # TAX RATE AUTO RECOVER
-        # ==========================================================
+        # ======================================================================
 
         subtotal = num(
 
@@ -588,7 +590,6 @@ def build_receipt_data(
 
         )
 
-
         tax_amount = num(
 
             sale.get(
@@ -597,11 +598,9 @@ def build_receipt_data(
                     "tax_amount",
                     0
                 )
-
             )
 
         )
-
 
         tax_rate = num(
 
@@ -612,173 +611,132 @@ def build_receipt_data(
 
         )
 
-
-
-        if tax_rate == 0 and subtotal > 0 and tax_amount > 0:
-
+        if (
+            tax_rate == 0
+            and
+            subtotal > 0
+            and
+            tax_amount > 0
+        ):
 
             tax_rate = round(
 
-                (tax_amount / subtotal) * 100,
+                (
+                    tax_amount
+                    /
+                    subtotal
+                )
+                *
+                100,
 
                 2
 
             )
 
-
-
-
-
-        # ==========================================================
+        # ======================================================================
         # FINAL RECEIPT OBJECT
-        # ==========================================================
-
+        # ======================================================================
 
         receipt = {
 
+            # ------------------------------------------------------------------
+            # SALE IDENTIFICATION
+            # ------------------------------------------------------------------
+
+            "sale_id":
+                sale_id,
 
             "invoice_no":
-
                 sale.get(
-
                     "invoice_no",
-
                     "-"
-
                 ),
 
+            # ------------------------------------------------------------------
+            # DATE
+            # ------------------------------------------------------------------
 
+            "date":
+                format_db_datetime(
+                    sale.get("created_at")
+                    or
+                    sale.get("date")
+                ),
 
-            "date": format_db_datetime(
-             sale.get("created_at")
-             or
-             sale.get("date")
-),
-
+            # ------------------------------------------------------------------
+            # CASHIER
+            # ------------------------------------------------------------------
 
             "cashier":
-
                 sale.get(
-
                     "cashier",
-
                     "Admin"
-
                 ),
 
-
+            # ------------------------------------------------------------------
+            # ITEMS
+            # ------------------------------------------------------------------
 
             "items":
-
                 clean_items,
 
-
+            # ------------------------------------------------------------------
+            # FINANCIAL DATA
+            # ------------------------------------------------------------------
 
             "subtotal":
-
                 subtotal,
 
-
-
             "discount":
-
                 num(
-
                     sale.get(
-
                         "discount",
-
                         0
-
                     )
-
                 ),
-
-
 
             "tax_rate":
-
                 tax_rate,
 
-
-
             "tax_amount":
-
                 tax_amount,
 
-
-
             "grand_total":
-
                 num(
-
                     sale.get(
-
                         "total",
-
                         0
-
                     )
-
                 ),
-
-
 
             "paid":
-
                 num(
-
                     sale.get(
-
                         "paid_amount",
-
                         0
-
                     )
-
                 ),
 
-
-
             "change":
-
                 num(
-
                     sale.get(
-
                         "change_amount",
-
                         0
-
                     )
-
                 )
 
         }
 
-
-
         return receipt
-
-
-
-
 
     except Exception as e:
 
-
         print(
-
             "BUILD RECEIPT ERROR:",
-
             e
-
         )
 
-
         return {}
-
-
 
 
 # ==============================================================================
@@ -789,9 +747,11 @@ def create_receipt_text(data):
 
     shop = get_shop_info()
 
-
     text = ""
 
+    # ==========================================================================
+    # SHOP HEADER
+    # ==========================================================================
 
     text += (
         shop.get(
@@ -802,7 +762,6 @@ def create_receipt_text(data):
         "\n"
     )
 
-
     text += (
         shop.get(
             "address",
@@ -811,7 +770,6 @@ def create_receipt_text(data):
         +
         "\n"
     )
-
 
     text += (
         "Tel : "
@@ -824,9 +782,15 @@ def create_receipt_text(data):
         "\n"
     )
 
+    text += (
+        "-" * 32
+        +
+        "\n"
+    )
 
-    text += "-" * 32 + "\n"
-
+    # ==========================================================================
+    # RECEIPT / SALE INFORMATION
+    # ==========================================================================
 
     text += (
         "Receipt : "
@@ -841,6 +805,29 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # --------------------------------------------------------------------------
+    # SALE ID
+    # --------------------------------------------------------------------------
+
+    sale_id = data.get(
+        "sale_id"
+    )
+
+    if sale_id is not None and str(
+        sale_id
+    ).strip():
+
+        text += (
+            "Sale ID : "
+            +
+            str(sale_id)
+            +
+            "\n"
+        )
+
+    # --------------------------------------------------------------------------
+    # DATE
+    # --------------------------------------------------------------------------
 
     text += (
         "Date : "
@@ -855,6 +842,9 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # --------------------------------------------------------------------------
+    # CASHIER
+    # --------------------------------------------------------------------------
 
     text += (
         "Cashier : "
@@ -869,9 +859,15 @@ def create_receipt_text(data):
         "\n"
     )
 
+    text += (
+        "-" * 32
+        +
+        "\n"
+    )
 
-    text += "-" * 32 + "\n"
-
+    # ==========================================================================
+    # ITEMS HEADER
+    # ==========================================================================
 
     text += (
         line(
@@ -883,6 +879,9 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # ==========================================================================
+    # ITEMS
+    # ==========================================================================
 
     for item in data.get(
         "items",
@@ -890,31 +889,52 @@ def create_receipt_text(data):
     ):
 
         name = (
+
             item.get("name")
-            or item.get("product_name")
-            or item.get("product")
-            or f"Product #{item.get('product_id', '')}"
+            or
+            item.get("product_name")
+            or
+            item.get("product")
+            or
+            f"Product #{item.get('product_id', '')}"
+
         )
 
-
-        qty = item.get("quantity")
+        qty = item.get(
+            "quantity"
+        )
 
         if qty is None:
-            qty = item.get("qty", 0)
 
-        qty = num(qty)
+            qty = item.get(
+                "qty",
+                0
+            )
 
+        qty = num(
+            qty
+        )
 
-        price = item.get("unit_price")
+        price = item.get(
+            "unit_price"
+        )
 
         if price is None:
-            price = item.get("selling_price")
+
+            price = item.get(
+                "selling_price"
+            )
 
         if price is None:
-            price = item.get("price", 0)
 
-        price = num(price)
+            price = item.get(
+                "price",
+                0
+            )
 
+        price = num(
+            price
+        )
 
         amount = num(
             item.get(
@@ -923,6 +943,9 @@ def create_receipt_text(data):
             )
         )
 
+        # ----------------------------------------------------------------------
+        # PRODUCT NAME
+        # ----------------------------------------------------------------------
 
         text += (
             str(name)[:32]
@@ -930,10 +953,13 @@ def create_receipt_text(data):
             "\n"
         )
 
+        # ----------------------------------------------------------------------
+        # QTY x PRICE + AMOUNT
+        # ----------------------------------------------------------------------
 
         text += (
             line(
-                f"{int(qty)} x {price:,.0f}",
+                f"{safe_int(qty)} x {price:,.0f}",
                 f"{amount:,.0f}",
                 32
             )
@@ -941,9 +967,19 @@ def create_receipt_text(data):
             "\n"
         )
 
+    # ==========================================================================
+    # TOTALS
+    # ==========================================================================
 
-    text += "-" * 32 + "\n"
+    text += (
+        "-" * 32
+        +
+        "\n"
+    )
 
+    # --------------------------------------------------------------------------
+    # SUBTOTAL
+    # --------------------------------------------------------------------------
 
     text += (
         line(
@@ -955,6 +991,32 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # --------------------------------------------------------------------------
+    # DISCOUNT
+    # --------------------------------------------------------------------------
+
+    discount = num(
+        data.get(
+            "discount",
+            0
+        )
+    )
+
+    if discount != 0:
+
+        text += (
+            line(
+                "Discount",
+                f"{discount:,.0f}",
+                32
+            )
+            +
+            "\n"
+        )
+
+    # --------------------------------------------------------------------------
+    # TAX
+    # --------------------------------------------------------------------------
 
     tax_rate = num(
         data.get(
@@ -962,13 +1024,11 @@ def create_receipt_text(data):
         )
     )
 
-
     tax_amount = num(
         data.get(
             "tax_amount"
         )
     )
-
 
     text += (
         line(
@@ -980,6 +1040,10 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # --------------------------------------------------------------------------
+    # GRAND TOTAL
+    # --------------------------------------------------------------------------
+
     text += (
         line(
             "TOTAL",
@@ -990,6 +1054,9 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # --------------------------------------------------------------------------
+    # PAID
+    # --------------------------------------------------------------------------
 
     text += (
         line(
@@ -1001,6 +1068,9 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # --------------------------------------------------------------------------
+    # CHANGE
+    # --------------------------------------------------------------------------
 
     text += (
         line(
@@ -1012,9 +1082,15 @@ def create_receipt_text(data):
         "\n"
     )
 
+    # ==========================================================================
+    # FOOTER
+    # ==========================================================================
 
-    text += "-" * 32 + "\n"
-
+    text += (
+        "-" * 32
+        +
+        "\n"
+    )
 
     text += (
         shop.get(
@@ -1025,10 +1101,7 @@ def create_receipt_text(data):
         "\n\n\n"
     )
 
-
     return text
-
-
 
 
 # ==============================================================================
@@ -1047,7 +1120,6 @@ def print_thermal(data):
 
             return False
 
-
         shop = get_shop_info()
 
         mode = shop.get(
@@ -1055,24 +1127,21 @@ def print_thermal(data):
             "windows"
         )
 
-
-        # ==================================================
+        # ==========================================================================
         # CREATE RECEIPT TEXT
-        # ==================================================
+        # ==========================================================================
 
         receipt_text = create_receipt_text(
             data
         )
 
-
-        # ==================================================
+        # ==========================================================================
         # WINDOWS PRINT
-        # ==================================================
+        # ==========================================================================
 
         if mode == "windows":
 
             temp_path = None
-
 
             try:
 
@@ -1088,17 +1157,13 @@ def print_thermal(data):
 
                 )
 
-
                 temp.write(
                     receipt_text
                 )
 
-
                 temp.close()
 
-
                 temp_path = temp.name
-
 
                 if win32api:
 
@@ -1118,33 +1183,25 @@ def print_thermal(data):
 
                     )
 
-
                     return True
-
 
                 else:
 
                     st.warning(
-
                         "pywin32 not installed. Receipt text created only."
-
                     )
 
-
                     return True
-
 
             finally:
 
                 pass
 
-
-        # ==================================================
+        # ==========================================================================
         # ESC/POS USB / NETWORK
-        # ==================================================
+        # ==========================================================================
 
         printer = get_printer()
-
 
         if printer:
 
@@ -1152,43 +1209,29 @@ def print_thermal(data):
                 receipt_text
             )
 
-
             try:
 
                 printer.cut()
-
 
             except Exception:
 
                 pass
 
-
             return True
 
-
         st.warning(
-
             "Printer not connected"
-
         )
 
-
         return False
-
 
     except Exception as e:
 
         st.error(
-
             f"THERMAL PRINT ERROR : {e}"
-
         )
 
-
         return False
-
-
-
 
 
 # ==============================================================================
@@ -1203,28 +1246,44 @@ def reprint_receipt(
     try:
 
         receipt = build_receipt_data(
-
             sale,
-
             items
-
         )
-
 
         return print_thermal(
-
             receipt
-
         )
-
 
     except Exception as e:
 
         st.error(
-
             f"REPRINT ERROR : {e}"
-
         )
 
-
         return False
+
+
+# ==============================================================================
+# OPTIONAL: GET RECEIPT SALE ID
+# ==============================================================================
+
+def get_receipt_sale_id(
+    sale
+):
+
+    """
+    Safely resolve Sale ID from a sale dictionary.
+
+    Priority:
+        1. sale_id
+        2. id
+    """
+
+    if not sale:
+        return None
+
+    return (
+        sale.get("sale_id")
+        or
+        sale.get("id")
+    )
