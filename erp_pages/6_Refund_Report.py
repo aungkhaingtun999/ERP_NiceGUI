@@ -178,7 +178,8 @@ def normalize_report_dataframe(df):
     df["refund_date"] = pd.to_datetime(
         df["refund_date"],
         errors="coerce",
-    )
+        utc=True,  # Convert to UTC for consistency
+    ).dt.tz_localize(None)  # Remove timezone info for naive datetime
 
     # --------------------------------------------------------------------------
     # Approved at
@@ -494,27 +495,17 @@ def create_refund_report_pdf(
     actual_net = summary["actual_net"]
     actual_tax = summary["actual_tax"]
     actual_total = summary["actual_total"]
-    rejected_total = summary[
-        "rejected_total"
-    ]
-    pending_total = summary[
-        "pending_total"
-    ]
-    actual_count = summary[
-        "actual_count"
-    ]
-    rejected_count = summary[
-        "rejected_count"
-    ]
-    pending_count = summary[
-        "pending_count"
-    ]
+    rejected_total = summary["rejected_total"]
+    pending_total = summary["pending_total"]
+    actual_count = summary["actual_count"]
+    rejected_count = summary["rejected_count"]
+    pending_count = summary["pending_count"]
 
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=40,
-        rightMargin=40,
+        leftMargin=30,  # Reduce margin for more space
+        rightMargin=30,
         topMargin=48,
         bottomMargin=40,
     )
@@ -575,12 +566,8 @@ def create_refund_report_pdf(
     period_text = (
         "Report Period: <b>{}</b> to <b>{}</b>"
         .format(
-            report_from.strftime(
-                "%Y-%m-%d"
-            ),
-            report_to.strftime(
-                "%Y-%m-%d"
-            ),
+            report_from.strftime("%Y-%m-%d"),
+            report_to.strftime("%Y-%m-%d"),
         )
     )
     content.append(
@@ -636,9 +623,7 @@ def create_refund_report_pdf(
                     "BACKGROUND",
                     (0, 0),
                     (-1, 0),
-                    colors.HexColor(
-                        "#343A40"
-                    ),
+                    colors.HexColor("#343A40"),
                 ),
                 (
                     "TEXTCOLOR",
@@ -650,9 +635,7 @@ def create_refund_report_pdf(
                     "BACKGROUND",
                     (0, 2),
                     (-1, 2),
-                    colors.HexColor(
-                        "#E9ECEF"
-                    ),
+                    colors.HexColor("#E9ECEF"),
                 ),
                 (
                     "FONTNAME",
@@ -701,9 +684,7 @@ def create_refund_report_pdf(
                     (0, 0),
                     (-1, -1),
                     0.4,
-                    colors.HexColor(
-                        "#BFC3C7"
-                    ),
+                    colors.HexColor("#BFC3C7"),
                 ),
                 (
                     "TOPPADDING",
@@ -720,12 +701,8 @@ def create_refund_report_pdf(
             ]
         )
     )
-    content.append(
-        summary_table
-    )
-    content.append(
-        Spacer(1, 16)
-    )
+    content.append(summary_table)
+    content.append(Spacer(1, 16))
 
     # --------------------------------------------------------------------------
     # ACTUAL REFUND REGISTER
@@ -742,9 +719,22 @@ def create_refund_report_pdf(
             small_style,
         )
     )
-    content.append(
-        Spacer(1, 8)
-    )
+    content.append(Spacer(1, 8))
+
+    # Define column widths for A4 (595 points width - 60 points margins = 535 points)
+    # ID: 30, Invoice: 65, Date: 60, Status: 50, Product: 100, Qty: 30, Net: 60, Tax: 50, Total: 65
+    # Total: 510 points (leaves some buffer)
+    col_widths = [
+        30,   # ID
+        65,   # Invoice
+        60,   # Date
+        50,   # Status
+        100,  # Product
+        30,   # Qty
+        60,   # Net
+        50,   # Tax
+        65,   # Total
+    ]
 
     table_data = [
         [
@@ -759,34 +749,28 @@ def create_refund_report_pdf(
             "Total",
         ]
     ]
+    
     for _, row in actual_df.iterrows():
-        refund_date = row[
-            "refund_date"
-        ]
+        refund_date = row["refund_date"]
         if pd.notna(refund_date):
-            date_text = (
-                refund_date.strftime(
-                    "%Y-%m-%d"
-                )
-            )
+            # Use shorter date format
+            date_text = refund_date.strftime("%Y-%m-%d")
         else:
             date_text = ""
+        
+        # Truncate long text fields
+        refund_id = safe_text(row["refund_id"])[:10]  # Limit ID length
+        invoice_no = safe_text(row["invoice_no"])[:15]  # Limit invoice length
+        product_name = safe_text(row["product_name"])[:25]  # Limit product name
+        
         table_data.append(
             [
-                safe_text(
-                    row["refund_id"]
-                ),
-                safe_text(
-                    row["invoice_no"]
-                ),
+                refund_id,
+                invoice_no,
                 date_text,
-                safe_text(
-                    row["status"]
-                ),
-                safe_text(
-                    row["product_name"]
-                ),
-                f"{safe_float(row['quantity']):,.2f}",
+                safe_text(row["status"]),
+                product_name,
+                f"{safe_float(row['quantity']):,.0f}",  # No decimal for qty
                 f"{safe_float(row['report_net']):,.2f}",
                 f"{safe_float(row['report_tax']):,.2f}",
                 f"{safe_float(row['report_total']):,.2f}",
@@ -810,18 +794,9 @@ def create_refund_report_pdf(
     detail_table = Table(
         table_data,
         repeatRows=1,
-        colWidths=[
-            35,
-            60,
-            58,
-            55,
-            105,
-            35,
-            58,
-            48,
-            61,
-        ],
+        colWidths=col_widths,
     )
+    
     detail_table.setStyle(
         TableStyle(
             [
@@ -829,9 +804,7 @@ def create_refund_report_pdf(
                     "BACKGROUND",
                     (0, 0),
                     (-1, 0),
-                    colors.HexColor(
-                        "#343A40"
-                    ),
+                    colors.HexColor("#343A40"),
                 ),
                 (
                     "TEXTCOLOR",
@@ -861,15 +834,13 @@ def create_refund_report_pdf(
                     "FONTSIZE",
                     (0, 1),
                     (-1, -1),
-                    6.8,
+                    6.5,  # Slightly smaller font
                 ),
                 (
                     "BACKGROUND",
                     (0, -1),
                     (-1, -1),
-                    colors.HexColor(
-                        "#E9ECEF"
-                    ),
+                    colors.HexColor("#E9ECEF"),
                 ),
                 (
                     "FONTNAME",
@@ -882,27 +853,25 @@ def create_refund_report_pdf(
                     (0, 0),
                     (-1, -1),
                     0.35,
-                    colors.HexColor(
-                        "#BFC3C7"
-                    ),
+                    colors.HexColor("#BFC3C7"),
                 ),
                 (
                     "ALIGN",
                     (0, 0),
-                    (-1, -1),
+                    (3, -1),  # Align first 4 columns left
                     "LEFT",
                 ),
                 (
                     "ALIGN",
-                    (5, 1),
-                    (-1, -1),
-                    "RIGHT",
+                    (4, 0),
+                    (4, -1),  # Product column left
+                    "LEFT",
                 ),
                 (
                     "ALIGN",
                     (5, 0),
-                    (-1, 0),
-                    "CENTER",
+                    (-1, -1),  # Numeric columns right
+                    "RIGHT",
                 ),
                 (
                     "VALIGN",
@@ -914,34 +883,54 @@ def create_refund_report_pdf(
                     "TOPPADDING",
                     (0, 0),
                     (-1, -1),
-                    5,
+                    4,  # Less padding
                 ),
                 (
                     "BOTTOMPADDING",
                     (0, 0),
                     (-1, -1),
-                    5,
+                    4,
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3,  # Less horizontal padding
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3,
                 ),
             ]
         )
     )
-    content.append(
-        detail_table
-    )
+    content.append(detail_table)
 
     # --------------------------------------------------------------------------
     # REJECTED SECTION
     # --------------------------------------------------------------------------
     if not rejected_df.empty:
-        content.append(
-            Spacer(1, 18)
-        )
+        content.append(Spacer(1, 18))
         content.append(
             Paragraph(
                 "REJECTED REFUNDS — SEPARATE",
                 section_style,
             )
         )
+        
+        # Column widths for rejected table
+        rejected_col_widths = [
+            40,   # ID
+            70,   # Invoice
+            60,   # Date
+            60,   # Status
+            120,  # Product
+            45,   # Qty
+            70,   # Amount
+        ]
+        
         rejected_table_data = [
             [
                 "ID",
@@ -953,36 +942,31 @@ def create_refund_report_pdf(
                 "Amount",
             ]
         ]
+        
         for _, row in rejected_df.iterrows():
-            refund_date = row[
-                "refund_date"
-            ]
+            refund_date = row["refund_date"]
             date_text = (
-                refund_date.strftime(
-                    "%Y-%m-%d"
-                )
-                if pd.notna(
-                    refund_date
-                )
+                refund_date.strftime("%Y-%m-%d")
+                if pd.notna(refund_date)
                 else ""
             )
+            
+            refund_id = safe_text(row["refund_id"])[:10]
+            invoice_no = safe_text(row["invoice_no"])[:15]
+            product_name = safe_text(row["product_name"])[:30]
+            
             rejected_table_data.append(
                 [
-                    safe_text(
-                        row["refund_id"]
-                    ),
-                    safe_text(
-                        row["invoice_no"]
-                    ),
+                    refund_id,
+                    invoice_no,
                     date_text,
                     "REJECTED",
-                    safe_text(
-                        row["product_name"]
-                    ),
-                    f"{safe_float(row['quantity']):,.2f}",
+                    product_name,
+                    f"{safe_float(row['quantity']):,.0f}",
                     f"{safe_float(row['report_total']):,.2f}",
                 ]
             )
+            
         rejected_table_data.append(
             [
                 "",
@@ -998,16 +982,9 @@ def create_refund_report_pdf(
         rejected_table = Table(
             rejected_table_data,
             repeatRows=1,
-            colWidths=[
-                45,
-                75,
-                65,
-                65,
-                130,
-                45,
-                80,
-            ],
+            colWidths=rejected_col_widths,
         )
+        
         rejected_table.setStyle(
             TableStyle(
                 [
@@ -1015,9 +992,7 @@ def create_refund_report_pdf(
                         "BACKGROUND",
                         (0, 0),
                         (-1, 0),
-                        colors.HexColor(
-                            "#842029"
-                        ),
+                        colors.HexColor("#842029"),
                     ),
                     (
                         "TEXTCOLOR",
@@ -1041,9 +1016,7 @@ def create_refund_report_pdf(
                         "BACKGROUND",
                         (0, -1),
                         (-1, -1),
-                        colors.HexColor(
-                            "#F8D7DA"
-                        ),
+                        colors.HexColor("#F8D7DA"),
                     ),
                     (
                         "FONTNAME",
@@ -1056,13 +1029,17 @@ def create_refund_report_pdf(
                         (0, 0),
                         (-1, -1),
                         0.35,
-                        colors.HexColor(
-                            "#BFC3C7"
-                        ),
+                        colors.HexColor("#BFC3C7"),
                     ),
                     (
                         "ALIGN",
-                        (5, 1),
+                        (0, 0),
+                        (4, -1),
+                        "LEFT",
+                    ),
+                    (
+                        "ALIGN",
+                        (5, 0),
                         (-1, -1),
                         "RIGHT",
                     ),
@@ -1076,34 +1053,54 @@ def create_refund_report_pdf(
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        4,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        4,
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        3,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        3,
                     ),
                 ]
             )
         )
-        content.append(
-            rejected_table
-        )
+        content.append(rejected_table)
 
     # --------------------------------------------------------------------------
     # PENDING SECTION
     # --------------------------------------------------------------------------
     if not pending_df.empty:
-        content.append(
-            Spacer(1, 18)
-        )
+        content.append(Spacer(1, 18))
         content.append(
             Paragraph(
                 "PENDING REFUNDS — SEPARATE",
                 section_style,
             )
         )
+        
+        # Column widths for pending table (same as rejected)
+        pending_col_widths = [
+            40,   # ID
+            70,   # Invoice
+            60,   # Date
+            60,   # Status
+            120,  # Product
+            45,   # Qty
+            70,   # Amount
+        ]
+        
         pending_table_data = [
             [
                 "ID",
@@ -1115,36 +1112,31 @@ def create_refund_report_pdf(
                 "Amount",
             ]
         ]
+        
         for _, row in pending_df.iterrows():
-            refund_date = row[
-                "refund_date"
-            ]
+            refund_date = row["refund_date"]
             date_text = (
-                refund_date.strftime(
-                    "%Y-%m-%d"
-                )
-                if pd.notna(
-                    refund_date
-                )
+                refund_date.strftime("%Y-%m-%d")
+                if pd.notna(refund_date)
                 else ""
             )
+            
+            refund_id = safe_text(row["refund_id"])[:10]
+            invoice_no = safe_text(row["invoice_no"])[:15]
+            product_name = safe_text(row["product_name"])[:30]
+            
             pending_table_data.append(
                 [
-                    safe_text(
-                        row["refund_id"]
-                    ),
-                    safe_text(
-                        row["invoice_no"]
-                    ),
+                    refund_id,
+                    invoice_no,
                     date_text,
                     "PENDING",
-                    safe_text(
-                        row["product_name"]
-                    ),
-                    f"{safe_float(row['quantity']):,.2f}",
+                    product_name,
+                    f"{safe_float(row['quantity']):,.0f}",
                     f"{safe_float(row['report_total']):,.2f}",
                 ]
             )
+            
         pending_table_data.append(
             [
                 "",
@@ -1160,16 +1152,9 @@ def create_refund_report_pdf(
         pending_table = Table(
             pending_table_data,
             repeatRows=1,
-            colWidths=[
-                45,
-                75,
-                65,
-                65,
-                130,
-                45,
-                80,
-            ],
+            colWidths=pending_col_widths,
         )
+        
         pending_table.setStyle(
             TableStyle(
                 [
@@ -1177,9 +1162,7 @@ def create_refund_report_pdf(
                         "BACKGROUND",
                         (0, 0),
                         (-1, 0),
-                        colors.HexColor(
-                            "#856404"
-                        ),
+                        colors.HexColor("#856404"),
                     ),
                     (
                         "TEXTCOLOR",
@@ -1203,9 +1186,7 @@ def create_refund_report_pdf(
                         "BACKGROUND",
                         (0, -1),
                         (-1, -1),
-                        colors.HexColor(
-                            "#FFF3CD"
-                        ),
+                        colors.HexColor("#FFF3CD"),
                     ),
                     (
                         "FONTNAME",
@@ -1218,13 +1199,17 @@ def create_refund_report_pdf(
                         (0, 0),
                         (-1, -1),
                         0.35,
-                        colors.HexColor(
-                            "#BFC3C7"
-                        ),
+                        colors.HexColor("#BFC3C7"),
                     ),
                     (
                         "ALIGN",
-                        (5, 1),
+                        (0, 0),
+                        (4, -1),
+                        "LEFT",
+                    ),
+                    (
+                        "ALIGN",
+                        (5, 0),
                         (-1, -1),
                         "RIGHT",
                     ),
@@ -1238,27 +1223,35 @@ def create_refund_report_pdf(
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        4,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        4,
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        3,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        3,
                     ),
                 ]
             )
         )
-        content.append(
-            pending_table
-        )
+        content.append(pending_table)
 
     # --------------------------------------------------------------------------
     # ACCOUNTING RULE
     # --------------------------------------------------------------------------
-    content.append(
-        Spacer(1, 14)
-    )
+    content.append(Spacer(1, 14))
     content.append(
         Paragraph(
             "<b>Accounting Rule:</b> "
@@ -1296,21 +1289,11 @@ def create_html_report(
     actual_net = summary["actual_net"]
     actual_tax = summary["actual_tax"]
     actual_total = summary["actual_total"]
-    rejected_total = summary[
-        "rejected_total"
-    ]
-    pending_total = summary[
-        "pending_total"
-    ]
-    actual_count = summary[
-        "actual_count"
-    ]
-    rejected_count = summary[
-        "rejected_count"
-    ]
-    pending_count = summary[
-        "pending_count"
-    ]
+    rejected_total = summary["rejected_total"]
+    pending_total = summary["pending_total"]
+    actual_count = summary["actual_count"]
+    rejected_count = summary["rejected_count"]
+    pending_count = summary["pending_count"]
 
     # --------------------------------------------------------------------------
     # ACTUAL REFUND TABLE ONLY
@@ -1319,78 +1302,54 @@ def create_html_report(
     if not html_df.empty:
         html_df["Refund Date"] = (
             html_df["refund_date"]
-            .dt.strftime(
-                "%Y-%m-%d %H:%M"
-            )
+            .dt.strftime("%Y-%m-%d %H:%M")
         )
 
     display_df = pd.DataFrame(
         {
             "Refund ID": html_df.get(
                 "refund_id",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
             "Invoice": html_df.get(
                 "invoice_no",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
             "Refund Date": html_df.get(
                 "Refund Date",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
             "Status": html_df.get(
                 "status",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
             "Product": html_df.get(
                 "product_name",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
             "Qty": html_df.get(
                 "quantity",
-                pd.Series(
-                    dtype="float"
-                ),
+                pd.Series(dtype="float"),
             ),
             "Refund Net": html_df.get(
                 "report_net",
-                pd.Series(
-                    dtype="float"
-                ),
+                pd.Series(dtype="float"),
             ),
             "Refund Tax": html_df.get(
                 "report_tax",
-                pd.Series(
-                    dtype="float"
-                ),
+                pd.Series(dtype="float"),
             ),
             "Refund Total": html_df.get(
                 "report_total",
-                pd.Series(
-                    dtype="float"
-                ),
+                pd.Series(dtype="float"),
             ),
             "Cashier": html_df.get(
                 "cashier_name",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
             "Warehouse": html_df.get(
                 "warehouse_name",
-                pd.Series(
-                    dtype="object"
-                ),
+                pd.Series(dtype="object"),
             ),
         }
     )
@@ -1405,24 +1364,12 @@ def create_html_report(
     # HTML
     # --------------------------------------------------------------------------
     html_parts = []
-    html_parts.append(
-        "<!DOCTYPE html>"
-    )
-    html_parts.append(
-        "<html>"
-    )
-    html_parts.append(
-        "<head>"
-    )
-    html_parts.append(
-        '<meta charset="utf-8">'
-    )
-    html_parts.append(
-        "<title>Refund Report</title>"
-    )
-    html_parts.append(
-        "<style>"
-    )
+    html_parts.append("<!DOCTYPE html>")
+    html_parts.append("<html>")
+    html_parts.append("<head>")
+    html_parts.append('<meta charset="utf-8">')
+    html_parts.append("<title>Refund Report</title>")
+    html_parts.append("<style>")
     html_parts.append(
         "body { font-family: Arial, sans-serif; margin: 40px; color: #222; }"
     )
@@ -1465,227 +1412,101 @@ def create_html_report(
     html_parts.append(
         ".separate { margin-top: 30px; padding: 15px; border: 1px solid #ddd; }"
     )
-    html_parts.append(
-        "</style>"
-    )
-    html_parts.append(
-        "</head>"
-    )
-    html_parts.append(
-        "<body>"
-    )
-    html_parts.append(
-        "<h1>REFUND REPORT</h1>"
-    )
-    html_parts.append(
-        '<div class="period">'
-    )
+    html_parts.append("</style>")
+    html_parts.append("</head>")
+    html_parts.append("<body>")
+    html_parts.append("<h1>REFUND REPORT</h1>")
+    html_parts.append('<div class="period">')
     html_parts.append(
         "Report Period: <b>"
-        + report_from.strftime(
-            "%Y-%m-%d"
-        )
+        + report_from.strftime("%Y-%m-%d")
         + "</b> to <b>"
-        + report_to.strftime(
-            "%Y-%m-%d"
-        )
+        + report_to.strftime("%Y-%m-%d")
         + "</b>"
     )
-    html_parts.append(
-        "</div>"
-    )
+    html_parts.append("</div>")
 
     # --------------------------------------------------------------------------
     # SUMMARY
     # --------------------------------------------------------------------------
-    html_parts.append(
-        '<table class="summary">'
-    )
-    html_parts.append(
-        "<tr>"
-    )
-    html_parts.append(
-        '<td class="summary-title">Actual Refunds</td>'
-    )
-    html_parts.append(
-        '<td class="summary-title">Refund Net</td>'
-    )
-    html_parts.append(
-        '<td class="summary-title">Refund Tax</td>'
-    )
-    html_parts.append(
-        '<td class="summary-title">Refund Total</td>'
-    )
-    html_parts.append(
-        "</tr>"
-    )
-    html_parts.append(
-        "<tr>"
-    )
-    html_parts.append(
-        "<td>"
-        + str(actual_count)
-        + "</td>"
-    )
-    html_parts.append(
-        "<td>"
-        + f"{actual_net:,.2f}"
-        + " MMK</td>"
-    )
-    html_parts.append(
-        "<td>"
-        + f"{actual_tax:,.2f}"
-        + " MMK</td>"
-    )
-    html_parts.append(
-        "<td>"
-        + f"{actual_total:,.2f}"
-        + " MMK</td>"
-    )
-    html_parts.append(
-        "</tr>"
-    )
-    html_parts.append(
-        "<tr>"
-    )
-    html_parts.append(
-        '<td class="reject-title">Rejected</td>'
-    )
-    html_parts.append(
-        '<td class="reject-title">Rejected Total</td>'
-    )
-    html_parts.append(
-        '<td class="pending-title">Pending</td>'
-    )
-    html_parts.append(
-        '<td class="pending-title">Pending Total</td>'
-    )
-    html_parts.append(
-        "</tr>"
-    )
-    html_parts.append(
-        "<tr>"
-    )
-    html_parts.append(
-        "<td>"
-        + str(rejected_count)
-        + "</td>"
-    )
-    html_parts.append(
-        "<td>"
-        + f"{rejected_total:,.2f}"
-        + " MMK</td>"
-    )
-    html_parts.append(
-        "<td>"
-        + str(pending_count)
-        + "</td>"
-    )
-    html_parts.append(
-        "<td>"
-        + f"{pending_total:,.2f}"
-        + " MMK</td>"
-    )
-    html_parts.append(
-        "</tr>"
-    )
-    html_parts.append(
-        "</table>"
-    )
+    html_parts.append('<table class="summary">')
+    html_parts.append("<tr>")
+    html_parts.append('<td class="summary-title">Actual Refunds</td>')
+    html_parts.append('<td class="summary-title">Refund Net</td>')
+    html_parts.append('<td class="summary-title">Refund Tax</td>')
+    html_parts.append('<td class="summary-title">Refund Total</td>')
+    html_parts.append("</tr>")
+    html_parts.append("<tr>")
+    html_parts.append("<td>" + str(actual_count) + "</td>")
+    html_parts.append("<td>" + f"{actual_net:,.2f}" + " MMK</td>")
+    html_parts.append("<td>" + f"{actual_tax:,.2f}" + " MMK</td>")
+    html_parts.append("<td>" + f"{actual_total:,.2f}" + " MMK</td>")
+    html_parts.append("</tr>")
+    html_parts.append("<tr>")
+    html_parts.append('<td class="reject-title">Rejected</td>')
+    html_parts.append('<td class="reject-title">Rejected Total</td>')
+    html_parts.append('<td class="pending-title">Pending</td>')
+    html_parts.append('<td class="pending-title">Pending Total</td>')
+    html_parts.append("</tr>")
+    html_parts.append("<tr>")
+    html_parts.append("<td>" + str(rejected_count) + "</td>")
+    html_parts.append("<td>" + f"{rejected_total:,.2f}" + " MMK</td>")
+    html_parts.append("<td>" + str(pending_count) + "</td>")
+    html_parts.append("<td>" + f"{pending_total:,.2f}" + " MMK</td>")
+    html_parts.append("</tr>")
+    html_parts.append("</table>")
 
     # --------------------------------------------------------------------------
     # ACTUAL REFUND REGISTER
     # --------------------------------------------------------------------------
+    html_parts.append("<h2>ACTUAL REFUND REGISTER</h2>")
     html_parts.append(
-        "<h2>ACTUAL REFUND REGISTER</h2>"
+        "<p>Only COMPLETED and APPROVED refunds are shown in this register.</p>"
     )
-    html_parts.append(
-        "<p>"
-        "Only COMPLETED and APPROVED refunds are shown in this register."
-        "</p>"
-    )
-    html_parts.append(
-        table_html
-    )
+    html_parts.append(table_html)
 
     # --------------------------------------------------------------------------
     # REJECTED SEPARATE
     # --------------------------------------------------------------------------
     if not rejected_df.empty:
+        html_parts.append('<div class="separate">')
+        html_parts.append("<h2>REJECTED REFUNDS — SEPARATE</h2>")
         html_parts.append(
-            '<div class="separate">'
+            "<p>" + f"Rejected Total: {rejected_total:,.2f} MMK" + "</p>"
         )
-        html_parts.append(
-            "<h2>REJECTED REFUNDS — SEPARATE</h2>"
-        )
-        html_parts.append(
-            "<p>"
-            + f"Rejected Total: {rejected_total:,.2f} MMK"
-            + "</p>"
-        )
-        html_parts.append(
-            "</div>"
-        )
+        html_parts.append("</div>")
 
     # --------------------------------------------------------------------------
     # PENDING SEPARATE
     # --------------------------------------------------------------------------
     if not pending_df.empty:
+        html_parts.append('<div class="separate">')
+        html_parts.append("<h2>PENDING REFUNDS — SEPARATE</h2>")
         html_parts.append(
-            '<div class="separate">'
+            "<p>" + f"Pending Total: {pending_total:,.2f} MMK" + "</p>"
         )
-        html_parts.append(
-            "<h2>PENDING REFUNDS — SEPARATE</h2>"
-        )
-        html_parts.append(
-            "<p>"
-            + f"Pending Total: {pending_total:,.2f} MMK"
-            + "</p>"
-        )
-        html_parts.append(
-            "</div>"
-        )
+        html_parts.append("</div>")
 
     # --------------------------------------------------------------------------
     # FOOTER
     # --------------------------------------------------------------------------
+    html_parts.append('<div class="footer">')
     html_parts.append(
-        '<div class="footer">'
+        "Actual Refund Total: " + f"{actual_total:,.2f}" + " MMK"
     )
+    html_parts.append("<br><br>")
     html_parts.append(
-        "Actual Refund Total: "
-        + f"{actual_total:,.2f}"
-        + " MMK"
+        "Rejected Total: " + f"{rejected_total:,.2f}" + " MMK"
     )
+    html_parts.append("<br><br>")
     html_parts.append(
-        "<br><br>"
+        "Pending Total: " + f"{pending_total:,.2f}" + " MMK"
     )
-    html_parts.append(
-        "Rejected Total: "
-        + f"{rejected_total:,.2f}"
-        + " MMK"
-    )
-    html_parts.append(
-        "<br><br>"
-    )
-    html_parts.append(
-        "Pending Total: "
-        + f"{pending_total:,.2f}"
-        + " MMK"
-    )
-    html_parts.append(
-        "</div>"
-    )
-    html_parts.append(
-        "</body>"
-    )
-    html_parts.append(
-        "</html>"
-    )
+    html_parts.append("</div>")
+    html_parts.append("</body>")
+    html_parts.append("</html>")
 
-    return "\n".join(
-        html_parts
-    )
+    return "\n".join(html_parts)
 
 # ==============================================================================
 # BUILD EXPORT DATAFRAME
@@ -1694,26 +1515,19 @@ def create_html_report(
 # This function receives ACTUAL REFUND dataframe only.
 # Therefore REJECTED records cannot enter the normal Refund CSV.
 # ==============================================================================
-def build_export_dataframe(
-    report_df
-):
+def build_export_dataframe(report_df):
     if report_df is None:
         report_df = pd.DataFrame()
 
     export_df = report_df.copy()
 
-    if (
-        "refund_date"
-        in export_df.columns
-    ):
+    if "refund_date" in export_df.columns:
         export_df["refund_date"] = (
             pd.to_datetime(
                 export_df["refund_date"],
                 errors="coerce",
             )
-            .dt.strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            .dt.strftime("%Y-%m-%d %H:%M:%S")
         )
 
     export_columns = [
@@ -1741,9 +1555,7 @@ def build_export_dataframe(
         if col not in export_df.columns:
             export_df[col] = ""
 
-    export_df = export_df[
-        export_columns
-    ].copy()
+    export_df = export_df[export_columns].copy()
 
     export_df = export_df.rename(
         columns={
@@ -1773,9 +1585,7 @@ def build_export_dataframe(
 # ==============================================================================
 # MAIN UI
 # ==============================================================================
-st.title(
-    "↩️ ERP ENTERPRISE REFUND REPORT"
-)
+st.title("↩️ ERP ENTERPRISE REFUND REPORT")
 st.caption(
     "Tax-Aware Refund Reporting | "
     "Date Range | "
@@ -1786,66 +1596,39 @@ st.caption(
 # LOAD DATA
 # ==============================================================================
 all_refunds_df = load_refund_report()
-all_refunds_df = normalize_report_dataframe(
-    all_refunds_df
-)
+all_refunds_df = normalize_report_dataframe(all_refunds_df)
 
 # ==============================================================================
 # DATE RANGE
 # ==============================================================================
 today = date.today()
 
-if (
-    "refund_report_from_date"
-    not in st.session_state
-):
+if "refund_report_from_date" not in st.session_state:
     if not all_refunds_df.empty:
-        valid_dates = (
-            all_refunds_df[
-                "refund_date"
-            ]
-            .dropna()
-        )
+        valid_dates = all_refunds_df["refund_date"].dropna()
         if not valid_dates.empty:
-            st.session_state[
-                "refund_report_from_date"
-            ] = valid_dates.min().date()
+            st.session_state["refund_report_from_date"] = valid_dates.min().date()
         else:
-            st.session_state[
-                "refund_report_from_date"
-            ] = today
+            st.session_state["refund_report_from_date"] = today
     else:
-        st.session_state[
-            "refund_report_from_date"
-        ] = today
+        st.session_state["refund_report_from_date"] = today
 
-if (
-    "refund_report_to_date"
-    not in st.session_state
-):
-    st.session_state[
-        "refund_report_to_date"
-    ] = today
+if "refund_report_to_date" not in st.session_state:
+    st.session_state["refund_report_to_date"] = today
 
-col1, col2, col3 = st.columns(
-    [1, 1, 1]
-)
+col1, col2, col3 = st.columns([1, 1, 1])
 
 with col1:
     report_from = st.date_input(
         "From Date",
-        value=st.session_state[
-            "refund_report_from_date"
-        ],
+        value=st.session_state["refund_report_from_date"],
         key="refund_report_from_picker",
     )
 
 with col2:
     report_to = st.date_input(
         "To Date",
-        value=st.session_state[
-            "refund_report_to_date"
-        ],
+        value=st.session_state["refund_report_to_date"],
         key="refund_report_to_picker",
     )
 
@@ -1863,9 +1646,7 @@ with col3:
 # VALIDATE DATE
 # ==============================================================================
 if report_from > report_to:
-    st.error(
-        "From Date cannot be later than To Date."
-    )
+    st.error("From Date cannot be later than To Date.")
     st.stop()
 
 # ==============================================================================
@@ -1883,11 +1664,7 @@ date_filtered_df = filter_by_date(
 # CRITICAL:
 # REJECTED IS REMOVED FROM ACTUAL REFUND REGISTER HERE.
 # ==============================================================================
-actual_df, rejected_df, pending_df = (
-    split_report_by_status(
-        date_filtered_df
-    )
-)
+actual_df, rejected_df, pending_df = split_report_by_status(date_filtered_df)
 
 # ==============================================================================
 # SUMMARY
@@ -1901,9 +1678,7 @@ summary = calculate_summary(
 # ==============================================================================
 # KPI CARDS
 # ==============================================================================
-k1, k2, k3, k4, k5 = st.columns(
-    5
-)
+k1, k2, k3, k4, k5 = st.columns(5)
 
 with k1:
     st.metric(
@@ -1914,33 +1689,25 @@ with k1:
 with k2:
     st.metric(
         "Refund Net",
-        money(
-            summary["actual_net"]
-        ),
+        money(summary["actual_net"]),
     )
 
 with k3:
     st.metric(
         "Refund Tax",
-        money(
-            summary["actual_tax"]
-        ),
+        money(summary["actual_tax"]),
     )
 
 with k4:
     st.metric(
         "Refund Total",
-        money(
-            summary["actual_total"]
-        ),
+        money(summary["actual_total"]),
     )
 
 with k5:
     st.metric(
         "Rejected Total",
-        money(
-            summary["rejected_total"]
-        ),
+        money(summary["rejected_total"]),
     )
 
 # ==============================================================================
@@ -1954,9 +1721,7 @@ st.info(
 # ==============================================================================
 # STATUS SUMMARY
 # ==============================================================================
-s1, s2, s3 = st.columns(
-    3
-)
+s1, s2, s3 = st.columns(3)
 
 with s1:
     st.metric(
@@ -1993,26 +1758,15 @@ tab_refund, tab_rejected, tab_pending, tab_export = st.tabs(
 # ACTUAL REFUND REGISTER
 # ==============================================================================
 with tab_refund:
-    st.subheader(
-        "↩️ Actual Refund Register"
-    )
-    st.caption(
-        "Only COMPLETED and APPROVED refunds are shown here."
-    )
+    st.subheader("↩️ Actual Refund Register")
+    st.caption("Only COMPLETED and APPROVED refunds are shown here.")
 
     if actual_df.empty:
-        st.success(
-            "No actual refund records found for the selected date range."
-        )
+        st.success("No actual refund records found for the selected date range.")
     else:
         display_actual = actual_df.copy()
         display_actual["Refund Date"] = (
-            display_actual[
-                "refund_date"
-            ]
-            .dt.strftime(
-                "%Y-%m-%d %H:%M"
-            )
+            display_actual["refund_date"].dt.strftime("%Y-%m-%d %H:%M")
         )
 
         display_actual = display_actual[
@@ -2057,29 +1811,21 @@ with tab_refund:
 
         st.divider()
 
-        r1, r2, r3 = st.columns(
-            3
-        )
+        r1, r2, r3 = st.columns(3)
         with r1:
             st.metric(
                 "Refund Net",
-                money(
-                    summary["actual_net"]
-                ),
+                money(summary["actual_net"]),
             )
         with r2:
             st.metric(
                 "Refund Tax",
-                money(
-                    summary["actual_tax"]
-                ),
+                money(summary["actual_tax"]),
             )
         with r3:
             st.metric(
                 "Refund Total",
-                money(
-                    summary["actual_total"]
-                ),
+                money(summary["actual_total"]),
             )
 
 # ==============================================================================
@@ -2087,26 +1833,15 @@ with tab_refund:
 # REJECTED
 # ==============================================================================
 with tab_rejected:
-    st.subheader(
-        "❌ Rejected Refunds"
-    )
-    st.caption(
-        "Rejected refunds are NOT part of the Actual Refund Register."
-    )
+    st.subheader("❌ Rejected Refunds")
+    st.caption("Rejected refunds are NOT part of the Actual Refund Register.")
 
     if rejected_df.empty:
-        st.success(
-            "No rejected refunds found for the selected date range."
-        )
+        st.success("No rejected refunds found for the selected date range.")
     else:
         display_rejected = rejected_df.copy()
         display_rejected["Refund Date"] = (
-            display_rejected[
-                "refund_date"
-            ]
-            .dt.strftime(
-                "%Y-%m-%d %H:%M"
-            )
+            display_rejected["refund_date"].dt.strftime("%Y-%m-%d %H:%M")
         )
 
         display_rejected = display_rejected[
@@ -2149,11 +1884,7 @@ with tab_rejected:
 
         st.error(
             "Rejected Total: "
-            + money(
-                summary[
-                    "rejected_total"
-                ]
-            )
+            + money(summary["rejected_total"])
             + " — NOT INCLUDED in Refund Total."
         )
 
@@ -2162,26 +1893,15 @@ with tab_rejected:
 # PENDING
 # ==============================================================================
 with tab_pending:
-    st.subheader(
-        "⏳ Pending Refunds"
-    )
-    st.caption(
-        "Pending refunds are NOT part of the Actual Refund Register."
-    )
+    st.subheader("⏳ Pending Refunds")
+    st.caption("Pending refunds are NOT part of the Actual Refund Register.")
 
     if pending_df.empty:
-        st.success(
-            "No pending refunds found for the selected date range."
-        )
+        st.success("No pending refunds found for the selected date range.")
     else:
         display_pending = pending_df.copy()
         display_pending["Refund Date"] = (
-            display_pending[
-                "refund_date"
-            ]
-            .dt.strftime(
-                "%Y-%m-%d %H:%M"
-            )
+            display_pending["refund_date"].dt.strftime("%Y-%m-%d %H:%M")
         )
 
         display_pending = display_pending[
@@ -2224,11 +1944,7 @@ with tab_pending:
 
         st.warning(
             "Pending Total: "
-            + money(
-                summary[
-                    "pending_total"
-                ]
-            )
+            + money(summary["pending_total"])
             + " — NOT INCLUDED in Refund Total."
         )
 
@@ -2237,9 +1953,7 @@ with tab_pending:
 # EXPORT
 # ==============================================================================
 with tab_export:
-    st.subheader(
-        "📤 Refund Report Export"
-    )
+    st.subheader("📤 Refund Report Export")
     st.write(
         "Selected Period: "
         f"{report_from.strftime('%Y-%m-%d')}"
@@ -2252,9 +1966,7 @@ with tab_export:
     # --------------------------------------------------------------------------
     # PDF
     # --------------------------------------------------------------------------
-    st.markdown(
-        "### 📄 PDF Report"
-    )
+    st.markdown("### 📄 PDF Report")
 
     pdf_bytes = create_refund_report_pdf(
         actual_df=actual_df,
@@ -2279,9 +1991,7 @@ with tab_export:
     # --------------------------------------------------------------------------
     # HTML
     # --------------------------------------------------------------------------
-    st.markdown(
-        "### 🌐 HTML Report"
-    )
+    st.markdown("### 🌐 HTML Report")
 
     html_bytes = create_html_report(
         actual_df=actual_df,
@@ -2289,9 +1999,7 @@ with tab_export:
         pending_df=pending_df,
         report_from=report_from,
         report_to=report_to,
-    ).encode(
-        "utf-8"
-    )
+    ).encode("utf-8")
 
     st.download_button(
         label="🌐 Download HTML Report",
@@ -2310,25 +2018,16 @@ with tab_export:
     # --------------------------------------------------------------------------
     # ACTUAL REFUND CSV
     # --------------------------------------------------------------------------
-    st.markdown(
-        "### ↩️ Actual Refund CSV"
-    )
+    st.markdown("### ↩️ Actual Refund CSV")
 
-    actual_export_df = (
-        build_export_dataframe(
-            actual_df
-        )
-    )
+    actual_export_df = build_export_dataframe(actual_df)
 
     actual_csv = (
-        actual_export_df
-        .to_csv(
+        actual_export_df.to_csv(
             index=False,
             encoding="utf-8-sig",
         )
-        .encode(
-            "utf-8-sig"
-        )
+        .encode("utf-8-sig")
     )
 
     st.download_button(
@@ -2346,25 +2045,16 @@ with tab_export:
     # --------------------------------------------------------------------------
     # REJECTED CSV
     # --------------------------------------------------------------------------
-    st.markdown(
-        "### ❌ Rejected CSV"
-    )
+    st.markdown("### ❌ Rejected CSV")
 
-    rejected_export_df = (
-        build_export_dataframe(
-            rejected_df
-        )
-    )
+    rejected_export_df = build_export_dataframe(rejected_df)
 
     rejected_csv = (
-        rejected_export_df
-        .to_csv(
+        rejected_export_df.to_csv(
             index=False,
             encoding="utf-8-sig",
         )
-        .encode(
-            "utf-8-sig"
-        )
+        .encode("utf-8-sig")
     )
 
     st.download_button(
@@ -2382,25 +2072,16 @@ with tab_export:
     # --------------------------------------------------------------------------
     # PENDING CSV
     # --------------------------------------------------------------------------
-    st.markdown(
-        "### ⏳ Pending CSV"
-    )
+    st.markdown("### ⏳ Pending CSV")
 
-    pending_export_df = (
-        build_export_dataframe(
-            pending_df
-        )
-    )
+    pending_export_df = build_export_dataframe(pending_df)
 
     pending_csv = (
-        pending_export_df
-        .to_csv(
+        pending_export_df.to_csv(
             index=False,
             encoding="utf-8-sig",
         )
-        .encode(
-            "utf-8-sig"
-        )
+        .encode("utf-8-sig")
     )
 
     st.download_button(
