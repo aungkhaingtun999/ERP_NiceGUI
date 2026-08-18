@@ -1,18 +1,30 @@
+# ==============================================================================
+# ERP ENTERPRISE REFUND APPROVAL CENTER
+#
+# FINAL REFUND WORKFLOW
+#
+# RPC ONLY:
+#   approve_refund_rpc
+#   reject_refund_rpc
+#
+# STATUS FLOW:
+#   PENDING -> APPROVED
+#   PENDING -> REJECTED
+#
+# IMPORTANT:
+#   Approve = restore stock + inventory log + FIFO layer
+#   Reject  = status only
+# ==============================================================================
+
 import streamlit as st
 
 from database import db
 from auth import require_login
-from utils.ui import show_table
 
 
 # ==============================================================================
 # ALLOWED ROLES
 # ==============================================================================
-
-# Admin    = role_id 1
-# Manager  = role_id 2
-#
-# Both are allowed to access Refund Approval Center.
 
 ALLOWED_ROLE_IDS = {
     1,  # Admin
@@ -21,7 +33,25 @@ ALLOWED_ROLE_IDS = {
 
 
 # ==============================================================================
-# ACTION FUNCTIONS
+# SAFE NUMBER
+# ==============================================================================
+
+def safe_float(value):
+
+    try:
+
+        return float(value or 0)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return 0.0
+
+
+# ==============================================================================
+# APPROVE
 # ==============================================================================
 
 def handle_approval(
@@ -31,33 +61,41 @@ def handle_approval(
 
     try:
 
-        result = db().rpc(
-            "approve_refund_rpc",
-            {
-                "p_refund_id": refund_id,
-                "p_manager_id": approver_id,
-            },
-        ).execute()
+        result = (
+            db()
+            .rpc(
+                "approve_refund_rpc",
+                {
+                    "p_refund_id": int(refund_id),
+                    "p_manager_id": approver_id,
+                },
+            )
+            .execute()
+        )
 
-        # ----------------------------------------------------------------------
-        # RPC response
-        # ----------------------------------------------------------------------
+        data = result.data
 
         if (
-            isinstance(result.data, dict)
-            and result.data.get("success")
+            isinstance(data, dict)
+            and data.get("success") is True
         ):
 
             st.success(
-                f"Refund ID {refund_id} successfully approved."
+                f"Refund ID {refund_id} approved successfully."
             )
 
             st.rerun()
 
         else:
 
+            message = (
+                data.get("message")
+                if isinstance(data, dict)
+                else str(data)
+            )
+
             st.error(
-                f"Approval failed: {result.data}"
+                f"Approval failed: {message}"
             )
 
     except Exception as e:
@@ -68,7 +106,7 @@ def handle_approval(
 
 
 # ==============================================================================
-# REJECTION
+# REJECT
 # ==============================================================================
 
 def handle_rejection(
@@ -77,32 +115,55 @@ def handle_rejection(
     reason,
 ):
 
+    reason = (reason or "").strip()
+
+    if not reason:
+
+        st.warning(
+            "Reject reason is required."
+        )
+
+        return
+
+
     try:
 
-        result = db().rpc(
-            "reject_refund_rpc",
-            {
-                "p_refund_id": refund_id,
-                "p_manager_id": approver_id,
-                "p_reason": reason,
-            },
-        ).execute()
+        result = (
+            db()
+            .rpc(
+                "reject_refund_rpc",
+                {
+                    "p_refund_id": int(refund_id),
+                    "p_manager_id": approver_id,
+                    "p_reason": reason,
+                },
+            )
+            .execute()
+        )
+
+        data = result.data
 
         if (
-            isinstance(result.data, dict)
-            and result.data.get("success")
+            isinstance(data, dict)
+            and data.get("success") is True
         ):
 
             st.success(
-                f"Refund ID {refund_id} rejected."
+                f"Refund ID {refund_id} rejected successfully."
             )
 
             st.rerun()
 
         else:
 
+            message = (
+                data.get("message")
+                if isinstance(data, dict)
+                else str(data)
+            )
+
             st.error(
-                f"Rejection failed: {result.data}"
+                f"Rejection failed: {message}"
             )
 
     except Exception as e:
@@ -113,18 +174,13 @@ def handle_rejection(
 
 
 # ==============================================================================
-# MAIN RUN FUNCTION
+# MAIN
 # ==============================================================================
 
 def run():
 
-    st.set_page_config(
-        page_title="Refund Approval",
-        layout="wide",
-    )
-
     # ==========================================================================
-    # AUTHENTICATION
+    # AUTH
     # ==========================================================================
 
     user = require_login()
@@ -137,17 +193,16 @@ def run():
 
         st.stop()
 
+
     # ==========================================================================
     # ROLE
     # ==========================================================================
 
-    role_id = user.get(
-        "role_id"
-    )
-
     try:
 
-        role_id = int(role_id)
+        role_id = int(
+            user.get("role_id")
+        )
 
     except (
         TypeError,
@@ -156,9 +211,6 @@ def run():
 
         role_id = None
 
-    # ==========================================================================
-    # ADMIN + MANAGER ACCESS
-    # ==========================================================================
 
     if role_id not in ALLOWED_ROLE_IDS:
 
@@ -169,6 +221,7 @@ def run():
 
         st.stop()
 
+
     # ==========================================================================
     # PAGE
     # ==========================================================================
@@ -177,21 +230,18 @@ def run():
         "✅ Refund Approval Center"
     )
 
-    # --------------------------------------------------------------------------
-    # Display current approver role
-    # --------------------------------------------------------------------------
 
-    if role_id == 1:
+    role_name = (
+        "Admin"
+        if role_id == 1
+        else "Manager"
+    )
 
-        role_name = "Admin"
-
-    else:
-
-        role_name = "Manager"
 
     st.caption(
         f"Authorized Approver: {role_name}"
     )
+
 
     # ==========================================================================
     # LOAD PENDING REFUNDS
@@ -199,10 +249,12 @@ def run():
 
     try:
 
-        refunds = (
+        response = (
             db()
             .table("refunds")
-            .select("*")
+            .select(
+                "*"
+            )
             .eq(
                 "status",
                 "PENDING",
@@ -214,129 +266,197 @@ def run():
             .execute()
         )
 
-        data = (
-            refunds.data
-            or []
+        refunds = (
+            response.data
+            if response
+            and hasattr(response, "data")
+            and response.data
+            else []
         )
 
     except Exception as e:
 
         st.error(
-            f"Error loading data: {e}"
+            f"Error loading pending refunds: {e}"
         )
 
         st.stop()
 
+
     # ==========================================================================
-    # DISPLAY
+    # EMPTY
     # ==========================================================================
 
-    if not data:
+    if not refunds:
 
-        st.info(
-            "No Pending Refunds"
+        st.success(
+            "✅ No Pending Refunds"
         )
 
         return
 
-    st.subheader(
-        f"Pending Refund Count : {len(data)}"
+
+    # ==========================================================================
+    # SUMMARY
+    # ==========================================================================
+
+    total_pending = len(refunds)
+
+    total_amount = sum(
+        safe_float(
+            refund.get("refund_amount")
+        )
+        for refund in refunds
     )
+
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        st.metric(
+            "Pending Refunds",
+            total_pending,
+        )
+
+
+    with col2:
+
+        st.metric(
+            "Pending Amount",
+            f"{total_amount:,.0f} MMK",
+        )
+
+
+    st.divider()
+
 
     # ==========================================================================
     # REFUND QUEUE
     # ==========================================================================
 
-    for refund in data:
+    for refund in refunds:
 
-        refund_id = refund.get(
-            "id"
+        refund_id = refund.get("id")
+
+        sale_id = refund.get("sale_id")
+
+        refund_amount = safe_float(
+            refund.get("refund_amount")
         )
+
+        refund_date = (
+            refund.get("refund_date")
+            or "-"
+        )
+
+        reason = (
+            refund.get("reason")
+            or "-"
+        )
+
 
         with st.container(
             border=True
         ):
 
-            col1, col2, col3 = st.columns(
-                3
+            # ==============================================================
+            # HEADER
+            # ==============================================================
+
+            col1, col2, col3, col4 = st.columns(
+                [1, 1, 2, 2]
             )
 
-            # ------------------------------------------------------------------
-            # REFUND INFORMATION
-            # ------------------------------------------------------------------
 
             with col1:
 
-                st.write(
-                    f"**Refund ID:** {refund_id}"
+                st.caption(
+                    "Refund ID"
                 )
 
                 st.write(
-                    f"**Sale ID:** "
-                    f"{refund.get('sale_id')}"
+                    f"**{refund_id}**"
                 )
 
-            # ------------------------------------------------------------------
-            # AMOUNT
-            # ------------------------------------------------------------------
 
             with col2:
 
-                refund_amount = refund.get(
-                    "refund_amount"
+                st.caption(
+                    "Sale ID"
                 )
-
-                try:
-
-                    refund_amount = float(
-                        refund_amount or 0
-                    )
-
-                except (
-                    TypeError,
-                    ValueError,
-                ):
-
-                    refund_amount = 0.0
 
                 st.write(
-                    f"**Amount:** "
-                    f"{refund_amount:,.0f} MMK"
+                    f"**{sale_id}**"
                 )
 
-            # ------------------------------------------------------------------
-            # DATE / STATUS
-            # ------------------------------------------------------------------
 
             with col3:
 
-                st.write(
-                    f"**Date:** "
-                    f"{refund.get('refund_date')}"
+                st.caption(
+                    "Refund Amount"
                 )
 
                 st.write(
-                    f"**Status:** "
-                    f"{refund.get('status')}"
+                    f"**{refund_amount:,.0f} MMK**"
                 )
 
-            # ------------------------------------------------------------------
+
+            with col4:
+
+                st.caption(
+                    "Refund Date"
+                )
+
+                st.write(
+                    f"**{refund_date}**"
+                )
+
+
+            # ==============================================================
+            # REASON
+            # ==============================================================
+
+            st.caption(
+                "Reason"
+            )
+
+            st.write(
+                reason
+            )
+
+
+            # ==============================================================
+            # STATUS
+            # ==============================================================
+
+            st.warning(
+                "⏳ PENDING — Waiting for Manager Approval"
+            )
+
+
+            st.divider()
+
+
+            # ==============================================================
             # ACTIONS
-            # ------------------------------------------------------------------
+            # ==============================================================
 
-            app_col, rej_col = st.columns(
+            approve_col, reject_col = st.columns(
                 [1, 2]
             )
 
-            # ------------------------------------------------------------------
-            # APPROVE
-            # ------------------------------------------------------------------
 
-            with app_col:
+            # ==============================================================
+            # APPROVE
+            # ==============================================================
+
+            with approve_col:
 
                 if st.button(
-                    "✅ Approve",
-                    key=f"approve_{refund_id}",
+                    "✅ Approve Refund",
+                    key=f"approve_refund_{refund_id}",
                     type="primary",
                     use_container_width=True,
                 ):
@@ -346,42 +466,42 @@ def run():
                         user["id"],
                     )
 
-            # ------------------------------------------------------------------
-            # REJECT
-            # ------------------------------------------------------------------
 
-            with rej_col:
+            # ==============================================================
+            # REJECT
+            # ==============================================================
+
+            with reject_col:
 
                 reject_reason = st.text_input(
                     "Reject Reason",
                     key=f"reject_reason_{refund_id}",
+                    placeholder="Enter reason for rejection...",
                 )
 
+
                 if st.button(
-                    "❌ Reject",
-                    key=f"reject_{refund_id}",
+                    "❌ Reject Refund",
+                    key=f"reject_refund_{refund_id}",
                     use_container_width=True,
                 ):
 
-                    if not reject_reason.strip():
-
-                        st.warning(
-                            "Please enter reject reason."
-                        )
-
-                    else:
-
-                        handle_rejection(
-                            refund_id,
-                            user["id"],
-                            reject_reason.strip(),
-                        )
+                    handle_rejection(
+                        refund_id,
+                        user["id"],
+                        reject_reason,
+                    )
 
 
 # ==============================================================================
-# DIRECT EXECUTION
+# ENTRY POINT
 # ==============================================================================
 
 if __name__ == "__main__":
+
+    st.set_page_config(
+        page_title="Refund Approval",
+        layout="wide",
+    )
 
     run()
