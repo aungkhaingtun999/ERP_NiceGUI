@@ -1,43 +1,6 @@
 # ==============================================================================
 # ERP ENTERPRISE REFUND REPORT v5.1
-#
 # TAX-AWARE + DATE RANGE + REJECTED SEPARATION
-#
-# IMPORTANT BUSINESS RULE
-#
-# ACTUAL REFUND TOTAL:
-#     COMPLETED + APPROVED
-#
-# REJECTED:
-#     NEVER INCLUDED IN REFUND TOTAL
-#     SHOWN SEPARATELY AS REJECTED TOTAL
-#
-# PENDING:
-#     NEVER INCLUDED IN REFUND TOTAL
-#     SHOWN SEPARATELY AS PENDING TOTAL
-#
-# DATE:
-#     FROM DATE -> TO DATE
-#
-# EXPORT:
-#     PDF
-#     EXCEL
-#     CSV
-#     HTML
-#
-# DATABASE VIEWS:
-#     refund_report_view
-#     refund_detail_view
-#
-# V4 AMOUNTS:
-#     refund_net_amount
-#     refund_tax_amount
-#     refund_total_amount
-# ==============================================================================
-
-
-# ==============================================================================
-# IMPORTS
 # ==============================================================================
 
 import io
@@ -61,7 +24,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
-
 # ==============================================================================
 # PAGE CONFIG
 # ==============================================================================
@@ -72,13 +34,11 @@ st.set_page_config(
     layout="wide",
 )
 
-
 # ==============================================================================
 # AUTH
 # ==============================================================================
 
 user = require_login()
-
 
 # ==============================================================================
 # BUSINESS STATUS RULE
@@ -87,7 +47,6 @@ user = require_login()
 ACTUAL_REFUND_STATUSES = ["COMPLETED", "APPROVED"]
 REJECTED_STATUS = "REJECTED"
 PENDING_STATUS = "PENDING"
-
 
 # ==============================================================================
 # COLUMN DEFINITIONS
@@ -112,13 +71,11 @@ TEXT_COLUMNS = [
     "reason",
 ]
 
-
 # ==============================================================================
 # SAFE HELPERS
 # ==============================================================================
 
 def safe_float(value):
-    """Safely convert a value to float."""
     try:
         if value is None:
             return 0.0
@@ -128,9 +85,7 @@ def safe_float(value):
     except Exception:
         return 0.0
 
-
 def safe_text(value):
-    """Safely convert a value to string."""
     if value is None:
         return ""
     try:
@@ -140,11 +95,8 @@ def safe_text(value):
         pass
     return str(value)
 
-
 def money(value):
-    """MMK money formatter."""
     return f"{safe_float(value):,.2f} MMK"
-
 
 # ==============================================================================
 # NORMALIZE REPORT DATAFRAME
@@ -155,49 +107,35 @@ def normalize_report_dataframe(df):
         df = pd.DataFrame()
     df = df.copy()
 
-    # Numeric columns
     for col in NUMERIC_COLUMNS:
         if col not in df.columns:
             df[col] = 0.0
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    # Text columns
     for col in TEXT_COLUMNS:
         if col not in df.columns:
             df[col] = ""
         df[col] = df[col].fillna("").astype(str)
 
-    # ID columns
     for col in ["refund_id", "sale_id", "product_id"]:
         if col not in df.columns:
             df[col] = ""
 
-    # Status
     if "status" not in df.columns:
         df["status"] = "COMPLETED"
-    df["status"] = (
-        df["status"]
-        .fillna("COMPLETED")
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
+    df["status"] = df["status"].fillna("COMPLETED").astype(str).str.strip().str.upper()
 
-    # Refund date
     if "refund_date" not in df.columns:
         df["refund_date"] = pd.NaT
     df["refund_date"] = pd.to_datetime(df["refund_date"], errors="coerce")
 
-    # Approved at
     if "approved_at" not in df.columns:
         df["approved_at"] = ""
 
-    # V4 report amounts
     df["report_net"] = df["refund_net_amount"].astype(float)
     df["report_tax"] = df["refund_tax_amount"].astype(float)
     df["report_total"] = df["refund_total_amount"].astype(float)
 
-    # Legacy fallback
     legacy_total_mask = (df["report_total"] == 0) & (df["item_total"] != 0)
     df.loc[legacy_total_mask, "report_total"] = df.loc[legacy_total_mask, "item_total"]
 
@@ -205,7 +143,6 @@ def normalize_report_dataframe(df):
     df.loc[legacy_net_mask, "report_net"] = df.loc[legacy_net_mask, "item_total"]
 
     return df
-
 
 # ==============================================================================
 # LOAD REFUND REPORT
@@ -222,7 +159,6 @@ def load_refund_report():
     )
     return pd.DataFrame(response.data or [])
 
-
 # ==============================================================================
 # PDF HEADER / FOOTER
 # ==============================================================================
@@ -230,19 +166,14 @@ def load_refund_report():
 def pdf_header_footer(canvas, doc):
     canvas.saveState()
     width, height = A4
-
     canvas.setFont("Helvetica-Bold", 9)
     canvas.drawString(40, height - 28, "ERP ENTERPRISE")
-
     canvas.setFont("Helvetica", 8)
     canvas.drawRightString(width - 40, height - 28, "REFUND REPORT")
-
     canvas.setFont("Helvetica", 8)
     canvas.drawString(40, 22, "ERP Refund Report")
     canvas.drawRightString(width - 40, 22, f"Page {doc.page}")
-
     canvas.restoreState()
-
 
 # ==============================================================================
 # CREATE PDF REPORT
@@ -309,30 +240,27 @@ def create_refund_report_pdf(report_df, report_from, report_to):
     content = []
 
     content.append(Paragraph("REFUND REPORT", title_style))
-    content.append(
-        Paragraph(
-            "Report Period: <b>{}</b> to <b>{}</b>".format(
-                report_from.strftime("%Y-%m-%d"),
-                report_to.strftime("%Y-%m-%d")
-            ),
-            subtitle_style,
-        )
+
+    period_text = "Report Period: <b>{}</b> to <b>{}</b>".format(
+        report_from.strftime("%Y-%m-%d"),
+        report_to.strftime("%Y-%m-%d")
     )
+    content.append(Paragraph(period_text, subtitle_style))
 
     # Summary table
     summary_data = [
         ["Actual Refunds", "Refund Net", "Refund Tax", "Refund Total"],
         [
-            f"{refund_count_pdf:,}",
+            str(refund_count_pdf),
             f"{actual_net:,.2f}",
             f"{actual_tax:,.2f}",
             f"{actual_total:,.2f}",
         ],
         ["Rejected", "Rejected Total", "Pending", "Pending Total"],
         [
-            f"{rejected_count_pdf:,}",
+            str(rejected_count_pdf),
             f"{rejected_total_pdf:,.2f}",
-            f"{pending_count_pdf:,}",
+            str(pending_count_pdf),
             f"{pending_total_pdf:,.2f}",
         ],
     ]
@@ -389,26 +317,13 @@ def create_refund_report_pdf(report_df, report_from, report_to):
         )
 
     table_data.append(
-        [
-            "", "", "", "", "REFUND TOTAL", "",
-            f"{actual_net:,.2f}",
-            f"{actual_tax:,.2f}",
-            f"{actual_total:,.2f}",
-        ]
+        ["", "", "", "", "REFUND TOTAL", "", f"{actual_net:,.2f}", f"{actual_tax:,.2f}", f"{actual_total:,.2f}"]
     )
-
     table_data.append(
-        [
-            "", "", "", "", "REJECTED TOTAL", "", "", "",
-            f"{rejected_total_pdf:,.2f}",
-        ]
+        ["", "", "", "", "REJECTED TOTAL", "", "", "", f"{rejected_total_pdf:,.2f}"]
     )
-
     table_data.append(
-        [
-            "", "", "", "", "PENDING TOTAL", "", "", "",
-            f"{pending_total_pdf:,.2f}",
-        ]
+        ["", "", "", "", "PENDING TOTAL", "", "", "", f"{pending_total_pdf:,.2f}"]
     )
 
     detail_table = Table(
@@ -465,7 +380,6 @@ def create_refund_report_pdf(report_df, report_from, report_to):
     buffer.seek(0)
     return buffer.getvalue()
 
-
 # ==============================================================================
 # CREATE HTML REPORT
 # ==============================================================================
@@ -507,134 +421,72 @@ def create_html_report(report_df, report_from, report_to):
 
     table_html = display_df.to_html(index=False, classes="refund-table", border=0)
 
-    html_content = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Refund Report</title>
-<style>
-body {
-    font-family: Arial, sans-serif;
-    margin: 40px;
-    color: #222;
-}
-h1 {
-    text-align: center;
-    margin-bottom: 5px;
-}
-.period {
-    text-align: center;
-    color: #666;
-    margin-bottom: 25px;
-}
-.summary {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 25px;
-}
-.summary td {
-    border: 1px solid #ddd;
-    padding: 12px;
-    text-align: center;
-}
-.summary-title {
-    font-weight: bold;
-    background: #343a40;
-    color: white;
-}
-.reject-title {
-    font-weight: bold;
-    background: #f8d7da;
-}
-.pending-title {
-    font-weight: bold;
-    background: #fff3cd;
-}
-.refund-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-.refund-table th {
-    background: #343a40;
-    color: white;
-    padding: 9px;
-    text-align: left;
-}
-.refund-table td {
-    border: 1px solid #ddd;
-    padding: 8px;
-}
-.refund-table tr:nth-child(even) {
-    background: #f8f9fa;
-}
-.footer {
-    margin-top: 25px;
-    font-weight: bold;
-}
-</style>
-</head>
-<body>
-<h1>REFUND REPORT</h1>
-<div class="period">
-Report Period: <b>{}</b> to <b>{}</b>
-</div>
-<table class="summary">
-<tr>
-<td class="summary-title">Actual Refunds</td>
-<td class="summary-title">Refund Net</td>
-<td class="summary-title">Refund Tax</td>
-<td class="summary-title">Refund Total</td>
-</tr>
-<tr>
-<td>{:,}</td>
-<td>{:,.2f} MMK</td>
-<td>{:,.2f} MMK</td>
-<td>{:,.2f} MMK</td>
-</tr>
-<tr>
-<td class="reject-title">Rejected</td>
-<td class="reject-title">Rejected Total</td>
-<td class="pending-title">Pending</td>
-<td class="pending-title">Pending Total</td>
-</tr>
-<tr>
-<td>{:,}</td>
-<td>{:,.2f} MMK</td>
-<td>{:,}</td>
-<td>{:,.2f} MMK</td>
-</tr>
-</table>
-{}
-<div class="footer">
-Actual Refund Total: {:,.2f} MMK
-<br><br>
-Rejected Total: {:,.2f} MMK
-<br><br>
-Pending Total: {:,.2f} MMK
-</div>
-</body>
-</html>
-""".format(
-        report_from.strftime("%Y-%m-%d"),
-        report_to.strftime("%Y-%m-%d"),
-        actual_count_html,
-        actual_net_html,
-        actual_tax_html,
-        actual_total_html,
-        rejected_count_html,
-        rejected_total_html,
-        pending_count_html,
-        pending_total_html,
-        table_html,
-        actual_total_html,
-        rejected_total_html,
-        pending_total_html,
-    )
+    # Build HTML using string concatenation instead of .format()
+    html_parts = []
+    html_parts.append("<!DOCTYPE html>")
+    html_parts.append("<html>")
+    html_parts.append("<head>")
+    html_parts.append('<meta charset="utf-8">')
+    html_parts.append("<title>Refund Report</title>")
+    html_parts.append("<style>")
+    html_parts.append("body { font-family: Arial, sans-serif; margin: 40px; color: #222; }")
+    html_parts.append("h1 { text-align: center; margin-bottom: 5px; }")
+    html_parts.append(".period { text-align: center; color: #666; margin-bottom: 25px; }")
+    html_parts.append(".summary { width: 100%; border-collapse: collapse; margin-bottom: 25px; }")
+    html_parts.append(".summary td { border: 1px solid #ddd; padding: 12px; text-align: center; }")
+    html_parts.append(".summary-title { font-weight: bold; background: #343a40; color: white; }")
+    html_parts.append(".reject-title { font-weight: bold; background: #f8d7da; }")
+    html_parts.append(".pending-title { font-weight: bold; background: #fff3cd; }")
+    html_parts.append(".refund-table { width: 100%; border-collapse: collapse; margin-top: 20px; }")
+    html_parts.append(".refund-table th { background: #343a40; color: white; padding: 9px; text-align: left; }")
+    html_parts.append(".refund-table td { border: 1px solid #ddd; padding: 8px; }")
+    html_parts.append(".refund-table tr:nth-child(even) { background: #f8f9fa; }")
+    html_parts.append(".footer { margin-top: 25px; font-weight: bold; }")
+    html_parts.append("</style>")
+    html_parts.append("</head>")
+    html_parts.append("<body>")
+    html_parts.append("<h1>REFUND REPORT</h1>")
+    html_parts.append('<div class="period">')
+    html_parts.append("Report Period: <b>" + report_from.strftime("%Y-%m-%d") + "</b> to <b>" + report_to.strftime("%Y-%m-%d") + "</b>")
+    html_parts.append("</div>")
+    html_parts.append('<table class="summary">')
+    html_parts.append("<tr>")
+    html_parts.append('<td class="summary-title">Actual Refunds</td>')
+    html_parts.append('<td class="summary-title">Refund Net</td>')
+    html_parts.append('<td class="summary-title">Refund Tax</td>')
+    html_parts.append('<td class="summary-title">Refund Total</td>')
+    html_parts.append("</tr>")
+    html_parts.append("<tr>")
+    html_parts.append("<td>" + str(actual_count_html) + "</td>")
+    html_parts.append("<td>" + f"{actual_net_html:,.2f}" + " MMK</td>")
+    html_parts.append("<td>" + f"{actual_tax_html:,.2f}" + " MMK</td>")
+    html_parts.append("<td>" + f"{actual_total_html:,.2f}" + " MMK</td>")
+    html_parts.append("</tr>")
+    html_parts.append("<tr>")
+    html_parts.append('<td class="reject-title">Rejected</td>')
+    html_parts.append('<td class="reject-title">Rejected Total</td>')
+    html_parts.append('<td class="pending-title">Pending</td>')
+    html_parts.append('<td class="pending-title">Pending Total</td>')
+    html_parts.append("</tr>")
+    html_parts.append("<tr>")
+    html_parts.append("<td>" + str(rejected_count_html) + "</td>")
+    html_parts.append("<td>" + f"{rejected_total_html:,.2f}" + " MMK</td>")
+    html_parts.append("<td>" + str(pending_count_html) + "</td>")
+    html_parts.append("<td>" + f"{pending_total_html:,.2f}" + " MMK</td>")
+    html_parts.append("</tr>")
+    html_parts.append("</table>")
+    html_parts.append(table_html)
+    html_parts.append('<div class="footer">')
+    html_parts.append("Actual Refund Total: " + f"{actual_total_html:,.2f}" + " MMK")
+    html_parts.append("<br><br>")
+    html_parts.append("Rejected Total: " + f"{rejected_total_html:,.2f}" + " MMK")
+    html_parts.append("<br><br>")
+    html_parts.append("Pending Total: " + f"{pending_total_html:,.2f}" + " MMK")
+    html_parts.append("</div>")
+    html_parts.append("</body>")
+    html_parts.append("</html>")
 
-    return html_content
-
+    return "\n".join(html_parts)
 
 # ==============================================================================
 # BUILD EXPORT DATAFRAME
@@ -697,7 +549,6 @@ def build_export_dataframe(report_df):
     )
 
     return export_df
-
 
 # ==============================================================================
 # MAIN FUNCTION
@@ -855,12 +706,11 @@ def main():
         filtered = filtered[filtered["status"].isin(status_filter)]
 
     # Report period info
-    st.info(
-        "📅 Report Period: **{}** → **{}**".format(
-            from_date.strftime("%Y-%m-%d"),
-            to_date.strftime("%Y-%m-%d")
-        )
+    period_info = "📅 Report Period: **{}** → **{}**".format(
+        from_date.strftime("%Y-%m-%d"),
+        to_date.strftime("%Y-%m-%d")
     )
+    st.info(period_info)
 
     # Financial status masks
     actual_refund_mask = filtered["status"].isin(ACTUAL_REFUND_STATUSES)
@@ -918,10 +768,12 @@ def main():
         st.metric("Rejected Total", money(rejected_total))
 
     if pending_total != 0:
-        st.warning("⏳ Pending Refund Total: **{}**".format(money(pending_total)))
+        pending_msg = "⏳ Pending Refund Total: **{}**".format(money(pending_total))
+        st.warning(pending_msg)
 
     if rejected_total != 0:
-        st.error("❌ Rejected Refund Total: **{}**".format(money(rejected_total)))
+        rejected_msg = "❌ Rejected Refund Total: **{}**".format(money(rejected_total))
+        st.error(rejected_msg)
 
     # ==========================================================================
     # REFUND REGISTER WITH DATE RANGE
@@ -981,12 +833,11 @@ def main():
         & (filtered["refund_date"].dt.date <= register_to_date)
     ]
 
-    st.caption(
-        "Showing refunds from **{}** to **{}**".format(
-            register_from_date.strftime("%Y-%m-%d"),
-            register_to_date.strftime("%Y-%m-%d")
-        )
+    register_caption = "Showing refunds from **{}** to **{}**".format(
+        register_from_date.strftime("%Y-%m-%d"),
+        register_to_date.strftime("%Y-%m-%d")
     )
+    st.caption(register_caption)
 
     if register_df.empty:
         st.warning("No refund records match the selected date range.")
