@@ -198,7 +198,7 @@ def run():
 
     with tab1:
 
-        search = st.text_input("🔍 Search", placeholder="Search by username or full name...", label_visibility="collapsed")
+        search = st.text_input("🔍 Search", placeholder="Search by username or full name...", label_visibility="collapsed", key="search_users")
 
         if search:
             search = search.lower()
@@ -235,7 +235,7 @@ def run():
 
         if filtered:
             opts = {str(u["id"]): f"{u['username']} - {u['full_name']}" for u in filtered}
-            selected_id = st.selectbox("Select User to Edit", options=list(opts.keys()), format_func=lambda x: opts[x], key="edit_select")
+            selected_id = st.selectbox("Select User to Edit", options=list(opts.keys()), format_func=lambda x: opts[x], key="edit_select_main")
             
             if selected_id:
                 selected = next((u for u in filtered if str(u["id"]) == selected_id), None)
@@ -248,15 +248,15 @@ def run():
                         col1, col2 = st.columns(2)
                         
                         with col1:
-                            new_name = st.text_input("New Full Name", value=selected.get("full_name", ""), key="edit_new_name")
+                            new_name = st.text_input("New Full Name", value=selected.get("full_name", ""), key="edit_new_name_main")
                             current_role = next((r["name"] for r in roles if r["id"] == selected["role_id"]), role_names[0])
-                            new_role = st.selectbox("New System Role", role_names, index=role_names.index(current_role), key="edit_new_role")
+                            new_role = st.selectbox("New System Role", role_names, index=role_names.index(current_role), key="edit_new_role_main")
                         
                         with col2:
                             tenant_opts = ["staff", "manager", "admin", "owner"]
                             current_tenant = selected.get("tenant_role", "staff")
-                            new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=tenant_opts.index(current_tenant), key="edit_new_tenant")
-                            new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_new_active")
+                            new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=tenant_opts.index(current_tenant), key="edit_new_tenant_main")
+                            new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_new_active_main")
                         
                         # Check if anything changed
                         has_changes = (
@@ -269,7 +269,7 @@ def run():
                         if not has_changes:
                             st.info("ℹ️ No changes detected")
                         else:
-                            if st.button("📤 Submit Edit Request", use_container_width=True, type="primary"):
+                            if st.button("📤 Submit Edit Request", use_container_width=True, type="primary", key="submit_edit_main"):
                                 if is_maker_user or is_owner:
                                     # Check if already has pending edit request
                                     existing = supabase.table("user_edit_requests").select("id").eq("user_id", selected_id).eq("status", "pending").execute()
@@ -321,20 +321,20 @@ def run():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    username = st.text_input("Username *", placeholder="Min 3 chars")
-                    full_name = st.text_input("Full Name *")
-                    password = st.text_input("Password *", type="password", placeholder="Min 6 chars")
+                    username = st.text_input("Username *", placeholder="Min 3 chars", key="create_username")
+                    full_name = st.text_input("Full Name *", key="create_fullname")
+                    password = st.text_input("Password *", type="password", placeholder="Min 6 chars", key="create_password")
                 
                 with col2:
                     if len(shops) > 1 and is_owner:
-                        selected_shop = st.selectbox("Shop", shop_names)
+                        selected_shop = st.selectbox("Shop", shop_names, key="create_shop")
                         selected_shop_id = shop_map[selected_shop]
                     else:
                         selected_shop_id = shops[0]["id"] if shops else None
                     
-                    tenant_role = st.selectbox("Tenant Role", ["staff", "manager", "admin", "owner"])
-                    selected_role = st.selectbox("System Role", role_names)
-                    active = st.checkbox("Active", value=True)
+                    tenant_role = st.selectbox("Tenant Role", ["staff", "manager", "admin", "owner"], key="create_tenant")
+                    selected_role = st.selectbox("System Role", role_names, key="create_role")
+                    active = st.checkbox("Active", value=True, key="create_active")
                 
                 if st.form_submit_button("📤 Submit Request", use_container_width=True, type="primary"):
                     if not username or not password or not full_name:
@@ -406,7 +406,7 @@ def run():
                                 new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=tenant_opts.index(current_tenant), key="edit_tab_tenant")
                                 new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_tab_active")
                             
-                            if st.button("📤 Submit Edit Request", use_container_width=True, type="primary"):
+                            if st.button("📤 Submit Edit Request", use_container_width=True, type="primary", key="submit_edit_tab"):
                                 if not pending_edit.data:
                                     supabase.table("user_edit_requests").insert({
                                         "requested_by": st.session_state.get("user_id"),
@@ -446,7 +446,7 @@ def run():
             if not pending_create_requests:
                 st.info("No pending create requests")
             else:
-                for req in pending_create_requests:
+                for idx, req in enumerate(pending_create_requests):
                     with st.container(border=True):
                         col1, col2, col3 = st.columns([3, 1, 1])
                         
@@ -458,7 +458,7 @@ def run():
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
                         
                         with col2:
-                            if st.button("✅ Approve", key=f"app_c_{req['id']}", use_container_width=True, type="primary"):
+                            if st.button("✅ Approve", key=f"app_c_{req['id']}_{idx}", use_container_width=True, type="primary"):
                                 supabase.table("users").insert({
                                     "username": req.get("username"),
                                     "full_name": req.get("full_name"),
@@ -478,9 +478,9 @@ def run():
                                 st.rerun()
                         
                         with col3:
-                            with st.popover("❌ Reject"):
-                                reason = st.text_input("Reason", key=f"rej_c_{req['id']}")
-                                if st.button("Confirm", key=f"rej_c_confirm_{req['id']}"):
+                            with st.popover("❌ Reject", key=f"rej_pop_c_{req['id']}_{idx}"):
+                                reason = st.text_input("Reason", key=f"rej_c_{req['id']}_{idx}")
+                                if st.button("Confirm", key=f"rej_c_confirm_{req['id']}_{idx}"):
                                     supabase.table("user_create_requests").update({
                                         "status": "rejected",
                                         "checked_by": st.session_state.get("user_id"),
@@ -501,7 +501,7 @@ def run():
             if not pending_edit_requests:
                 st.info("No pending edit requests")
             else:
-                for req in pending_edit_requests:
+                for idx, req in enumerate(pending_edit_requests):
                     with st.container(border=True):
                         col1, col2, col3 = st.columns([3, 1, 1])
                         
@@ -516,7 +516,7 @@ def run():
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
                         
                         with col2:
-                            if st.button("✅ Approve", key=f"app_e_{req['id']}", use_container_width=True, type="primary"):
+                            if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
                                 # Apply changes
                                 update_data = {}
                                 if req.get('new_full_name'):
@@ -540,9 +540,9 @@ def run():
                                 st.rerun()
                         
                         with col3:
-                            with st.popover("❌ Reject"):
-                                reason = st.text_input("Reason", key=f"rej_e_{req['id']}")
-                                if st.button("Confirm", key=f"rej_e_confirm_{req['id']}"):
+                            with st.popover("❌ Reject", key=f"rej_pop_e_{req['id']}_{idx}"):
+                                reason = st.text_input("Reason", key=f"rej_e_{req['id']}_{idx}")
+                                if st.button("Confirm", key=f"rej_e_confirm_{req['id']}_{idx}"):
                                     supabase.table("user_edit_requests").update({
                                         "status": "rejected",
                                         "checked_by": st.session_state.get("user_id"),
