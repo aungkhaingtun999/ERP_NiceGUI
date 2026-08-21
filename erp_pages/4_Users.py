@@ -1,12 +1,15 @@
 import hashlib
 import pandas as pd
 import streamlit as st
+from datetime import datetime
 
 from auth import require_admin, get_current_shop_id, is_shop_owner, get_current_user
 from database import get_supabase
 from utils.notification import (
     notify_error,
     notify_success,
+    notify_warning,
+    notify_info,
     show_notification,
 )
 
@@ -47,41 +50,58 @@ def run():
     # --------------------------------------------------------------------------
 
     def create_activity_log(user_id, action, description):
-
         try:
-
             supabase.table("user_activity_logs").insert(
                 {
                     "user_id": user_id,
                     "action": action,
                     "description": description,
+                    "created_at": datetime.now().isoformat()
                 }
             ).execute()
-
         except Exception:
             pass
+
+    # --------------------------------------------------------------------------
+    # VALIDATION FUNCTIONS
+    # --------------------------------------------------------------------------
+
+    def validate_username(username):
+        """Validate username format"""
+        if len(username) < 3:
+            return False, "Username must be at least 3 characters long"
+        if not username.isalnum() and '_' not in username:
+            return False, "Username can only contain letters, numbers and underscore"
+        return True, ""
+
+    def validate_password(password):
+        """Validate password strength"""
+        if len(password) < 6:
+            return False, "Password must be at least 6 characters long"
+        return True, ""
+
+    def validate_full_name(full_name):
+        """Validate full name"""
+        if not full_name or len(full_name.strip()) < 2:
+            return False, "Full name must be at least 2 characters long"
+        return True, ""
 
     # --------------------------------------------------------------------------
     # LOAD ROLES
     # --------------------------------------------------------------------------
 
     try:
-
         roles_resp = (
             supabase.table("roles")
             .select("id,name")
             .execute()
         )
-
         roles = roles_resp.data or []
-
     except Exception as e:
-
         st.error(f"Role loading failed: {e}")
         return
 
     if not roles:
-
         st.warning("Roles table is empty. Please create roles first.")
         return
 
@@ -89,11 +109,10 @@ def run():
     role_names = list(role_map.keys())
 
     # --------------------------------------------------------------------------
-    # LOAD SHOPS (for shop selection)
+    # LOAD SHOPS
     # --------------------------------------------------------------------------
 
     try:
-        # Owner/Admin can see all shops, others only their own
         if is_owner:
             shops_resp = supabase.table("shops").select("id,name,code").execute()
         else:
@@ -126,10 +145,9 @@ def run():
 
     try:
         query = supabase.table("users").select(
-            "id, username, full_name, role_id, is_active, shop_id, branch_id, tenant_role"
+            "id, username, full_name, role_id, is_active, shop_id, branch_id, tenant_role, created_at, last_login"
         )
         
-        # Owner/Admin can see all users, others only their shop
         if not is_owner and current_shop_id:
             query = query.eq("shop_id", current_shop_id)
         
@@ -144,103 +162,191 @@ def run():
     # SEARCH
     # --------------------------------------------------------------------------
 
-    search = st.text_input("🔍 Search User")
+    search = st.text_input("🔍 Search User", placeholder="Search by username or full name...")
 
     if search:
-
         search = search.lower()
-
         users = [
-            u
-            for u in users
+            u for u in users
             if search in str(u.get("username", "")).lower()
             or search in str(u.get("full_name", "")).lower()
         ]
 
     # --------------------------------------------------------------------------
-    # CREATE USER (Multi-Tenant)
+    # STATISTICS ROW
     # --------------------------------------------------------------------------
 
-    with st.expander("➕ Create New User"):
+    col1, col2, col3, col4, col5 = st.columns(5)
+    total_users = len(users)
+    active_users = sum(1 for u in users if u.get("is_active", False))
+    inactive_users = total_users - active_users
+    shop_owners = sum(1 for u in users if u.get("tenant_role") == "owner")
+    staff_users = total_users - shop_owners
+
+    with col1:
+        st.metric("👥 Total Users", total_users)
+    with col2:
+        st.metric("🟢 Active", active_users, delta=f"{active_users}" if active_users > 0 else None)
+    with col3:
+        st.metric("🔴 Inactive", inactive_users, delta=f"-{inactive_users}" if inactive_users > 0 else None)
+    with col4:
+        st.metric("👑 Shop Owners", shop_owners)
+    with col5:
+        st.metric("👤 Staff", staff_users)
+
+    st.divider()
+
+    # --------------------------------------------------------------------------
+    # CREATE USER (Multi-Tenant with Full Validation)
+    # --------------------------------------------------------------------------
+
+    with st.expander("➕ Create New User", expanded=False):
 
         with st.form("create_user_form"):
 
-            username = st.text_input("Username")
-            full_name = st.text_input("Full Name")
-            password = st.text_input("Password", type="password")
+            col1, col2 = st.columns(2)
 
-            # Shop selection
-            if len(shops) > 1 and is_owner:
-                selected_shop = st.selectbox("Shop", shop_names)
-                selected_shop_id = shop_map[selected_shop]
-            else:
-                selected_shop_id = shops[0]["id"] if shops else None
-                if shops:
-                    st.info(f"🏪 Shop: {shops[0]['name']}")
+            with col1:
+                username = st.text_input(
+                    "Username *",
+                    placeholder="Enter username (min 3 characters)",
+                    help="Letters, numbers and underscore only"
+                )
+                full_name = st.text_input(
+                    "Full Name *",
+                    placeholder="Enter full name"
+                )
+                password = st.text_input(
+                    "Password *",
+                    type="password",
+                    placeholder="Enter password (min 6 characters)",
+                    help="Minimum 6 characters"
+                )
 
-            # Branch selection (filter by selected shop)
-            if selected_shop_id:
-                branch_options = [b for b in branches if b.get("shop_id") == selected_shop_id]
-            else:
-                branch_options = []
-            
-            branch_names = [b["name"] for b in branch_options] if branch_options else ["No Branch"]
-            selected_branch = st.selectbox("Branch", branch_names)
-            selected_branch_id = branch_options[0]["id"] if branch_options and selected_branch != "No Branch" else None
+            with col2:
+                # Shop selection
+                if len(shops) > 1 and is_owner:
+                    selected_shop = st.selectbox("Shop *", shop_names)
+                    selected_shop_id = shop_map[selected_shop]
+                else:
+                    selected_shop_id = shops[0]["id"] if shops else None
+                    if shops:
+                        st.info(f"🏪 Shop: {shops[0]['name']}")
 
-            # Tenant Role
-            tenant_role = st.selectbox(
-                "Tenant Role",
-                ["staff", "manager", "admin", "owner"],
-                help="staff=Normal user, manager=Can manage team, admin=Can manage shop, owner=Full access"
-            )
+                # Branch selection
+                if selected_shop_id:
+                    branch_options = [b for b in branches if b.get("shop_id") == selected_shop_id]
+                else:
+                    branch_options = []
+                
+                branch_names = [b["name"] for b in branch_options] if branch_options else ["No Branch"]
+                selected_branch = st.selectbox("Branch", branch_names)
+                selected_branch_id = branch_options[0]["id"] if branch_options and selected_branch != "No Branch" else None
 
-            selected_role = st.selectbox("Role", role_names)
-            active = st.checkbox("Active", value=True)
+                tenant_role = st.selectbox(
+                    "Tenant Role *",
+                    ["staff", "manager", "admin", "owner"],
+                    help="staff=Normal user, manager=Can manage team, admin=Can manage shop, owner=Full access"
+                )
 
-            submit = st.form_submit_button("Create User")
+                selected_role = st.selectbox("System Role *", role_names)
+                active = st.checkbox("Active", value=True)
+
+            st.caption("⚠️ Fields with * are required")
+
+            submit = st.form_submit_button("✅ Create User", use_container_width=True)
 
             if submit:
 
-                if not username or not password:
+                # =============================================
+                # VALIDATION
+                # =============================================
 
-                    notify_error("Username and password required")
+                errors = []
 
-                else:
+                # Validate username
+                valid, msg = validate_username(username)
+                if not valid:
+                    errors.append(msg)
 
-                    try:
+                # Validate password
+                valid, msg = validate_password(password)
+                if not valid:
+                    errors.append(msg)
 
-                        # Check if username already exists
-                        existing = supabase.table("users").select("id").eq("username", username).execute()
+                # Validate full name
+                valid, msg = validate_full_name(full_name)
+                if not valid:
+                    errors.append(msg)
+
+                # Show validation errors
+                if errors:
+                    for error in errors:
+                        notify_error(f"❌ {error}")
+                    return
+
+                # =============================================
+                # CREATE USER
+                # =============================================
+
+                try:
+                    # Check if username already exists
+                    existing = supabase.table("users").select("id").eq("username", username).execute()
+                    
+                    if existing.data and len(existing.data) > 0:
+                        notify_error(f"❌ Username '{username}' already exists. Please choose a different username.")
+                    
+                    else:
+                        # Create user
+                        new_user = {
+                            "username": username,
+                            "full_name": full_name,
+                            "password_hash": hash_password(password),
+                            "role_id": role_map[selected_role],
+                            "shop_id": selected_shop_id,
+                            "branch_id": selected_branch_id,
+                            "tenant_role": tenant_role,
+                            "is_active": active,
+                            "created_at": datetime.now().isoformat()
+                        }
                         
-                        if existing.data and len(existing.data) > 0:
-                            notify_error(f"❌ Username '{username}' already exists. Please choose a different username.")
-                        
-                        else:
-                            supabase.table("users").insert(
-                                {
-                                    "username": username,
-                                    "full_name": full_name,
-                                    "password_hash": hash_password(password),
-                                    "role_id": role_map[selected_role],
-                                    "shop_id": selected_shop_id,
-                                    "branch_id": selected_branch_id,
-                                    "tenant_role": tenant_role,
-                                    "is_active": active,
-                                }
-                            ).execute()
+                        result = supabase.table("users").insert(new_user).execute()
 
-                            notify_success(f"✅ User '{username}' created successfully")
+                        if result.data:
+                            # Get created user ID
+                            new_user_id = result.data[0].get("id")
+                            
+                            # Log activity
+                            create_activity_log(
+                                st.session_state.get("user_id"),
+                                "CREATE_USER",
+                                f"Created user '{username}' with role '{selected_role}' and tenant role '{tenant_role}'"
+                            )
+
+                            # Success notification with details
+                            st.success(f"""
+                            ✅ **User created successfully!**
+
+                            | Field | Value |
+                            |-------|-------|
+                            | **Username** | `{username}` |
+                            | **Full Name** | {full_name} |
+                            | **System Role** | {selected_role} |
+                            | **Tenant Role** | {tenant_role} |
+                            | **Status** | {"🟢 Active" if active else "🔴 Inactive"} |
+                            """)
+                            
+                            st.balloons()
                             st.rerun()
-
-                    except Exception as e:
-                        
-                        error_msg = str(e)
-                        
-                        if "duplicate key value violates unique constraint" in error_msg:
-                            notify_error(f"❌ Username '{username}' already exists. Please choose a different username.")
                         else:
-                            notify_error(f"❌ Create user failed: {e}")
+                            notify_error("❌ Failed to create user: No data returned")
+
+                except Exception as e:
+                    error_msg = str(e)
+                    if "duplicate key value violates unique constraint" in error_msg:
+                        notify_error(f"❌ Username '{username}' already exists. Please choose a different username.")
+                    else:
+                        notify_error(f"❌ Create user failed: {error_msg}")
 
     st.divider()
 
@@ -251,49 +357,45 @@ def run():
     st.subheader("📋 Users")
 
     if not users:
-
-        st.info("No users found")
-
+        st.info("📭 No users found. Create your first user above.")
     else:
-
+        # Convert to DataFrame for display
         table_rows = []
-
         for u in users:
-
             role_name = next(
-                (
-                    r["name"]
-                    for r in roles
-                    if r["id"] == u["role_id"]
-                ),
+                (r["name"] for r in roles if r["id"] == u["role_id"]),
                 "Unknown",
             )
-            
             shop_name = next(
                 (s["name"] for s in shops if s["id"] == u.get("shop_id")),
                 "N/A",
             )
-            
             branch_name = next(
                 (b["name"] for b in branches if b["id"] == u.get("branch_id")),
                 "N/A",
             )
 
-            table_rows.append(
-                {
-                    "Username": u.get("username"),
-                    "Full Name": u.get("full_name"),
-                    "Shop": shop_name,
-                    "Branch": branch_name,
-                    "Tenant Role": u.get("tenant_role", "staff"),
-                    "Role": role_name,
-                    "Status": (
-                        "🟢 Active"
-                        if u.get("is_active")
-                        else "🔴 Disabled"
-                    ),
-                }
-            )
+            # Format dates
+            created_at = u.get("created_at")
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        created_at = created_at[:10]
+                except:
+                    created_at = "N/A"
+            else:
+                created_at = "N/A"
+
+            table_rows.append({
+                "Username": u.get("username"),
+                "Full Name": u.get("full_name"),
+                "Shop": shop_name,
+                "Branch": branch_name,
+                "Tenant Role": u.get("tenant_role", "staff"),
+                "System Role": role_name,
+                "Status": "🟢 Active" if u.get("is_active") else "🔴 Disabled",
+                "Created": created_at,
+            })
 
         df_users = pd.DataFrame(table_rows)
 
@@ -301,7 +403,19 @@ def run():
             df_users,
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "Status": st.column_config.TextColumn(
+                    "Status",
+                    help="User account status"
+                ),
+                "Created": st.column_config.TextColumn(
+                    "Created",
+                    help="User creation date"
+                ),
+            }
         )
+
+        st.caption(f"📊 Showing {len(users)} users")
 
         st.divider()
 
@@ -309,239 +423,212 @@ def run():
         # EDIT USER (Multi-Tenant)
         # ----------------------------------------------------------------------
 
-        st.subheader("✏ Edit User")
+        st.subheader("✏️ Edit User")
 
-        user_options = {
-            str(u["id"]): f"{u['username']} - {u['full_name']}"
-            for u in users
-        }
-
-        selected_user_id = st.selectbox(
-            "Select User",
-            options=list(user_options.keys()),
-            format_func=lambda x: user_options[x],
-        )
-
-        selected_user = next(
-            (
-                u
+        if not users:
+            st.info("No users available to edit")
+        else:
+            user_options = {
+                str(u["id"]): f"{u['username']} - {u['full_name']}"
                 for u in users
-                if str(u["id"]) == selected_user_id
-            ),
-            None,
-        )
+            }
 
-        if selected_user:
-
-            current_role_name = next(
-                (
-                    r["name"]
-                    for r in roles
-                    if r["id"] == selected_user["role_id"]
-                ),
-                role_names[0],
+            selected_user_id = st.selectbox(
+                "Select User",
+                options=list(user_options.keys()),
+                format_func=lambda x: user_options[x],
             )
 
-            new_full_name = st.text_input(
-                "Full Name",
-                value=selected_user.get("full_name", ""),
+            selected_user = next(
+                (u for u in users if str(u["id"]) == selected_user_id),
+                None,
             )
 
-            new_role = st.selectbox(
-                "Role",
-                role_names,
-                index=role_names.index(current_role_name),
-            )
-            
-            # Shop selection (only if owner/admin)
-            if is_owner and len(shops) > 1:
-                current_shop_name = next(
-                    (s["name"] for s in shops if s["id"] == selected_user.get("shop_id")),
-                    shop_names[0] if shop_names else ""
+            if selected_user:
+                # Display user info
+                with st.container(border=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"**Username:** `{selected_user.get('username')}`")
+                    with col2:
+                        st.write(f"**Created:** {selected_user.get('created_at', 'N/A')[:10] if selected_user.get('created_at') else 'N/A'}")
+
+                current_role_name = next(
+                    (r["name"] for r in roles if r["id"] == selected_user["role_id"]),
+                    role_names[0],
                 )
-                new_shop = st.selectbox("Shop", shop_names, index=shop_names.index(current_shop_name) if current_shop_name in shop_names else 0)
-                new_shop_id = shop_map[new_shop]
-            else:
-                new_shop_id = selected_user.get("shop_id") or current_shop_id
-                
-            # Filter branches by selected shop
-            if new_shop_id:
-                branch_options = [b for b in branches if b.get("shop_id") == new_shop_id]
-            else:
-                branch_options = []
-                
-            branch_names = [b["name"] for b in branch_options] if branch_options else ["No Branch"]
-            current_branch_name = next(
-                (b["name"] for b in branches if b["id"] == selected_user.get("branch_id")),
-                branch_names[0] if branch_names else "No Branch"
-            )
-            
-            if branch_names:
-                new_branch = st.selectbox("Branch", branch_names, index=branch_names.index(current_branch_name) if current_branch_name in branch_names else 0)
-                new_branch_id = branch_options[branch_names.index(new_branch)]["id"] if branch_options else None
-            else:
-                new_branch_id = None
-                st.info("No branches available")
 
-            # Tenant Role
-            current_tenant_role = selected_user.get("tenant_role", "staff")
-            tenant_role_options = ["staff", "manager", "admin", "owner"]
-            new_tenant_role = st.selectbox(
-                "Tenant Role",
-                tenant_role_options,
-                index=tenant_role_options.index(current_tenant_role) if current_tenant_role in tenant_role_options else 0,
-                help="staff=Normal user, manager=Can manage team, admin=Can manage shop, owner=Full access"
-            )
+                col1, col2 = st.columns(2)
 
-            new_active = st.toggle("Active", value=selected_user.get("is_active", True))
+                with col1:
+                    new_full_name = st.text_input(
+                        "Full Name",
+                        value=selected_user.get("full_name", ""),
+                    )
+                    new_role = st.selectbox(
+                        "System Role",
+                        role_names,
+                        index=role_names.index(current_role_name),
+                    )
 
-            col1, col2 = st.columns(2)
-
-            # UPDATE
-            with col1:
-
-                if st.button("💾 Update User", use_container_width=True):
-
-                    try:
-
-                        update_data = {
-                            "full_name": new_full_name,
-                            "role_id": role_map[new_role],
-                            "shop_id": new_shop_id,
-                            "branch_id": new_branch_id,
-                            "tenant_role": new_tenant_role,
-                            "is_active": new_active,
-                        }
-                        
-                        supabase.table("users").update(update_data).eq("id", selected_user_id).execute()
-
-                        create_activity_log(
-                            st.session_state.get("user_id"),
-                            "UPDATE_USER",
-                            f"Updated user {selected_user['username']}",
+                with col2:
+                    # Shop selection
+                    if is_owner and len(shops) > 1:
+                        current_shop_name = next(
+                            (s["name"] for s in shops if s["id"] == selected_user.get("shop_id")),
+                            shop_names[0] if shop_names else ""
                         )
+                        new_shop = st.selectbox("Shop", shop_names, index=shop_names.index(current_shop_name) if current_shop_name in shop_names else 0)
+                        new_shop_id = shop_map[new_shop]
+                    else:
+                        new_shop_id = selected_user.get("shop_id") or current_shop_id
+                        
+                    # Filter branches
+                    if new_shop_id:
+                        branch_options = [b for b in branches if b.get("shop_id") == new_shop_id]
+                    else:
+                        branch_options = []
+                        
+                    branch_names = [b["name"] for b in branch_options] if branch_options else ["No Branch"]
+                    current_branch_name = next(
+                        (b["name"] for b in branches if b["id"] == selected_user.get("branch_id")),
+                        branch_names[0] if branch_names else "No Branch"
+                    )
+                    
+                    if branch_names:
+                        new_branch = st.selectbox("Branch", branch_names, index=branch_names.index(current_branch_name) if current_branch_name in branch_names else 0)
+                        new_branch_id = branch_options[branch_names.index(new_branch)]["id"] if branch_options else None
+                    else:
+                        new_branch_id = None
+                        st.info("No branches available")
 
-                        notify_success("✅ User updated successfully")
-                        st.rerun()
+                # Tenant Role
+                current_tenant_role = selected_user.get("tenant_role", "staff")
+                tenant_role_options = ["staff", "manager", "admin", "owner"]
+                new_tenant_role = st.selectbox(
+                    "Tenant Role",
+                    tenant_role_options,
+                    index=tenant_role_options.index(current_tenant_role) if current_tenant_role in tenant_role_options else 0,
+                    help="staff=Normal user, manager=Can manage team, admin=Can manage shop, owner=Full access"
+                )
 
-                    except Exception as e:
+                new_active = st.toggle("Active", value=selected_user.get("is_active", True))
 
-                        notify_error(f"❌ Update failed: {e}")
+                col1, col2, col3 = st.columns(3)
 
-            # DELETE
-            with col2:
-
-                if selected_user.get("username") == "admin":
-
-                    st.info("⚠️ System admin cannot be deleted")
-
-                else:
-
-                    if st.button("🗑 Delete User", use_container_width=True):
-
+                # UPDATE
+                with col1:
+                    if st.button("💾 Update User", use_container_width=True, type="primary"):
                         try:
-
-                            supabase.table("users").delete().eq("id", selected_user_id).execute()
+                            update_data = {
+                                "full_name": new_full_name,
+                                "role_id": role_map[new_role],
+                                "shop_id": new_shop_id,
+                                "branch_id": new_branch_id,
+                                "tenant_role": new_tenant_role,
+                                "is_active": new_active,
+                            }
+                            
+                            supabase.table("users").update(update_data).eq("id", selected_user_id).execute()
 
                             create_activity_log(
                                 st.session_state.get("user_id"),
-                                "DELETE_USER",
-                                f"Deleted user {selected_user['username']}",
+                                "UPDATE_USER",
+                                f"Updated user {selected_user['username']}",
                             )
 
-                            notify_success("✅ User deleted successfully")
+                            notify_success(f"✅ User '{selected_user['username']}' updated successfully")
                             st.rerun()
 
                         except Exception as e:
+                            notify_error(f"❌ Update failed: {e}")
 
-                            notify_error(f"❌ Delete failed: {e}")
+                # DELETE
+                with col2:
+                    if selected_user.get("username") == "admin":
+                        st.info("⚠️ System admin cannot be deleted")
+                    else:
+                        if st.button("🗑 Delete User", use_container_width=True):
+                            try:
+                                supabase.table("users").delete().eq("id", selected_user_id).execute()
 
-            st.divider()
+                                create_activity_log(
+                                    st.session_state.get("user_id"),
+                                    "DELETE_USER",
+                                    f"Deleted user {selected_user['username']}",
+                                )
 
-            # ------------------------------------------------------------------
-            # RESET PASSWORD
-            # ------------------------------------------------------------------
+                                notify_success(f"✅ User '{selected_user['username']}' deleted successfully")
+                                st.rerun()
 
-            st.subheader("🔐 Reset Password")
+                            except Exception as e:
+                                notify_error(f"❌ Delete failed: {e}")
 
-            new_password = st.text_input(
-                "New Password",
-                type="password",
-            )
-
-            if st.button("💾 Save Password", use_container_width=True):
-
-                if not new_password:
-
-                    notify_error("❌ Password required")
-
-                else:
-
-                    try:
-
-                        supabase.table("users").update(
-                            {
-                                "password_hash": hash_password(new_password)
-                            }
-                        ).eq("id", selected_user_id).execute()
-
-                        create_activity_log(
-                            st.session_state.get("user_id"),
-                            "RESET_PASSWORD",
-                            f"Reset password for {selected_user['username']}",
+                # RESET PASSWORD
+                with col3:
+                    with st.popover("🔐 Reset Password"):
+                        new_password = st.text_input(
+                            "New Password",
+                            type="password",
+                            placeholder="Enter new password (min 6 chars)"
                         )
+                        
+                        if st.button("💾 Save Password", use_container_width=True):
+                            if not new_password:
+                                notify_error("❌ Password required")
+                            elif len(new_password) < 6:
+                                notify_error("❌ Password must be at least 6 characters")
+                            else:
+                                try:
+                                    supabase.table("users").update({
+                                        "password_hash": hash_password(new_password)
+                                    }).eq("id", selected_user_id).execute()
 
-                        notify_success("✅ Password reset successfully")
-                        st.rerun()
+                                    create_activity_log(
+                                        st.session_state.get("user_id"),
+                                        "RESET_PASSWORD",
+                                        f"Reset password for {selected_user['username']}",
+                                    )
 
+                                    notify_success(f"✅ Password reset successfully for '{selected_user['username']}'")
+                                    st.rerun()
+
+                                except Exception as e:
+                                    notify_error(f"❌ Reset failed: {e}")
+
+                st.divider()
+
+                # ------------------------------------------------------------------
+                # USER LOGIN HISTORY
+                # ------------------------------------------------------------------
+
+                with st.expander("📋 Login History", expanded=False):
+                    try:
+                        login_logs = (
+                            supabase.table("user_activity_logs")
+                            .select("action, description, created_at")
+                            .eq("user_id", selected_user_id)
+                            .order("created_at", desc=True)
+                            .limit(20)
+                            .execute()
+                        )
+                        
+                        if login_logs.data:
+                            st.dataframe(login_logs.data, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No login history found")
                     except Exception as e:
-
-                        notify_error(f"❌ Reset failed: {e}")
-
-    # ==============================================================================
-    # SUMMARY
-    # ==============================================================================
-
-    total = len(users)
-    active_count = sum(
-        1 for u in users if u.get("is_active", False)
-    )
-    
-    # Count by shop
-    shop_counts = {}
-    for u in users:
-        shop_id = u.get("shop_id")
-        if shop_id:
-            shop_name = next((s["name"] for s in shops if s["id"] == shop_id), "Unknown")
-            shop_counts[shop_name] = shop_counts.get(shop_name, 0) + 1
-
-    st.divider()
-    st.subheader("📊 System Summary")
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric("👥 Users", total)
-    c2.metric("🟢 Active", active_count)
-    c3.metric("🔴 Disabled", total - active_count)
-    c4.metric("🛡 Roles", len(roles))
-    
-    # Shop distribution
-    if shop_counts:
-        st.divider()
-        st.subheader("🏪 Users by Shop")
-        for shop_name, count in shop_counts.items():
-            st.metric(shop_name, count)
+                        st.error(f"Failed to load login history: {e}")
 
     # ==============================================================================
-    # ACTIVITY LOG
+    # ACTIVITY LOG (All Users)
     # ==============================================================================
 
     st.divider()
 
-    with st.expander("📝 User Activity Log", expanded=False):
+    with st.expander("📝 Recent User Activity Log", expanded=False):
 
         try:
-
             logs = (
                 supabase.table("user_activity_logs")
                 .select("action, description, created_at")
@@ -553,98 +640,16 @@ def run():
             activity_logs = logs.data or []
 
             if activity_logs:
-
                 st.dataframe(
                     activity_logs,
                     use_container_width=True,
                     hide_index=True,
                 )
-
             else:
-
                 st.info("No activity logs found")
 
         except Exception as e:
-
             st.error(f"Activity log loading failed: {e}")
-
-    # ==============================================================================
-    # PERMISSION MATRIX
-    # ==============================================================================
-
-    st.divider()
-    st.subheader("👑 Permission Matrix")
-
-    try:
-
-        permissions = (
-            supabase.table("permissions")
-            .select("*")
-            .execute()
-            .data
-            or []
-        )
-
-        if permissions:
-
-            for role in roles:
-
-                st.markdown(f"### 🛡 {role['name']}")
-
-                for perm in permissions:
-
-                    # ✅ Fix: Use 'name' column instead of 'permission_name'
-                    perm_name = perm.get("name") or perm.get("permission_name") or str(perm.get("id"))
-                    
-                    current = (
-                        supabase.table("role_permissions")
-                        .select("allowed")
-                        .eq("role_id", role["id"])
-                        .eq("permission_id", perm["id"])
-                        .execute()
-                    )
-
-                    allowed = False
-
-                    if current.data:
-                        allowed = current.data[0]["allowed"]
-
-                    new_value = st.checkbox(
-                        str(perm_name),
-                        value=allowed,
-                        key=f"{role['id']}_{perm['id']}",
-                    )
-
-                    if new_value != allowed:
-
-                        if current.data:
-
-                            supabase.table("role_permissions").update(
-                                {"allowed": new_value}
-                            ).eq("role_id", role["id"]).eq(
-                                "permission_id",
-                                perm["id"],
-                            ).execute()
-
-                        else:
-
-                            supabase.table("role_permissions").insert(
-                                {
-                                    "role_id": role["id"],
-                                    "permission_id": perm["id"],
-                                    "allowed": new_value,
-                                }
-                            ).execute()
-
-                        st.rerun()
-
-        else:
-
-            st.info("No permissions found in database.")
-
-    except Exception as e:
-
-        st.error(f"Permission Matrix Error: {e}")
 
 
 # ==============================================================================
