@@ -160,25 +160,37 @@ def run():
 
                     try:
 
-                        supabase.table("users").insert(
-                            {
-                                "username": username,
-                                "full_name": full_name,
-                                "password_hash": hash_password(password),
-                                "role_id": role_map[selected_role],
-                                "is_active": active,
-                            }
-                        ).execute()
+                        # ✅ Check if username already exists
+                        existing = supabase.table("users").select("id").eq("username", username).execute()
+                        
+                        if existing.data and len(existing.data) > 0:
+                            notify_error(f"❌ Username '{username}' already exists. Please choose a different username.")
+                        
+                        else:
+                            supabase.table("users").insert(
+                                {
+                                    "username": username,
+                                    "full_name": full_name,
+                                    "password_hash": hash_password(password),
+                                    "role_id": role_map[selected_role],
+                                    "is_active": active,
+                                }
+                            ).execute()
 
-                        notify_success(
-                            f"User '{username}' created successfully"
-                        )
+                            notify_success(
+                                f"✅ User '{username}' created successfully"
+                            )
 
-                        st.rerun()
+                            st.rerun()
 
                     except Exception as e:
-
-                        notify_error(f"Create user failed: {e}")
+                        
+                        error_msg = str(e)
+                        
+                        if "duplicate key value violates unique constraint" in error_msg:
+                            notify_error(f"❌ Username '{username}' already exists. Please choose a different username.")
+                        else:
+                            notify_error(f"❌ Create user failed: {e}")
 
     st.divider()
 
@@ -310,14 +322,14 @@ def run():
                         )
 
                         notify_success(
-                            "User updated successfully"
+                            "✅ User updated successfully"
                         )
 
                         st.rerun()
 
                     except Exception as e:
 
-                        notify_error(f"Update failed: {e}")
+                        notify_error(f"❌ Update failed: {e}")
 
             # DELETE
             with col2:
@@ -325,7 +337,7 @@ def run():
                 if selected_user.get("username") == "admin":
 
                     st.info(
-                        "System admin cannot be deleted"
+                        "⚠️ System admin cannot be deleted"
                     )
 
                 else:
@@ -349,14 +361,14 @@ def run():
                             )
 
                             notify_success(
-                                "User deleted successfully"
+                                "✅ User deleted successfully"
                             )
 
                             st.rerun()
 
                         except Exception as e:
 
-                            notify_error(f"Delete failed: {e}")
+                            notify_error(f"❌ Delete failed: {e}")
 
             st.divider()
 
@@ -378,7 +390,7 @@ def run():
 
                 if not new_password:
 
-                    notify_error("Password required")
+                    notify_error("❌ Password required")
 
                 else:
 
@@ -397,14 +409,14 @@ def run():
                         )
 
                         notify_success(
-                            "Password reset successfully"
+                            "✅ Password reset successfully"
                         )
 
                         st.rerun()
 
                     except Exception as e:
 
-                        notify_error(f"Reset failed: {e}")
+                        notify_error(f"❌ Reset failed: {e}")
 
     # ==============================================================================
     # SUMMARY
