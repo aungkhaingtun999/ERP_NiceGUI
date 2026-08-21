@@ -54,26 +54,19 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
-    # bcrypt
     if stored.startswith("$2"):
         try:
             return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
         except Exception:
             return False
 
-    # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    
-    # Direct match
     if hmac.compare_digest(stored, sha256_hash):
         upgrade_password(user["id"], password)
         return True
-    
-    # Plain text match (legacy)
     if hmac.compare_digest(stored, password):
         upgrade_password(user["id"], password)
         return True
-    
     return False
 
 
@@ -85,19 +78,19 @@ def upgrade_password(user_id, password):
         pass
 
 # ==================================================
-# USER QUERY - FIXED (ဒီနေရာမှာ ပြင်ထားပါတယ်)
+# USER QUERY - FIXED
 # ==================================================
 
 def get_user_by_username(username):
     """Get user by username - case insensitive (Fixed)"""
     try:
-        # ပထမ အဆင့် - တိကျတဲ့ username နဲ့ ရှာပါ (case-sensitive)
+        # ပထမ - တိကျတဲ့ username နဲ့ ရှာပါ
         result = supabase.table("users").select("*").eq("username", username.strip()).execute()
         
         if result.data and len(result.data) > 0:
             return result.data[0]
         
-        # ဒုတိယ အဆင့် - မတွေ့ရင် အကုန်ဆွဲပြီး Python နဲ့ case-insensitive ရှာပါ
+        # ဒုတိယ - အကုန်ဆွဲပြီး case-insensitive ရှာပါ
         all_result = supabase.table("users").select("*").execute()
         
         if all_result.data:
@@ -121,7 +114,6 @@ def login_user(username, password):
     if not user:
         return False, "User not found. Please check username."
 
-    # Check if user is active
     if not user.get("is_active", False):
         return False, "Account is disabled. Please contact administrator."
 
@@ -135,7 +127,6 @@ def login_user(username, password):
             pass
 
     if not verify_password(user, password):
-        # Update failed attempts
         attempts = user.get("failed_attempts", 0) + 1
         update_data = {"failed_attempts": attempts}
         if attempts >= MAX_FAILED_ATTEMPTS:
@@ -146,7 +137,6 @@ def login_user(username, password):
             pass
         return False, "Invalid password."
 
-    # Login success
     try:
         supabase.table("users").update({
             "failed_attempts": 0,
@@ -257,11 +247,21 @@ def require_shop_access():
     return get_current_user()
 
 # ==================================================
-# LOGIN UI
+# LOGIN UI - WITH DEBUG
 # ==================================================
 
 def login_page():
     st.title("🔐 ERP Enterprise Login")
+    
+    # DEBUG - Show all users from database
+    with st.expander("🔍 Database Debug (Click to expand)"):
+        try:
+            all_users = supabase.table("users").select("username, full_name, shop_id, tenant_role, is_active").execute()
+            st.write("📋 Users in database:")
+            st.dataframe(all_users.data)
+        except Exception as e:
+            st.error(f"❌ Cannot fetch users: {e}")
+    
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
@@ -269,6 +269,8 @@ def login_page():
         if not username or not password:
             st.error("Username and password required")
         else:
+            # DEBUG
+            st.write(f"🔍 Trying to login with: '{username}'")
             success, msg = login_user(username, password)
             if success:
                 st.success("✅ Login successful!")
@@ -299,7 +301,7 @@ def auth_sidebar():
             st.success(f"👤 {user['full_name']}")
             st.caption(f"Role: {user['role']}")
             if user.get('shop_id'):
-                st.caption(f"🏪 Shop ID: {user.get('shop_id', 'N/A')[:8]}...")
+                st.caption(f"🏪 Shop: {user.get('shop_id', 'N/A')[:8]}...")
             if user.get('tenant_role'):
                 st.caption(f"🔑 {user.get('tenant_role_name', 'Staff')}")
             if st.button("🚪 Logout"):
