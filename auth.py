@@ -297,7 +297,39 @@ def login_page():
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")
+# ==================================================
+# MAKER-CHECKER FUNCTIONS
+# ==================================================
 
+def is_maker():
+    """Check if current user is a Maker (Admin)"""
+    user = get_current_user()
+    if not user:
+        return False
+    role_id = user.get('role_id')
+    return role_id == ROLE_ADMIN
+
+def is_checker():
+    """Check if current user is a Checker (Owner)"""
+    user = get_current_user()
+    if not user:
+        return False
+    tenant_role = user.get('tenant_role', 'staff')
+    return tenant_role == TENANT_ROLE_OWNER
+
+def require_maker():
+    """Require user to be a Maker (Admin)"""
+    require_login()
+    if not is_maker():
+        st.error("⛔ Admin (Maker) privileges required to create user requests.")
+        st.stop()
+
+def require_checker():
+    """Require user to be a Checker (Owner)"""
+    require_login()
+    if not is_checker():
+        st.error("⛔ Owner (Checker) privileges required to approve/reject requests.")
+        st.stop()
 # ==================================================
 # LOGOUT
 # ==================================================
