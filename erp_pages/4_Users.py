@@ -5,8 +5,6 @@ from datetime import datetime
 
 from auth import (
     require_admin, 
-    require_maker, 
-    require_checker,
     get_current_shop_id, 
     is_shop_owner, 
     get_current_user,
@@ -28,10 +26,7 @@ from utils.notification import (
 
 def run():
 
-    # Notification
     show_notification()
-
-    # Admin Guard
     require_admin()
 
     st.title("👥 User Management")
@@ -39,7 +34,6 @@ def run():
 
     supabase = get_supabase()
     
-    # Get current user and shop info
     current_user = get_current_user()
     current_shop_id = get_current_shop_id()
     is_owner = is_shop_owner()
@@ -69,7 +63,7 @@ def run():
             pass
 
     # --------------------------------------------------------------------------
-    # LOAD ROLES
+    # LOAD DATA
     # --------------------------------------------------------------------------
 
     try:
@@ -86,10 +80,6 @@ def run():
     role_map = {r["name"]: r["id"] for r in roles}
     role_names = list(role_map.keys())
 
-    # --------------------------------------------------------------------------
-    # LOAD SHOPS
-    # --------------------------------------------------------------------------
-
     try:
         if is_owner:
             shops_resp = supabase.table("shops").select("id,name,code").execute()
@@ -102,10 +92,6 @@ def run():
     shop_map = {s["name"]: s["id"] for s in shops}
     shop_names = list(shop_map.keys())
 
-    # --------------------------------------------------------------------------
-    # LOAD BRANCHES
-    # --------------------------------------------------------------------------
-
     try:
         if is_owner:
             branches_resp = supabase.table("branches").select("id,name,shop_id").execute()
@@ -114,10 +100,6 @@ def run():
         branches = branches_resp.data or []
     except Exception:
         branches = []
-
-    # --------------------------------------------------------------------------
-    # LOAD USERS
-    # --------------------------------------------------------------------------
 
     try:
         query = supabase.table("users").select(
@@ -130,10 +112,6 @@ def run():
     except Exception as e:
         st.error(f"User loading failed: {e}")
         return
-
-    # --------------------------------------------------------------------------
-    # LOAD PENDING REQUESTS
-    # --------------------------------------------------------------------------
 
     pending_requests = []
     if is_checker_user or is_owner:
@@ -150,138 +128,55 @@ def run():
             pass
 
     # ==========================================================================
-    # STATISTICS ROW - COMPACT
+    # STATISTICS - ONE ROW
     # ==========================================================================
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("👥 Users", len(users))
-    col2.metric("🟢 Active", sum(1 for u in users if u.get("is_active")))
-    col3.metric("🔴 Inactive", sum(1 for u in users if not u.get("is_active")))
-    col4.metric("👑 Owners", sum(1 for u in users if u.get("tenant_role") == "owner"))
-    col5.metric("⏳ Pending", len(pending_requests))
+    total = len(users)
+    active = sum(1 for u in users if u.get("is_active"))
+    inactive = total - active
+    owners = sum(1 for u in users if u.get("tenant_role") == "owner")
+    pending = len(pending_requests)
+
+    # ✅ One row with 6 metrics
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("👥 Users", total)
+    c2.metric("🟢 Active", active)
+    c3.metric("🔴 Inactive", inactive)
+    c4.metric("👑 Owners", owners)
+    c5.metric("⏳ Pending", pending)
+    c6.metric("🛡 Roles", len(roles))
 
     st.divider()
 
     # ==========================================================================
-    # TABS - COMPACT
+    # SEARCH + CREATE (One Row)
     # ==========================================================================
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 Users", "➕ Create", "✅ Approvals", "📊 Summary"])
+    col_search, col_btn = st.columns([4, 1])
+    with col_search:
+        search = st.text_input("🔍 Search", placeholder="Search username...", label_visibility="collapsed")
+    with col_btn:
+        if st.button("➕ New User", use_container_width=True, type="primary"):
+            st.session_state.show_create = not st.session_state.get("show_create", False)
 
     # ==========================================================================
-    # TAB 1: USERS
+    # CREATE FORM (Toggle)
     # ==========================================================================
 
-    with tab1:
-        search = st.text_input("🔍 Search", placeholder="Search user...", key="search_user")
-        
-        if search:
-            search = search.lower()
-            filtered = [u for u in users if search in str(u.get("username", "")).lower() or search in str(u.get("full_name", "")).lower()]
-        else:
-            filtered = users
-
-        if filtered:
-            data = []
-            for u in filtered:
-                role_name = next((r["name"] for r in roles if r["id"] == u["role_id"]), "Unknown")
-                shop_name = next((s["name"] for s in shops if s["id"] == u.get("shop_id")), "N/A")
-                branch_name = next((b["name"] for b in branches if b["id"] == u.get("branch_id")), "N/A")
-                
-                data.append({
-                    "User": u.get("username"),
-                    "Name": u.get("full_name"),
-                    "Shop": shop_name,
-                    "Branch": branch_name,
-                    "Tenant": u.get("tenant_role", "staff"),
-                    "Role": role_name,
-                    "Status": "✅" if u.get("is_active") else "❌",
-                })
-            
-            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
-        else:
-            st.info("No users found")
-
-        st.divider()
-
-        # Edit Section - Compact
-        st.subheader("✏️ Edit User")
-        
-        user_options = {str(u["id"]): f"{u['username']}" for u in users}
-        if user_options:
-            selected_id = st.selectbox("Select User", options=list(user_options.keys()), format_func=lambda x: user_options[x], key="edit_user")
-            selected = next((u for u in users if str(u["id"]) == selected_id), None)
-            
-            if selected:
-                with st.expander(f"✏️ Editing: {selected.get('username')}", expanded=True):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        new_name = st.text_input("Full Name", value=selected.get("full_name", ""), key="edit_name")
-                        current_role = next((r["name"] for r in roles if r["id"] == selected["role_id"]), role_names[0])
-                        new_role = st.selectbox("System Role", role_names, index=role_names.index(current_role), key="edit_role")
-                        
-                        # Tenant Role - Compact
-                        tenant_options = ["staff", "manager", "admin", "owner"]
-                        current_tenant = selected.get("tenant_role", "staff")
-                        new_tenant = st.selectbox("Tenant Role", tenant_options, index=tenant_options.index(current_tenant), key="edit_tenant")
-                    
-                    with col2:
-                        new_active = st.toggle("Active", value=selected.get("is_active", True), key="edit_active")
-                        
-                        # Password reset - Compact
-                        with st.popover("🔐 Reset Password"):
-                            new_pass = st.text_input("New Password", type="password", placeholder="Min 6 chars", key="reset_pass")
-                            if st.button("Save Password", use_container_width=True):
-                                if new_pass and len(new_pass) >= 6:
-                                    supabase.table("users").update({"password_hash": hash_password(new_pass)}).eq("id", selected_id).execute()
-                                    notify_success("✅ Password reset")
-                                    st.rerun()
-                                else:
-                                    notify_error("❌ Password must be at least 6 chars")
-                    
-                    col_a, col_b, col_c = st.columns(3)
-                    with col_a:
-                        if st.button("💾 Update", use_container_width=True, type="primary"):
-                            supabase.table("users").update({
-                                "full_name": new_name,
-                                "role_id": role_map[new_role],
-                                "tenant_role": new_tenant,
-                                "is_active": new_active,
-                            }).eq("id", selected_id).execute()
-                            notify_success(f"✅ Updated {selected['username']}")
-                            st.rerun()
-                    
-                    with col_b:
-                        if selected.get("username") != "admin":
-                            if st.button("🗑 Delete", use_container_width=True):
-                                supabase.table("users").delete().eq("id", selected_id).execute()
-                                notify_success(f"✅ Deleted {selected['username']}")
-                                st.rerun()
-                        else:
-                            st.info("⚠️ Admin protected")
-        else:
-            st.info("No users to edit")
-
-    # ==========================================================================
-    # TAB 2: CREATE USER
-    # ==========================================================================
-
-    with tab2:
-        if not is_maker_user and not is_owner:
-            st.warning("⚠️ Only Admin can create user requests")
-        else:
+    if st.session_state.get("show_create", False):
+        with st.container(border=True):
             st.subheader("📝 Create User Request")
             
             with st.form("create_form", clear_on_submit=True):
-                col1, col2 = st.columns(2)
+                col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
                     username = st.text_input("Username *", placeholder="Min 3 chars")
                     full_name = st.text_input("Full Name *")
-                    password = st.text_input("Password *", type="password", placeholder="Min 6 chars")
-                
                 with col2:
+                    password = st.text_input("Password *", type="password", placeholder="Min 6 chars")
+                    selected_role = st.selectbox("System Role", role_names)
+                with col3:
                     shop_name = shop_names[0] if shop_names else None
                     selected_shop_id = shop_map.get(shop_name) if shop_name else None
                     
@@ -293,131 +188,228 @@ def run():
                     branch_names = [b["name"] for b in branch_opts] if branch_opts else ["No Branch"]
                     selected_branch = st.selectbox("Branch", branch_names)
                     selected_branch_id = branch_opts[0]["id"] if branch_opts and selected_branch != "No Branch" else None
-                    
+                with col4:
                     tenant_role = st.selectbox("Tenant Role", ["staff", "manager", "admin", "owner"])
-                    selected_role = st.selectbox("System Role", role_names)
                     active = st.checkbox("Active", value=True)
                 
-                if st.form_submit_button("📤 Submit Request", use_container_width=True, type="primary"):
-                    if not username or not password or not full_name:
-                        notify_error("❌ All fields required")
-                    elif len(username) < 3:
-                        notify_error("❌ Username min 3 chars")
-                    elif len(password) < 6:
-                        notify_error("❌ Password min 6 chars")
-                    else:
-                        existing = supabase.table("users").select("id").eq("username", username).execute()
-                        if existing.data:
-                            notify_error(f"❌ Username '{username}' exists")
+                col_btn1, col_btn2 = st.columns([1, 5])
+                with col_btn1:
+                    if st.form_submit_button("✅ Submit", use_container_width=True, type="primary"):
+                        if not username or not password or not full_name:
+                            notify_error("❌ All fields required")
+                        elif len(username) < 3:
+                            notify_error("❌ Username min 3 chars")
+                        elif len(password) < 6:
+                            notify_error("❌ Password min 6 chars")
                         else:
-                            supabase.table("user_create_requests").insert({
-                                "requested_by": st.session_state.get("user_id"),
-                                "username": username,
-                                "full_name": full_name,
-                                "password_hash": hash_password(password),
-                                "role_id": role_map[selected_role],
-                                "shop_id": selected_shop_id,
-                                "branch_id": selected_branch_id,
-                                "tenant_role": tenant_role,
-                                "is_active": active,
-                                "status": "pending",
-                                "requested_at": datetime.now().isoformat()
-                            }).execute()
-                            notify_success(f"✅ Request for '{username}' submitted")
-                            st.rerun()
+                            existing = supabase.table("users").select("id").eq("username", username).execute()
+                            if existing.data:
+                                notify_error(f"❌ Username '{username}' exists")
+                            else:
+                                supabase.table("user_create_requests").insert({
+                                    "requested_by": st.session_state.get("user_id"),
+                                    "username": username,
+                                    "full_name": full_name,
+                                    "password_hash": hash_password(password),
+                                    "role_id": role_map[selected_role],
+                                    "shop_id": selected_shop_id,
+                                    "branch_id": selected_branch_id,
+                                    "tenant_role": tenant_role,
+                                    "is_active": active,
+                                    "status": "pending",
+                                    "requested_at": datetime.now().isoformat()
+                                }).execute()
+                                notify_success(f"✅ Request for '{username}' submitted")
+                                st.session_state.show_create = False
+                                st.rerun()
+                with col_btn2:
+                    if st.form_submit_button("❌ Cancel", use_container_width=True):
+                        st.session_state.show_create = False
+                        st.rerun()
 
     # ==========================================================================
-    # TAB 3: APPROVALS
+    # USERS TABLE - COMPACT
     # ==========================================================================
 
-    with tab3:
-        if not is_checker_user and not is_owner:
-            st.warning("⚠️ Only Owner can approve requests")
-        elif not pending_requests:
-            st.info("📭 No pending requests")
-        else:
-            st.subheader(f"⏳ Pending Requests ({len(pending_requests)})")
+    if search:
+        search = search.lower()
+        filtered = [u for u in users if search in str(u.get("username", "")).lower() or search in str(u.get("full_name", "")).lower()]
+    else:
+        filtered = users
+
+    if filtered:
+        data = []
+        for u in filtered:
+            role_name = next((r["name"] for r in roles if r["id"] == u["role_id"]), "Unknown")
+            shop_name = next((s["name"] for s in shops if s["id"] == u.get("shop_id")), "-")
             
-            for req in pending_requests:
+            data.append({
+                "Username": u.get("username"),
+                "Name": u.get("full_name"),
+                "Shop": shop_name,
+                "Tenant": u.get("tenant_role", "staff"),
+                "Role": role_name,
+                "Status": "🟢" if u.get("is_active") else "🔴",
+                "Actions": u.get("id"),
+            })
+        
+        df = pd.DataFrame(data)
+        
+        # ✅ Custom column config for compact display
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Username": st.column_config.TextColumn("User", width="small"),
+                "Name": st.column_config.TextColumn("Name", width="medium"),
+                "Shop": st.column_config.TextColumn("Shop", width="small"),
+                "Tenant": st.column_config.TextColumn("Tenant", width="small"),
+                "Role": st.column_config.TextColumn("Role", width="small"),
+                "Status": st.column_config.TextColumn("Status", width="small"),
+                "Actions": st.column_config.TextColumn("", width="small"),
+            }
+        )
+    else:
+        st.info("No users found")
+
+    st.divider()
+
+    # ==========================================================================
+    # EDIT USER - Compact Popup
+    # ==========================================================================
+
+    if filtered:
+        st.subheader("✏️ Edit User")
+        
+        user_opts = {str(u["id"]): f"{u['username']}" for u in filtered}
+        selected_id = st.selectbox("Select User", options=list(user_opts.keys()), format_func=lambda x: user_opts[x], label_visibility="collapsed", placeholder="Select user to edit...")
+        
+        if selected_id:
+            selected = next((u for u in filtered if str(u["id"]) == selected_id), None)
+            
+            if selected:
                 with st.container(border=True):
-                    col1, col2, col3 = st.columns([3, 1, 1])
+                    col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        st.write(f"**{req.get('username')}** - {req.get('full_name')}")
-                        st.caption(f"Role: {next((r['name'] for r in roles if r['id'] == req.get('role_id')), 'Unknown')} | Tenant: {req.get('tenant_role', 'staff')}")
-                        requested_by = req.get('requested_by', {})
-                        st.caption(f"Requested by: {requested_by.get('full_name', 'Unknown')}")
+                        st.caption(f"**{selected.get('username')}**")
+                        new_name = st.text_input("Name", value=selected.get("full_name", ""), label_visibility="collapsed", placeholder="Full name")
                     
                     with col2:
-                        if st.button("✅ Approve", key=f"app_{req['id']}", use_container_width=True, type="primary"):
-                            new_user = {
-                                "username": req.get("username"),
-                                "full_name": req.get("full_name"),
-                                "password_hash": req.get("password_hash"),
-                                "role_id": req.get("role_id"),
-                                "shop_id": req.get("shop_id"),
-                                "branch_id": req.get("branch_id"),
-                                "tenant_role": req.get("tenant_role", "staff"),
-                                "is_active": req.get("is_active", True),
-                            }
-                            supabase.table("users").insert(new_user).execute()
-                            supabase.table("user_create_requests").update({
-                                "status": "approved",
-                                "checked_by": st.session_state.get("user_id"),
-                                "checked_at": datetime.now().isoformat()
-                            }).eq("id", req["id"]).execute()
-                            notify_success(f"✅ {req['username']} created")
-                            st.rerun()
+                        current_role = next((r["name"] for r in roles if r["id"] == selected["role_id"]), role_names[0])
+                        new_role = st.selectbox("Role", role_names, index=role_names.index(current_role), label_visibility="collapsed")
                     
                     with col3:
-                        with st.popover("❌ Reject"):
-                            reason = st.text_input("Reason", key=f"reason_{req['id']}")
-                            if st.button("Confirm Reject", key=f"rej_{req['id']}"):
-                                supabase.table("user_create_requests").update({
-                                    "status": "rejected",
-                                    "checked_by": st.session_state.get("user_id"),
-                                    "checked_at": datetime.now().isoformat(),
-                                    "rejection_reason": reason or "No reason"
-                                }).eq("id", req["id"]).execute()
-                                notify_warning(f"❌ {req['username']} rejected")
+                        tenant_opts = ["staff", "manager", "admin", "owner"]
+                        current_tenant = selected.get("tenant_role", "staff")
+                        new_tenant = st.selectbox("Tenant", tenant_opts, index=tenant_opts.index(current_tenant), label_visibility="collapsed")
+                    
+                    with col4:
+                        new_active = st.toggle("Active", value=selected.get("is_active", True), label_visibility="collapsed")
+                    
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        if st.button("💾 Update", use_container_width=True, type="primary"):
+                            supabase.table("users").update({
+                                "full_name": new_name,
+                                "role_id": role_map[new_role],
+                                "tenant_role": new_tenant,
+                                "is_active": new_active,
+                            }).eq("id", selected_id).execute()
+                            notify_success(f"✅ Updated")
+                            st.rerun()
+                    
+                    with col_b:
+                        with st.popover("🔐 Reset Password"):
+                            new_pass = st.text_input("New Password", type="password", placeholder="Min 6 chars")
+                            if st.button("Save", use_container_width=True):
+                                if new_pass and len(new_pass) >= 6:
+                                    supabase.table("users").update({"password_hash": hash_password(new_pass)}).eq("id", selected_id).execute()
+                                    notify_success("✅ Password reset")
+                                    st.rerun()
+                                else:
+                                    notify_error("❌ Min 6 chars")
+                    
+                    with col_c:
+                        if selected.get("username") != "admin":
+                            if st.button("🗑 Delete", use_container_width=True):
+                                supabase.table("users").delete().eq("id", selected_id).execute()
+                                notify_success(f"✅ Deleted")
                                 st.rerun()
+                    
+                    with col_d:
+                        if selected.get("last_login"):
+                            st.caption(f"Last: {selected.get('last_login', '')[:10] if selected.get('last_login') else 'Never'}")
 
     # ==========================================================================
-    # TAB 4: SUMMARY
+    # PENDING APPROVALS (Only for Checker/Owner)
     # ==========================================================================
 
-    with tab4:
-        col1, col2, col3 = st.columns(3)
-        col1.metric("👥 Total", len(users))
-        col2.metric("🟢 Active", sum(1 for u in users if u.get("is_active")))
-        col3.metric("⏳ Pending", len(pending_requests))
-        
-        # Shop distribution - Compact
-        if shops:
-            st.divider()
-            st.subheader("🏪 Users by Shop")
-            cols = st.columns(min(len(shops), 4))
-            for idx, shop in enumerate(shops):
-                count = sum(1 for u in users if u.get("shop_id") == shop["id"])
-                cols[idx % 4].metric(shop["name"], count)
-        
-        # Recent history - Compact
+    if (is_checker_user or is_owner) and pending_requests:
         st.divider()
-        with st.expander("📋 Recent History", expanded=False):
-            try:
-                history = supabase.table("user_create_requests").select(
-                    "username, status, checked_at, rejection_reason"
-                ).neq("status", "pending").order("checked_at", desc=True).limit(20).execute()
+        st.subheader(f"⏳ Pending Approvals ({len(pending_requests)})")
+        
+        for req in pending_requests:
+            with st.container(border=True):
+                col1, col2, col3 = st.columns([3, 1, 1])
                 
-                if history.data:
-                    df = pd.DataFrame(history.data)
-                    df["Status"] = df["status"].apply(lambda x: "✅ Approved" if x == "approved" else "❌ Rejected")
-                    df = df[["username", "Status", "checked_at", "rejection_reason"]]
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No history")
-            except Exception as e:
-                st.error(f"Error: {e}")
+                with col1:
+                    st.write(f"**{req.get('username')}** - {req.get('full_name')}")
+                    st.caption(f"Role: {next((r['name'] for r in roles if r['id'] == req.get('role_id')), 'Unknown')} | Tenant: {req.get('tenant_role', 'staff')}")
+                
+                with col2:
+                    if st.button("✅ Approve", key=f"app_{req['id']}", use_container_width=True, type="primary"):
+                        new_user = {
+                            "username": req.get("username"),
+                            "full_name": req.get("full_name"),
+                            "password_hash": req.get("password_hash"),
+                            "role_id": req.get("role_id"),
+                            "shop_id": req.get("shop_id"),
+                            "branch_id": req.get("branch_id"),
+                            "tenant_role": req.get("tenant_role", "staff"),
+                            "is_active": req.get("is_active", True),
+                        }
+                        supabase.table("users").insert(new_user).execute()
+                        supabase.table("user_create_requests").update({
+                            "status": "approved",
+                            "checked_by": st.session_state.get("user_id"),
+                            "checked_at": datetime.now().isoformat()
+                        }).eq("id", req["id"]).execute()
+                        notify_success(f"✅ {req['username']} created")
+                        st.rerun()
+                
+                with col3:
+                    with st.popover("❌ Reject"):
+                        reason = st.text_input("Reason", key=f"reason_{req['id']}")
+                        if st.button("Confirm", key=f"rej_{req['id']}"):
+                            supabase.table("user_create_requests").update({
+                                "status": "rejected",
+                                "checked_by": st.session_state.get("user_id"),
+                                "checked_at": datetime.now().isoformat(),
+                                "rejection_reason": reason or "No reason"
+                            }).eq("id", req["id"]).execute()
+                            notify_warning(f"❌ Rejected")
+                            st.rerun()
+
+    # ==========================================================================
+    # RECENT ACTIVITY (Compact)
+    # ==========================================================================
+
+    with st.expander("📋 Recent Activity", expanded=False):
+        try:
+            logs = supabase.table("user_activity_logs").select(
+                "action, description, created_at"
+            ).order("created_at", desc=True).limit(20).execute()
+            
+            if logs.data:
+                df = pd.DataFrame(logs.data)
+                df["created_at"] = df["created_at"].apply(lambda x: x[:16] if x else "")
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No activity")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 
 # ==============================================================================
