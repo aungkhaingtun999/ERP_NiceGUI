@@ -85,23 +85,26 @@ def upgrade_password(user_id, password):
         pass
 
 # ==================================================
-# USER QUERY - FIXED
+# USER QUERY - FIXED (ဒီနေရာမှာ ပြင်ထားပါတယ်)
 # ==================================================
 
 def get_user_by_username(username):
-    """Get user by username - case insensitive"""
+    """Get user by username - case insensitive (Fixed)"""
     try:
-        # Get all users and filter in Python (more reliable)
-        result = supabase.table("users").select("*").execute()
+        # ပထမ အဆင့် - တိကျတဲ့ username နဲ့ ရှာပါ (case-sensitive)
+        result = supabase.table("users").select("*").eq("username", username.strip()).execute()
         
-        if not result.data:
-            return None
+        if result.data and len(result.data) > 0:
+            return result.data[0]
         
-        # Case-insensitive search
-        username_lower = username.strip().lower()
-        for user in result.data:
-            if user.get("username", "").lower() == username_lower:
-                return user
+        # ဒုတိယ အဆင့် - မတွေ့ရင် အကုန်ဆွဲပြီး Python နဲ့ case-insensitive ရှာပါ
+        all_result = supabase.table("users").select("*").execute()
+        
+        if all_result.data:
+            username_lower = username.strip().lower()
+            for user in all_result.data:
+                if user.get("username", "").lower() == username_lower:
+                    return user
         
         return None
         
