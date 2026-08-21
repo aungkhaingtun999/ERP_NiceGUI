@@ -1,7 +1,8 @@
 # ==============================================================================
 # auth.py
-# ERP ENTERPRISE AUTHENTICATION SYSTEM V30
+# ERP ENTERPRISE AUTHENTICATION SYSTEM V31
 # SECURITY + ROLE + SESSION MANAGEMENT
+# With Supabase Auth Integration
 # ==============================================================================
 
 import hashlib
@@ -111,6 +112,59 @@ def upgrade_password(user_id, password):
 
 
 # ==================================================
+# SUPABASE AUTH INTEGRATION
+# ==================================================
+
+
+def sync_with_supabase_auth(username, password, user_data=None):
+    """
+    Sync custom user with Supabase Auth.
+    Creates or signs in the user with Supabase Auth.
+    """
+    email = f"{username}@nexora-erp.local"
+    
+    try:
+        # Try to sign in with existing Supabase Auth user
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        
+        # Store session tokens
+        if auth_response.session:
+            st.session_state["access_token"] = auth_response.session.access_token
+            st.session_state["refresh_token"] = auth_response.session.refresh_token
+            return True
+            
+    except Exception as sign_in_error:
+        # If sign in fails, try to sign up
+        try:
+            auth_response = supabase.auth.sign_up({
+                "email": email,
+                "password": password,
+                "options": {
+                    "data": {
+                        "username": username,
+                        "full_name": user_data.get("full_name", "") if user_data else "",
+                        "role_id": user_data.get("role_id", ROLE_CASHIER) if user_data else ROLE_CASHIER,
+                    }
+                }
+            })
+            
+            # Store session tokens
+            if auth_response.session:
+                st.session_state["access_token"] = auth_response.session.access_token
+                st.session_state["refresh_token"] = auth_response.session.refresh_token
+                return True
+                
+        except Exception as sign_up_error:
+            print(f"Supabase Auth sync failed: {sign_up_error}")
+            return False
+    
+    return False
+
+
+# ==================================================
 # USER QUERY
 # ==================================================
 
@@ -153,12 +207,21 @@ def login_user(username, password):
             return False, "Account locked. Try again later."
 
     if verify_password(user, password):
-        supabase.table("users").update(
-            {"failed_attempts": 0, "locked_until": None}
-        ).eq("id", user["id"]).execute()
+        # Update failed attempts
+        try:
+            supabase.table("users").update(
+                {"failed_attempts": 0, "locked_until": None}
+            ).eq("id", user["id"]).execute()
+        except Exception:
+            pass
 
+        # Sync with Supabase Auth (for RLS policies)
+        sync_with_supabase_auth(username, password, user)
+
+        # Build session
         build_session(user)
 
+        # Log event
         log_auth_event(user["id"], "login")
 
         return True, "Success"
@@ -174,9 +237,12 @@ def login_user(username, password):
                 + timedelta(minutes=LOCK_DURATION_MINUTES)
             ).isoformat()
 
-        supabase.table("users").update(update_data).eq(
-            "id", user["id"]
-        ).execute()
+        try:
+            supabase.table("users").update(update_data).eq(
+                "id", user["id"]
+            ).execute()
+        except Exception:
+            pass
 
         log_auth_event(user["id"], "login", "failed")
 
@@ -189,75 +255,28 @@ def login_user(username, password):
 
 
 def build_session(user):
-
-    role_id = int(
-        user.get(
-            "role_id",
-            ROLE_CASHIER
-        )
-    )
-
-
+    role_id = int(user.get("role_id", ROLE_CASHIER))
     user_id = user.get("id")
-
-
-    username = (
-        user.get("username")
-        or
-        user.get("email")
-        or
-        "Unknown"
-    )
-
+    username = user.get("username") or user.get("email") or "Unknown"
 
     st.session_state.user = {
-
         "id": user_id,
-
         "username": username,
-
-        "full_name":
-            user.get(
-                "full_name",
-                username
-            ),
-
-        "role_id":
-            role_id,
-
-        "role":
-            ROLE_MAP.get(
-                role_id,
-                "Cashier"
-            ),
-
-        "is_active":
-            bool(
-                user.get(
-                    "is_active",
-                    True
-                )
-            ),
-
-        "last_activity":
-            time.time(),
-
+        "full_name": user.get("full_name", username),
+        "role_id": role_id,
+        "role": ROLE_MAP.get(role_id, "Cashier"),
+        "is_active": bool(user.get("is_active", True)),
+        "last_activity": time.time(),
     }
 
-
-    # =================================================
     # IMPORTANT UUID SESSION
-    # =================================================
-
     st.session_state["user_id"] = user_id
-
     st.session_state["username"] = username
-
     st.session_state["role_id"] = role_id
-
 
     # backup id
     st.session_state["id"] = user_id
+
 
 # ==================================================
 # CURRENT USER & ROLE HELPERS
@@ -387,6 +406,57 @@ def login_page():
 
 
 # ==================================================
+# USER CREATION
+# ==================================================
+
+
+def create_user(username, full_name, password, role_id=ROLE_CASHIER):
+    """
+    Create a new user with both custom auth and Supabase Auth.
+    """
+    try:
+        import uuid
+
+        # Check if username already exists
+        existing = get_user(username)
+        if existing:
+            return False, "Username already exists"
+
+        # Hash password (SHA256 for initial, will be upgraded to bcrypt)
+        password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+        # Generate UUID
+        user_id = str(uuid.uuid4())
+
+        # Create user data
+        new_user = {
+            "id": user_id,
+            "username": username.strip(),
+            "full_name": full_name,
+            "password_hash": password_hash,
+            "role_id": role_id,
+            "is_active": True,
+            "failed_attempts": 0,
+            "created_at": "now()",
+            "updated_at": "now()"
+        }
+
+        # Insert into custom users table
+        result = supabase.table("users").insert(new_user).execute()
+
+        if not result.data:
+            return False, "Failed to create user"
+
+        # Sync with Supabase Auth
+        sync_with_supabase_auth(username, password, new_user)
+
+        return True, "User created successfully!"
+
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
+
+# ==================================================
 # PASSWORD MANAGEMENT
 # ==================================================
 
@@ -412,15 +482,24 @@ def change_password(user_id, old_password, new_password):
             return False, "Old password is incorrect"
 
         # Hash new password
-        new_hash = hashlib.sha256(new_password.encode("utf-8")).hexdigest()
+        new_hash = bcrypt.hashpw(
+            new_password.encode("utf-8"), bcrypt.gensalt()
+        ).decode()
 
-        # Update
-        (
-            supabase.table("users")
-            .update({"password_hash": new_hash})
-            .eq("id", user_id)
-            .execute()
-        )
+        # Update custom users table
+        supabase.table("users").update(
+            {"password_hash": new_hash}
+        ).eq("id", user_id).execute()
+
+        # Update Supabase Auth password
+        try:
+            email = f"{user['username']}@nexora-erp.local"
+            supabase.auth.update_user({
+                "email": email,
+                "password": new_password
+            })
+        except Exception:
+            pass
 
         return True, "Password changed successfully"
 
@@ -434,6 +513,13 @@ def change_password(user_id, old_password, new_password):
 
 
 def logout():
+    # Sign out from Supabase Auth
+    try:
+        supabase.auth.sign_out()
+    except Exception:
+        pass
+
+    # Clear all session state
     for key in list(st.session_state.keys()):
         del st.session_state[key]
 
