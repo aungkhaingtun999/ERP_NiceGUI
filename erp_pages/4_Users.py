@@ -63,6 +63,16 @@ def run():
             pass
 
     # --------------------------------------------------------------------------
+    # HELPER: Owner to Admin check
+    # --------------------------------------------------------------------------
+
+    def validate_owner_change(current_tenant, new_tenant):
+        """Validate owner role change: Owner -> must go to Admin first"""
+        if current_tenant == "owner" and new_tenant != "owner" and new_tenant != "admin":
+            return False, "⚠️ Owner must first be changed to **Admin**, then to other roles."
+        return True, ""
+
+    # --------------------------------------------------------------------------
     # LOAD ROLES
     # --------------------------------------------------------------------------
 
@@ -126,7 +136,7 @@ def run():
         return
 
     # --------------------------------------------------------------------------
-    # LOAD PENDING CREATE REQUESTS
+    # LOAD PENDING REQUESTS
     # --------------------------------------------------------------------------
 
     pending_create_requests = []
@@ -142,10 +152,6 @@ def run():
             pending_create_requests = requests_resp.data or []
         except Exception:
             pass
-
-    # --------------------------------------------------------------------------
-    # LOAD PENDING EDIT REQUESTS
-    # --------------------------------------------------------------------------
 
     pending_edit_requests = []
     if is_checker_user or is_owner:
@@ -245,6 +251,13 @@ def run():
                         st.caption(f"**Current User:** `{selected.get('username')}`")
                         st.caption(f"**Current Role:** {next((r['name'] for r in roles if r['id'] == selected['role_id']), 'Unknown')}")
                         
+                        current_tenant = selected.get("tenant_role", "staff")
+                        is_owner_user = current_tenant == "owner"
+                        
+                        # ✅ Owner validation message
+                        if is_owner_user:
+                            st.info("🔑 **Owner → Admin → Other**: Owner must first be changed to **Admin**, then to other roles.")
+                        
                         col1, col2 = st.columns(2)
                         
                         with col1:
@@ -254,9 +267,14 @@ def run():
                         
                         with col2:
                             tenant_opts = ["staff", "manager", "admin", "owner"]
-                            current_tenant = selected.get("tenant_role", "staff")
-                            new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=tenant_opts.index(current_tenant), key="edit_new_tenant_main")
+                            current_tenant_idx = tenant_opts.index(current_tenant) if current_tenant in tenant_opts else 0
+                            new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=current_tenant_idx, key="edit_new_tenant_main")
                             new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_new_active_main")
+                        
+                        # ✅ Validate Owner change
+                        valid, msg = validate_owner_change(current_tenant, new_tenant)
+                        if not valid:
+                            st.warning(msg)
                         
                         # Check if anything changed
                         has_changes = (
@@ -268,15 +286,15 @@ def run():
                         
                         if not has_changes:
                             st.info("ℹ️ No changes detected")
+                        elif not valid:
+                            st.warning("⚠️ Please change Owner to **Admin** first, then to other roles.")
                         else:
                             if st.button("📤 Submit Edit Request", use_container_width=True, type="primary", key="submit_edit_main"):
                                 if is_maker_user or is_owner:
-                                    # Check if already has pending edit request
                                     existing = supabase.table("user_edit_requests").select("id").eq("user_id", selected_id).eq("status", "pending").execute()
                                     if existing.data:
                                         notify_warning("⚠️ This user already has a pending edit request")
                                     else:
-                                        # Create edit request
                                         supabase.table("user_edit_requests").insert({
                                             "requested_by": st.session_state.get("user_id"),
                                             "user_id": selected_id,
@@ -286,7 +304,7 @@ def run():
                                             "new_is_active": new_active,
                                             "old_full_name": selected.get("full_name"),
                                             "old_role_id": selected["role_id"],
-                                            "old_tenant_role": selected.get("tenant_role", "staff"),
+                                            "old_tenant_role": current_tenant,
                                             "old_is_active": selected.get("is_active", True),
                                             "status": "pending",
                                             "requested_at": datetime.now().isoformat()
@@ -386,10 +404,15 @@ def run():
                     selected = next((u for u in filtered if str(u["id"]) == selected_id), None)
                     
                     if selected:
-                        # Check for pending edit request
                         pending_edit = supabase.table("user_edit_requests").select("id").eq("user_id", selected_id).eq("status", "pending").execute()
                         if pending_edit.data:
                             st.warning("⚠️ This user already has a pending edit request")
+                        
+                        current_tenant = selected.get("tenant_role", "staff")
+                        is_owner_user = current_tenant == "owner"
+                        
+                        if is_owner_user:
+                            st.info("🔑 **Owner → Admin → Other**: Owner must first be changed to **Admin**, then to other roles.")
                         
                         with st.container(border=True):
                             col1, col2 = st.columns(2)
@@ -402,12 +425,17 @@ def run():
                             
                             with col2:
                                 tenant_opts = ["staff", "manager", "admin", "owner"]
-                                current_tenant = selected.get("tenant_role", "staff")
-                                new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=tenant_opts.index(current_tenant), key="edit_tab_tenant")
+                                current_tenant_idx = tenant_opts.index(current_tenant) if current_tenant in tenant_opts else 0
+                                new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=current_tenant_idx, key="edit_tab_tenant")
                                 new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_tab_active")
                             
-                            if st.button("📤 Submit Edit Request", use_container_width=True, type="primary", key="submit_edit_tab"):
-                                if not pending_edit.data:
+                            # ✅ Validate Owner change
+                            valid, msg = validate_owner_change(current_tenant, new_tenant)
+                            if not valid:
+                                st.warning(msg)
+                            
+                            if not pending_edit.data and valid:
+                                if st.button("📤 Submit Edit Request", use_container_width=True, type="primary", key="submit_edit_tab"):
                                     supabase.table("user_edit_requests").insert({
                                         "requested_by": st.session_state.get("user_id"),
                                         "user_id": selected_id,
@@ -417,15 +445,15 @@ def run():
                                         "new_is_active": new_active,
                                         "old_full_name": selected.get("full_name"),
                                         "old_role_id": selected["role_id"],
-                                        "old_tenant_role": selected.get("tenant_role", "staff"),
+                                        "old_tenant_role": current_tenant,
                                         "old_is_active": selected.get("is_active", True),
                                         "status": "pending",
                                         "requested_at": datetime.now().isoformat()
                                     }).execute()
                                     notify_success(f"✅ Edit request for '{selected['username']}' submitted")
                                     st.rerun()
-                                else:
-                                    notify_warning("⚠️ Pending request already exists")
+                            elif pending_edit.data:
+                                notify_warning("⚠️ Pending request already exists")
 
     # ==========================================================================
     # TAB 4: APPROVALS
@@ -478,7 +506,7 @@ def run():
                                 st.rerun()
                         
                         with col3:
-                            with st.popover("❌ Reject", key=f"rej_pop_c_{req['id']}_{idx}"):
+                            with st.popover("❌ Reject"):
                                 reason = st.text_input("Reason", key=f"rej_c_{req['id']}_{idx}")
                                 if st.button("Confirm", key=f"rej_c_confirm_{req['id']}_{idx}"):
                                     supabase.table("user_create_requests").update({
@@ -516,31 +544,39 @@ def run():
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
                         
                         with col2:
-                            if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
-                                # Apply changes
-                                update_data = {}
-                                if req.get('new_full_name'):
-                                    update_data["full_name"] = req.get('new_full_name')
-                                if req.get('new_role_id'):
-                                    update_data["role_id"] = req.get('new_role_id')
-                                if req.get('new_tenant_role'):
-                                    update_data["tenant_role"] = req.get('new_tenant_role')
-                                if req.get('new_is_active') is not None:
-                                    update_data["is_active"] = req.get('new_is_active')
-                                
-                                supabase.table("users").update(update_data).eq("id", req["user_id"]).execute()
-                                
-                                supabase.table("user_edit_requests").update({
-                                    "status": "approved",
-                                    "checked_by": st.session_state.get("user_id"),
-                                    "checked_at": datetime.now().isoformat()
-                                }).eq("id", req["id"]).execute()
-                                
-                                notify_success(f"✅ {target_user.get('username', 'User')} updated")
-                                st.rerun()
+                            # ✅ Validate Owner change before approve
+                            old_tenant = req.get('old_tenant_role')
+                            new_tenant = req.get('new_tenant_role')
+                            valid, msg = validate_owner_change(old_tenant, new_tenant)
+                            
+                            if not valid:
+                                st.warning(msg)
+                                st.info("ℹ️ This request cannot be approved. Please change Owner to **Admin** first.")
+                            else:
+                                if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
+                                    update_data = {}
+                                    if req.get('new_full_name'):
+                                        update_data["full_name"] = req.get('new_full_name')
+                                    if req.get('new_role_id'):
+                                        update_data["role_id"] = req.get('new_role_id')
+                                    if req.get('new_tenant_role'):
+                                        update_data["tenant_role"] = req.get('new_tenant_role')
+                                    if req.get('new_is_active') is not None:
+                                        update_data["is_active"] = req.get('new_is_active')
+                                    
+                                    supabase.table("users").update(update_data).eq("id", req["user_id"]).execute()
+                                    
+                                    supabase.table("user_edit_requests").update({
+                                        "status": "approved",
+                                        "checked_by": st.session_state.get("user_id"),
+                                        "checked_at": datetime.now().isoformat()
+                                    }).eq("id", req["id"]).execute()
+                                    
+                                    notify_success(f"✅ {target_user.get('username', 'User')} updated")
+                                    st.rerun()
                         
                         with col3:
-                            with st.popover("❌ Reject", key=f"rej_pop_e_{req['id']}_{idx}"):
+                            with st.popover("❌ Reject"):
                                 reason = st.text_input("Reason", key=f"rej_e_{req['id']}_{idx}")
                                 if st.button("Confirm", key=f"rej_e_confirm_{req['id']}_{idx}"):
                                     supabase.table("user_edit_requests").update({
