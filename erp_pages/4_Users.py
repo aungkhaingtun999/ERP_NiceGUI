@@ -484,28 +484,50 @@ def run():
                             requested_by = req.get('requested_by', {})
                             if requested_by:
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
+                            
+                            # ✅ Show if same user
+                            if requested_by and requested_by.get('id') == st.session_state.get('user_id'):
+                                st.warning("⚠️ You requested this. You cannot approve your own request.")
                         
                         with col2:
-                            if st.button("✅ Approve", key=f"app_c_{req['id']}_{idx}", use_container_width=True, type="primary"):
-                                supabase.table("users").insert({
-                                    "username": req.get("username"),
-                                    "full_name": req.get("full_name"),
-                                    "password_hash": req.get("password_hash"),
-                                    "role_id": req.get("role_id"),
-                                    "shop_id": req.get("shop_id"),
-                                    "branch_id": req.get("branch_id"),
-                                    "tenant_role": req.get("tenant_role", "staff"),
-                                    "is_active": req.get("is_active", True),
-                                }).execute()
-                                supabase.table("user_create_requests").update({
-                                    "status": "approved",
-                                    "checked_by": st.session_state.get("user_id"),
-                                    "checked_at": datetime.now().isoformat()
-                                }).eq("id", req["id"]).execute()
-                                notify_success(f"✅ {req['username']} created")
-                                st.rerun()
+                            # ✅ Check if requester is same as current user
+                            requester_id = req.get('requested_by', {}).get('id')
+                            current_user_id = st.session_state.get('user_id')
+                            
+                            # ✅ Can approve if: different user OR (same user but only owner)
+                            can_approve = requester_id != current_user_id
+                            
+                            if not can_approve:
+                                # Check if user is the only owner (can self-approve)
+                                owners = supabase.table("users").select("id").eq("tenant_role", "owner").execute()
+                                if owners.data and len(owners.data) == 1 and owners.data[0]["id"] == current_user_id:
+                                    can_approve = True
+                                    st.info("🔑 You are the only Owner. You can self-approve.")
+                                else:
+                                    st.warning("⛔ You cannot approve your own request. Ask another Owner.")
+                            
+                            if can_approve:
+                                if st.button("✅ Approve", key=f"app_c_{req['id']}_{idx}", use_container_width=True, type="primary"):
+                                    supabase.table("users").insert({
+                                        "username": req.get("username"),
+                                        "full_name": req.get("full_name"),
+                                        "password_hash": req.get("password_hash"),
+                                        "role_id": req.get("role_id"),
+                                        "shop_id": req.get("shop_id"),
+                                        "branch_id": req.get("branch_id"),
+                                        "tenant_role": req.get("tenant_role", "staff"),
+                                        "is_active": req.get("is_active", True),
+                                    }).execute()
+                                    supabase.table("user_create_requests").update({
+                                        "status": "approved",
+                                        "checked_by": st.session_state.get("user_id"),
+                                        "checked_at": datetime.now().isoformat()
+                                    }).eq("id", req["id"]).execute()
+                                    notify_success(f"✅ {req['username']} created")
+                                    st.rerun()
                         
                         with col3:
+                            # ✅ Reject: always allowed
                             with st.popover("❌ Reject"):
                                 reason = st.text_input("Reason", key=f"rej_c_{req['id']}_{idx}")
                                 if st.button("Confirm", key=f"rej_c_confirm_{req['id']}_{idx}"):
@@ -542,9 +564,13 @@ def run():
                             requested_by = req.get('requested_by', {})
                             if requested_by:
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
+                            
+                            # ✅ Show if same user
+                            if requested_by and requested_by.get('id') == st.session_state.get('user_id'):
+                                st.warning("⚠️ You requested this. You cannot approve your own request.")
                         
                         with col2:
-                            # ✅ Validate Owner change before approve
+                            # ✅ Validate Owner change
                             old_tenant = req.get('old_tenant_role')
                             new_tenant = req.get('new_tenant_role')
                             valid, msg = validate_owner_change(old_tenant, new_tenant)
@@ -553,27 +579,43 @@ def run():
                                 st.warning(msg)
                                 st.info("ℹ️ This request cannot be approved. Please change Owner to **Admin** first.")
                             else:
-                                if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
-                                    update_data = {}
-                                    if req.get('new_full_name'):
-                                        update_data["full_name"] = req.get('new_full_name')
-                                    if req.get('new_role_id'):
-                                        update_data["role_id"] = req.get('new_role_id')
-                                    if req.get('new_tenant_role'):
-                                        update_data["tenant_role"] = req.get('new_tenant_role')
-                                    if req.get('new_is_active') is not None:
-                                        update_data["is_active"] = req.get('new_is_active')
-                                    
-                                    supabase.table("users").update(update_data).eq("id", req["user_id"]).execute()
-                                    
-                                    supabase.table("user_edit_requests").update({
-                                        "status": "approved",
-                                        "checked_by": st.session_state.get("user_id"),
-                                        "checked_at": datetime.now().isoformat()
-                                    }).eq("id", req["id"]).execute()
-                                    
-                                    notify_success(f"✅ {target_user.get('username', 'User')} updated")
-                                    st.rerun()
+                                # ✅ Check if requester is same as current user
+                                requester_id = req.get('requested_by', {}).get('id')
+                                current_user_id = st.session_state.get('user_id')
+                                
+                                can_approve = requester_id != current_user_id
+                                
+                                if not can_approve:
+                                    # Check if user is the only owner
+                                    owners = supabase.table("users").select("id").eq("tenant_role", "owner").execute()
+                                    if owners.data and len(owners.data) == 1 and owners.data[0]["id"] == current_user_id:
+                                        can_approve = True
+                                        st.info("🔑 You are the only Owner. You can self-approve.")
+                                    else:
+                                        st.warning("⛔ You cannot approve your own request. Ask another Owner.")
+                                
+                                if can_approve:
+                                    if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
+                                        update_data = {}
+                                        if req.get('new_full_name'):
+                                            update_data["full_name"] = req.get('new_full_name')
+                                        if req.get('new_role_id'):
+                                            update_data["role_id"] = req.get('new_role_id')
+                                        if req.get('new_tenant_role'):
+                                            update_data["tenant_role"] = req.get('new_tenant_role')
+                                        if req.get('new_is_active') is not None:
+                                            update_data["is_active"] = req.get('new_is_active')
+                                        
+                                        supabase.table("users").update(update_data).eq("id", req["user_id"]).execute()
+                                        
+                                        supabase.table("user_edit_requests").update({
+                                            "status": "approved",
+                                            "checked_by": st.session_state.get("user_id"),
+                                            "checked_at": datetime.now().isoformat()
+                                        }).eq("id", req["id"]).execute()
+                                        
+                                        notify_success(f"✅ {target_user.get('username', 'User')} updated")
+                                        st.rerun()
                         
                         with col3:
                             with st.popover("❌ Reject"):
