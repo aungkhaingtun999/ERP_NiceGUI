@@ -43,7 +43,7 @@ TENANT_ROLE_MAP = {
 }
 
 # ==================================================
-# PASSWORD VERIFY - SIMPLEST
+# PASSWORD VERIFY
 # ==================================================
 
 def verify_password(user, password):
@@ -51,36 +51,25 @@ def verify_password(user, password):
     if not stored:
         return False
     
-    # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    
-    # Debug
-    print(f"🔍 Password: '{password}'")
-    print(f"🔍 SHA256: '{sha256_hash}'")
-    print(f"🔍 Stored: '{stored}'")
-    print(f"🔍 Match: {sha256_hash == stored}")
-    
     return sha256_hash == stored
 
 # ==================================================
-# USER QUERY - DIRECT
+# USER QUERY
 # ==================================================
 
 def get_user_by_username(username):
-    """Get user by username - direct query"""
+    """Get user by username"""
     try:
-        print(f"🔍 Searching for: '{username}'")
         result = supabase.table('users').select('*').eq('username', username.strip()).execute()
         
         if result.data and len(result.data) > 0:
-            print(f"✅ Found: {result.data[0].get('username')}")
             return result.data[0]
         
-        print(f"❌ Not found: '{username}'")
         return None
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         return None
 
 # ==================================================
@@ -88,18 +77,15 @@ def get_user_by_username(username):
 # ==================================================
 
 def login_user(username, password):
-    print(f"🔐 Login attempt: '{username}'")
-    
     user = get_user_by_username(username)
     
     if not user:
-        return False, "User not found. Please check username."
+        return False, "User not found"
 
     if not user.get("is_active", False):
-        return False, "Account is disabled."
+        return False, "Account is disabled"
 
     if not verify_password(user, password):
-        # Update failed attempts
         attempts = user.get("failed_attempts", 0) + 1
         update_data = {"failed_attempts": attempts}
         if attempts >= MAX_FAILED_ATTEMPTS:
@@ -108,9 +94,8 @@ def login_user(username, password):
             supabase.table("users").update(update_data).eq("id", user["id"]).execute()
         except Exception:
             pass
-        return False, "Invalid password."
+        return False, "Invalid password"
 
-    # Success
     try:
         supabase.table("users").update({
             "failed_attempts": 0,
