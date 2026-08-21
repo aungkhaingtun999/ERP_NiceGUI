@@ -18,7 +18,8 @@ import streamlit as st
 import pandas as pd
 from supabase_client import get_supabase
 
-
+from auth import require_admin
+require_admin()
 # ============================================================
 # PAGE CONFIG
 # ============================================================
