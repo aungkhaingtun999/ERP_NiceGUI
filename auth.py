@@ -246,6 +246,36 @@ def require_shop_access():
     return get_current_user()
 
 # ==================================================
+# PASSWORD MANAGEMENT
+# ==================================================
+
+def change_password(user_id, old_password, new_password):
+    """Change user password"""
+    try:
+        # Get user
+        result = supabase.table("users").select("*").eq("id", user_id).execute()
+        
+        if not result.data:
+            return False, "User not found"
+        
+        user = result.data[0]
+        
+        # Verify old password
+        if not verify_password(user, old_password):
+            return False, "Current password is incorrect"
+        
+        # Hash new password
+        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode()
+        
+        # Update
+        supabase.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
+        
+        return True, "Password changed successfully"
+        
+    except Exception as e:
+        return False, str(e)
+
+# ==================================================
 # LOGIN UI
 # ==================================================
 
