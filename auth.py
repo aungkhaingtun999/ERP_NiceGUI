@@ -55,19 +55,29 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
+    # bcrypt
     if stored.startswith("$2"):
         try:
             return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
         except Exception:
             return False
 
+    # SHA256 - Direct comparison
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    
+    # ✅ Log for debugging
+    print(f"🔍 Input password: {password}")
+    print(f"🔍 SHA256 hash: {sha256_hash}")
+    print(f"🔍 Stored hash: {stored}")
+    
     if hmac.compare_digest(stored, sha256_hash):
         upgrade_password(user["id"], password)
         return True
+    
     if hmac.compare_digest(stored, password):
         upgrade_password(user["id"], password)
         return True
+    
     return False
 
 
