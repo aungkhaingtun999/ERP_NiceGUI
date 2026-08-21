@@ -75,24 +75,38 @@ def verify_password(user, password):
 # ==================================================
 # USER QUERY
 # ==================================================
+# ==================================================
+# USER QUERY - FIXED (ထပ်ပြင်ဆင်)
+# ==================================================
 
 def get_user_by_username(username):
-    """Get user by username - case insensitive"""
+    """Get user by username - case insensitive with debug"""
     try:
-        result = supabase.table('users').select('*').execute()
+        # Debug: ရှာနေတဲ့ username ကိုပြပါ
+        print(f"🔍 Looking for username: '{username}'")
         
-        if not result.data:
-            return None
+        # Method 1: Exact match first
+        result = supabase.table('users').select('*').eq('username', username.strip()).execute()
         
-        username_lower = username.strip().lower()
-        for user in result.data:
-            if user.get('username', '').lower() == username_lower:
-                return user
+        if result.data and len(result.data) > 0:
+            print(f"✅ Found user (exact): {result.data[0].get('username')}")
+            return result.data[0]
         
+        # Method 2: Case-insensitive search
+        all_result = supabase.table('users').select('*').execute()
+        
+        if all_result.data:
+            username_lower = username.strip().lower()
+            for user in all_result.data:
+                if user.get('username', '').lower() == username_lower:
+                    print(f"✅ Found user (case-insensitive): {user.get('username')}")
+                    return user
+        
+        print(f"❌ User not found: '{username}'")
         return None
         
     except Exception as e:
-        print(f"Get user error: {e}")
+        print(f"❌ Get user error: {e}")
         return None
 
 # ==================================================
