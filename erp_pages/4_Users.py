@@ -234,92 +234,136 @@ def run():
         st.divider()
 
         # ----------------------------------------------------------------------
-        # EDIT USER - Request Form (Maker)
+        # EDIT USER - Direct Edit (for owners/admins) + Request Form (for makers)
         # ----------------------------------------------------------------------
 
-        st.subheader("✏️ Edit User (Request)")
+        st.subheader("✏️ Edit User")
 
         if filtered:
             opts = {str(u["id"]): f"{u['username']} - {u['full_name']}" for u in filtered}
-            selected_id = st.selectbox("Select User to Edit", options=list(opts.keys()), format_func=lambda x: opts[x], key="edit_select_main")
+            selected_id = st.selectbox("Select User", options=list(opts.keys()), format_func=lambda x: opts[x], key="edit_select_main")
             
             if selected_id:
                 selected = next((u for u in filtered if str(u["id"]) == selected_id), None)
                 
                 if selected:
                     with st.container(border=True):
-                        st.caption(f"**Current User:** `{selected.get('username')}`")
+                        st.caption(f"**User:** `{selected.get('username')}`")
                         st.caption(f"**Current Role:** {next((r['name'] for r in roles if r['id'] == selected['role_id']), 'Unknown')}")
                         
                         current_tenant = selected.get("tenant_role", "staff")
                         is_owner_user = current_tenant == "owner"
                         
-                        # ✅ Owner validation message
                         if is_owner_user:
                             st.info("🔑 **Owner → Admin → Other**: Owner must first be changed to **Admin**, then to other roles.")
                         
-                        col1, col2 = st.columns(2)
+                        col1, col2, col3 = st.columns(3)
                         
                         with col1:
-                            new_name = st.text_input("New Full Name", value=selected.get("full_name", ""), key="edit_new_name_main")
+                            new_name = st.text_input("Full Name", value=selected.get("full_name", ""), key="edit_name_main")
                             current_role = next((r["name"] for r in roles if r["id"] == selected["role_id"]), role_names[0])
-                            new_role = st.selectbox("New System Role", role_names, index=role_names.index(current_role), key="edit_new_role_main")
+                            new_role = st.selectbox("System Role", role_names, index=role_names.index(current_role), key="edit_role_main")
                         
                         with col2:
                             tenant_opts = ["staff", "manager", "admin", "owner"]
                             current_tenant_idx = tenant_opts.index(current_tenant) if current_tenant in tenant_opts else 0
-                            new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=current_tenant_idx, key="edit_new_tenant_main")
-                            new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_new_active_main")
+                            new_tenant = st.selectbox("Tenant Role", tenant_opts, index=current_tenant_idx, key="edit_tenant_main")
+                            new_active = st.toggle("Active", value=selected.get("is_active", True), key="edit_active_main")
                         
-                        # ✅ Validate Owner change
-                        valid, msg = validate_owner_change(current_tenant, new_tenant)
-                        if not valid:
-                            st.warning(msg)
-                        
-                        # Check if anything changed
-                        has_changes = (
-                            new_name != selected.get("full_name") or
-                            new_role != current_role or
-                            new_tenant != current_tenant or
-                            new_active != selected.get("is_active", True)
-                        )
-                        
-                        if not has_changes:
-                            st.info("ℹ️ No changes detected")
-                        elif not valid:
-                            st.warning("⚠️ Please change Owner to **Admin** first, then to other roles.")
-                        else:
-                            if st.button("📤 Submit Edit Request", use_container_width=True, type="primary", key="submit_edit_main"):
-                                if is_maker_user or is_owner:
-                                    existing = supabase.table("user_edit_requests").select("id").eq("user_id", selected_id).eq("status", "pending").execute()
-                                    if existing.data:
-                                        notify_warning("⚠️ This user already has a pending edit request")
-                                    else:
-                                        supabase.table("user_edit_requests").insert({
-                                            "requested_by": st.session_state.get("user_id"),
-                                            "user_id": selected_id,
-                                            "new_full_name": new_name,
-                                            "new_role_id": role_map[new_role],
-                                            "new_tenant_role": new_tenant,
-                                            "new_is_active": new_active,
-                                            "old_full_name": selected.get("full_name"),
-                                            "old_role_id": selected["role_id"],
-                                            "old_tenant_role": current_tenant,
-                                            "old_is_active": selected.get("is_active", True),
-                                            "status": "pending",
-                                            "requested_at": datetime.now().isoformat()
-                                        }).execute()
-                                        
-                                        create_activity_log(
-                                            st.session_state.get("user_id"),
-                                            "EDIT_USER_REQUEST",
-                                            f"Requested to edit user '{selected['username']}'"
-                                        )
-                                        
-                                        notify_success(f"✅ Edit request for '{selected['username']}' submitted for approval")
-                                        st.rerun()
+                        with col3:
+                            st.write("**Actions**")
+                            
+                            # ✅ Validate Owner change
+                            valid, msg = validate_owner_change(current_tenant, new_tenant)
+                            if not valid:
+                                st.warning(msg)
+                            
+                            # Check if anything changed
+                            has_changes = (
+                                new_name != selected.get("full_name") or
+                                new_role != current_role or
+                                new_tenant != current_tenant or
+                                new_active != selected.get("is_active", True)
+                            )
+                            
+                            col_a, col_b, col_c = st.columns(3)
+                            
+                            # ✅ UPDATE button (Direct - only for Owner)
+                            with col_a:
+                                if is_owner or is_checker_user:
+                                    if st.button("💾 Update", use_container_width=True, type="primary", key="update_direct"):
+                                        if not valid:
+                                            notify_error(msg)
+                                        elif not has_changes:
+                                            notify_warning("No changes to update")
+                                        else:
+                                            supabase.table("users").update({
+                                                "full_name": new_name,
+                                                "role_id": role_map[new_role],
+                                                "tenant_role": new_tenant,
+                                                "is_active": new_active,
+                                            }).eq("id", selected_id).execute()
+                                            create_activity_log(
+                                                st.session_state.get("user_id"),
+                                                "UPDATE_USER",
+                                                f"Updated user '{selected['username']}'"
+                                            )
+                                            notify_success(f"✅ {selected['username']} updated")
+                                            st.rerun()
                                 else:
-                                    notify_error("❌ Only Admin (Maker) can submit edit requests")
+                                    st.info("Only Owner can update directly")
+
+                            # ✅ SUBMIT REQUEST button (Maker)
+                            with col_b:
+                                if is_maker_user or is_owner:
+                                    if st.button("📤 Submit Request", use_container_width=True, key="submit_edit_main"):
+                                        if not valid:
+                                            notify_error(msg)
+                                        elif not has_changes:
+                                            notify_warning("No changes to submit")
+                                        else:
+                                            existing = supabase.table("user_edit_requests").select("id").eq("user_id", selected_id).eq("status", "pending").execute()
+                                            if existing.data:
+                                                notify_warning("⚠️ Pending request already exists")
+                                            else:
+                                                supabase.table("user_edit_requests").insert({
+                                                    "requested_by": st.session_state.get("user_id"),
+                                                    "user_id": selected_id,
+                                                    "new_full_name": new_name,
+                                                    "new_role_id": role_map[new_role],
+                                                    "new_tenant_role": new_tenant,
+                                                    "new_is_active": new_active,
+                                                    "old_full_name": selected.get("full_name"),
+                                                    "old_role_id": selected["role_id"],
+                                                    "old_tenant_role": current_tenant,
+                                                    "old_is_active": selected.get("is_active", True),
+                                                    "status": "pending",
+                                                    "requested_at": datetime.now().isoformat()
+                                                }).execute()
+                                                create_activity_log(
+                                                    st.session_state.get("user_id"),
+                                                    "EDIT_USER_REQUEST",
+                                                    f"Requested to edit user '{selected['username']}'"
+                                                )
+                                                notify_success(f"✅ Edit request for '{selected['username']}' submitted")
+                                                st.rerun()
+                                else:
+                                    st.info("Only Maker can submit request")
+                            
+                            # ✅ RESET PASSWORD
+                            with col_c:
+                                if selected.get("username") != "admin":
+                                    with st.popover("🔐 Reset"):
+                                        new_pass = st.text_input("New Password", type="password", placeholder="Min 6 chars", key="reset_pass_main")
+                                        if st.button("Save", use_container_width=True, key="reset_save_main"):
+                                            if new_pass and len(new_pass) >= 6:
+                                                supabase.table("users").update({"password_hash": hash_password(new_pass)}).eq("id", selected_id).execute()
+                                                notify_success("✅ Password reset")
+                                                st.rerun()
+                                            else:
+                                                notify_error("❌ Min 6 chars")
+                                else:
+                                    st.info("🔒")
         else:
             st.info("No users")
 
@@ -429,7 +473,6 @@ def run():
                                 new_tenant = st.selectbox("New Tenant Role", tenant_opts, index=current_tenant_idx, key="edit_tab_tenant")
                                 new_active = st.toggle("New Status", value=selected.get("is_active", True), key="edit_tab_active")
                             
-                            # ✅ Validate Owner change
                             valid, msg = validate_owner_change(current_tenant, new_tenant)
                             if not valid:
                                 st.warning(msg)
@@ -484,50 +527,28 @@ def run():
                             requested_by = req.get('requested_by', {})
                             if requested_by:
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
-                            
-                            # ✅ Show if same user
-                            if requested_by and requested_by.get('id') == st.session_state.get('user_id'):
-                                st.warning("⚠️ You requested this. You cannot approve your own request.")
                         
                         with col2:
-                            # ✅ Check if requester is same as current user
-                            requester_id = req.get('requested_by', {}).get('id')
-                            current_user_id = st.session_state.get('user_id')
-                            
-                            # ✅ Can approve if: different user OR (same user but only owner)
-                            can_approve = requester_id != current_user_id
-                            
-                            if not can_approve:
-                                # Check if user is the only owner (can self-approve)
-                                owners = supabase.table("users").select("id").eq("tenant_role", "owner").execute()
-                                if owners.data and len(owners.data) == 1 and owners.data[0]["id"] == current_user_id:
-                                    can_approve = True
-                                    st.info("🔑 You are the only Owner. You can self-approve.")
-                                else:
-                                    st.warning("⛔ You cannot approve your own request. Ask another Owner.")
-                            
-                            if can_approve:
-                                if st.button("✅ Approve", key=f"app_c_{req['id']}_{idx}", use_container_width=True, type="primary"):
-                                    supabase.table("users").insert({
-                                        "username": req.get("username"),
-                                        "full_name": req.get("full_name"),
-                                        "password_hash": req.get("password_hash"),
-                                        "role_id": req.get("role_id"),
-                                        "shop_id": req.get("shop_id"),
-                                        "branch_id": req.get("branch_id"),
-                                        "tenant_role": req.get("tenant_role", "staff"),
-                                        "is_active": req.get("is_active", True),
-                                    }).execute()
-                                    supabase.table("user_create_requests").update({
-                                        "status": "approved",
-                                        "checked_by": st.session_state.get("user_id"),
-                                        "checked_at": datetime.now().isoformat()
-                                    }).eq("id", req["id"]).execute()
-                                    notify_success(f"✅ {req['username']} created")
-                                    st.rerun()
+                            if st.button("✅ Approve", key=f"app_c_{req['id']}_{idx}", use_container_width=True, type="primary"):
+                                supabase.table("users").insert({
+                                    "username": req.get("username"),
+                                    "full_name": req.get("full_name"),
+                                    "password_hash": req.get("password_hash"),
+                                    "role_id": req.get("role_id"),
+                                    "shop_id": req.get("shop_id"),
+                                    "branch_id": req.get("branch_id"),
+                                    "tenant_role": req.get("tenant_role", "staff"),
+                                    "is_active": req.get("is_active", True),
+                                }).execute()
+                                supabase.table("user_create_requests").update({
+                                    "status": "approved",
+                                    "checked_by": st.session_state.get("user_id"),
+                                    "checked_at": datetime.now().isoformat()
+                                }).eq("id", req["id"]).execute()
+                                notify_success(f"✅ {req['username']} created")
+                                st.rerun()
                         
                         with col3:
-                            # ✅ Reject: always allowed
                             with st.popover("❌ Reject"):
                                 reason = st.text_input("Reason", key=f"rej_c_{req['id']}_{idx}")
                                 if st.button("Confirm", key=f"rej_c_confirm_{req['id']}_{idx}"):
@@ -564,13 +585,8 @@ def run():
                             requested_by = req.get('requested_by', {})
                             if requested_by:
                                 st.caption(f"By: {requested_by.get('full_name', 'Unknown')}")
-                            
-                            # ✅ Show if same user
-                            if requested_by and requested_by.get('id') == st.session_state.get('user_id'):
-                                st.warning("⚠️ You requested this. You cannot approve your own request.")
                         
                         with col2:
-                            # ✅ Validate Owner change
                             old_tenant = req.get('old_tenant_role')
                             new_tenant = req.get('new_tenant_role')
                             valid, msg = validate_owner_change(old_tenant, new_tenant)
@@ -579,43 +595,27 @@ def run():
                                 st.warning(msg)
                                 st.info("ℹ️ This request cannot be approved. Please change Owner to **Admin** first.")
                             else:
-                                # ✅ Check if requester is same as current user
-                                requester_id = req.get('requested_by', {}).get('id')
-                                current_user_id = st.session_state.get('user_id')
-                                
-                                can_approve = requester_id != current_user_id
-                                
-                                if not can_approve:
-                                    # Check if user is the only owner
-                                    owners = supabase.table("users").select("id").eq("tenant_role", "owner").execute()
-                                    if owners.data and len(owners.data) == 1 and owners.data[0]["id"] == current_user_id:
-                                        can_approve = True
-                                        st.info("🔑 You are the only Owner. You can self-approve.")
-                                    else:
-                                        st.warning("⛔ You cannot approve your own request. Ask another Owner.")
-                                
-                                if can_approve:
-                                    if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
-                                        update_data = {}
-                                        if req.get('new_full_name'):
-                                            update_data["full_name"] = req.get('new_full_name')
-                                        if req.get('new_role_id'):
-                                            update_data["role_id"] = req.get('new_role_id')
-                                        if req.get('new_tenant_role'):
-                                            update_data["tenant_role"] = req.get('new_tenant_role')
-                                        if req.get('new_is_active') is not None:
-                                            update_data["is_active"] = req.get('new_is_active')
-                                        
-                                        supabase.table("users").update(update_data).eq("id", req["user_id"]).execute()
-                                        
-                                        supabase.table("user_edit_requests").update({
-                                            "status": "approved",
-                                            "checked_by": st.session_state.get("user_id"),
-                                            "checked_at": datetime.now().isoformat()
-                                        }).eq("id", req["id"]).execute()
-                                        
-                                        notify_success(f"✅ {target_user.get('username', 'User')} updated")
-                                        st.rerun()
+                                if st.button("✅ Approve", key=f"app_e_{req['id']}_{idx}", use_container_width=True, type="primary"):
+                                    update_data = {}
+                                    if req.get('new_full_name'):
+                                        update_data["full_name"] = req.get('new_full_name')
+                                    if req.get('new_role_id'):
+                                        update_data["role_id"] = req.get('new_role_id')
+                                    if req.get('new_tenant_role'):
+                                        update_data["tenant_role"] = req.get('new_tenant_role')
+                                    if req.get('new_is_active') is not None:
+                                        update_data["is_active"] = req.get('new_is_active')
+                                    
+                                    supabase.table("users").update(update_data).eq("id", req["user_id"]).execute()
+                                    
+                                    supabase.table("user_edit_requests").update({
+                                        "status": "approved",
+                                        "checked_by": st.session_state.get("user_id"),
+                                        "checked_at": datetime.now().isoformat()
+                                    }).eq("id", req["id"]).execute()
+                                    
+                                    notify_success(f"✅ {target_user.get('username', 'User')} updated")
+                                    st.rerun()
                         
                         with col3:
                             with st.popover("❌ Reject"):
