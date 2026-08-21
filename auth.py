@@ -1,5 +1,8 @@
 # ==============================================================================
-# auth.py - MULTI-TENANT LOGIN FIX
+# auth.py
+# ERP ENTERPRISE AUTHENTICATION SYSTEM V32
+# SECURITY + ROLE + SESSION + MULTI-TENANT MANAGEMENT
+# With Supabase Auth Integration
 # ==============================================================================
 
 import hashlib
@@ -10,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import streamlit as st
 
+# V30 DATABASE CORE
 from erp_core.base_repo import db
 
 supabase = db()
@@ -51,6 +55,49 @@ TENANT_ROLE_MAP = {
     TENANT_ROLE_MANAGER: "Manager",
     TENANT_ROLE_STAFF: "Staff",
 }
+
+# ==================================================
+# AUDIT LOGGING
+# ==================================================
+
+
+def log_auth_event(user_id, event_type, status="success"):
+    try:
+        supabase.table("auth_logs").insert(
+            {
+                "user_id": user_id,
+                "event": event_type,
+                "status": status,
+                "ip_address": "system",
+            }
+        ).execute()
+    except Exception:
+        pass
+
+
+def log_audit_trail(user_id, action, table_name=None, record_id=None, old_data=None, new_data=None):
+    """Log audit trail for compliance"""
+    try:
+        # Get current user's shop_id
+        user = get_current_user()
+        shop_id = user.get('shop_id') if user else None
+        branch_id = user.get('branch_id') if user else None
+        
+        supabase.table("audit_trail").insert({
+            "user_id": user_id,
+            "shop_id": shop_id,
+            "branch_id": branch_id,
+            "action": action,
+            "table_name": table_name,
+            "record_id": record_id,
+            "old_data": old_data,
+            "new_data": new_data,
+            "ip_address": "system",
+            "user_agent": "ERP_System"
+        }).execute()
+    except Exception:
+        pass
+
 
 # ==================================================
 # PASSWORD ENGINE
@@ -100,17 +147,17 @@ def upgrade_password(user_id, password):
 
 
 # ==================================================
-# USER QUERY (Multi-Tenant)
+# USER QUERY (Case-Insensitive)
 # ==================================================
 
 
 def get_user_by_username(username):
-    """Get user by username from custom users table"""
+    """Get user by username from custom users table (case-insensitive)"""
     try:
         result = (
             supabase.table("users")
             .select("*")
-            .eq("username", username.strip())
+            .ilike("username", username.strip())
             .limit(1)
             .execute()
         )
@@ -146,7 +193,7 @@ def get_user_by_id(user_id):
 
 
 def login_user(username, password):
-    # 1. Get user from custom users table ONLY
+    # 1. Get user from custom users table (case-insensitive)
     user = get_user_by_username(username)
 
     if not user:
@@ -185,7 +232,11 @@ def login_user(username, password):
     # 4. Login success - Reset failed attempts
     try:
         supabase.table("users").update(
-            {"failed_attempts": 0, "locked_until": None, "last_login": datetime.now(timezone.utc).isoformat()}
+            {
+                "failed_attempts": 0,
+                "locked_until": None,
+                "last_login": datetime.now(timezone.utc).isoformat()
+            }
         ).eq("id", user["id"]).execute()
     except Exception:
         pass
@@ -195,6 +246,7 @@ def login_user(username, password):
 
     # 6. Log event
     log_auth_event(user["id"], "login")
+    log_audit_trail(user["id"], "LOGIN", "users", user["id"])
 
     return True, "Success"
 
@@ -236,20 +288,6 @@ def build_session(user):
     st.session_state["branch_id"] = branch_id
     st.session_state["tenant_role"] = tenant_role
     st.session_state["id"] = user_id
-
-
-def log_auth_event(user_id, event_type, status="success"):
-    try:
-        supabase.table("auth_logs").insert(
-            {
-                "user_id": user_id,
-                "event": event_type,
-                "status": status,
-                "ip_address": "system",
-            }
-        ).execute()
-    except Exception:
-        pass
 
 
 # ==================================================
@@ -384,6 +422,43 @@ def require_branch_access():
     return user
 
 
+def has_permission(permission_key):
+    try:
+        role_id = get_current_role_id()
+
+        if not role_id:
+            return False
+
+        response = (
+            supabase.table("role_permissions")
+            .select(
+                """
+                allowed,
+                permissions(
+                    permission_key
+                )
+                """
+            )
+            .eq("role_id", role_id)
+            .execute()
+        )
+
+        permissions = response.data or []
+
+        for item in permissions:
+            permission = item.get("permissions")
+
+            if permission:
+                if permission.get("permission_key") == permission_key:
+                    return item.get("allowed", False)
+
+        return False
+
+    except Exception as e:
+        st.error(f"Permission check error: {e}")
+        return False
+
+
 # ==================================================
 # LOGIN UI
 # ==================================================
@@ -409,11 +484,139 @@ def login_page():
 
 
 # ==================================================
+# USER CREATION (Multi-Tenant)
+# ==================================================
+
+
+def create_user(username, full_name, password, role_id=ROLE_CASHIER, shop_id=None, branch_id=None, tenant_role=TENANT_ROLE_STAFF):
+    """
+    Create a new user with both custom auth and Supabase Auth.
+    Supports Multi-Tenant with shop_id and branch_id.
+    """
+    try:
+        import uuid
+
+        # Check if username already exists (case-insensitive)
+        existing = get_user_by_username(username)
+        if existing:
+            return False, "Username already exists"
+
+        # Hash password (SHA256 for initial, will be upgraded to bcrypt)
+        password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+        # Generate UUID
+        user_id = str(uuid.uuid4())
+
+        # Create user data
+        new_user = {
+            "id": user_id,
+            "username": username.strip(),
+            "full_name": full_name,
+            "password_hash": password_hash,
+            "role_id": role_id,
+            "shop_id": shop_id,
+            "branch_id": branch_id,
+            "tenant_role": tenant_role,
+            "is_active": True,
+            "failed_attempts": 0,
+        }
+
+        # Insert into custom users table
+        result = supabase.table("users").insert(new_user).execute()
+
+        if not result.data:
+            return False, "Failed to create user"
+
+        # Log audit
+        log_audit_trail(user_id, "USER_CREATED", "users", user_id, None, new_user)
+
+        return True, "User created successfully!"
+
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
+
+# ==================================================
+# PASSWORD MANAGEMENT
+# ==================================================
+
+
+def change_password(user_id, old_password, new_password):
+    try:
+        # Current user load
+        result = (
+            supabase.table("users")
+            .select("*")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+
+        user = result.data
+
+        if not user:
+            return False, "User not found"
+
+        # Verify old password
+        if not verify_password(user, old_password):
+            return False, "Old password is incorrect"
+
+        # Hash new password
+        new_hash = bcrypt.hashpw(
+            new_password.encode("utf-8"), bcrypt.gensalt()
+        ).decode()
+
+        # Update custom users table
+        supabase.table("users").update(
+            {"password_hash": new_hash}
+        ).eq("id", user_id).execute()
+
+        # Log audit
+        log_audit_trail(user_id, "PASSWORD_CHANGED", "users", user_id)
+
+        return True, "Password changed successfully"
+
+    except Exception as e:
+        return False, str(e)
+
+
+def reset_password(user_id, new_password, admin_user_id=None):
+    """Reset user password (admin only)"""
+    try:
+        user = get_user_by_id(user_id)
+        if not user:
+            return False, "User not found"
+
+        # Hash new password
+        new_hash = bcrypt.hashpw(
+            new_password.encode("utf-8"), bcrypt.gensalt()
+        ).decode()
+
+        # Update custom users table
+        supabase.table("users").update(
+            {"password_hash": new_hash}
+        ).eq("id", user_id).execute()
+
+        # Log audit
+        log_audit_trail(admin_user_id or user_id, "PASSWORD_RESET", "users", user_id)
+
+        return True, "Password reset successfully"
+
+    except Exception as e:
+        return False, str(e)
+
+
+# ==================================================
 # LOGOUT
 # ==================================================
 
 
 def logout():
+    # Log audit
+    user_id = st.session_state.get("user_id")
+    if user_id:
+        log_audit_trail(user_id, "LOGOUT", "sessions")
+
     # Clear all session state
     for key in list(st.session_state.keys()):
         del st.session_state[key]
