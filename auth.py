@@ -1,5 +1,6 @@
 # ============================================================
 # auth.py - ERP ENTERPRISE AUTHENTICATION
+# FINAL FIXED VERSION
 # ============================================================
 
 import hashlib
@@ -45,7 +46,7 @@ TENANT_ROLE_MAP = {
 }
 
 # ==================================================
-# PASSWORD ENGINE
+# PASSWORD ENGINE - SIMPLIFIED
 # ==================================================
 
 def verify_password(user, password):
@@ -54,18 +55,7 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
-    # Plain text match
-    if stored == password:
-        return True
-
-    # bcrypt
-    if stored.startswith("$2"):
-        try:
-            return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
-        except Exception:
-            return False
-
-    # SHA256
+    # SHA256 (admin123)
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
     if sha256_hash == stored:
         return True
@@ -73,31 +63,32 @@ def verify_password(user, password):
     return False
 
 # ==================================================
-# USER QUERY - FIXED
+# USER QUERY - CASE INSENSITIVE
 # ==================================================
 
 def get_user_by_username(username):
     """Get user by username - case insensitive"""
     try:
-        # Get all users and filter in Python
+        # Get all users
         result = supabase.table('users').select('*').execute()
         
         if not result.data:
-            print(f"❌ No users found in database")
+            print(f"No users found in database")
             return None
         
+        # Case-insensitive search
         username_lower = username.strip().lower()
         for user in result.data:
             user_username = user.get('username', '')
             if user_username.lower() == username_lower:
-                print(f"✅ Found user: {user_username}")
+                print(f"Found user: {user_username}")
                 return user
         
-        print(f"❌ User not found: '{username}'")
+        print(f"User not found: '{username}'")
         return None
         
     except Exception as e:
-        print(f"❌ Get user error: {e}")
+        print(f"Get user error: {e}")
         return None
 
 # ==================================================
@@ -142,7 +133,6 @@ def login_user(username, password):
     except Exception:
         pass
 
-    # ✅ Build session
     build_session(user)
     return True, "Success"
 
@@ -185,27 +175,22 @@ def build_session(user):
 # ==================================================
 
 def get_current_user():
-    user = st.session_state.get("user")
-    if user is None:
-        return {}
-    return user
+    return st.session_state.get("user") or {}
 
 def get_current_shop_id():
     user = get_current_user()
-    return user.get("shop_id") if user else None
+    return user.get("shop_id")
 
 def get_current_branch_id():
     user = get_current_user()
-    return user.get("branch_id") if user else None
+    return user.get("branch_id")
 
 def get_current_tenant_role():
     user = get_current_user()
-    return user.get("tenant_role", TENANT_ROLE_STAFF) if user else TENANT_ROLE_STAFF
+    return user.get("tenant_role", TENANT_ROLE_STAFF)
 
 def is_shop_owner():
     user = get_current_user()
-    if not user:
-        return False
     tenant_role = user.get("tenant_role", TENANT_ROLE_STAFF)
     return tenant_role in [TENANT_ROLE_OWNER, TENANT_ROLE_ADMIN]
 
