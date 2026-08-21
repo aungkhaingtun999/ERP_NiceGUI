@@ -1,5 +1,5 @@
 # ============================================================
-# auth.py - FIXED (ပြင်ဆင်ပြီး)
+# auth.py - ERP ENTERPRISE AUTHENTICATION
 # ============================================================
 
 import hashlib
@@ -45,8 +45,9 @@ TENANT_ROLE_MAP = {
 }
 
 # ==================================================
-# PASSWORD ENGINE - FIXED
+# PASSWORD ENGINE
 # ==================================================
+
 def verify_password(user, password):
     stored = user.get("password_hash")
     if not stored:
@@ -60,39 +61,31 @@ def verify_password(user, password):
         except Exception:
             return False
 
-    # ✅ SHA256 - ဒါက admin အတွက် စစ်ပေးမယ်
-    sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    if sha256_hash == stored:
-        return True
-    
-    return False
-
     # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    
-    # Direct comparison
     if sha256_hash == stored:
-        # Upgrade to bcrypt
-        try:
-            new_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
-            supabase.table("users").update({"password_hash": new_hash}).eq("id", user["id"]).execute()
-        except Exception:
-            pass
         return True
     
     return False
 
 # ==================================================
-# USER QUERY - FIXED
+# USER QUERY
 # ==================================================
 
 def get_user_by_username(username):
-    """Get user by username"""
+    """Get user by username - case insensitive"""
     try:
-        result = supabase.table('users').select('*').eq('username', username.strip()).execute()
+        # Get all users and filter in Python (most reliable)
+        result = supabase.table('users').select('*').execute()
         
-        if result.data and len(result.data) > 0:
-            return result.data[0]
+        if not result.data:
+            return None
+        
+        # Case-insensitive search
+        username_lower = username.strip().lower()
+        for user in result.data:
+            if user.get('username', '').lower() == username_lower:
+                return user
         
         return None
         
@@ -316,3 +309,28 @@ def auth_sidebar():
                 st.caption(f"🔑 {user.get('tenant_role_name', 'Staff')}")
             if st.button("🚪 Logout"):
                 logout()
+
+# ==================================================
+# PASSWORD MANAGEMENT
+# ==================================================
+
+def change_password(user_id, old_password, new_password):
+    """Change user password"""
+    try:
+        result = supabase.table("users").select("*").eq("id", user_id).execute()
+        
+        if not result.data:
+            return False, "User not found"
+        
+        user = result.data[0]
+        
+        if not verify_password(user, old_password):
+            return False, "Current password is incorrect"
+        
+        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode()
+        supabase.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
+        
+        return True, "Password changed successfully"
+        
+    except Exception as e:
+        return False, str(e)
