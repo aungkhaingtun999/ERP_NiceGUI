@@ -252,7 +252,6 @@ def require_shop_access():
 def change_password(user_id, old_password, new_password):
     """Change user password"""
     try:
-        # Get user
         result = supabase.table("users").select("*").eq("id", user_id).execute()
         
         if not result.data:
@@ -260,14 +259,11 @@ def change_password(user_id, old_password, new_password):
         
         user = result.data[0]
         
-        # Verify old password
         if not verify_password(user, old_password):
             return False, "Current password is incorrect"
         
-        # Hash new password
         new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode()
         
-        # Update
         supabase.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
         
         return True, "Password changed successfully"
@@ -297,8 +293,9 @@ def login_page():
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")
+
 # ==================================================
-# MAKER-CHECKER FUNCTIONS
+# MAKER-CHECKER FUNCTIONS & VALIDATION
 # ==================================================
 
 def is_maker():
@@ -330,6 +327,25 @@ def require_checker():
     if not is_checker():
         st.error("⛔ Owner (Checker) privileges required to approve/reject requests.")
         st.stop()
+
+def validate_maker_checker(requested_by_id, checker_id):
+    """
+    Validate that Maker and Checker are different users.
+    Returns: (is_valid, error_message)
+    """
+    if requested_by_id == checker_id:
+        return False, "❌ Maker and Checker cannot be the same user. Please ask another Owner to review this request."
+    return True, ""
+
+def can_self_approve(user_id):
+    """
+    Check if user can self-approve (only if they are the only Owner)
+    """
+    owners = supabase.table("users").select("id").eq("tenant_role", "owner").execute()
+    if owners.data and len(owners.data) == 1:
+        return owners.data[0]["id"] == user_id
+    return False
+
 # ==================================================
 # LOGOUT
 # ==================================================
