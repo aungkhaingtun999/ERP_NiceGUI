@@ -1,5 +1,6 @@
 # ============================================================
 # auth.py - ERP ENTERPRISE AUTHENTICATION
+# FINAL VERSION - WITH FULL DEBUG
 # ============================================================
 
 import hashlib
@@ -10,7 +11,6 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import streamlit as st
 
-# ✅ Supabase Client
 from supabase_client import get_supabase
 
 supabase = get_supabase()
@@ -246,35 +246,63 @@ def require_shop_access():
     return get_current_user()
 
 # ==================================================
-# LOGIN UI
+# LOGIN UI - WITH FULL DEBUG
 # ==================================================
 
 def login_page():
     st.title("🔐 ERP Enterprise Login")
     
     # Debug
-    with st.expander("🔍 Database Debug"):
+    with st.expander("🔍 Database Debug (Click to expand)"):
+        st.write("📡 Testing Supabase connection...")
+        
         try:
+            # 1. Try to get users
             result = supabase.table('users').select('*').execute()
-            st.write(f"📋 Users: {len(result.data) if result.data else 0}")
+            st.write(f"📋 Users found: {len(result.data) if result.data else 0}")
+            
             if result.data:
                 st.dataframe(result.data)
+            else:
+                st.warning("⚠️ No users found in users table.")
+                
         except Exception as e:
-            st.error(f"❌ Error: {e}")
+            st.error(f"❌ Error accessing users table: {e}")
+        
+        # 2. Try to list all tables
+        try:
+            st.write("---")
+            st.write("📋 Listing all tables in public schema...")
+            result = supabase.from_('information_schema.tables').select('table_name').eq('table_schema', 'public').execute()
+            if result.data:
+                tables = [t.get('table_name') for t in result.data if t.get('table_name')]
+                st.write(f"Tables found: {len(tables)}")
+                st.write(tables)
+            else:
+                st.warning("No tables found in public schema.")
+        except Exception as e:
+            st.error(f"❌ Cannot list tables: {e}")
+        
+        # 3. Show Supabase client info
+        st.write("---")
+        st.write(f"🔧 Supabase client: {type(supabase)}")
+        st.write(f"🔧 Supabase URL: {st.secrets.get('SUPABASE_URL', 'Not set')[:30]}...")
     
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
-    if st.button("Login", use_container_width=True):
-        if not username or not password:
-            st.error("Username and password required")
-        else:
-            success, msg = login_user(username, password)
-            if success:
-                st.success("✅ Login successful!")
-                st.rerun()
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("Login", use_container_width=True):
+            if not username or not password:
+                st.error("Username and password required")
             else:
-                st.error(f"❌ {msg}")
+                success, msg = login_user(username, password)
+                if success:
+                    st.success("✅ Login successful!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg}")
 
 # ==================================================
 # LOGOUT
