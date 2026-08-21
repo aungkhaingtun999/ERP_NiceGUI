@@ -54,7 +54,7 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
-    # Plain text match check
+    # Plain text match
     if stored == password:
         return True
 
@@ -73,34 +73,25 @@ def verify_password(user, password):
     return False
 
 # ==================================================
-# USER QUERY
-# ==================================================
-# ==================================================
-# USER QUERY - FIXED (ထပ်ပြင်ဆင်)
+# USER QUERY - FIXED
 # ==================================================
 
 def get_user_by_username(username):
-    """Get user by username - case insensitive with debug"""
+    """Get user by username - case insensitive"""
     try:
-        # Debug: ရှာနေတဲ့ username ကိုပြပါ
-        print(f"🔍 Looking for username: '{username}'")
+        # Get all users and filter in Python
+        result = supabase.table('users').select('*').execute()
         
-        # Method 1: Exact match first
-        result = supabase.table('users').select('*').eq('username', username.strip()).execute()
+        if not result.data:
+            print(f"❌ No users found in database")
+            return None
         
-        if result.data and len(result.data) > 0:
-            print(f"✅ Found user (exact): {result.data[0].get('username')}")
-            return result.data[0]
-        
-        # Method 2: Case-insensitive search
-        all_result = supabase.table('users').select('*').execute()
-        
-        if all_result.data:
-            username_lower = username.strip().lower()
-            for user in all_result.data:
-                if user.get('username', '').lower() == username_lower:
-                    print(f"✅ Found user (case-insensitive): {user.get('username')}")
-                    return user
+        username_lower = username.strip().lower()
+        for user in result.data:
+            user_username = user.get('username', '')
+            if user_username.lower() == username_lower:
+                print(f"✅ Found user: {user_username}")
+                return user
         
         print(f"❌ User not found: '{username}'")
         return None
@@ -115,6 +106,7 @@ def get_user_by_username(username):
 
 def login_user(username, password):
     user = get_user_by_username(username)
+    
     if not user:
         return False, "User not found. Please check username."
 
@@ -150,6 +142,7 @@ def login_user(username, password):
     except Exception:
         pass
 
+    # ✅ Build session
     build_session(user)
     return True, "Success"
 
@@ -192,22 +185,27 @@ def build_session(user):
 # ==================================================
 
 def get_current_user():
-    return st.session_state.get("user") or {}
+    user = st.session_state.get("user")
+    if user is None:
+        return {}
+    return user
 
 def get_current_shop_id():
     user = get_current_user()
-    return user.get("shop_id")
+    return user.get("shop_id") if user else None
 
 def get_current_branch_id():
     user = get_current_user()
-    return user.get("branch_id")
+    return user.get("branch_id") if user else None
 
 def get_current_tenant_role():
     user = get_current_user()
-    return user.get("tenant_role", TENANT_ROLE_STAFF)
+    return user.get("tenant_role", TENANT_ROLE_STAFF) if user else TENANT_ROLE_STAFF
 
 def is_shop_owner():
     user = get_current_user()
+    if not user:
+        return False
     tenant_role = user.get("tenant_role", TENANT_ROLE_STAFF)
     return tenant_role in [TENANT_ROLE_OWNER, TENANT_ROLE_ADMIN]
 
@@ -243,7 +241,7 @@ def require_login():
 
 def require_admin():
     user = require_login()
-    if user["role_id"] != ROLE_ADMIN:
+    if user.get("role_id") != ROLE_ADMIN:
         st.error("⛔ Admin privileges required.")
         st.stop()
     return user
@@ -317,8 +315,8 @@ def auth_sidebar():
     if is_authenticated():
         user = get_current_user()
         with st.sidebar:
-            st.success(f"👤 {user['full_name']}")
-            st.caption(f"Role: {user['role']}")
+            st.success(f"👤 {user.get('full_name', 'User')}")
+            st.caption(f"Role: {user.get('role', 'Unknown')}")
             if user.get('shop_id'):
                 st.caption(f"🏪 Shop: {user.get('shop_id', 'N/A')[:8]}...")
             if user.get('tenant_role'):
