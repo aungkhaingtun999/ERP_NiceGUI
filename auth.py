@@ -1,6 +1,5 @@
 # ============================================================
-# auth.py - ERP ENTERPRISE AUTHENTICATION
-# MULTI-TENANT READY - PRODUCTION VERSION
+# auth.py - FIXED (ပြင်ဆင်ပြီး)
 # ============================================================
 
 import hashlib
@@ -46,7 +45,7 @@ TENANT_ROLE_MAP = {
 }
 
 # ==================================================
-# PASSWORD ENGINE
+# PASSWORD ENGINE - FIXED
 # ==================================================
 
 def verify_password(user, password):
@@ -62,34 +61,23 @@ def verify_password(user, password):
         except Exception:
             return False
 
-    # SHA256 - Direct comparison
+    # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
     
-    # ✅ Log for debugging
-    print(f"🔍 Input password: {password}")
-    print(f"🔍 SHA256 hash: {sha256_hash}")
-    print(f"🔍 Stored hash: {stored}")
-    
-    if hmac.compare_digest(stored, sha256_hash):
-        upgrade_password(user["id"], password)
-        return True
-    
-    if hmac.compare_digest(stored, password):
-        upgrade_password(user["id"], password)
+    # Direct comparison
+    if sha256_hash == stored:
+        # Upgrade to bcrypt
+        try:
+            new_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
+            supabase.table("users").update({"password_hash": new_hash}).eq("id", user["id"]).execute()
+        except Exception:
+            pass
         return True
     
     return False
 
-
-def upgrade_password(user_id, password):
-    try:
-        new_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
-        supabase.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
-    except Exception:
-        pass
-
 # ==================================================
-# USER QUERY
+# USER QUERY - FIXED
 # ==================================================
 
 def get_user_by_username(username):
@@ -99,14 +87,6 @@ def get_user_by_username(username):
         
         if result.data and len(result.data) > 0:
             return result.data[0]
-        
-        all_result = supabase.table('users').select('*').execute()
-        
-        if all_result.data:
-            username_lower = username.strip().lower()
-            for user in all_result.data:
-                if user.get('username', '').lower() == username_lower:
-                    return user
         
         return None
         
@@ -216,6 +196,18 @@ def is_shop_owner():
     tenant_role = user.get("tenant_role", TENANT_ROLE_STAFF)
     return tenant_role in [TENANT_ROLE_OWNER, TENANT_ROLE_ADMIN]
 
+def is_maker():
+    user = get_current_user()
+    if not user:
+        return False
+    return user.get("role_id") == ROLE_ADMIN
+
+def is_checker():
+    user = get_current_user()
+    if not user:
+        return False
+    return user.get("tenant_role") == TENANT_ROLE_OWNER
+
 def is_authenticated():
     user = st.session_state.get("user")
     if not user:
@@ -255,31 +247,17 @@ def require_shop_access():
         st.stop()
     return get_current_user()
 
-# ==================================================
-# PASSWORD MANAGEMENT
-# ==================================================
+def require_maker():
+    require_login()
+    if not is_maker():
+        st.error("⛔ Admin (Maker) privileges required.")
+        st.stop()
 
-def change_password(user_id, old_password, new_password):
-    """Change user password"""
-    try:
-        result = supabase.table("users").select("*").eq("id", user_id).execute()
-        
-        if not result.data:
-            return False, "User not found"
-        
-        user = result.data[0]
-        
-        if not verify_password(user, old_password):
-            return False, "Current password is incorrect"
-        
-        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode()
-        
-        supabase.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
-        
-        return True, "Password changed successfully"
-        
-    except Exception as e:
-        return False, str(e)
+def require_checker():
+    require_login()
+    if not is_checker():
+        st.error("⛔ Owner (Checker) privileges required.")
+        st.stop()
 
 # ==================================================
 # LOGIN UI
@@ -303,58 +281,6 @@ def login_page():
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")
-
-# ==================================================
-# MAKER-CHECKER FUNCTIONS & VALIDATION
-# ==================================================
-
-def is_maker():
-    """Check if current user is a Maker (Admin)"""
-    user = get_current_user()
-    if not user:
-        return False
-    role_id = user.get('role_id')
-    return role_id == ROLE_ADMIN
-
-def is_checker():
-    """Check if current user is a Checker (Owner)"""
-    user = get_current_user()
-    if not user:
-        return False
-    tenant_role = user.get('tenant_role', 'staff')
-    return tenant_role == TENANT_ROLE_OWNER
-
-def require_maker():
-    """Require user to be a Maker (Admin)"""
-    require_login()
-    if not is_maker():
-        st.error("⛔ Admin (Maker) privileges required to create user requests.")
-        st.stop()
-
-def require_checker():
-    """Require user to be a Checker (Owner)"""
-    require_login()
-    if not is_checker():
-        st.error("⛔ Owner (Checker) privileges required to approve/reject requests.")
-        st.stop()
-
-def validate_maker_checker(requested_by_id, checker_id):
-    """
-    Validate that Maker and Checker are different users.
-    Returns: (is_valid, error_message)
-    """
-    if requested_by_id == checker_id:
-        return False, "❌ Maker and Checker cannot be the same user. Please ask another Owner to review this request."
-    return True, ""
-
-def can_self_approve(user_id):
-    """
-    Check if user can self-approve (only if they are the only Owner)
-    """
-    owners = supabase.table("users").select("id").eq("tenant_role", "owner").execute()
-    if owners.data and len(owners.data) == 1:
-        return owners.data[0]["id"] == user_id
-    return False
 
 # ==================================================
 # LOGOUT
