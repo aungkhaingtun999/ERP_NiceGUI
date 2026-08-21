@@ -54,16 +54,26 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
+    # bcrypt
     if stored.startswith("$2"):
         try:
             return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
         except Exception:
             return False
 
+    # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    if hmac.compare_digest(stored, sha256_hash) or hmac.compare_digest(stored, password):
+    
+    # Direct match
+    if hmac.compare_digest(stored, sha256_hash):
         upgrade_password(user["id"], password)
         return True
+    
+    # Plain text match (legacy)
+    if hmac.compare_digest(stored, password):
+        upgrade_password(user["id"], password)
+        return True
+    
     return False
 
 
@@ -75,13 +85,26 @@ def upgrade_password(user_id, password):
         pass
 
 # ==================================================
-# USER QUERY
+# USER QUERY - FIXED
 # ==================================================
 
 def get_user_by_username(username):
+    """Get user by username - case insensitive"""
     try:
-        result = supabase.table("users").select("*").ilike("username", username.strip()).limit(1).execute()
-        return result.data[0] if result.data else None
+        # Get all users and filter in Python (more reliable)
+        result = supabase.table("users").select("*").execute()
+        
+        if not result.data:
+            return None
+        
+        # Case-insensitive search
+        username_lower = username.strip().lower()
+        for user in result.data:
+            if user.get("username", "").lower() == username_lower:
+                return user
+        
+        return None
+        
     except Exception as e:
         print(f"Get user error: {e}")
         return None
@@ -95,13 +118,21 @@ def login_user(username, password):
     if not user:
         return False, "User not found. Please check username."
 
+    # Check if user is active
+    if not user.get("is_active", False):
+        return False, "Account is disabled. Please contact administrator."
+
     locked_until = user.get("locked_until")
     if locked_until:
-        lock_time = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
-        if datetime.now(timezone.utc) < lock_time:
-            return False, "Account locked. Try again later."
+        try:
+            lock_time = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) < lock_time:
+                return False, "Account locked. Try again later."
+        except Exception:
+            pass
 
     if not verify_password(user, password):
+        # Update failed attempts
         attempts = user.get("failed_attempts", 0) + 1
         update_data = {"failed_attempts": attempts}
         if attempts >= MAX_FAILED_ATTEMPTS:
@@ -112,6 +143,7 @@ def login_user(username, password):
             pass
         return False, "Invalid password."
 
+    # Login success
     try:
         supabase.table("users").update({
             "failed_attempts": 0,
@@ -172,6 +204,10 @@ def get_current_shop_id():
 def get_current_branch_id():
     user = get_current_user()
     return user.get("branch_id")
+
+def get_current_tenant_role():
+    user = get_current_user()
+    return user.get("tenant_role", TENANT_ROLE_STAFF)
 
 def is_shop_owner():
     user = get_current_user()
@@ -243,7 +279,10 @@ def login_page():
 
 def logout():
     for key in list(st.session_state.keys()):
-        del st.session_state[key]
+        try:
+            del st.session_state[key]
+        except Exception:
+            pass
     st.rerun()
 
 # ==================================================
