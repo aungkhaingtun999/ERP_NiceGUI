@@ -1,7 +1,7 @@
 # ==============================================================================
 # auth.py
-# ERP ENTERPRISE AUTHENTICATION SYSTEM V31
-# SECURITY + ROLE + SESSION MANAGEMENT
+# ERP ENTERPRISE AUTHENTICATION SYSTEM V32
+# SECURITY + ROLE + SESSION + MULTI-TENANT MANAGEMENT
 # With Supabase Auth Integration
 # ==============================================================================
 
@@ -41,6 +41,22 @@ ROLE_MAP = {
 }
 
 # ==================================================
+# TENANT ROLE CONSTANTS
+# ==================================================
+
+TENANT_ROLE_OWNER = "owner"
+TENANT_ROLE_ADMIN = "admin"
+TENANT_ROLE_MANAGER = "manager"
+TENANT_ROLE_STAFF = "staff"
+
+TENANT_ROLE_MAP = {
+    TENANT_ROLE_OWNER: "Owner",
+    TENANT_ROLE_ADMIN: "Admin",
+    TENANT_ROLE_MANAGER: "Manager",
+    TENANT_ROLE_STAFF: "Staff",
+}
+
+# ==================================================
 # AUDIT LOGGING
 # ==================================================
 
@@ -55,6 +71,30 @@ def log_auth_event(user_id, event_type, status="success"):
                 "ip_address": "system",
             }
         ).execute()
+    except Exception:
+        pass
+
+
+def log_audit_trail(user_id, action, table_name=None, record_id=None, old_data=None, new_data=None):
+    """Log audit trail for compliance"""
+    try:
+        # Get current user's shop_id
+        user = get_current_user()
+        shop_id = user.get('shop_id') if user else None
+        branch_id = user.get('branch_id') if user else None
+        
+        supabase.table("audit_trail").insert({
+            "user_id": user_id,
+            "shop_id": shop_id,
+            "branch_id": branch_id,
+            "action": action,
+            "table_name": table_name,
+            "record_id": record_id,
+            "old_data": old_data,
+            "new_data": new_data,
+            "ip_address": "system",
+            "user_agent": "ERP_System"
+        }).execute()
     except Exception:
         pass
 
@@ -147,6 +187,9 @@ def sync_with_supabase_auth(username, password, user_data=None):
                         "username": username,
                         "full_name": user_data.get("full_name", "") if user_data else "",
                         "role_id": user_data.get("role_id", ROLE_CASHIER) if user_data else ROLE_CASHIER,
+                        "shop_id": user_data.get("shop_id") if user_data else None,
+                        "branch_id": user_data.get("branch_id") if user_data else None,
+                        "tenant_role": user_data.get("tenant_role", TENANT_ROLE_STAFF) if user_data else TENANT_ROLE_STAFF,
                     }
                 }
             })
@@ -187,6 +230,22 @@ def get_user(username):
         return None
 
 
+def get_user_by_id(user_id):
+    try:
+        result = (
+            supabase.table("users")
+            .select("*")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+
+        return result.data[0] if result.data else None
+
+    except Exception:
+        return None
+
+
 # ==================================================
 # LOGIN ENGINE
 # ==================================================
@@ -223,6 +282,7 @@ def login_user(username, password):
 
         # Log event
         log_auth_event(user["id"], "login")
+        log_audit_trail(user["id"], "LOGIN", "users", user["id"])
 
         return True, "Success"
 
@@ -250,7 +310,7 @@ def login_user(username, password):
 
 
 # ==================================================
-# SESSION BUILDER
+# SESSION BUILDER (Multi-Tenant)
 # ==================================================
 
 
@@ -258,6 +318,11 @@ def build_session(user):
     role_id = int(user.get("role_id", ROLE_CASHIER))
     user_id = user.get("id")
     username = user.get("username") or user.get("email") or "Unknown"
+    
+    # Get tenant info
+    shop_id = user.get("shop_id")
+    branch_id = user.get("branch_id")
+    tenant_role = user.get("tenant_role", TENANT_ROLE_STAFF)
 
     st.session_state.user = {
         "id": user_id,
@@ -265,6 +330,10 @@ def build_session(user):
         "full_name": user.get("full_name", username),
         "role_id": role_id,
         "role": ROLE_MAP.get(role_id, "Cashier"),
+        "shop_id": shop_id,
+        "branch_id": branch_id,
+        "tenant_role": tenant_role,
+        "tenant_role_name": TENANT_ROLE_MAP.get(tenant_role, "Staff"),
         "is_active": bool(user.get("is_active", True)),
         "last_activity": time.time(),
     }
@@ -273,6 +342,9 @@ def build_session(user):
     st.session_state["user_id"] = user_id
     st.session_state["username"] = username
     st.session_state["role_id"] = role_id
+    st.session_state["shop_id"] = shop_id
+    st.session_state["branch_id"] = branch_id
+    st.session_state["tenant_role"] = tenant_role
 
     # backup id
     st.session_state["id"] = user_id
@@ -296,6 +368,33 @@ def get_current_role_id():
     if not user:
         return None
     return user.get("role_id")
+
+
+def get_current_shop_id():
+    """Get current user's shop_id"""
+    user = get_current_user()
+    return user.get("shop_id") if user else None
+
+
+def get_current_branch_id():
+    """Get current user's branch_id"""
+    user = get_current_user()
+    return user.get("branch_id") if user else None
+
+
+def get_current_tenant_role():
+    """Get current user's tenant_role"""
+    user = get_current_user()
+    return user.get("tenant_role", TENANT_ROLE_STAFF) if user else TENANT_ROLE_STAFF
+
+
+def is_shop_owner():
+    """Check if current user is shop owner or admin"""
+    user = get_current_user()
+    if not user:
+        return False
+    tenant_role = user.get("tenant_role", TENANT_ROLE_STAFF)
+    return tenant_role in [TENANT_ROLE_OWNER, TENANT_ROLE_ADMIN]
 
 
 # ==================================================
@@ -344,6 +443,48 @@ def require_role(role_id):
         st.error(f"⛔ Requires {ROLE_MAP.get(role_id)}")
         st.stop()
 
+    return user
+
+
+# ==================================================
+# MULTI-TENANT GUARDS
+# ==================================================
+
+
+def require_shop_owner():
+    """Require user to be shop owner or admin"""
+    require_login()
+    user = get_current_user()
+    tenant_role = user.get("tenant_role", TENANT_ROLE_STAFF)
+    
+    if tenant_role not in [TENANT_ROLE_OWNER, TENANT_ROLE_ADMIN]:
+        st.error("⛔ Shop owner or admin privileges required.")
+        st.stop()
+    
+    return user
+
+
+def require_shop_access():
+    """Require user to have a shop assigned"""
+    require_login()
+    user = get_current_user()
+    
+    if not user.get("shop_id"):
+        st.error("⛔ No shop assigned. Please contact administrator.")
+        st.stop()
+    
+    return user
+
+
+def require_branch_access():
+    """Require user to have a branch assigned"""
+    require_login()
+    user = get_current_user()
+    
+    if not user.get("branch_id"):
+        st.error("⛔ No branch assigned. Please contact administrator.")
+        st.stop()
+    
     return user
 
 
@@ -406,13 +547,14 @@ def login_page():
 
 
 # ==================================================
-# USER CREATION
+# USER CREATION (Multi-Tenant)
 # ==================================================
 
 
-def create_user(username, full_name, password, role_id=ROLE_CASHIER):
+def create_user(username, full_name, password, role_id=ROLE_CASHIER, shop_id=None, branch_id=None, tenant_role=TENANT_ROLE_STAFF):
     """
     Create a new user with both custom auth and Supabase Auth.
+    Supports Multi-Tenant with shop_id and branch_id.
     """
     try:
         import uuid
@@ -435,10 +577,11 @@ def create_user(username, full_name, password, role_id=ROLE_CASHIER):
             "full_name": full_name,
             "password_hash": password_hash,
             "role_id": role_id,
+            "shop_id": shop_id,
+            "branch_id": branch_id,
+            "tenant_role": tenant_role,
             "is_active": True,
             "failed_attempts": 0,
-            "created_at": "now()",
-            "updated_at": "now()"
         }
 
         # Insert into custom users table
@@ -449,6 +592,9 @@ def create_user(username, full_name, password, role_id=ROLE_CASHIER):
 
         # Sync with Supabase Auth
         sync_with_supabase_auth(username, password, new_user)
+
+        # Log audit
+        log_audit_trail(user_id, "USER_CREATED", "users", user_id, None, new_user)
 
         return True, "User created successfully!"
 
@@ -501,7 +647,46 @@ def change_password(user_id, old_password, new_password):
         except Exception:
             pass
 
+        # Log audit
+        log_audit_trail(user_id, "PASSWORD_CHANGED", "users", user_id)
+
         return True, "Password changed successfully"
+
+    except Exception as e:
+        return False, str(e)
+
+
+def reset_password(user_id, new_password, admin_user_id=None):
+    """Reset user password (admin only)"""
+    try:
+        user = get_user_by_id(user_id)
+        if not user:
+            return False, "User not found"
+
+        # Hash new password
+        new_hash = bcrypt.hashpw(
+            new_password.encode("utf-8"), bcrypt.gensalt()
+        ).decode()
+
+        # Update custom users table
+        supabase.table("users").update(
+            {"password_hash": new_hash}
+        ).eq("id", user_id).execute()
+
+        # Update Supabase Auth password
+        try:
+            email = f"{user['username']}@nexora-erp.local"
+            supabase.auth.update_user({
+                "email": email,
+                "password": new_password
+            })
+        except Exception:
+            pass
+
+        # Log audit
+        log_audit_trail(admin_user_id or user_id, "PASSWORD_RESET", "users", user_id)
+
+        return True, "Password reset successfully"
 
     except Exception as e:
         return False, str(e)
@@ -519,6 +704,11 @@ def logout():
     except Exception:
         pass
 
+    # Log audit
+    user_id = st.session_state.get("user_id")
+    if user_id:
+        log_audit_trail(user_id, "LOGOUT", "sessions")
+
     # Clear all session state
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -527,7 +717,7 @@ def logout():
 
 
 # ==================================================
-# SIDEBAR USER PANEL
+# SIDEBAR USER PANEL (Multi-Tenant)
 # ==================================================
 
 
@@ -539,6 +729,14 @@ def auth_sidebar():
             st.success(f"👤 {user['full_name']}")
 
             st.caption(f"Role: {user['role']}")
+            
+            # Show tenant info
+            if user.get('shop_id'):
+                st.caption(f"🏪 Shop: {user.get('shop_id', 'N/A')[:8]}...")
+            if user.get('branch_id'):
+                st.caption(f"📍 Branch: {user.get('branch_id', 'N/A')[:8]}...")
+            if user.get('tenant_role'):
+                st.caption(f"🔑 {user.get('tenant_role_name', 'Staff')}")
 
             if st.button("🚪 Logout"):
                 logout()
