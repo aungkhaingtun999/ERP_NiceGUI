@@ -1,14 +1,11 @@
 # ============================================================
-# auth.py - ERP ENTERPRISE AUTHENTICATION
-# FINAL FIXED VERSION
+# auth.py - ULTRA SIMPLE (FOR TESTING)
 # ============================================================
 
 import hashlib
-import hmac
 import time
 from datetime import datetime, timedelta, timezone
 
-import bcrypt
 import streamlit as st
 
 from supabase_client import get_supabase
@@ -46,49 +43,44 @@ TENANT_ROLE_MAP = {
 }
 
 # ==================================================
-# PASSWORD ENGINE - SIMPLIFIED
+# PASSWORD VERIFY - SIMPLEST
 # ==================================================
 
 def verify_password(user, password):
     stored = user.get("password_hash")
     if not stored:
         return False
-    stored = str(stored).strip()
-
-    # SHA256 (admin123)
-    sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    if sha256_hash == stored:
-        return True
     
-    return False
+    # SHA256
+    sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    
+    # Debug
+    print(f"🔍 Password: '{password}'")
+    print(f"🔍 SHA256: '{sha256_hash}'")
+    print(f"🔍 Stored: '{stored}'")
+    print(f"🔍 Match: {sha256_hash == stored}")
+    
+    return sha256_hash == stored
 
 # ==================================================
-# USER QUERY - CASE INSENSITIVE
+# USER QUERY - DIRECT
 # ==================================================
 
 def get_user_by_username(username):
-    """Get user by username - case insensitive"""
+    """Get user by username - direct query"""
     try:
-        # Get all users
-        result = supabase.table('users').select('*').execute()
+        print(f"🔍 Searching for: '{username}'")
+        result = supabase.table('users').select('*').eq('username', username.strip()).execute()
         
-        if not result.data:
-            print(f"No users found in database")
-            return None
+        if result.data and len(result.data) > 0:
+            print(f"✅ Found: {result.data[0].get('username')}")
+            return result.data[0]
         
-        # Case-insensitive search
-        username_lower = username.strip().lower()
-        for user in result.data:
-            user_username = user.get('username', '')
-            if user_username.lower() == username_lower:
-                print(f"Found user: {user_username}")
-                return user
-        
-        print(f"User not found: '{username}'")
+        print(f"❌ Not found: '{username}'")
         return None
         
     except Exception as e:
-        print(f"Get user error: {e}")
+        print(f"❌ Error: {e}")
         return None
 
 # ==================================================
@@ -96,24 +88,18 @@ def get_user_by_username(username):
 # ==================================================
 
 def login_user(username, password):
+    print(f"🔐 Login attempt: '{username}'")
+    
     user = get_user_by_username(username)
     
     if not user:
         return False, "User not found. Please check username."
 
     if not user.get("is_active", False):
-        return False, "Account is disabled. Please contact administrator."
-
-    locked_until = user.get("locked_until")
-    if locked_until:
-        try:
-            lock_time = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) < lock_time:
-                return False, "Account locked. Try again later."
-        except Exception:
-            pass
+        return False, "Account is disabled."
 
     if not verify_password(user, password):
+        # Update failed attempts
         attempts = user.get("failed_attempts", 0) + 1
         update_data = {"failed_attempts": attempts}
         if attempts >= MAX_FAILED_ATTEMPTS:
@@ -124,6 +110,7 @@ def login_user(username, password):
             pass
         return False, "Invalid password."
 
+    # Success
     try:
         supabase.table("users").update({
             "failed_attempts": 0,
@@ -308,28 +295,3 @@ def auth_sidebar():
                 st.caption(f"🔑 {user.get('tenant_role_name', 'Staff')}")
             if st.button("🚪 Logout"):
                 logout()
-
-# ==================================================
-# PASSWORD MANAGEMENT
-# ==================================================
-
-def change_password(user_id, old_password, new_password):
-    """Change user password"""
-    try:
-        result = supabase.table("users").select("*").eq("id", user_id).execute()
-        
-        if not result.data:
-            return False, "User not found"
-        
-        user = result.data[0]
-        
-        if not verify_password(user, old_password):
-            return False, "Current password is incorrect"
-        
-        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode()
-        supabase.table("users").update({"password_hash": new_hash}).eq("id", user_id).execute()
-        
-        return True, "Password changed successfully"
-        
-    except Exception as e:
-        return False, str(e)
