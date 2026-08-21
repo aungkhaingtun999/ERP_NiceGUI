@@ -593,6 +593,9 @@ def run():
 
                 for perm in permissions:
 
+                    # ✅ Fix: Use 'name' column instead of 'permission_name'
+                    perm_name = perm.get("name") or perm.get("permission_name") or str(perm.get("id"))
+                    
                     current = (
                         supabase.table("role_permissions")
                         .select("allowed")
@@ -607,7 +610,7 @@ def run():
                         allowed = current.data[0]["allowed"]
 
                     new_value = st.checkbox(
-                        perm["permission_name"],
+                        str(perm_name),
                         value=allowed,
                         key=f"{role['id']}_{perm['id']}",
                     )
