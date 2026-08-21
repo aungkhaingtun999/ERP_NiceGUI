@@ -47,7 +47,6 @@ TENANT_ROLE_MAP = {
 # ==================================================
 # PASSWORD ENGINE - FIXED
 # ==================================================
-
 def verify_password(user, password):
     stored = user.get("password_hash")
     if not stored:
@@ -60,6 +59,13 @@ def verify_password(user, password):
             return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
         except Exception:
             return False
+
+    # ✅ SHA256 - ဒါက admin အတွက် စစ်ပေးမယ်
+    sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if sha256_hash == stored:
+        return True
+    
+    return False
 
     # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
