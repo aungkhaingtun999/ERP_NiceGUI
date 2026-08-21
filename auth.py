@@ -54,6 +54,10 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
+    # EMERGENCY BACKUP: Plain text match check (just in case database has plain text)
+    if stored == password:
+        return True
+
     # bcrypt
     if stored.startswith("$2"):
         try:
@@ -75,13 +79,11 @@ def verify_password(user, password):
 def get_user_by_username(username):
     """Get user by username - case insensitive"""
     try:
-        # Get all users and filter in Python (most reliable)
         result = supabase.table('users').select('*').execute()
         
         if not result.data:
             return None
         
-        # Case-insensitive search
         username_lower = username.strip().lower()
         for user in result.data:
             if user.get('username', '').lower() == username_lower:
@@ -265,6 +267,39 @@ def require_checker():
 def login_page():
     st.title("🔐 ERP Enterprise Login")
     
+    # --- EMERGENCY RECOVERY BUTTON ---
+    with st.expander("🛠️ Emergency Admin Reset"):
+        if st.button("Reset Admin Credentials to admin / admin123", use_container_width=True):
+            try:
+                res = supabase.table("users").select("*").execute()
+                if res.data:
+                    target_user = None
+                    for u in res.data:
+                        if u.get("role_id") == 1 or u.get("username") == "admin":
+                            target_user = u
+                            break
+                    if not target_user and res.data:
+                        target_user = res.data[0]
+                    
+                    if target_user:
+                        # Generate proper bcrypt hash via Python
+                        new_hash = bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt()).decode()
+                        supabase.table("users").update({
+                            "username": "admin",
+                            "password_hash": new_hash,
+                            "is_active": True,
+                            "failed_attempts": 0,
+                            "locked_until": None
+                        }).eq("id", target_user["id"]).execute()
+                        st.success("✅ Reset successful! Please log in with admin / admin123.")
+                    else:
+                        st.error("❌ No users found.")
+                else:
+                    st.error("❌ Users table is empty.")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+    # -------------------------------
+
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
