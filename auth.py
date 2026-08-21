@@ -1,5 +1,5 @@
 # ============================================================
-# auth.py - SIMPLIFIED MULTI-TENANT (No RLS) - FINAL
+# auth.py - ERP ENTERPRISE AUTHENTICATION
 # ============================================================
 
 import hashlib
@@ -10,9 +10,10 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import streamlit as st
 
-from erp_core.base_repo import db
+# ✅ Supabase Client
+from supabase_client import get_supabase
 
-supabase = db()
+supabase = get_supabase()
 
 # ==================================================
 # CONSTANTS
@@ -84,12 +85,12 @@ def upgrade_password(user_id, password):
 def get_user_by_username(username):
     """Get user by username"""
     try:
-        result = supabase.schema('public').table('users').select('*').eq('username', username.strip()).execute()
+        result = supabase.table('users').select('*').eq('username', username.strip()).execute()
         
         if result.data and len(result.data) > 0:
             return result.data[0]
         
-        all_result = supabase.schema('public').table('users').select('*').execute()
+        all_result = supabase.table('users').select('*').execute()
         
         if all_result.data:
             username_lower = username.strip().lower()
@@ -254,12 +255,12 @@ def login_page():
     # Debug
     with st.expander("🔍 Database Debug"):
         try:
-            result = supabase.schema('public').table('users').select('*').execute()
+            result = supabase.table('users').select('*').execute()
             st.write(f"📋 Users: {len(result.data) if result.data else 0}")
             if result.data:
                 st.dataframe(result.data)
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"❌ Error: {e}")
     
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
