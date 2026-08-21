@@ -1,5 +1,5 @@
 # ============================================================
-# auth.py - SIMPLIFIED MULTI-TENANT (No RLS)
+# auth.py - SIMPLIFIED MULTI-TENANT (No RLS) - FINAL
 # ============================================================
 
 import hashlib
@@ -54,19 +54,26 @@ def verify_password(user, password):
         return False
     stored = str(stored).strip()
 
+    # bcrypt
     if stored.startswith("$2"):
         try:
             return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
         except Exception:
             return False
 
+    # SHA256
     sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    
+    # Direct match
     if hmac.compare_digest(stored, sha256_hash):
         upgrade_password(user["id"], password)
         return True
+    
+    # Plain text match (legacy)
     if hmac.compare_digest(stored, password):
         upgrade_password(user["id"], password)
         return True
+    
     return False
 
 
@@ -78,20 +85,20 @@ def upgrade_password(user_id, password):
         pass
 
 # ==================================================
-# USER QUERY - FIXED
+# USER QUERY - DIRECT SQL
 # ==================================================
 
 def get_user_by_username(username):
-    """Get user by username - case insensitive (Fixed)"""
+    """Get user by username - Direct SQL"""
     try:
-        # ပထမ - တိကျတဲ့ username နဲ့ ရှာပါ
-        result = supabase.table("users").select("*").eq("username", username.strip()).execute()
+        # Method 1: Try raw SQL
+        result = supabase.from_('users').select('*').eq('username', username.strip()).execute()
         
         if result.data and len(result.data) > 0:
             return result.data[0]
         
-        # ဒုတိယ - အကုန်ဆွဲပြီး case-insensitive ရှာပါ
-        all_result = supabase.table("users").select("*").execute()
+        # Method 2: Get all and filter
+        all_result = supabase.from_('users').select('*').execute()
         
         if all_result.data:
             username_lower = username.strip().lower()
@@ -114,6 +121,7 @@ def login_user(username, password):
     if not user:
         return False, "User not found. Please check username."
 
+    # Check if user is active
     if not user.get("is_active", False):
         return False, "Account is disabled. Please contact administrator."
 
@@ -127,6 +135,7 @@ def login_user(username, password):
             pass
 
     if not verify_password(user, password):
+        # Update failed attempts
         attempts = user.get("failed_attempts", 0) + 1
         update_data = {"failed_attempts": attempts}
         if attempts >= MAX_FAILED_ATTEMPTS:
@@ -137,6 +146,7 @@ def login_user(username, password):
             pass
         return False, "Invalid password."
 
+    # Login success
     try:
         supabase.table("users").update({
             "failed_attempts": 0,
@@ -256,11 +266,29 @@ def login_page():
     # DEBUG - Show all users from database
     with st.expander("🔍 Database Debug (Click to expand)"):
         try:
-            all_users = supabase.table("users").select("username, full_name, shop_id, tenant_role, is_active").execute()
-            st.write("📋 Users in database:")
-            st.dataframe(all_users.data)
+            # Try both methods
+            st.write("📋 Testing Supabase connection...")
+            
+            # Method 1: table()
+            try:
+                result1 = supabase.table("users").select("*").execute()
+                st.write(f"✅ table('users') result: {len(result1.data) if result1.data else 0} users")
+                if result1.data:
+                    st.dataframe(result1.data)
+            except Exception as e1:
+                st.error(f"❌ table('users') error: {e1}")
+            
+            # Method 2: from_()
+            try:
+                result2 = supabase.from_('users').select('*').execute()
+                st.write(f"✅ from_('users') result: {len(result2.data) if result2.data else 0} users")
+                if result2.data:
+                    st.dataframe(result2.data)
+            except Exception as e2:
+                st.error(f"❌ from_('users') error: {e2}")
+                
         except Exception as e:
-            st.error(f"❌ Cannot fetch users: {e}")
+            st.error(f"❌ Debug error: {e}")
     
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -269,8 +297,6 @@ def login_page():
         if not username or not password:
             st.error("Username and password required")
         else:
-            # DEBUG
-            st.write(f"🔍 Trying to login with: '{username}'")
             success, msg = login_user(username, password)
             if success:
                 st.success("✅ Login successful!")
