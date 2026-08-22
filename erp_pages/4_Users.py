@@ -2474,6 +2474,8 @@ def run():
                         target_user.get("id")
                     )
 
+                    request_id = req.get("id", "unknown")
+
                     with st.container(
                         border=True
                     ):
@@ -2483,6 +2485,10 @@ def run():
                                 [3, 1, 1]
                             )
                         )
+
+                        # ------------------------------------------------------
+                        # REQUEST DETAILS
+                        # ------------------------------------------------------
 
                         with col1:
 
@@ -2506,6 +2512,13 @@ def run():
                             )
 
                             st.caption(
+                                f"Tenant: "
+                                f"{req.get('old_tenant_role', 'staff')} "
+                                f"→ "
+                                f"{req.get('new_tenant_role', 'staff')}"
+                            )
+
+                            st.caption(
                                 f"Status: "
                                 f"{'🟢' if req.get('old_is_active') else '🔴'} "
                                 f"→ "
@@ -2524,6 +2537,10 @@ def run():
                                 st.caption(
                                     "By: Unknown requester"
                                 )
+
+                        # ------------------------------------------------------
+                        # APPROVE
+                        # ------------------------------------------------------
 
                         with col2:
 
@@ -2596,8 +2613,9 @@ def run():
                                         if st.button(
                                             "✅ Approve",
                                             key=(
-                                                f"app_e_"
-                                                f"{req.get('id', idx)}_"
+                                                f"tab4_edit_approve_"
+                                                f"{request_id}_"
+                                                f"{target_id}_"
                                                 f"{idx}"
                                             ),
                                             use_container_width=True,
@@ -2606,12 +2624,9 @@ def run():
 
                                             update_data = {}
 
-                                            if (
-                                                req.get(
-                                                    "new_full_name"
-                                                )
-                                                is not None
-                                            ):
+                                            if req.get(
+                                                "new_full_name"
+                                            ) is not None:
 
                                                 update_data[
                                                     "full_name"
@@ -2619,12 +2634,9 @@ def run():
                                                     "new_full_name"
                                                 )
 
-                                            if (
-                                                req.get(
-                                                    "new_role_id"
-                                                )
-                                                is not None
-                                            ):
+                                            if req.get(
+                                                "new_role_id"
+                                            ) is not None:
 
                                                 update_data[
                                                     "role_id"
@@ -2632,12 +2644,9 @@ def run():
                                                     "new_role_id"
                                                 )
 
-                                            if (
-                                                req.get(
-                                                    "new_tenant_role"
-                                                )
-                                                is not None
-                                            ):
+                                            if req.get(
+                                                "new_tenant_role"
+                                            ) is not None:
 
                                                 update_data[
                                                     "tenant_role"
@@ -2645,12 +2654,9 @@ def run():
                                                     "new_tenant_role"
                                                 )
 
-                                            if (
-                                                req.get(
-                                                    "new_is_active"
-                                                )
-                                                is not None
-                                            ):
+                                            if req.get(
+                                                "new_is_active"
+                                            ) is not None:
 
                                                 update_data[
                                                     "is_active"
@@ -2660,18 +2666,28 @@ def run():
 
                                             if update_data:
 
-                                                (
-                                                    supabase
-                                                    .table("users")
-                                                    .update(
-                                                        update_data
+                                                try:
+
+                                                    (
+                                                        supabase
+                                                        .table("users")
+                                                        .update(
+                                                            update_data
+                                                        )
+                                                        .eq(
+                                                            "id",
+                                                            target_id,
+                                                        )
+                                                        .execute()
                                                     )
-                                                    .eq(
-                                                        "id",
-                                                        target_id,
+
+                                                except Exception as e:
+
+                                                    notify_error(
+                                                        f"❌ User update failed: {e}"
                                                     )
-                                                    .execute()
-                                                )
+
+                                                    st.stop()
 
                                             (
                                                 supabase
@@ -2682,14 +2698,30 @@ def run():
                                                     {
                                                         "status": "approved",
                                                         "checked_by": current_user_id,
-                                                        "checked_at": datetime.now().isoformat(),
+                                                        "checked_at": datetime.now(
+                                                            timezone.utc
+                                                        ).isoformat(),
                                                     }
                                                 )
                                                 .eq(
                                                     "id",
-                                                    req.get("id"),
+                                                    request_id,
+                                                )
+                                                .eq(
+                                                    "status",
+                                                    "pending",
                                                 )
                                                 .execute()
+                                            )
+
+                                            create_activity_log(
+                                                current_user_id,
+                                                "APPROVE_EDIT_USER",
+                                                (
+                                                    f"Approved edit request "
+                                                    f"for user "
+                                                    f"'{target_user.get('username', 'User')}'"
+                                                ),
                                             )
 
                                             notify_success(
@@ -2711,10 +2743,9 @@ def run():
                                     "could not be found."
                                 )
 
-                                st.caption(
-                                    "This request cannot be safely approved "
-                                    "until the target user exists."
-                                )
+                        # ------------------------------------------------------
+                        # REJECT
+                        # ------------------------------------------------------
 
                         with col3:
 
@@ -2725,8 +2756,9 @@ def run():
                                 reason = st.text_input(
                                     "Reason",
                                     key=(
-                                        f"rej_e_"
-                                        f"{req.get('id', idx)}_"
+                                        f"tab4_edit_reject_reason_"
+                                        f"{request_id}_"
+                                        f"{target_id}_"
                                         f"{idx}"
                                     ),
                                 )
@@ -2734,10 +2766,12 @@ def run():
                                 if st.button(
                                     "Confirm",
                                     key=(
-                                        f"rej_e_confirm_"
-                                        f"{req.get('id', idx)}_"
+                                        f"tab4_edit_reject_confirm_"
+                                        f"{request_id}_"
+                                        f"{target_id}_"
                                         f"{idx}"
                                     ),
+                                    use_container_width=True,
                                 ):
 
                                     (
@@ -2749,7 +2783,9 @@ def run():
                                             {
                                                 "status": "rejected",
                                                 "checked_by": current_user_id,
-                                                "checked_at": datetime.now().isoformat(),
+                                                "checked_at": datetime.now(
+                                                    timezone.utc
+                                                ).isoformat(),
                                                 "rejection_reason": (
                                                     reason
                                                     or "No reason"
@@ -2758,9 +2794,25 @@ def run():
                                         )
                                         .eq(
                                             "id",
-                                            req.get("id"),
+                                            request_id,
+                                        )
+                                        .eq(
+                                            "status",
+                                            "pending",
                                         )
                                         .execute()
+                                    )
+
+                                    create_activity_log(
+                                        current_user_id,
+                                        "REJECT_EDIT_USER",
+                                        (
+                                            f"Rejected edit request "
+                                            f"for user "
+                                            f"'{target_user.get('username', 'User')}'. "
+                                            f"Reason: "
+                                            f"{reason or 'No reason'}"
+                                        ),
                                     )
 
                                     notify_warning(
@@ -2768,7 +2820,8 @@ def run():
                                     )
 
                                     st.rerun()
-
+                            
+                                                
 
 # ==============================================================================
 # ENTRY
