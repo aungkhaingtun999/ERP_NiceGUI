@@ -48,10 +48,23 @@ TENANT_ROLE_MAP = {
 
 def verify_password(user, password):
     stored = user.get("password_hash")
+
     if not stored:
+        print("AUTH DEBUG: password_hash is EMPTY")
         return False
-    
-    sha256_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+    sha256_hash = hashlib.sha256(
+        password.encode("utf-8")
+    ).hexdigest()
+
+    print("========== AUTH DEBUG ==========")
+    print("Username:", user.get("username"))
+    print("Password length:", len(password))
+    print("Stored hash:", repr(stored))
+    print("Calculated hash:", repr(sha256_hash))
+    print("Hashes match:", sha256_hash == stored)
+    print("================================")
+
     return sha256_hash == stored
 
 # ==================================================
