@@ -813,87 +813,30 @@ def run():
                                     st.columns(3)
                                 )
 
-                                # ------------------------------------------------
-                                # DIRECT UPDATE
-                                # ------------------------------------------------
+       
+# ------------------------------------------------
+# MAKER-CHECKER ONLY
+# ------------------------------------------------
 
-                                with col_a:
+with col_a:
 
-                                    if (
-                                        (
-                                            is_owner
-                                            or is_checker_user
-                                        )
-                                        and not last_owner
-                                    ):
+    if last_owner:
 
-                                        if st.button(
-                                            "💾 Update",
-                                            use_container_width=True,
-                                            type="primary",
-                                            key="update_direct",
-                                        ):
+        st.info(
+            "🔒 Last Owner cannot be edited"
+        )
 
-                                            if not valid:
+    elif is_maker_user or is_owner:
 
-                                                notify_error(msg)
+        st.info(
+            "🔐 Edit must go through Maker-Checker approval."
+        )
 
-                                            elif not has_changes:
+    else:
 
-                                                notify_warning(
-                                                    "No changes to update"
-                                                )
-
-                                            else:
-
-                                                (
-                                                    supabase
-                                                    .table("users")
-                                                    .update(
-                                                        {
-                                                            "full_name": new_name,
-                                                            "role_id": role_map[
-                                                                new_role
-                                                            ],
-                                                            "tenant_role": new_tenant,
-                                                            "is_active": new_active,
-                                                        }
-                                                    )
-                                                    .eq(
-                                                        "id",
-                                                        selected_id,
-                                                    )
-                                                    .execute()
-                                                )
-
-                                                create_activity_log(
-                                                    current_user_id,
-                                                    "UPDATE_USER",
-                                                    f"Updated user "
-                                                    f"'{selected.get('username', '')}'",
-                                                )
-
-                                                notify_success(
-                                                    f"✅ "
-                                                    f"{selected.get('username', '')} "
-                                                    f"updated"
-                                                )
-
-                                                st.rerun()
-
-                                    else:
-
-                                        if last_owner:
-
-                                            st.info(
-                                                "🔒 Last Owner cannot be updated"
-                                            )
-
-                                        else:
-
-                                            st.info(
-                                                "👑 Only Owner can update directly"
-                                            )
+        st.info(
+            "🔧 Only Maker can submit edit request."
+        )
 
                                 # ------------------------------------------------
                                 # SUBMIT EDIT REQUEST
