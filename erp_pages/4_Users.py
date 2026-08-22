@@ -814,28 +814,29 @@ def run():
                                 )
 
                                 # ------------------------------------------------
-# MAKER-CHECKER ONLY
-# ------------------------------------------------
+                                # MAKER-CHECKER ONLY
+                                # ------------------------------------------------
 
-with col_a:
+                                with col_a:
 
-    if last_owner:
+                                    if last_owner:
 
-        st.info(
-            "🔒 Last Owner cannot be edited"
-        )
+                                        st.info(
+                                            "🔒 Last Owner cannot be edited"
+                                        )
 
-    elif is_maker_user or is_owner:
+                                    elif is_maker_user or is_owner:
 
-        st.info(
-            "🔐 Edit must go through Maker-Checker approval."
-        )
+                                        st.info(
+                                            "🔐 Edit must go through Maker-Checker approval."
+                                        )
 
-    else:
+                                    else:
 
-        st.info(
-            "🔧 Only Maker can submit edit request."
-        )
+                                        st.info(
+                                            "🔧 Only Maker can submit edit request."
+                                        )
+
                                 # ------------------------------------------------
                                 # SUBMIT EDIT REQUEST
                                 # ------------------------------------------------
