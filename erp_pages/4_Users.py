@@ -1500,12 +1500,16 @@ def run():
                                         "⚠️ Cannot submit request "
                                         "for last Owner"
                                     )
-
+    
     # ==========================================================================
     # TAB 4: APPROVALS
     # ==========================================================================
 
     with tab4:
+
+        # ----------------------------------------------------------------------
+        # CHECKER ACCESS
+        # ----------------------------------------------------------------------
 
         if not is_checker_user and not is_owner:
 
@@ -1546,6 +1550,14 @@ def run():
                         requested_by.get("id")
                     )
 
+                    request_id = req.get("id")
+
+                    username = (
+                        str(
+                            req.get("username") or ""
+                        ).strip()
+                    )
+
                     with st.container(
                         border=True
                     ):
@@ -1556,11 +1568,15 @@ def run():
                             )
                         )
 
+                        # ------------------------------------------------------
+                        # REQUEST DETAILS
+                        # ------------------------------------------------------
+
                         with col1:
 
                             st.write(
                                 f"**Create: "
-                                f"{req.get('username', 'Unknown')}** "
+                                f"{username or 'Unknown'}** "
                                 f"- "
                                 f"{req.get('full_name', '')}"
                             )
@@ -1570,6 +1586,11 @@ def run():
                                 f"{get_role_name(req.get('role_id'))} "
                                 f"| Tenant: "
                                 f"{req.get('tenant_role', 'staff')}"
+                            )
+
+                            st.caption(
+                                f"Shop: "
+                                f"{get_shop_name(req.get('shop_id'))}"
                             )
 
                             if requested_by:
@@ -1585,6 +1606,10 @@ def run():
                                     "By: Unknown requester"
                                 )
 
+                        # ------------------------------------------------------
+                        # APPROVE
+                        # ------------------------------------------------------
+
                         with col2:
 
                             can_approve, msg = (
@@ -1597,77 +1622,318 @@ def run():
 
                                 if st.button(
                                     "✅ Approve",
-                                    key=f"app_c_{req.get('id', idx)}_{idx}",
+                                    key=(
+                                        f"app_c_"
+                                        f"{request_id}_{idx}"
+                                    ),
                                     use_container_width=True,
                                     type="primary",
                                 ):
 
-                                    (
+                                    # ==================================================
+                                    # 1. BASIC VALIDATION
+                                    # ==================================================
+
+                                    if not username:
+
+                                        notify_error(
+                                            "❌ Username is empty."
+                                        )
+
+                                        st.stop()
+
+                                    # ==================================================
+                                    # 2. DUPLICATE USERNAME CHECK
+                                    # ==================================================
+
+                                    existing_user_resp = (
                                         supabase
                                         .table("users")
-                                        .insert(
-                                            {
-                                                "username": req.get(
-                                                    "username"
-                                                ),
-                                                "full_name": req.get(
-                                                    "full_name"
-                                                ),
-                                                "password_hash": req.get(
-                                                    "password_hash"
-                                                ),
-                                                "role_id": req.get(
-                                                    "role_id"
-                                                ),
-                                                "shop_id": req.get(
-                                                    "shop_id"
-                                                ),
-                                                "branch_id": req.get(
-                                                    "branch_id"
-                                                ),
-                                                "tenant_role": req.get(
-                                                    "tenant_role",
-                                                    "staff",
-                                                ),
-                                                "is_active": req.get(
-                                                    "is_active",
-                                                    True,
-                                                ),
-                                            }
+                                        .select(
+                                            "id,username"
                                         )
+                                        .eq(
+                                            "username",
+                                            username,
+                                        )
+                                        .limit(1)
                                         .execute()
                                     )
 
-                                    (
-                                        supabase
-                                        .table(
-                                            "user_create_requests"
-                                        )
-                                        .update(
-                                            {
-                                                "status": "approved",
-                                                "checked_by": current_user_id,
-                                                "checked_at": datetime.now().isoformat(),
-                                            }
-                                        )
-                                        .eq(
-                                            "id",
-                                            req.get("id"),
-                                        )
-                                        .execute()
+                                    existing_users = (
+                                        existing_user_resp.data
+                                        or []
                                     )
+
+                                    if existing_users:
+
+                                        existing_user = (
+                                            safe_dict(
+                                                existing_users[0]
+                                            )
+                                        )
+
+                                        existing_username = (
+                                            existing_user.get(
+                                                "username"
+                                            )
+                                            or username
+                                        )
+
+                                        # ------------------------------------------
+                                        # DO NOT INSERT DUPLICATE USER
+                                        # ------------------------------------------
+
+                                        notify_error(
+                                            f"❌ Username "
+                                            f"'{existing_username}' "
+                                            f"already exists. "
+                                            f"Request cannot be approved."
+                                        )
+
+                                        # ------------------------------------------
+                                        # Mark request as rejected
+                                        #
+                                        # IMPORTANT:
+                                        # We do NOT insert another user.
+                                        # ------------------------------------------
+
+                                        (
+                                            supabase
+                                            .table(
+                                                "user_create_requests"
+                                            )
+                                            .update(
+                                                {
+                                                    "status": "rejected",
+                                                    "checked_by": current_user_id,
+                                                    "checked_at": datetime.now(
+                                                        timezone.utc
+                                                    ).isoformat(),
+                                                    "rejection_reason": (
+                                                        "Username already exists "
+                                                        "in users table."
+                                                    ),
+                                                }
+                                            )
+                                            .eq(
+                                                "id",
+                                                request_id,
+                                            )
+                                            .eq(
+                                                "status",
+                                                "pending",
+                                            )
+                                            .execute()
+                                        )
+
+                                        create_activity_log(
+                                            current_user_id,
+                                            "REJECT_CREATE_DUPLICATE",
+                                            (
+                                                f"Create request for "
+                                                f"'{username}' rejected "
+                                                f"because username already exists."
+                                            ),
+                                        )
+
+                                        st.rerun()
+
+                                    # ==================================================
+                                    # 3. INSERT NEW USER
+                                    # ==================================================
+
+                                    try:
+
+                                        insert_result = (
+                                            supabase
+                                            .table("users")
+                                            .insert(
+                                                {
+                                                    "username": username,
+                                                    "full_name": req.get(
+                                                        "full_name"
+                                                    ),
+                                                    "password_hash": req.get(
+                                                        "password_hash"
+                                                    ),
+                                                    "role_id": req.get(
+                                                        "role_id"
+                                                    ),
+                                                    "shop_id": req.get(
+                                                        "shop_id"
+                                                    ),
+                                                    "branch_id": req.get(
+                                                        "branch_id"
+                                                    ),
+                                                    "tenant_role": req.get(
+                                                        "tenant_role",
+                                                        "staff",
+                                                    ),
+                                                    "is_active": req.get(
+                                                        "is_active",
+                                                        True,
+                                                    ),
+                                                    "failed_attempts": 0,
+                                                    "locked_until": None,
+                                                }
+                                            )
+                                            .execute()
+                                        )
+
+                                    except Exception as e:
+
+                                        error_text = str(e)
+
+                                        # ------------------------------------------
+                                        # DUPLICATE RACE CONDITION
+                                        # ------------------------------------------
+                                        #
+                                        # Another request could have created the
+                                        # same username between our SELECT and
+                                        # INSERT.
+                                        #
+                                        # Never crash the page.
+                                        # ------------------------------------------
+
+                                        if (
+                                            "23505"
+                                            in error_text
+                                            or
+                                            "users_username_key"
+                                            in error_text
+                                        ):
+
+                                            (
+                                                supabase
+                                                .table(
+                                                    "user_create_requests"
+                                                )
+                                                .update(
+                                                    {
+                                                        "status": "rejected",
+                                                        "checked_by": current_user_id,
+                                                        "checked_at": datetime.now(
+                                                            timezone.utc
+                                                        ).isoformat(),
+                                                        "rejection_reason": (
+                                                            "Username already "
+                                                            "exists in users table."
+                                                        ),
+                                                    }
+                                                )
+                                                .eq(
+                                                    "id",
+                                                    request_id,
+                                                )
+                                                .eq(
+                                                    "status",
+                                                    "pending",
+                                                )
+                                                .execute()
+                                            )
+
+                                            create_activity_log(
+                                                current_user_id,
+                                                "REJECT_CREATE_DUPLICATE",
+                                                (
+                                                    f"Create request for "
+                                                    f"'{username}' rejected "
+                                                    f"because username already exists."
+                                                ),
+                                            )
+
+                                            notify_error(
+                                                f"❌ Username "
+                                                f"'{username}' already exists."
+                                            )
+
+                                            st.rerun()
+
+                                        else:
+
+                                            notify_error(
+                                                f"❌ User creation failed: "
+                                                f"{error_text}"
+                                            )
+
+                                            st.stop()
+
+                                    # ==================================================
+                                    # 4. MARK REQUEST APPROVED
+                                    # ==================================================
+
+                                    try:
+
+                                        (
+                                            supabase
+                                            .table(
+                                                "user_create_requests"
+                                            )
+                                            .update(
+                                                {
+                                                    "status": "approved",
+                                                    "checked_by": current_user_id,
+                                                    "checked_at": datetime.now(
+                                                        timezone.utc
+                                                    ).isoformat(),
+                                                }
+                                            )
+                                            .eq(
+                                                "id",
+                                                request_id,
+                                            )
+                                            .eq(
+                                                "status",
+                                                "pending",
+                                            )
+                                            .execute()
+                                        )
+
+                                    except Exception as e:
+
+                                        notify_error(
+                                            f"⚠️ User was created, "
+                                            f"but request status update failed: "
+                                            f"{e}"
+                                        )
+
+                                        st.stop()
+
+                                    # ==================================================
+                                    # 5. ACTIVITY LOG
+                                    # ==================================================
+
+                                    create_activity_log(
+                                        current_user_id,
+                                        "APPROVE_CREATE_USER",
+                                        (
+                                            f"Approved and created user "
+                                            f"'{username}'"
+                                        ),
+                                    )
+
+                                    # ==================================================
+                                    # 6. SUCCESS
+                                    # ==================================================
 
                                     notify_success(
                                         f"✅ "
-                                        f"{req.get('username', 'User')} "
-                                        f"created"
+                                        f"{username} "
+                                        f"created successfully."
                                     )
 
                                     st.rerun()
 
                             else:
 
-                                st.warning(msg)
+                                st.warning(
+                                    msg
+                                )
+
+                        # ------------------------------------------------------
+                        # REJECT
+                        # ------------------------------------------------------
 
                         with col3:
 
@@ -1679,7 +1945,7 @@ def run():
                                     "Reason",
                                     key=(
                                         f"rej_c_"
-                                        f"{req.get('id', idx)}_"
+                                        f"{request_id}_"
                                         f"{idx}"
                                     ),
                                 )
@@ -1688,9 +1954,10 @@ def run():
                                     "Confirm",
                                     key=(
                                         f"rej_c_confirm_"
-                                        f"{req.get('id', idx)}_"
+                                        f"{request_id}_"
                                         f"{idx}"
                                     ),
+                                    use_container_width=True,
                                 ):
 
                                     (
@@ -1702,7 +1969,437 @@ def run():
                                             {
                                                 "status": "rejected",
                                                 "checked_by": current_user_id,
-                                                "checked_at": datetime.now().isoformat(),
+                                                "checked_at": datetime.now(
+                                                    timezone.utc
+                                                ).isoformat(),
+                                                "rejection_reason": (
+                                                    reason
+                                                    or "No reason"
+                                                ),
+                                            }
+                                        )
+                                        .eq(
+                                            "id",
+                                            request_id,
+                                        )
+                                        .eq(
+                                            "status",
+                                            "pending",
+                                        )
+                                        .execute()
+                                    )
+
+                                    create_activity_log(
+                                        current_user_id,
+                                        "REJECT_CREATE_USER",
+                                        (
+                                            f"Rejected create request "
+                                            f"for '{username}'. "
+                                            f"Reason: "
+                                            f"{reason or 'No reason'}"
+                                        ),
+                                    )
+
+                                    notify_warning(
+                                        f"❌ "
+                                        f"{username} "
+                                        f"rejected"
+                                    )
+
+                                    st.rerun()
+
+            st.divider()
+
+            # ==================================================================
+            # EDIT REQUESTS
+            # ==================================================================
+
+            st.subheader(
+                f"✏️ Edit Requests "
+                f"({len(pending_edit_requests)})"
+            )
+
+            if not pending_edit_requests:
+
+                st.info(
+                    "No pending edit requests"
+                )
+
+            else:
+
+                for idx, req in enumerate(
+                    pending_edit_requests
+                ):
+
+                    req = safe_dict(req)
+
+                    requested_by = safe_dict(
+                        req.get("requested_by")
+                    )
+
+                    target_user = safe_dict(
+                        req.get("user_id")
+                    )
+
+                    requester_id = (
+                        requested_by.get("id")
+                    )
+
+                    target_id = (
+                        target_user.get("id")
+                    )
+
+                    with st.container(
+                        border=True
+                    ):
+
+                        col1, col2, col3 = (
+                            st.columns(
+                                [3, 1, 1]
+                            )
+                        )
+
+                        # ------------------------------------------------------
+                        # EDIT REQUEST DETAILS
+                        # ------------------------------------------------------
+
+                        with col1:
+
+                            st.write(
+                                f"**Edit: "
+                                f"{target_user.get('username', 'Unknown')}**"
+                            )
+
+                            st.caption(
+                                f"Current: "
+                                f"{req.get('old_full_name', '')} "
+                                f"→ New: "
+                                f"{req.get('new_full_name', '')}"
+                            )
+
+                            st.caption(
+                                f"Role: "
+                                f"{get_role_name(req.get('old_role_id'))} "
+                                f"→ "
+                                f"{get_role_name(req.get('new_role_id'))}"
+                            )
+
+                            st.caption(
+                                f"Tenant: "
+                                f"{req.get('old_tenant_role', 'staff')} "
+                                f"→ "
+                                f"{req.get('new_tenant_role', 'staff')}"
+                            )
+
+                            st.caption(
+                                f"Status: "
+                                f"{'🟢' if req.get('old_is_active') else '🔴'} "
+                                f"→ "
+                                f"{'🟢' if req.get('new_is_active') else '🔴'}"
+                            )
+
+                            if requested_by:
+
+                                st.caption(
+                                    f"By: "
+                                    f"{requested_by.get('full_name', 'Unknown')}"
+                                )
+
+                            else:
+
+                                st.caption(
+                                    "By: Unknown requester"
+                                )
+
+                        # ------------------------------------------------------
+                        # APPROVE EDIT
+                        # ------------------------------------------------------
+
+                        with col2:
+
+                            target_user_data = next(
+                                (
+                                    u
+                                    for u in users
+                                    if safe_dict(u).get("id")
+                                    == target_id
+                                ),
+                                None,
+                            )
+
+                            if target_user_data:
+
+                                target_user_data = safe_dict(
+                                    target_user_data
+                                )
+
+                                is_owner_target = (
+                                    target_user_data.get(
+                                        "tenant_role"
+                                    )
+                                    == "owner"
+                                )
+
+                                owner_count = sum(
+                                    1
+                                    for u in users
+                                    if safe_dict(u).get(
+                                        "tenant_role"
+                                    )
+                                    == "owner"
+                                )
+
+                                is_last_owner_target = (
+                                    is_owner_target
+                                    and owner_count <= 1
+                                )
+
+                                # ----------------------------------------------
+                                # LAST OWNER PROTECTION
+                                # ----------------------------------------------
+
+                                if (
+                                    is_last_owner_target
+                                    and req.get(
+                                        "new_tenant_role"
+                                    )
+                                    != "owner"
+                                ):
+
+                                    st.warning(
+                                        "🚫 **Cannot change last Owner!** "
+                                        "Create another Owner first."
+                                    )
+
+                                    st.info(
+                                        "ℹ️ This request cannot be "
+                                        "approved until another Owner "
+                                        "is created."
+                                    )
+
+                                else:
+
+                                    can_approve, msg = (
+                                        can_approve_request(
+                                            requester_id
+                                        )
+                                    )
+
+                                    if can_approve:
+
+                                        if st.button(
+                                            "✅ Approve",
+                                            key=(
+                                                f"app_e_"
+                                                f"{req.get('id', idx)}_"
+                                                f"{idx}"
+                                            ),
+                                            use_container_width=True,
+                                            type="primary",
+                                        ):
+
+                                            update_data = {}
+
+                                            if (
+                                                req.get(
+                                                    "new_full_name"
+                                                )
+                                                is not None
+                                            ):
+
+                                                update_data[
+                                                    "full_name"
+                                                ] = req.get(
+                                                    "new_full_name"
+                                                )
+
+                                            if (
+                                                req.get(
+                                                    "new_role_id"
+                                                )
+                                                is not None
+                                            ):
+
+                                                update_data[
+                                                    "role_id"
+                                                ] = req.get(
+                                                    "new_role_id"
+                                                )
+
+                                            if (
+                                                req.get(
+                                                    "new_tenant_role"
+                                                )
+                                                is not None
+                                            ):
+
+                                                update_data[
+                                                    "tenant_role"
+                                                ] = req.get(
+                                                    "new_tenant_role"
+                                                )
+
+                                            if (
+                                                req.get(
+                                                    "new_is_active"
+                                                )
+                                                is not None
+                                            ):
+
+                                                update_data[
+                                                    "is_active"
+                                                ] = req.get(
+                                                    "new_is_active"
+                                                )
+
+                                            # ----------------------------------
+                                            # APPLY USER UPDATE
+                                            # ----------------------------------
+
+                                            if update_data:
+
+                                                try:
+
+                                                    (
+                                                        supabase
+                                                        .table("users")
+                                                        .update(
+                                                            update_data
+                                                        )
+                                                        .eq(
+                                                            "id",
+                                                            target_id,
+                                                        )
+                                                        .execute()
+                                                    )
+
+                                                except Exception as e:
+
+                                                    notify_error(
+                                                        f"❌ User update failed: "
+                                                        f"{e}"
+                                                    )
+
+                                                    st.stop()
+
+                                            # ----------------------------------
+                                            # MARK REQUEST APPROVED
+                                            # ----------------------------------
+
+                                            try:
+
+                                                (
+                                                    supabase
+                                                    .table(
+                                                        "user_edit_requests"
+                                                    )
+                                                    .update(
+                                                        {
+                                                            "status": "approved",
+                                                            "checked_by": current_user_id,
+                                                            "checked_at": datetime.now(
+                                                                timezone.utc
+                                                            ).isoformat(),
+                                                        }
+                                                    )
+                                                    .eq(
+                                                        "id",
+                                                        req.get("id"),
+                                                    )
+                                                    .eq(
+                                                        "status",
+                                                        "pending",
+                                                    )
+                                                    .execute()
+                                                )
+
+                                            except Exception as e:
+
+                                                notify_error(
+                                                    f"⚠️ User updated, "
+                                                    f"but request status "
+                                                    f"update failed: {e}"
+                                                )
+
+                                                st.stop()
+
+                                            create_activity_log(
+                                                current_user_id,
+                                                "APPROVE_EDIT_USER",
+                                                (
+                                                    f"Approved edit request "
+                                                    f"for user "
+                                                    f"'{target_user.get('username', 'User')}'"
+                                                ),
+                                            )
+
+                                            notify_success(
+                                                f"✅ "
+                                                f"{target_user.get('username', 'User')} "
+                                                f"updated"
+                                            )
+
+                                            st.rerun()
+
+                                    else:
+
+                                        st.warning(
+                                            msg
+                                        )
+
+                            else:
+
+                                st.warning(
+                                    "⚠️ Target user record "
+                                    "could not be found."
+                                )
+
+                                st.caption(
+                                    "This request cannot be safely approved "
+                                    "until the target user exists."
+                                )
+
+                        # ------------------------------------------------------
+                        # REJECT EDIT
+                        # ------------------------------------------------------
+
+                        with col3:
+
+                            with st.popover(
+                                "❌ Reject"
+                            ):
+
+                                reason = st.text_input(
+                                    "Reason",
+                                    key=(
+                                        f"rej_e_"
+                                        f"{req.get('id', idx)}_"
+                                        f"{idx}"
+                                    ),
+                                )
+
+                                if st.button(
+                                    "Confirm",
+                                    key=(
+                                        f"rej_e_confirm_"
+                                        f"{req.get('id', idx)}_"
+                                        f"{idx}"
+                                    ),
+                                    use_container_width=True,
+                                ):
+
+                                    (
+                                        supabase
+                                        .table(
+                                            "user_edit_requests"
+                                        )
+                                        .update(
+                                            {
+                                                "status": "rejected",
+                                                "checked_by": current_user_id,
+                                                "checked_at": datetime.now(
+                                                    timezone.utc
+                                                ).isoformat(),
                                                 "rejection_reason": (
                                                     reason
                                                     or "No reason"
@@ -1713,18 +2410,30 @@ def run():
                                             "id",
                                             req.get("id"),
                                         )
+                                        .eq(
+                                            "status",
+                                            "pending",
+                                        )
                                         .execute()
                                     )
 
+                                    create_activity_log(
+                                        current_user_id,
+                                        "REJECT_EDIT_USER",
+                                        (
+                                            f"Rejected edit request "
+                                            f"for user "
+                                            f"'{target_user.get('username', 'User')}'. "
+                                            f"Reason: "
+                                            f"{reason or 'No reason'}"
+                                        ),
+                                    )
+
                                     notify_warning(
-                                        f"❌ "
-                                        f"{req.get('username', 'User')} "
-                                        f"rejected"
+                                        "❌ Edit request rejected"
                                     )
 
                                     st.rerun()
-
-            st.divider()
 
             # ==================================================================
             # EDIT REQUESTS
