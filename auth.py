@@ -86,10 +86,20 @@ def get_user_by_username(username):
 # ==================================================
 # LOGIN
 # ==================================================
-
 def login_user(username, password):
+    print("========== LOGIN DEBUG ==========")
+    print("USERNAME:", repr(username))
+    print("PASSWORD:", repr(password))
+    print("=================================")
+
     user = get_user_by_username(username)
-    
+
+    print("USER FOUND:", user is not None)
+
+    if user:
+        print("DB USERNAME:", repr(user.get("username")))
+        print("DB HASH:", repr(user.get("password_hash")))
+
     if not user:
         return False, "User not found"
 
@@ -97,24 +107,7 @@ def login_user(username, password):
         return False, "Account is disabled"
 
     if not verify_password(user, password):
-        attempts = user.get("failed_attempts", 0) + 1
-        update_data = {"failed_attempts": attempts}
-        if attempts >= MAX_FAILED_ATTEMPTS:
-            update_data["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOCK_DURATION_MINUTES)).isoformat()
-        try:
-            supabase.table("users").update(update_data).eq("id", user["id"]).execute()
-        except Exception:
-            pass
         return False, "Invalid password"
-
-    try:
-        supabase.table("users").update({
-            "failed_attempts": 0,
-            "locked_until": None,
-            "last_login": datetime.now(timezone.utc).isoformat()
-        }).eq("id", user["id"]).execute()
-    except Exception:
-        pass
 
     build_session(user)
     return True, "Success"
