@@ -1,15 +1,28 @@
+# ============================================================
 # supabase_client.py
+# ERP ENTERPRISE SUPABASE CLIENT
+# SERVER-SIDE SERVICE ROLE
+# ============================================================
+
 import streamlit as st
 from supabase import create_client, Client
 
+
 @st.cache_resource
 def get_supabase() -> Client:
-    supabase_url = st.secrets["SUPABASE_URL"]
-    
-    # ✅ Force use service role key
-    supabase_key = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
-    
-    if not supabase_url or not supabase_key:
-        raise RuntimeError("Supabase credentials not found.")
-    
-    return create_client(supabase_url, supabase_key)
+
+    supabase_url = st.secrets.get("SUPABASE_URL")
+    supabase_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY")
+
+    if not supabase_url:
+        raise RuntimeError("SUPABASE_URL is missing.")
+
+    if not supabase_key:
+        raise RuntimeError(
+            "SUPABASE_SERVICE_ROLE_KEY is missing."
+        )
+
+    return create_client(
+        supabase_url,
+        supabase_key
+    )
