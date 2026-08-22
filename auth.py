@@ -1,8 +1,10 @@
 # ============================================================
 # auth.py
 # ERP ENTERPRISE AUTHENTICATION
+# MULTI-TENANT
 # SHA-256 PASSWORD AUTH
 # SUPABASE USERS TABLE
+# MAKER / CHECKER
 # ============================================================
 
 import hashlib
@@ -22,7 +24,7 @@ supabase = get_supabase()
 
 
 # ============================================================
-# CONSTANTS
+# SESSION / LOGIN SETTINGS
 # ============================================================
 
 SESSION_IDLE_TIMEOUT = 1800
@@ -64,16 +66,10 @@ TENANT_ROLE_MAP = {
 
 
 # ============================================================
-# PASSWORD HASH
+# PASSWORD
 # ============================================================
 
 def hash_password(password: str) -> str:
-    """
-    Hash password using SHA-256.
-
-    Database password_hash must contain the hexadecimal
-    SHA-256 digest.
-    """
 
     if password is None:
         password = ""
@@ -83,14 +79,7 @@ def hash_password(password: str) -> str:
     ).hexdigest()
 
 
-# ============================================================
-# PASSWORD VERIFY
-# ============================================================
-
 def verify_password(user, password):
-    """
-    Verify entered password against users.password_hash.
-    """
 
     if not user:
         return False
@@ -102,22 +91,20 @@ def verify_password(user, password):
 
     stored = str(stored).strip()
 
-    calculated = hash_password(password)
-
-    return calculated == stored
+    return hash_password(password) == stored
 
 
 # ============================================================
-# USER QUERY
+# USER LOOKUP
 # ============================================================
 
 def get_user_by_username(username):
-    """
-    Get active/user record by username.
-    """
 
     try:
-        clean_username = (username or "").strip()
+
+        clean_username = str(
+            username or ""
+        ).strip()
 
         if not clean_username:
             return None
@@ -131,24 +118,22 @@ def get_user_by_username(username):
             .execute()
         )
 
-        if result.data:
-            return result.data[0]
+        data = result.data or []
 
-        return None
+        return data[0] if data else None
 
-    except Exception as e:
-        print(f"Authentication user query error: {e}")
+    except Exception:
         return None
 
 
 # ============================================================
-# ACCOUNT LOCK CHECK
+# ACCOUNT LOCK
 # ============================================================
 
 def is_account_locked(user):
-    """
-    Check whether account is currently locked.
-    """
+
+    if not user:
+        return False
 
     locked_until = user.get("locked_until")
 
@@ -156,58 +141,65 @@ def is_account_locked(user):
         return False
 
     try:
+
         locked_time = datetime.fromisoformat(
-            str(locked_until).replace("Z", "+00:00")
+            str(locked_until).replace(
+                "Z",
+                "+00:00"
+            )
         )
 
         if locked_time.tzinfo is None:
-            locked_time = locked_time.replace(tzinfo=timezone.utc)
+            locked_time = locked_time.replace(
+                tzinfo=timezone.utc
+            )
 
-        now = datetime.now(timezone.utc)
-
-        if now < locked_time:
-            return True
-
-        return False
+        return datetime.now(
+            timezone.utc
+        ) < locked_time
 
     except Exception:
         return False
 
 
 # ============================================================
-# UPDATE FAILED LOGIN
+# FAILED LOGIN
 # ============================================================
 
 def record_failed_login(user):
-    """
-    Increment failed login attempts.
-    Lock account after MAX_FAILED_ATTEMPTS.
-    """
+
+    if not user:
+        return
 
     try:
-        attempts = int(user.get("failed_attempts") or 0) + 1
 
-        update_data = {
+        attempts = int(
+            user.get("failed_attempts") or 0
+        ) + 1
+
+        data = {
             "failed_attempts": attempts
         }
 
         if attempts >= MAX_FAILED_ATTEMPTS:
 
-            locked_until = (
+            data["locked_until"] = (
                 datetime.now(timezone.utc)
-                + timedelta(minutes=LOCK_DURATION_MINUTES)
-            )
+                + timedelta(
+                    minutes=LOCK_DURATION_MINUTES
+                )
+            ).isoformat()
 
-            update_data["locked_until"] = locked_until.isoformat()
-
-        supabase \
-            .table("users") \
-            .update(update_data) \
-            .eq("id", user["id"]) \
+        (
+            supabase
+            .table("users")
+            .update(data)
+            .eq("id", user.get("id"))
             .execute()
+        )
 
-    except Exception as e:
-        print(f"Failed login update error: {e}")
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -215,23 +207,28 @@ def record_failed_login(user):
 # ============================================================
 
 def reset_login_state(user):
-    """
-    Reset failed attempts after successful login.
-    """
+
+    if not user:
+        return
 
     try:
-        supabase \
-            .table("users") \
+
+        (
+            supabase
+            .table("users")
             .update({
                 "failed_attempts": 0,
                 "locked_until": None,
-                "last_login": datetime.now(timezone.utc).isoformat()
-            }) \
-            .eq("id", user["id"]) \
+                "last_login": datetime.now(
+                    timezone.utc
+                ).isoformat()
+            })
+            .eq("id", user.get("id"))
             .execute()
+        )
 
-    except Exception as e:
-        print(f"Login state update error: {e}")
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -240,7 +237,9 @@ def reset_login_state(user):
 
 def login_user(username, password):
 
-    username = (username or "").strip()
+    username = str(
+        username or ""
+    ).strip()
 
     if not username:
         return False, "Username required"
@@ -248,25 +247,15 @@ def login_user(username, password):
     if not password:
         return False, "Password required"
 
-    # --------------------------------------------------------
-    # GET USER
-    # --------------------------------------------------------
-
     user = get_user_by_username(username)
 
     if not user:
         return False, "User not found"
 
-    # --------------------------------------------------------
-    # ACTIVE CHECK
-    # --------------------------------------------------------
-
-    if not bool(user.get("is_active", False)):
+    if not bool(
+        user.get("is_active", False)
+    ):
         return False, "Account is disabled"
-
-    # --------------------------------------------------------
-    # LOCK CHECK
-    # --------------------------------------------------------
 
     if is_account_locked(user):
         return (
@@ -274,19 +263,14 @@ def login_user(username, password):
             "Account temporarily locked. Please try again later."
         )
 
-    # --------------------------------------------------------
-    # PASSWORD CHECK
-    # --------------------------------------------------------
-
-    if not verify_password(user, password):
+    if not verify_password(
+        user,
+        password
+    ):
 
         record_failed_login(user)
 
         return False, "Invalid password"
-
-    # --------------------------------------------------------
-    # SUCCESS
-    # --------------------------------------------------------
 
     reset_login_state(user)
 
@@ -301,19 +285,32 @@ def login_user(username, password):
 
 def build_session(user):
 
-    role_id = int(
-        user.get("role_id", ROLE_CASHIER)
+    if not user:
+        return
+
+    role_id = user.get(
+        "role_id",
+        ROLE_CASHIER
     )
+
+    try:
+        role_id = int(role_id)
+    except Exception:
+        role_id = ROLE_CASHIER
 
     user_id = user.get("id")
 
-    username = (
+    username = str(
         user.get("username")
         or "Unknown"
     )
 
-    shop_id = user.get("shop_id")
+    full_name = (
+        user.get("full_name")
+        or username
+    )
 
+    shop_id = user.get("shop_id")
     branch_id = user.get("branch_id")
 
     tenant_role = (
@@ -321,16 +318,13 @@ def build_session(user):
         or TENANT_ROLE_STAFF
     )
 
-    st.session_state.user = {
+    session_user = {
 
         "id": user_id,
 
         "username": username,
 
-        "full_name": (
-            user.get("full_name")
-            or username
-        ),
+        "full_name": full_name,
 
         "role_id": role_id,
 
@@ -351,28 +345,27 @@ def build_session(user):
         ),
 
         "is_active": bool(
-            user.get("is_active", True)
+            user.get(
+                "is_active",
+                True
+            )
         ),
 
         "last_activity": time.time(),
     }
+
+    st.session_state["user"] = session_user
 
     # --------------------------------------------------------
     # BACKWARD COMPATIBILITY
     # --------------------------------------------------------
 
     st.session_state["user_id"] = user_id
-
     st.session_state["username"] = username
-
     st.session_state["role_id"] = role_id
-
     st.session_state["shop_id"] = shop_id
-
     st.session_state["branch_id"] = branch_id
-
     st.session_state["tenant_role"] = tenant_role
-
     st.session_state["id"] = user_id
 
 
@@ -382,10 +375,23 @@ def build_session(user):
 
 def get_current_user():
 
-    return st.session_state.get(
-        "user",
-        {}
-    )
+    user = st.session_state.get("user")
+
+    return user if isinstance(
+        user,
+        dict
+    ) else {}
+
+
+# ============================================================
+# CURRENT USER ID
+# ============================================================
+
+def get_current_user_id():
+
+    user = get_current_user()
+
+    return user.get("id")
 
 
 # ============================================================
@@ -425,22 +431,30 @@ def get_current_tenant_role():
 
 
 # ============================================================
-# SHOP OWNER
+# OWNER
 # ============================================================
 
 def is_shop_owner():
 
-    user = get_current_user()
-
-    tenant_role = user.get(
-        "tenant_role",
-        TENANT_ROLE_STAFF
+    return (
+        get_current_tenant_role()
+        == TENANT_ROLE_OWNER
     )
 
-    return tenant_role in [
-        TENANT_ROLE_OWNER,
-        TENANT_ROLE_ADMIN
-    ]
+
+# ============================================================
+# ADMIN
+# ============================================================
+
+def is_tenant_admin():
+
+    return (
+        get_current_tenant_role()
+        in {
+            TENANT_ROLE_OWNER,
+            TENANT_ROLE_ADMIN
+        }
+    )
 
 
 # ============================================================
@@ -454,7 +468,10 @@ def is_maker():
     if not user:
         return False
 
-    return user.get("role_id") == ROLE_ADMIN
+    return (
+        user.get("role_id")
+        == ROLE_ADMIN
+    )
 
 
 # ============================================================
@@ -463,14 +480,7 @@ def is_maker():
 
 def is_checker():
 
-    user = get_current_user()
-
-    if not user:
-        return False
-
-    return user.get(
-        "tenant_role"
-    ) == TENANT_ROLE_OWNER
+    return is_shop_owner()
 
 
 # ============================================================
@@ -479,27 +489,31 @@ def is_checker():
 
 def is_authenticated():
 
-    user = st.session_state.get("user")
+    user = get_current_user()
 
     if not user:
         return False
 
-    if not user.get(
-        "is_active",
-        False
+    if not bool(
+        user.get("is_active", False)
     ):
         return False
 
     last_activity = user.get(
-        "last_activity",
-        0
+        "last_activity"
     )
 
+    if not last_activity:
+        return False
+
     if (
-        time.time() - last_activity
+        time.time()
+        - last_activity
         > SESSION_IDLE_TIMEOUT
     ):
+
         logout()
+
         return False
 
     user["last_activity"] = time.time()
@@ -542,22 +556,51 @@ def require_admin():
 
 
 # ============================================================
-# REQUIRE SHOP OWNER
+# REQUIRE TENANT ADMIN
 # ============================================================
 
-def require_shop_owner():
+def require_tenant_admin():
 
-    require_login()
+    user = require_login()
 
-    if not is_shop_owner():
+    if not is_tenant_admin():
 
         st.error(
-            "⛔ Shop owner or admin privileges required."
+            "⛔ Owner or Tenant Admin privileges required."
         )
 
         st.stop()
 
-    return get_current_user()
+    return user
+
+
+# ============================================================
+# REQUIRE OWNER
+# ============================================================
+
+def require_owner():
+
+    user = require_login()
+
+    if not is_shop_owner():
+
+        st.error(
+            "⛔ Owner privileges required."
+        )
+
+        st.stop()
+
+    return user
+
+
+# ============================================================
+# REQUIRE SHOP OWNER
+# BACKWARD COMPATIBILITY
+# ============================================================
+
+def require_shop_owner():
+
+    return require_tenant_admin()
 
 
 # ============================================================
@@ -566,9 +609,9 @@ def require_shop_owner():
 
 def require_shop_access():
 
-    require_login()
+    user = require_login()
 
-    if not get_current_shop_id():
+    if not user.get("shop_id"):
 
         st.error(
             "⛔ No shop assigned. "
@@ -577,7 +620,7 @@ def require_shop_access():
 
         st.stop()
 
-    return get_current_user()
+    return user
 
 
 # ============================================================
@@ -586,7 +629,7 @@ def require_shop_access():
 
 def require_maker():
 
-    require_login()
+    user = require_login()
 
     if not is_maker():
 
@@ -596,6 +639,8 @@ def require_maker():
 
         st.stop()
 
+    return user
+
 
 # ============================================================
 # REQUIRE CHECKER
@@ -603,7 +648,7 @@ def require_maker():
 
 def require_checker():
 
-    require_login()
+    user = require_login()
 
     if not is_checker():
 
@@ -613,9 +658,11 @@ def require_checker():
 
         st.stop()
 
+    return user
+
 
 # ============================================================
-# LOGIN UI
+# LOGIN PAGE
 # ============================================================
 
 def login_page():
@@ -623,12 +670,14 @@ def login_page():
     st.title("🔐 ERP Enterprise Login")
 
     username = st.text_input(
-        "Username"
+        "Username",
+        key="login_username"
     )
 
     password = st.text_input(
         "Password",
-        type="password"
+        type="password",
+        key="login_password"
     )
 
     col1, col2, col3 = st.columns(
@@ -639,7 +688,8 @@ def login_page():
 
         if st.button(
             "Login",
-            use_container_width=True
+            use_container_width=True,
+            type="primary"
         ):
 
             if not username or not password:
@@ -648,26 +698,20 @@ def login_page():
                     "Username and password required"
                 )
 
-            else:
+                return
 
-                success, msg = login_user(
-                    username,
-                    password
-                )
+            success, message = login_user(
+                username,
+                password
+            )
 
-                if success:
+            if success:
 
-                    st.success(
-                        "✅ Login successful!"
-                    )
+                st.rerun()
 
-                    st.rerun()
-
-                else:
-
-                    st.error(
-                        f"❌ {msg}"
-                    )
+            st.error(
+                f"❌ {message}"
+            )
 
 
 # ============================================================
@@ -676,13 +720,14 @@ def login_page():
 
 def logout():
 
-    for key in list(
+    keys = list(
         st.session_state.keys()
-    ):
+    )
+
+    for key in keys:
 
         try:
             del st.session_state[key]
-
         except Exception:
             pass
 
@@ -695,37 +740,43 @@ def logout():
 
 def auth_sidebar():
 
-    if is_authenticated():
+    if not is_authenticated():
+        return
 
-        user = get_current_user()
+    user = get_current_user()
 
-        with st.sidebar:
+    with st.sidebar:
 
-            st.success(
-                f"👤 {user.get('full_name', 'User')}"
-            )
+        st.success(
+            f"👤 {user.get('full_name', 'User')}"
+        )
+
+        st.caption(
+            f"Role: {user.get('role', 'Unknown')}"
+        )
+
+        st.caption(
+            f"Tenant: "
+            f"{user.get('tenant_role_name', 'Staff')}"
+        )
+
+        if user.get("shop_id"):
 
             st.caption(
-                f"Role: {user.get('role', 'Unknown')}"
+                f"🏪 Shop ID: "
+                f"{user.get('shop_id')}"
             )
 
-            if user.get("shop_id"):
+        if user.get("branch_id"):
 
-                shop_id = str(
-                    user.get("shop_id")
-                )
+            st.caption(
+                f"🏬 Branch ID: "
+                f"{user.get('branch_id')}"
+            )
 
-                st.caption(
-                    f"🏪 Shop: {shop_id[:8]}..."
-                )
+        if st.button(
+            "🚪 Logout",
+            use_container_width=True
+        ):
 
-            if user.get("tenant_role"):
-
-                st.caption(
-                    f"🔑 "
-                    f"{user.get('tenant_role_name', 'Staff')}"
-                )
-
-            if st.button("🚪 Logout"):
-
-                logout()
+            logout()
