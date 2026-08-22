@@ -30,10 +30,10 @@ supabase = get_supabase()
 SESSION_IDLE_TIMEOUT = 1800
 
 # Maximum failed attempts before account lockout
-MAX_FAILED_ATTEMPTS = 10  # Changed from 5 to 10
+MAX_FAILED_ATTEMPTS = 10
 
 # Lock duration after exceeding max failed attempts
-LOCK_DURATION_MINUTES = 30  # Increased from 15 to 30 minutes
+LOCK_DURATION_MINUTES = 30
 
 
 # ============================================================
@@ -66,6 +66,19 @@ TENANT_ROLE_MAP = {
     TENANT_ROLE_MANAGER: "Manager",
     TENANT_ROLE_STAFF: "Staff",
 }
+
+
+# ============================================================
+# MAKER / CHECKER ROLES
+# ============================================================
+
+# Maker: Admin role (system admin)
+# Can create, edit, and prepare transactions
+MAKER_ROLES = {ROLE_ADMIN}  # Admin (role_id=1)
+
+# Checker: Owner role (tenant owner)
+# Can review, approve, or reject maker's work
+CHECKER_ROLES = {TENANT_ROLE_OWNER}  # Owner (tenant_role='owner')
 
 
 # ============================================================
@@ -324,6 +337,10 @@ def build_session(user):
         or TENANT_ROLE_STAFF
     )
     
+    # Determine maker/checker status
+    is_maker_flag = role_id in MAKER_ROLES
+    is_checker_flag = tenant_role in CHECKER_ROLES
+    
     session_user = {
         "id": user_id,
         "username": username,
@@ -346,6 +363,9 @@ def build_session(user):
                 True
             )
         ),
+        "is_maker": is_maker_flag,
+        "is_checker": is_checker_flag,
+        "maker_checker_role": "Maker" if is_maker_flag else ("Checker" if is_checker_flag else "None"),
         "last_activity": time.time(),
     }
     
@@ -359,6 +379,8 @@ def build_session(user):
     st.session_state["branch_id"] = branch_id
     st.session_state["tenant_role"] = tenant_role
     st.session_state["id"] = user_id
+    st.session_state["is_maker"] = is_maker_flag
+    st.session_state["is_checker"] = is_checker_flag
 
 
 # ============================================================
@@ -442,14 +464,24 @@ def is_tenant_admin():
 
 
 # ============================================================
-# MAKER
+# MAKER (Admin role)
 # ============================================================
 
 def is_maker():
-    """Check if current user is maker (admin)"""
+    """
+    Check if current user is maker
+    Maker = Admin role (role_id = 1)
+    """
     user = get_current_user()
+    
     if not user:
         return False
+    
+    # Check if user has maker flag in session
+    if "is_maker" in user:
+        return user.get("is_maker", False)
+    
+    # Fallback: check role_id
     return (
         user.get("role_id")
         == ROLE_ADMIN
@@ -457,12 +489,51 @@ def is_maker():
 
 
 # ============================================================
-# CHECKER
+# CHECKER (Owner role)
 # ============================================================
 
 def is_checker():
-    """Check if current user is checker (owner)"""
-    return is_shop_owner()
+    """
+    Check if current user is checker
+    Checker = Owner role (tenant_role = 'owner')
+    """
+    user = get_current_user()
+    
+    if not user:
+        return False
+    
+    # Check if user has checker flag in session
+    if "is_checker" in user:
+        return user.get("is_checker", False)
+    
+    # Fallback: check tenant_role
+    return (
+        user.get("tenant_role")
+        == TENANT_ROLE_OWNER
+    )
+
+
+# ============================================================
+# MAKER OR CHECKER
+# ============================================================
+
+def is_maker_or_checker():
+    """Check if current user is either maker or checker"""
+    return is_maker() or is_checker()
+
+
+# ============================================================
+# GET MAKER CHECKER ROLE
+# ============================================================
+
+def get_maker_checker_role():
+    """Get current user's maker/checker role"""
+    if is_maker():
+        return "Maker"
+    elif is_checker():
+        return "Checker"
+    else:
+        return "None"
 
 
 # ============================================================
@@ -583,11 +654,11 @@ def require_shop_access():
 
 
 # ============================================================
-# REQUIRE MAKER
+# REQUIRE MAKER (Admin role)
 # ============================================================
 
 def require_maker():
-    """Require maker role"""
+    """Require maker role (Admin)"""
     user = require_login()
     
     if not is_maker():
@@ -598,15 +669,30 @@ def require_maker():
 
 
 # ============================================================
-# REQUIRE CHECKER
+# REQUIRE CHECKER (Owner role)
 # ============================================================
 
 def require_checker():
-    """Require checker role"""
+    """Require checker role (Owner)"""
     user = require_login()
     
     if not is_checker():
         st.error("⛔ Owner (Checker) privileges required.")
+        st.stop()
+    
+    return user
+
+
+# ============================================================
+# REQUIRE MAKER OR CHECKER
+# ============================================================
+
+def require_maker_or_checker():
+    """Require either maker or checker role"""
+    user = require_login()
+    
+    if not is_maker_or_checker():
+        st.error("⛔ Maker or Checker privileges required.")
         st.stop()
     
     return user
@@ -682,6 +768,12 @@ def auth_sidebar():
         st.success(f"👤 {user.get('full_name', 'User')}")
         st.caption(f"Role: {user.get('role', 'Unknown')}")
         st.caption(f"Tenant: {user.get('tenant_role_name', 'Staff')}")
+        
+        # Show maker/checker role
+        maker_checker_role = user.get('maker_checker_role', 'None')
+        if maker_checker_role != 'None':
+            icon = "🔨" if maker_checker_role == "Maker" else "✅"
+            st.caption(f"{icon} {maker_checker_role}")
         
         if user.get("shop_id"):
             st.caption(f"🏪 Shop ID: {user.get('shop_id')}")
