@@ -11,7 +11,7 @@ from auth import (
     is_maker,
     is_checker,
 )
-from database import get_supabase
+from erp_core import privileged_db
 from utils.notification import (
     notify_error,
     notify_success,
