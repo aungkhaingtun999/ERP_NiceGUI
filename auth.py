@@ -393,6 +393,23 @@ def get_current_user():
     return user if isinstance(user, dict) else {}
 
 
+def get_current_user_id():
+    """Get current user ID"""
+    user = get_current_user()
+    return user.get("id")
+
+
+# Backward-compatible helper
+def current_user():
+    """
+    Backward-compatible access to the current authenticated user.
+
+    IMPORTANT:
+    This must remain a function so the value is read from
+    Streamlit session_state at runtime.
+    """
+    return get_current_user()
+
 # ============================================================
 # CURRENT USER ID
 # ============================================================
