@@ -32,7 +32,7 @@ def run():
     st.title("👥 User Management")
     st.caption("Control users, roles and access rights with Maker-Checker")
 
-    supabase = get_supabase()
+    supabase = privileged_db()
 
     current_user = get_current_user()
     current_shop_id = get_current_shop_id()
