@@ -181,8 +181,7 @@ def record_failed_login(user):
             "failed_attempts": attempts
         }
 
-        if attempts >= MAX_FAILED_ATTEMPTS:
-
+        if attempts >= MAX_FAILED_ATTEMPTS=5:
             data["locked_until"] = (
                 datetime.now(timezone.utc)
                 + timedelta(
