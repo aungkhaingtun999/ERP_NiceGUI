@@ -49,7 +49,7 @@ ROLE_MAP = {
 
 
 # ==============================================================================
-# TENANT ROLE
+# TENANT ROLE CONSTANTS
 # ==============================================================================
 
 TENANT_ROLE_STAFF = "staff"
@@ -106,39 +106,60 @@ def log_auth_event(
 # ==============================================================================
 
 def hash_password(password):
-    """Hash password using bcrypt."""
+    """
+    Hash password using bcrypt.
+    """
+
     return bcrypt.hashpw(
         password.encode("utf-8"),
         bcrypt.gensalt()
     ).decode("utf-8")
 
 
-def verify_password(user, password):
-    """Verify password against stored hash."""
+def verify_password(
+    user,
+    password
+):
+    """
+    Verify password against stored password hash.
 
-    stored = user.get("password_hash")
+    Supports:
+    - bcrypt
+    - legacy SHA256
+    - legacy plain password
+    """
+
+    stored = user.get(
+        "password_hash"
+    )
 
     if not stored:
         return False
 
-    stored = str(stored).strip()
+    stored = str(
+        stored
+    ).strip()
 
-    # --------------------------------------------------
-    # bcrypt
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
+    # BCRYPT
+    # ------------------------------------------------------------------
 
     if stored.startswith("$2"):
+
         try:
+
             return bcrypt.checkpw(
                 password.encode("utf-8"),
                 stored.encode("utf-8")
             )
+
         except Exception:
+
             return False
 
-    # --------------------------------------------------
-    # Legacy SHA256 / plain password
-    # --------------------------------------------------
+    # ------------------------------------------------------------------
+    # LEGACY SHA256 / PLAIN PASSWORD
+    # ------------------------------------------------------------------
 
     sha256_hash = hashlib.sha256(
         password.encode("utf-8")
@@ -162,20 +183,32 @@ def verify_password(user, password):
     return False
 
 
-def upgrade_password(user_id, password):
-    """Upgrade legacy password to bcrypt."""
+def upgrade_password(
+    user_id,
+    password
+):
+    """
+    Upgrade legacy password to bcrypt.
+    """
 
     try:
 
-        new_hash = hash_password(password)
+        new_hash = hash_password(
+            password
+        )
 
         (
             supabase
             .table("users")
-            .update({
-                "password_hash": new_hash
-            })
-            .eq("id", user_id)
+            .update(
+                {
+                    "password_hash": new_hash
+                }
+            )
+            .eq(
+                "id",
+                user_id
+            )
             .execute()
         )
 
@@ -183,13 +216,17 @@ def upgrade_password(user_id, password):
         pass
 
 
+# ==============================================================================
+# CHANGE PASSWORD
+# ==============================================================================
+
 def change_password(
     user_id,
     old_password,
     new_password
 ):
     """
-    Change the authenticated user's password.
+    Change authenticated user's password.
 
     Returns:
         (True, success_message)
@@ -198,28 +235,48 @@ def change_password(
 
     try:
 
-        # --------------------------------------------------
-        # Basic validation
-        # --------------------------------------------------
+        # ------------------------------------------------------------------
+        # VALIDATION
+        # ------------------------------------------------------------------
 
         if not user_id:
-            return False, "User ID is required."
+
+            return (
+                False,
+                "User ID is required."
+            )
 
         if not old_password:
-            return False, "Current password is required."
+
+            return (
+                False,
+                "Current password is required."
+            )
 
         if not new_password:
-            return False, "New password is required."
+
+            return (
+                False,
+                "New password is required."
+            )
 
         if len(new_password) < 6:
-            return False, "New password must be at least 6 characters."
+
+            return (
+                False,
+                "New password must be at least 6 characters."
+            )
 
         if old_password == new_password:
-            return False, "New password must be different from current password."
 
-        # --------------------------------------------------
-        # Load current user
-        # --------------------------------------------------
+            return (
+                False,
+                "New password must be different from current password."
+            )
+
+        # ------------------------------------------------------------------
+        # LOAD CURRENT USER
+        # ------------------------------------------------------------------
 
         result = (
             supabase
@@ -227,66 +284,89 @@ def change_password(
             .select(
                 "id, username, password_hash, is_active"
             )
-            .eq("id", user_id)
-            .eq("is_active", True)
+            .eq(
+                "id",
+                user_id
+            )
+            .eq(
+                "is_active",
+                True
+            )
             .limit(1)
             .execute()
         )
 
         if not result.data:
-            return False, "User not found or inactive."
+
+            return (
+                False,
+                "User not found or inactive."
+            )
 
         user = result.data[0]
 
-        # --------------------------------------------------
-        # Verify current password
-        # --------------------------------------------------
+        # ------------------------------------------------------------------
+        # VERIFY OLD PASSWORD
+        # ------------------------------------------------------------------
 
         if not verify_password(
             user,
             old_password
         ):
+
             log_auth_event(
                 user_id,
                 "password_change",
                 "failed"
             )
 
-            return False, "Current password is incorrect."
+            return (
+                False,
+                "Current password is incorrect."
+            )
 
-        # --------------------------------------------------
-        # Hash new password
-        # --------------------------------------------------
+        # ------------------------------------------------------------------
+        # HASH NEW PASSWORD
+        # ------------------------------------------------------------------
 
         new_hash = hash_password(
             new_password
         )
 
-        # --------------------------------------------------
-        # Update password
-        # --------------------------------------------------
+        # ------------------------------------------------------------------
+        # UPDATE PASSWORD
+        # ------------------------------------------------------------------
 
         update_result = (
             supabase
             .table("users")
-            .update({
-                "password_hash": new_hash,
-                "failed_attempts": 0,
-                "locked_until": None,
-                "updated_at": datetime.now(
-                    timezone.utc
-                ).isoformat()
-            })
-            .eq("id", user_id)
+            .update(
+                {
+                    "password_hash": new_hash,
+                    "failed_attempts": 0,
+                    "locked_until": None,
+                    "updated_at": datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+                }
+            )
+            .eq(
+                "id",
+                user_id
+            )
             .execute()
         )
 
         if not update_result.data:
-            return False, "Password update failed."
 
-        # --------------------------------------------------
-        # Audit
-        # --------------------------------------------------
+            return (
+                False,
+                "Password update failed."
+            )
+
+        # ------------------------------------------------------------------
+        # AUDIT
+        # ------------------------------------------------------------------
 
         log_auth_event(
             user_id,
@@ -294,7 +374,10 @@ def change_password(
             "success"
         )
 
-        return True, "Password changed successfully."
+        return (
+            True,
+            "Password changed successfully."
+        )
 
     except Exception as e:
 
@@ -304,7 +387,10 @@ def change_password(
             "failed"
         )
 
-        return False, f"Password change error: {str(e)}"
+        return (
+            False,
+            f"Password change error: {str(e)}"
+        )
 
 
 # ==============================================================================
@@ -370,13 +456,21 @@ def build_tenant_context(
     )
 
     context = {
+
         "shop_id": shop_id,
+
         "branch_id": branch_id,
+
         "tenant_role": tenant_role,
+
         "shop_name": None,
+
         "shop_code": None,
+
         "branch_name": None,
+
         "branch_code": None,
+
     }
 
     # ------------------------------------------------------------------
@@ -390,7 +484,9 @@ def build_tenant_context(
             response = (
                 supabase
                 .table("shops")
-                .select("name, code")
+                .select(
+                    "name, code"
+                )
                 .eq(
                     "id",
                     shop_id
@@ -425,7 +521,9 @@ def build_tenant_context(
             response = (
                 supabase
                 .table("branches")
-                .select("name, code")
+                .select(
+                    "name, code"
+                )
                 .eq(
                     "id",
                     branch_id
@@ -501,6 +599,10 @@ def login_user(
         except Exception:
             pass
 
+    # ------------------------------------------------------------------
+    # PASSWORD SUCCESS
+    # ------------------------------------------------------------------
+
     if verify_password(
         user,
         password
@@ -536,6 +638,10 @@ def login_user(
             "Success"
         )
 
+    # ------------------------------------------------------------------
+    # PASSWORD FAILED
+    # ------------------------------------------------------------------
+
     attempts = (
         user.get(
             "failed_attempts",
@@ -562,7 +668,9 @@ def login_user(
     (
         supabase
         .table("users")
-        .update(update_data)
+        .update(
+            update_data
+        )
         .eq(
             "id",
             user["id"]
@@ -602,8 +710,12 @@ def build_session(
     )
 
     username = (
-        user.get("username")
-        or user.get("email")
+        user.get(
+            "username"
+        )
+        or user.get(
+            "email"
+        )
         or "Unknown"
     )
 
@@ -612,47 +724,64 @@ def build_session(
     )
 
     session_user = {
+
         "id": user_id,
+
         "username": username,
+
         "full_name": user.get(
             "full_name",
             username
         ),
+
         "role_id": role_id,
+
         "role": ROLE_MAP.get(
             role_id,
             "Cashier"
         ),
+
         "is_active": bool(
             user.get(
                 "is_active",
                 True
             )
         ),
+
         "last_activity": time.time(),
 
-        # Multi Tenant
+        # --------------------------------------------------------------
+        # MULTI TENANT
+        # --------------------------------------------------------------
+
         "shop_id": tenant_context.get(
             "shop_id"
         ),
+
         "branch_id": tenant_context.get(
             "branch_id"
         ),
+
         "tenant_role": tenant_context.get(
             "tenant_role"
         ),
+
         "shop_name": tenant_context.get(
             "shop_name"
         ),
+
         "branch_name": tenant_context.get(
             "branch_name"
         ),
+
     }
 
     st.session_state["user"] = session_user
 
     st.session_state["user_id"] = user_id
+
     st.session_state["username"] = username
+
     st.session_state["role_id"] = role_id
 
     st.session_state["shop_id"] = tenant_context.get(
@@ -701,7 +830,9 @@ def get_current_role_id():
     user = get_current_user()
 
     return (
-        user.get("role_id")
+        user.get(
+            "role_id"
+        )
         if user
         else None
     )
@@ -751,22 +882,71 @@ def is_shop_owner():
 def is_shop_admin():
 
     return get_current_tenant_role() in [
+
         TENANT_ROLE_ADMIN,
+
         TENANT_ROLE_OWNER,
+
     ]
 
 
 def is_shop_manager():
 
     return get_current_tenant_role() in [
+
         TENANT_ROLE_MANAGER,
+
         TENANT_ROLE_ADMIN,
+
         TENANT_ROLE_OWNER,
+
     ]
 
 
 # ==============================================================================
-# AUTH
+# MAKER / CHECKER
+# ==============================================================================
+
+def is_maker():
+    """
+    User Management Maker permission.
+
+    Owner and Tenant Admin can create/submit
+    Maker-Checker requests.
+    """
+
+    tenant_role = get_current_tenant_role()
+
+    return tenant_role in [
+
+        TENANT_ROLE_ADMIN,
+
+        TENANT_ROLE_OWNER,
+
+    ]
+
+
+def is_checker():
+    """
+    User Management Checker permission.
+
+    Owner and Tenant Admin can approve
+    Maker-Checker requests.
+    """
+
+    tenant_role = get_current_tenant_role()
+
+    return tenant_role in [
+
+        TENANT_ROLE_ADMIN,
+
+        TENANT_ROLE_OWNER,
+
+    ]
+
+
+# ==============================================================================
+# AUTHENTICATION
 # ==============================================================================
 
 def is_authenticated():
@@ -1075,37 +1255,79 @@ def auth_sidebar():
 
 __all__ = [
 
+    # ------------------------------------------------------------------
+    # SYSTEM ROLES
+    # ------------------------------------------------------------------
+
     "ROLE_ADMIN",
     "ROLE_MANAGER",
     "ROLE_CASHIER",
+
+    "ROLE_MAP",
+
+    # ------------------------------------------------------------------
+    # TENANT ROLES
+    # ------------------------------------------------------------------
 
     "TENANT_ROLE_STAFF",
     "TENANT_ROLE_MANAGER",
     "TENANT_ROLE_ADMIN",
     "TENANT_ROLE_OWNER",
 
+    "TENANT_ROLE_MAP",
+    "TENANT_ROLE_HIERARCHY",
+
+    # ------------------------------------------------------------------
+    # PASSWORD
+    # ------------------------------------------------------------------
+
     "hash_password",
     "verify_password",
     "upgrade_password",
     "change_password",
 
+    # ------------------------------------------------------------------
+    # USER
+    # ------------------------------------------------------------------
+
     "get_user",
     "login_user",
+
+    # ------------------------------------------------------------------
+    # SESSION
+    # ------------------------------------------------------------------
 
     "build_session",
     "build_tenant_context",
 
     "get_current_user",
     "current_user",
+
     "get_current_role_id",
     "get_current_shop_id",
     "get_current_branch_id",
+
     "get_current_tenant_role",
     "get_current_tenant_context",
+
+    # ------------------------------------------------------------------
+    # TENANT PERMISSIONS
+    # ------------------------------------------------------------------
 
     "is_shop_owner",
     "is_shop_admin",
     "is_shop_manager",
+
+    # ------------------------------------------------------------------
+    # MAKER CHECKER
+    # ------------------------------------------------------------------
+
+    "is_maker",
+    "is_checker",
+
+    # ------------------------------------------------------------------
+    # AUTH GUARDS
+    # ------------------------------------------------------------------
 
     "is_authenticated",
 
@@ -1116,8 +1338,17 @@ __all__ = [
 
     "has_permission",
 
+    # ------------------------------------------------------------------
+    # UI
+    # ------------------------------------------------------------------
+
     "login_page",
     "logout",
     "auth_sidebar",
+
+    # ------------------------------------------------------------------
+    # AUDIT
+    # ------------------------------------------------------------------
+
     "log_auth_event",
 ]
