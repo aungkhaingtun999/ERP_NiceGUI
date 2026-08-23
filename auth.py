@@ -1,48 +1,45 @@
-# ============================================================
+# ==============================================================================
 # auth.py
-# ERP ENTERPRISE AUTHENTICATION
-# MULTI-TENANT
-# SHA-256 PASSWORD AUTH
-# SUPABASE USERS TABLE
-# MAKER / CHECKER
-# ============================================================
+# ERP ENTERPRISE AUTHENTICATION SYSTEM
+# SECURITY + ROLE + SESSION + MULTI-TENANT
+# ==============================================================================
 
 import hashlib
+import hmac
 import time
+
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import streamlit as st
 
-from supabase_client import get_supabase
+from erp_core.base_repo import db
 
 
-# ============================================================
-# SUPABASE
-# ============================================================
+# ==============================================================================
+# DATABASE
+# ==============================================================================
 
-supabase = get_supabase()
+supabase = db()
 
 
-# ============================================================
-# SESSION / LOGIN SETTINGS
-# ============================================================
+# ==============================================================================
+# SECURITY CONSTANTS
+# ==============================================================================
 
 SESSION_IDLE_TIMEOUT = 1800
-
-# Maximum failed attempts before account lockout
-MAX_FAILED_ATTEMPTS = 10
-
-# Lock duration after exceeding max failed attempts
-LOCK_DURATION_MINUTES = 30
+MAX_FAILED_ATTEMPTS = 5
+LOCK_DURATION_MINUTES = 15
 
 
-# ============================================================
-# SYSTEM ROLES
-# ============================================================
+# ==============================================================================
+# ROLE CONSTANTS
+# ==============================================================================
 
 ROLE_ADMIN = 1
 ROLE_MANAGER = 2
 ROLE_CASHIER = 3
+
 
 ROLE_MAP = {
     ROLE_ADMIN: "Admin",
@@ -51,311 +48,580 @@ ROLE_MAP = {
 }
 
 
-# ============================================================
-# TENANT ROLES
-# ============================================================
+# ==============================================================================
+# TENANT ROLE
+# ==============================================================================
 
-TENANT_ROLE_OWNER = "owner"
-TENANT_ROLE_ADMIN = "admin"
-TENANT_ROLE_MANAGER = "manager"
 TENANT_ROLE_STAFF = "staff"
+TENANT_ROLE_MANAGER = "manager"
+TENANT_ROLE_ADMIN = "admin"
+TENANT_ROLE_OWNER = "owner"
+
 
 TENANT_ROLE_MAP = {
-    TENANT_ROLE_OWNER: "Owner",
-    TENANT_ROLE_ADMIN: "Admin",
-    TENANT_ROLE_MANAGER: "Manager",
     TENANT_ROLE_STAFF: "Staff",
+    TENANT_ROLE_MANAGER: "Manager",
+    TENANT_ROLE_ADMIN: "Admin",
+    TENANT_ROLE_OWNER: "Owner",
 }
 
 
-# ============================================================
-# MAKER / CHECKER ROLES
-# ============================================================
-
-# Maker: Admin role (system admin)
-# Can create, edit, and prepare transactions
-MAKER_ROLES = {ROLE_ADMIN}  # Admin (role_id=1)
-
-# Checker: Owner role (tenant owner)
-# Can review, approve, or reject maker's work
-CHECKER_ROLES = {TENANT_ROLE_OWNER}  # Owner (tenant_role='owner')
+TENANT_ROLE_HIERARCHY = {
+    TENANT_ROLE_STAFF: 1,
+    TENANT_ROLE_MANAGER: 2,
+    TENANT_ROLE_ADMIN: 3,
+    TENANT_ROLE_OWNER: 4,
+}
 
 
-# ============================================================
-# PASSWORD
-# ============================================================
+# ==============================================================================
+# AUTH LOG
+# ==============================================================================
 
-def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    if password is None:
-        password = ""
-    
-    return hashlib.sha256(
-        password.encode("utf-8")
-    ).hexdigest()
+def log_auth_event(
+    user_id,
+    event_type,
+    status="success"
+):
+
+    try:
+
+        supabase.table(
+            "auth_logs"
+        ).insert(
+            {
+                "user_id": user_id,
+                "event": event_type,
+                "status": status,
+                "ip_address": "system",
+            }
+        ).execute()
+
+    except Exception:
+        pass
+
+
+# ==============================================================================
+# PASSWORD ENGINE
+# ==============================================================================
+
+def hash_password(password):
+    """Hash password using bcrypt."""
+    return bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
 
 
 def verify_password(user, password):
-    """Verify password against stored hash"""
-    if not user:
-        return False
-    
+    """Verify password against stored hash."""
+
     stored = user.get("password_hash")
-    
+
     if not stored:
         return False
-    
+
     stored = str(stored).strip()
-    
-    return hash_password(password) == stored
 
+    # --------------------------------------------------
+    # bcrypt
+    # --------------------------------------------------
 
-# ============================================================
-# USER LOOKUP
-# ============================================================
-
-def get_user_by_username(username):
-    """Get user by username from database"""
-    try:
-        clean_username = str(
-            username or ""
-        ).strip()
-        
-        if not clean_username:
-            return None
-        
-        result = (
-            supabase
-            .table("users")
-            .select("*")
-            .eq("username", clean_username)
-            .limit(1)
-            .execute()
-        )
-        
-        data = result.data or []
-        
-        return data[0] if data else None
-    
-    except Exception as e:
-        st.error(f"Error fetching user: {str(e)}")
-        return None
-
-
-# ============================================================
-# ACCOUNT LOCK
-# ============================================================
-
-def is_account_locked(user):
-    """Check if user account is locked"""
-    if not user:
-        return False
-    
-    locked_until = user.get("locked_until")
-    
-    if not locked_until:
-        return False
-    
-    try:
-        locked_time = datetime.fromisoformat(
-            str(locked_until).replace(
-                "Z",
-                "+00:00"
+    if stored.startswith("$2"):
+        try:
+            return bcrypt.checkpw(
+                password.encode("utf-8"),
+                stored.encode("utf-8")
             )
+        except Exception:
+            return False
+
+    # --------------------------------------------------
+    # Legacy SHA256 / plain password
+    # --------------------------------------------------
+
+    sha256_hash = hashlib.sha256(
+        password.encode("utf-8")
+    ).hexdigest()
+
+    if hmac.compare_digest(
+        stored,
+        sha256_hash
+    ) or hmac.compare_digest(
+        stored,
+        password
+    ):
+
+        upgrade_password(
+            user["id"],
+            password
         )
-        
-        if locked_time.tzinfo is None:
-            locked_time = locked_time.replace(
-                tzinfo=timezone.utc
-            )
-        
-        return datetime.now(
-            timezone.utc
-        ) < locked_time
-    
-    except Exception:
-        return False
+
+        return True
+
+    return False
 
 
-# ============================================================
-# FAILED LOGIN
-# ============================================================
+def upgrade_password(user_id, password):
+    """Upgrade legacy password to bcrypt."""
 
-def record_failed_login(user):
-    """Record failed login attempt and lock account if needed"""
-    if not user:
-        return
-    
     try:
-        attempts = int(
-            user.get("failed_attempts") or 0
-        ) + 1
-        
-        data = {
-            "failed_attempts": attempts
-        }
-        
-        if attempts >= MAX_FAILED_ATTEMPTS:
-            data["locked_until"] = (
-                datetime.now(timezone.utc)
-                + timedelta(
-                    minutes=LOCK_DURATION_MINUTES
-                )
-            ).isoformat()
-        
-        (
-            supabase
-            .table("users")
-            .update(data)
-            .eq("id", user.get("id"))
-            .execute()
-        )
-    
-    except Exception as e:
-        print(f"Error recording failed login: {str(e)}")
 
+        new_hash = hash_password(password)
 
-# ============================================================
-# RESET LOGIN STATE
-# ============================================================
-
-def reset_login_state(user):
-    """Reset login state after successful login"""
-    if not user:
-        return
-    
-    try:
         (
             supabase
             .table("users")
             .update({
+                "password_hash": new_hash
+            })
+            .eq("id", user_id)
+            .execute()
+        )
+
+    except Exception:
+        pass
+
+
+def change_password(
+    user_id,
+    old_password,
+    new_password
+):
+    """
+    Change the authenticated user's password.
+
+    Returns:
+        (True, success_message)
+        (False, error_message)
+    """
+
+    try:
+
+        # --------------------------------------------------
+        # Basic validation
+        # --------------------------------------------------
+
+        if not user_id:
+            return False, "User ID is required."
+
+        if not old_password:
+            return False, "Current password is required."
+
+        if not new_password:
+            return False, "New password is required."
+
+        if len(new_password) < 6:
+            return False, "New password must be at least 6 characters."
+
+        if old_password == new_password:
+            return False, "New password must be different from current password."
+
+        # --------------------------------------------------
+        # Load current user
+        # --------------------------------------------------
+
+        result = (
+            supabase
+            .table("users")
+            .select(
+                "id, username, password_hash, is_active"
+            )
+            .eq("id", user_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            return False, "User not found or inactive."
+
+        user = result.data[0]
+
+        # --------------------------------------------------
+        # Verify current password
+        # --------------------------------------------------
+
+        if not verify_password(
+            user,
+            old_password
+        ):
+            log_auth_event(
+                user_id,
+                "password_change",
+                "failed"
+            )
+
+            return False, "Current password is incorrect."
+
+        # --------------------------------------------------
+        # Hash new password
+        # --------------------------------------------------
+
+        new_hash = hash_password(
+            new_password
+        )
+
+        # --------------------------------------------------
+        # Update password
+        # --------------------------------------------------
+
+        update_result = (
+            supabase
+            .table("users")
+            .update({
+                "password_hash": new_hash,
                 "failed_attempts": 0,
                 "locked_until": None,
-                "last_login": datetime.now(
+                "updated_at": datetime.now(
                     timezone.utc
                 ).isoformat()
             })
-            .eq("id", user.get("id"))
+            .eq("id", user_id)
             .execute()
         )
-    
+
+        if not update_result.data:
+            return False, "Password update failed."
+
+        # --------------------------------------------------
+        # Audit
+        # --------------------------------------------------
+
+        log_auth_event(
+            user_id,
+            "password_change",
+            "success"
+        )
+
+        return True, "Password changed successfully."
+
     except Exception as e:
-        print(f"Error resetting login state: {str(e)}")
+
+        log_auth_event(
+            user_id,
+            "password_change",
+            "failed"
+        )
+
+        return False, f"Password change error: {str(e)}"
 
 
-# ============================================================
+# ==============================================================================
+# USER QUERY
+# ==============================================================================
+
+def get_user(
+    username
+):
+
+    try:
+
+        result = (
+            supabase
+            .table("users")
+            .select("*")
+            .eq(
+                "username",
+                username.strip()
+            )
+            .eq(
+                "is_active",
+                True
+            )
+            .limit(1)
+            .execute()
+        )
+
+        return (
+            result.data[0]
+            if result.data
+            else None
+        )
+
+    except Exception:
+
+        st.error(
+            "Authentication Database Error"
+        )
+
+        return None
+
+
+# ==============================================================================
+# TENANT CONTEXT
+# ==============================================================================
+
+def build_tenant_context(
+    user
+):
+
+    shop_id = user.get(
+        "shop_id"
+    )
+
+    branch_id = user.get(
+        "branch_id"
+    )
+
+    tenant_role = user.get(
+        "tenant_role",
+        TENANT_ROLE_STAFF
+    )
+
+    context = {
+        "shop_id": shop_id,
+        "branch_id": branch_id,
+        "tenant_role": tenant_role,
+        "shop_name": None,
+        "shop_code": None,
+        "branch_name": None,
+        "branch_code": None,
+    }
+
+    # ------------------------------------------------------------------
+    # SHOP
+    # ------------------------------------------------------------------
+
+    if shop_id:
+
+        try:
+
+            response = (
+                supabase
+                .table("shops")
+                .select("name, code")
+                .eq(
+                    "id",
+                    shop_id
+                )
+                .limit(1)
+                .execute()
+            )
+
+            if response.data:
+
+                shop = response.data[0]
+
+                context["shop_name"] = shop.get(
+                    "name"
+                )
+
+                context["shop_code"] = shop.get(
+                    "code"
+                )
+
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # BRANCH
+    # ------------------------------------------------------------------
+
+    if branch_id:
+
+        try:
+
+            response = (
+                supabase
+                .table("branches")
+                .select("name, code")
+                .eq(
+                    "id",
+                    branch_id
+                )
+                .limit(1)
+                .execute()
+            )
+
+            if response.data:
+
+                branch = response.data[0]
+
+                context["branch_name"] = branch.get(
+                    "name"
+                )
+
+                context["branch_code"] = branch.get(
+                    "code"
+                )
+
+        except Exception:
+            pass
+
+    return context
+
+
+# ==============================================================================
 # LOGIN
-# ============================================================
+# ==============================================================================
 
-def login_user(username, password):
-    """Authenticate user with username and password"""
-    username = str(
-        username or ""
-    ).strip()
-    
-    if not username:
-        return False, "Username required"
-    
-    if not password:
-        return False, "Password required"
-    
-    user = get_user_by_username(username)
-    
+def login_user(
+    username,
+    password
+):
+
+    user = get_user(
+        username
+    )
+
     if not user:
-        return False, "User not found"
-    
-    if not bool(
-        user.get("is_active", False)
-    ):
-        return False, "Account is disabled"
-    
-    if is_account_locked(user):
+
         return (
             False,
-            "Account temporarily locked. Please try again later."
+            "User not found."
         )
-    
-    if not verify_password(
+
+    locked_until = user.get(
+        "locked_until"
+    )
+
+    if locked_until:
+
+        try:
+
+            lock_time = datetime.fromisoformat(
+                str(
+                    locked_until
+                ).replace(
+                    "Z",
+                    "+00:00"
+                )
+            )
+
+            if datetime.now(
+                timezone.utc
+            ) < lock_time:
+
+                return (
+                    False,
+                    "Account locked. Try again later."
+                )
+
+        except Exception:
+            pass
+
+    if verify_password(
         user,
         password
     ):
-        record_failed_login(user)
-        
-        # Get updated failed attempts count
-        updated_user = get_user_by_username(username)
-        if updated_user:
-            failed_attempts = int(
-                updated_user.get("failed_attempts") or 0
+
+        (
+            supabase
+            .table("users")
+            .update(
+                {
+                    "failed_attempts": 0,
+                    "locked_until": None,
+                }
             )
-            remaining_attempts = MAX_FAILED_ATTEMPTS - failed_attempts
-            
-            if remaining_attempts > 0:
-                return False, f"Invalid password. {remaining_attempts} attempts remaining."
-            else:
-                return False, "Invalid password. Account locked due to too many failed attempts."
-        
-        return False, "Invalid password"
-    
-    reset_login_state(user)
-    build_session(user)
-    
-    return True, "Success"
+            .eq(
+                "id",
+                user["id"]
+            )
+            .execute()
+        )
 
+        build_session(
+            user
+        )
 
-# ============================================================
-# SESSION BUILDER
-# ============================================================
+        log_auth_event(
+            user["id"],
+            "login"
+        )
 
-def build_session(user):
-    """Build session data for authenticated user"""
-    if not user:
-        return
-    
-    role_id = user.get(
-        "role_id",
-        ROLE_CASHIER
+        return (
+            True,
+            "Success"
+        )
+
+    attempts = (
+        user.get(
+            "failed_attempts",
+            0
+        )
+        + 1
     )
-    
-    try:
-        role_id = int(role_id)
-    except (TypeError, ValueError):
-        role_id = ROLE_CASHIER
-    
-    user_id = user.get("id")
-    username = str(
+
+    update_data = {
+        "failed_attempts": attempts
+    }
+
+    if attempts >= MAX_FAILED_ATTEMPTS:
+
+        update_data["locked_until"] = (
+            datetime.now(
+                timezone.utc
+            )
+            + timedelta(
+                minutes=LOCK_DURATION_MINUTES
+            )
+        ).isoformat()
+
+    (
+        supabase
+        .table("users")
+        .update(update_data)
+        .eq(
+            "id",
+            user["id"]
+        )
+        .execute()
+    )
+
+    log_auth_event(
+        user["id"],
+        "login",
+        "failed"
+    )
+
+    return (
+        False,
+        "Invalid password."
+    )
+
+
+# ==============================================================================
+# SESSION
+# ==============================================================================
+
+def build_session(
+    user
+):
+
+    role_id = int(
+        user.get(
+            "role_id",
+            ROLE_CASHIER
+        )
+    )
+
+    user_id = user.get(
+        "id"
+    )
+
+    username = (
         user.get("username")
+        or user.get("email")
         or "Unknown"
     )
-    full_name = (
-        user.get("full_name")
-        or username
+
+    tenant_context = build_tenant_context(
+        user
     )
-    shop_id = user.get("shop_id")
-    branch_id = user.get("branch_id")
-    tenant_role = (
-        user.get("tenant_role")
-        or TENANT_ROLE_STAFF
-    )
-    
-    # Determine maker/checker status
-    is_maker_flag = role_id in MAKER_ROLES
-    is_checker_flag = tenant_role in CHECKER_ROLES
-    
+
     session_user = {
         "id": user_id,
         "username": username,
-        "full_name": full_name,
+        "full_name": user.get(
+            "full_name",
+            username
+        ),
         "role_id": role_id,
         "role": ROLE_MAP.get(
             role_id,
             "Cashier"
-        ),
-        "shop_id": shop_id,
-        "branch_id": branch_id,
-        "tenant_role": tenant_role,
-        "tenant_role_name": TENANT_ROLE_MAP.get(
-            tenant_role,
-            "Staff"
         ),
         "is_active": bool(
             user.get(
@@ -363,440 +629,495 @@ def build_session(user):
                 True
             )
         ),
-        "is_maker": is_maker_flag,
-        "is_checker": is_checker_flag,
-        "maker_checker_role": "Maker" if is_maker_flag else ("Checker" if is_checker_flag else "None"),
         "last_activity": time.time(),
+
+        # Multi Tenant
+        "shop_id": tenant_context.get(
+            "shop_id"
+        ),
+        "branch_id": tenant_context.get(
+            "branch_id"
+        ),
+        "tenant_role": tenant_context.get(
+            "tenant_role"
+        ),
+        "shop_name": tenant_context.get(
+            "shop_name"
+        ),
+        "branch_name": tenant_context.get(
+            "branch_name"
+        ),
     }
-    
+
     st.session_state["user"] = session_user
-    
-    # Backward compatibility
+
     st.session_state["user_id"] = user_id
     st.session_state["username"] = username
     st.session_state["role_id"] = role_id
-    st.session_state["shop_id"] = shop_id
-    st.session_state["branch_id"] = branch_id
-    st.session_state["tenant_role"] = tenant_role
+
+    st.session_state["shop_id"] = tenant_context.get(
+        "shop_id"
+    )
+
+    st.session_state["branch_id"] = tenant_context.get(
+        "branch_id"
+    )
+
+    st.session_state["tenant_role"] = tenant_context.get(
+        "tenant_role"
+    )
+
+    st.session_state["shop_name"] = tenant_context.get(
+        "shop_name"
+    )
+
+    st.session_state["branch_name"] = tenant_context.get(
+        "branch_name"
+    )
+
+    st.session_state["tenant_context"] = tenant_context
+
     st.session_state["id"] = user_id
-    st.session_state["is_maker"] = is_maker_flag
-    st.session_state["is_checker"] = is_checker_flag
 
 
-# ============================================================
+# ==============================================================================
 # CURRENT USER
-# ============================================================
+# ==============================================================================
 
 def get_current_user():
-    """Get current authenticated user"""
-    user = st.session_state.get("user")
-    return user if isinstance(user, dict) else {}
+
+    return st.session_state.get(
+        "user"
+    ) or {}
 
 
-def get_current_user_id():
-    """Get current user ID"""
-    user = get_current_user()
-    return user.get("id")
-
-
-# Backward-compatible helper
 def current_user():
-    """
-    Backward-compatible access to the current authenticated user.
 
-    IMPORTANT:
-    This must remain a function so the value is read from
-    Streamlit session_state at runtime.
-    """
     return get_current_user()
 
-# ============================================================
-# CURRENT USER ID
-# ============================================================
 
-def get_current_user_id():
-    """Get current user ID"""
+def get_current_role_id():
+
     user = get_current_user()
-    return user.get("id")
 
+    return (
+        user.get("role_id")
+        if user
+        else None
+    )
 
-# ============================================================
-# SHOP
-# ============================================================
 
 def get_current_shop_id():
-    """Get current shop ID"""
-    user = get_current_user()
-    return user.get("shop_id")
 
+    return st.session_state.get(
+        "shop_id"
+    )
 
-# ============================================================
-# BRANCH
-# ============================================================
 
 def get_current_branch_id():
-    """Get current branch ID"""
-    user = get_current_user()
-    return user.get("branch_id")
 
+    return st.session_state.get(
+        "branch_id"
+    )
 
-# ============================================================
-# TENANT ROLE
-# ============================================================
 
 def get_current_tenant_role():
-    """Get current tenant role"""
-    user = get_current_user()
-    return user.get(
+
+    return st.session_state.get(
         "tenant_role",
         TENANT_ROLE_STAFF
     )
 
 
-# ============================================================
-# OWNER
-# ============================================================
+def get_current_tenant_context():
+
+    return st.session_state.get(
+        "tenant_context"
+    )
+
+
+# ==============================================================================
+# TENANT PERMISSIONS
+# ==============================================================================
 
 def is_shop_owner():
-    """Check if current user is shop owner"""
+
     return (
         get_current_tenant_role()
         == TENANT_ROLE_OWNER
     )
 
 
-# ============================================================
-# ADMIN
-# ============================================================
+def is_shop_admin():
 
-def is_tenant_admin():
-    """Check if current user is tenant admin"""
-    return (
-        get_current_tenant_role()
-        in {
-            TENANT_ROLE_OWNER,
-            TENANT_ROLE_ADMIN
-        }
-    )
+    return get_current_tenant_role() in [
+        TENANT_ROLE_ADMIN,
+        TENANT_ROLE_OWNER,
+    ]
 
 
-# ============================================================
-# MAKER (Admin role)
-# ============================================================
+def is_shop_manager():
 
-def is_maker():
-    """
-    Check if current user is maker
-    Maker = Admin role (role_id = 1)
-    """
-    user = get_current_user()
-    
-    if not user:
-        return False
-    
-    # Check if user has maker flag in session
-    if "is_maker" in user:
-        return user.get("is_maker", False)
-    
-    # Fallback: check role_id
-    return (
-        user.get("role_id")
-        == ROLE_ADMIN
-    )
+    return get_current_tenant_role() in [
+        TENANT_ROLE_MANAGER,
+        TENANT_ROLE_ADMIN,
+        TENANT_ROLE_OWNER,
+    ]
 
 
-# ============================================================
-# CHECKER (Owner role)
-# ============================================================
-
-def is_checker():
-    """
-    Check if current user is checker
-    Checker = Owner role (tenant_role = 'owner')
-    """
-    user = get_current_user()
-    
-    if not user:
-        return False
-    
-    # Check if user has checker flag in session
-    if "is_checker" in user:
-        return user.get("is_checker", False)
-    
-    # Fallback: check tenant_role
-    return (
-        user.get("tenant_role")
-        == TENANT_ROLE_OWNER
-    )
-
-
-# ============================================================
-# MAKER OR CHECKER
-# ============================================================
-
-def is_maker_or_checker():
-    """Check if current user is either maker or checker"""
-    return is_maker() or is_checker()
-
-
-# ============================================================
-# GET MAKER CHECKER ROLE
-# ============================================================
-
-def get_maker_checker_role():
-    """Get current user's maker/checker role"""
-    if is_maker():
-        return "Maker"
-    elif is_checker():
-        return "Checker"
-    else:
-        return "None"
-
-
-# ============================================================
-# AUTHENTICATED
-# ============================================================
+# ==============================================================================
+# AUTH
+# ==============================================================================
 
 def is_authenticated():
-    """Check if user is authenticated and session is valid"""
-    user = get_current_user()
-    
+
+    user = st.session_state.get(
+        "user"
+    )
+
     if not user:
+
         return False
-    
-    if not bool(
-        user.get("is_active", False)
+
+    if not user.get(
+        "is_active",
+        False
     ):
+
         return False
-    
-    last_activity = user.get("last_activity")
-    
-    if not last_activity:
-        return False
-    
+
+    last_activity = user.get(
+        "last_activity",
+        0
+    )
+
     if (
         time.time()
         - last_activity
         > SESSION_IDLE_TIMEOUT
     ):
+
         logout()
+
         return False
-    
+
     user["last_activity"] = time.time()
-    st.session_state["user"] = user  # Update session
-    
+
     return True
 
 
-# ============================================================
-# REQUIRE LOGIN
-# ============================================================
-
 def require_login():
-    """Require user to be logged in"""
+
     if not is_authenticated():
+
         login_page()
+
         st.stop()
-    
-    return get_current_user()
 
+    return current_user()
 
-# ============================================================
-# REQUIRE ADMIN
-# ============================================================
 
 def require_admin():
-    """Require admin role"""
+
     user = require_login()
-    
-    if user.get("role_id") != ROLE_ADMIN:
-        st.error("⛔ Admin privileges required.")
+
+    if user.get(
+        "role_id"
+    ) != ROLE_ADMIN:
+
+        st.error(
+            "Admin privileges required."
+        )
+
         st.stop()
-    
+
     return user
 
 
-# ============================================================
-# REQUIRE TENANT ADMIN
-# ============================================================
+def require_role(
+    role_id
+):
 
-def require_tenant_admin():
-    """Require tenant admin role"""
     user = require_login()
-    
-    if not is_tenant_admin():
-        st.error("⛔ Owner or Tenant Admin privileges required.")
+
+    if user.get(
+        "role_id"
+    ) != role_id:
+
+        st.error(
+            f"Requires {ROLE_MAP.get(role_id)}"
+        )
+
         st.stop()
-    
+
     return user
 
 
-# ============================================================
-# REQUIRE OWNER
-# ============================================================
+def require_tenant_role(
+    min_tenant_role
+):
 
-def require_owner():
-    """Require owner role"""
     user = require_login()
-    
-    if not is_shop_owner():
-        st.error("⛔ Owner privileges required.")
+
+    current_role = user.get(
+        "tenant_role",
+        TENANT_ROLE_STAFF
+    )
+
+    current_level = TENANT_ROLE_HIERARCHY.get(
+        current_role,
+        0
+    )
+
+    required_level = TENANT_ROLE_HIERARCHY.get(
+        min_tenant_role,
+        0
+    )
+
+    if current_level < required_level:
+
+        st.error(
+            f"Requires "
+            f"{TENANT_ROLE_MAP.get(min_tenant_role)} "
+            f"or higher."
+        )
+
         st.stop()
-    
+
     return user
 
 
-# ============================================================
-# REQUIRE SHOP OWNER (BACKWARD COMPATIBILITY)
-# ============================================================
+# ==============================================================================
+# ROLE PERMISSION
+# ==============================================================================
 
-def require_shop_owner():
-    """Require shop owner (backward compatibility)"""
-    return require_tenant_admin()
+def has_permission(
+    permission_key
+):
 
+    try:
 
-# ============================================================
-# REQUIRE SHOP ACCESS
-# ============================================================
+        role_id = get_current_role_id()
 
-def require_shop_access():
-    """Require shop access"""
-    user = require_login()
-    
-    if not user.get("shop_id"):
-        st.error("⛔ No shop assigned. Please contact administrator.")
-        st.stop()
-    
-    return user
+        if not role_id:
 
+            return False
 
-# ============================================================
-# REQUIRE MAKER (Admin role)
-# ============================================================
+        response = (
+            supabase
+            .table("role_permissions")
+            .select(
+                """
+                allowed,
+                permissions(
+                    permission_key
+                )
+                """
+            )
+            .eq(
+                "role_id",
+                role_id
+            )
+            .execute()
+        )
 
-def require_maker():
-    """Require maker role (Admin)"""
-    user = require_login()
-    
-    if not is_maker():
-        st.error("⛔ Admin (Maker) privileges required.")
-        st.stop()
-    
-    return user
+        for item in (
+            response.data or []
+        ):
 
+            permission = item.get(
+                "permissions"
+            )
 
-# ============================================================
-# REQUIRE CHECKER (Owner role)
-# ============================================================
+            if (
+                permission
+                and permission.get(
+                    "permission_key"
+                )
+                == permission_key
+            ):
 
-def require_checker():
-    """Require checker role (Owner)"""
-    user = require_login()
-    
-    if not is_checker():
-        st.error("⛔ Owner (Checker) privileges required.")
-        st.stop()
-    
-    return user
+                return bool(
+                    item.get(
+                        "allowed",
+                        False
+                    )
+                )
 
+        return False
 
-# ============================================================
-# REQUIRE MAKER OR CHECKER
-# ============================================================
+    except Exception:
 
-def require_maker_or_checker():
-    """Require either maker or checker role"""
-    user = require_login()
-    
-    if not is_maker_or_checker():
-        st.error("⛔ Maker or Checker privileges required.")
-        st.stop()
-    
-    return user
+        return False
 
 
-# ============================================================
-# LOGIN PAGE
-# ============================================================
+# ==============================================================================
+# LOGIN UI
+# ==============================================================================
 
 def login_page():
-    """Display login page"""
-    st.title("🔐 ERP Enterprise Login")
-    
-    # Center the login form
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            
-            submit_button = st.form_submit_button(
-                "Login",
-                use_container_width=True
+
+    st.title(
+        "ERP Enterprise Login"
+    )
+
+    username = st.text_input(
+        "Username"
+    )
+
+    password = st.text_input(
+        "Password",
+        type="password"
+    )
+
+    if st.button(
+        "Login",
+        use_container_width=True
+    ):
+
+        success, message = login_user(
+            username,
+            password
+        )
+
+        if success:
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                message
             )
-            
-            if submit_button:
-                if not username or not password:
-                    st.error("Username and password required")
-                else:
-                    success, message = login_user(username, password)
-                    
-                    if success:
-                        st.success("Login successful! Redirecting...")
-                        time.sleep(0.5)
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {message}")
-        
-        # Show information about login attempts
-        st.info(f"ℹ️ Maximum {MAX_FAILED_ATTEMPTS} failed login attempts before account is locked.")
 
 
-# ============================================================
+# ==============================================================================
 # LOGOUT
-# ============================================================
+# ==============================================================================
 
 def logout():
-    """Logout user and clear session"""
-    keys = list(st.session_state.keys())
-    
-    for key in keys:
-        try:
-            del st.session_state[key]
-        except Exception:
-            pass
-    
+
+    for key in list(
+        st.session_state.keys()
+    ):
+
+        del st.session_state[key]
+
     st.rerun()
 
 
-# ============================================================
-# SIDEBAR
-# ============================================================
+# ==============================================================================
+# SIDEBAR AUTH PANEL
+# ==============================================================================
 
 def auth_sidebar():
-    """Display authentication info in sidebar"""
+
     if not is_authenticated():
+
         return
-    
-    user = get_current_user()
-    
+
+    user = current_user()
+
     with st.sidebar:
-        st.success(f"👤 {user.get('full_name', 'User')}")
-        st.caption(f"Role: {user.get('role', 'Unknown')}")
-        st.caption(f"Tenant: {user.get('tenant_role_name', 'Staff')}")
-        
-        # Show maker/checker role
-        maker_checker_role = user.get('maker_checker_role', 'None')
-        if maker_checker_role != 'None':
-            icon = "🔨" if maker_checker_role == "Maker" else "✅"
-            st.caption(f"{icon} {maker_checker_role}")
-        
-        if user.get("shop_id"):
-            st.caption(f"🏪 Shop ID: {user.get('shop_id')}")
-        
-        if user.get("branch_id"):
-            st.caption(f"🏬 Branch ID: {user.get('branch_id')}")
-        
-        if st.button("🚪 Logout", use_container_width=True):
+
+        st.success(
+            f"User: {user.get('full_name', 'User')}"
+        )
+
+        st.caption(
+            f"Role: {user.get('role', 'Unknown')}"
+        )
+
+        tenant_role = user.get(
+            "tenant_role"
+        )
+
+        shop_name = user.get(
+            "shop_name"
+        )
+
+        branch_name = user.get(
+            "branch_name"
+        )
+
+        if tenant_role:
+
+            st.caption(
+                "Tenant Role: "
+                + TENANT_ROLE_MAP.get(
+                    tenant_role,
+                    tenant_role
+                )
+            )
+
+        if shop_name:
+
+            st.caption(
+                f"Shop: {shop_name}"
+            )
+
+        if branch_name:
+
+            st.caption(
+                f"Branch: {branch_name}"
+            )
+
+        if st.button(
+            "Logout"
+        ):
+
             logout()
+
+
+# ==============================================================================
+# PUBLIC EXPORTS
+# ==============================================================================
+
+__all__ = [
+
+    "ROLE_ADMIN",
+    "ROLE_MANAGER",
+    "ROLE_CASHIER",
+
+    "TENANT_ROLE_STAFF",
+    "TENANT_ROLE_MANAGER",
+    "TENANT_ROLE_ADMIN",
+    "TENANT_ROLE_OWNER",
+
+    "hash_password",
+    "verify_password",
+    "upgrade_password",
+    "change_password",
+
+    "get_user",
+    "login_user",
+
+    "build_session",
+    "build_tenant_context",
+
+    "get_current_user",
+    "current_user",
+    "get_current_role_id",
+    "get_current_shop_id",
+    "get_current_branch_id",
+    "get_current_tenant_role",
+    "get_current_tenant_context",
+
+    "is_shop_owner",
+    "is_shop_admin",
+    "is_shop_manager",
+
+    "is_authenticated",
+
+    "require_login",
+    "require_admin",
+    "require_role",
+    "require_tenant_role",
+
+    "has_permission",
+
+    "login_page",
+    "logout",
+    "auth_sidebar",
+    "log_auth_event",
+]
