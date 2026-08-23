@@ -52,7 +52,7 @@ MENU = {
         ("⚙️", "Settings", "12_Settings"),
         ("✅", "Settings Approval", "13_Settings_Approval"),
 
-        # My Profile is now handled directly by Sidebar
+        # Direct Profile Page
         ("👤", "My Profile", "__PROFILE__"),
 
         ("🧪", "System Test Center", "99_System_Test"),
@@ -106,9 +106,13 @@ def get_active_page():
         )
 
         if user.get("role_id") == ROLE_ADMIN:
-            st.session_state.active_page = "3_Admin_Dashboard"
+
+            st.session_state.active_page = (
+                "3_Admin_Dashboard"
+            )
 
         else:
+
             st.session_state.active_page = "1_POS"
 
     return st.session_state.get(
@@ -156,21 +160,34 @@ def render_profile():
     )
 
     if not user:
-        st.error("Please login first.")
+
+        st.error(
+            "Please login first."
+        )
+
         return
 
-    st.subheader("👤 My Profile")
+    # --------------------------------------------------------------------------
+    # PROFILE INFORMATION
+    # --------------------------------------------------------------------------
 
-    st.write(
-        f"**Username :** {user.get('username', '')}"
+    st.subheader(
+        "👤 My Profile"
     )
 
     st.write(
-        f"**Full Name :** {user.get('full_name', '')}"
+        f"**Username :** "
+        f"{user.get('username', '')}"
     )
 
     st.write(
-        f"**Role :** {user.get('role', '')}"
+        f"**Full Name :** "
+        f"{user.get('full_name', '')}"
+    )
+
+    st.write(
+        f"**Role :** "
+        f"{user.get('role', '')}"
     )
 
     tenant_role = user.get(
@@ -178,8 +195,10 @@ def render_profile():
     )
 
     if tenant_role:
+
         st.write(
-            f"**Tenant Role :** {tenant_role}"
+            f"**Tenant Role :** "
+            f"{tenant_role}"
         )
 
     shop_name = user.get(
@@ -187,8 +206,10 @@ def render_profile():
     )
 
     if shop_name:
+
         st.write(
-            f"**Shop :** {shop_name}"
+            f"**Shop :** "
+            f"{shop_name}"
         )
 
     branch_name = user.get(
@@ -196,81 +217,149 @@ def render_profile():
     )
 
     if branch_name:
+
         st.write(
-            f"**Branch :** {branch_name}"
+            f"**Branch :** "
+            f"{branch_name}"
         )
 
     st.divider()
 
-    st.subheader("🔐 Change Password")
+    # --------------------------------------------------------------------------
+    # CHANGE PASSWORD
+    # --------------------------------------------------------------------------
 
-    old_password = st.text_input(
-        "Current Password",
-        type="password",
-        key="profile_old_password"
+    st.subheader(
+        "🔐 Change Password"
     )
 
-    new_password = st.text_input(
-        "New Password",
-        type="password",
-        key="profile_new_password"
-    )
+    # IMPORTANT:
+    #
+    # Do NOT manually modify:
+    #
+    #   st.session_state.profile_old_password
+    #   st.session_state.profile_new_password
+    #   st.session_state.profile_confirm_password
+    #
+    # after the widgets have been rendered.
+    #
+    # clear_on_submit=True lets Streamlit clear the form fields safely.
+    # --------------------------------------------------------------------------
 
-    confirm_password = st.text_input(
-        "Confirm New Password",
-        type="password",
-        key="profile_confirm_password"
-    )
-
-    if st.button(
-        "💾 Change Password",
-        use_container_width=True,
-        key="profile_change_password"
+    with st.form(
+        "profile_change_password_form",
+        clear_on_submit=True
     ):
 
-        if not old_password:
-            st.error(
-                "Current password is required."
-            )
-            return
-
-        if not new_password:
-            st.error(
-                "New password is required."
-            )
-            return
-
-        if not confirm_password:
-            st.error(
-                "Please confirm the new password."
-            )
-            return
-
-        if new_password != confirm_password:
-            st.error(
-                "New passwords do not match."
-            )
-            return
-
-        user_id = user.get("id")
-
-        success, message = change_password(
-            user_id,
-            old_password,
-            new_password
+        old_password = st.text_input(
+            "Current Password",
+            type="password"
         )
 
-        if success:
+        new_password = st.text_input(
+            "New Password",
+            type="password"
+        )
 
-            st.success(message)
+        confirm_password = st.text_input(
+            "Confirm New Password",
+            type="password"
+        )
 
-            st.session_state.profile_old_password = ""
-            st.session_state.profile_new_password = ""
-            st.session_state.profile_confirm_password = ""
+        submitted = st.form_submit_button(
+            "💾 Change Password",
+            use_container_width=True
+        )
 
-        else:
+    # --------------------------------------------------------------------------
+    # PROCESS PASSWORD CHANGE
+    # --------------------------------------------------------------------------
 
-            st.error(message)
+    if not submitted:
+
+        return
+
+    # --------------------------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------------------------
+
+    if not old_password:
+
+        st.error(
+            "Current password is required."
+        )
+
+        return
+
+    if not new_password:
+
+        st.error(
+            "New password is required."
+        )
+
+        return
+
+    if not confirm_password:
+
+        st.error(
+            "Please confirm the new password."
+        )
+
+        return
+
+    if new_password != confirm_password:
+
+        st.error(
+            "New passwords do not match."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # CURRENT USER ID
+    # --------------------------------------------------------------------------
+
+    user_id = user.get(
+        "id"
+    )
+
+    if not user_id:
+
+        st.error(
+            "Unable to identify the current user."
+        )
+
+        return
+
+    # --------------------------------------------------------------------------
+    # CHANGE PASSWORD
+    # --------------------------------------------------------------------------
+
+    success, message = change_password(
+        user_id,
+        old_password,
+        new_password
+    )
+
+    # --------------------------------------------------------------------------
+    # RESULT
+    # --------------------------------------------------------------------------
+
+    if success:
+
+        st.success(
+            message
+        )
+
+        st.info(
+            "🔐 Your password has been updated successfully."
+        )
+
+    else:
+
+        st.error(
+            message
+        )
 
 
 # ==============================================================================
@@ -284,10 +373,15 @@ def render_menu_item(
     active
 ):
 
-    label = f"{icon} {title}"
+    label = (
+        f"{icon} {title}"
+    )
 
     if active == page_id:
-        label = f"✅ {label}"
+
+        label = (
+            f"✅ {label}"
+        )
 
     if st.button(
         label,
@@ -295,20 +389,26 @@ def render_menu_item(
         use_container_width=True
     ):
 
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
         # DIRECT PROFILE
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
 
         if page_id == "__PROFILE__":
 
-            st.session_state.active_page = "__PROFILE__"
+            st.session_state.active_page = (
+                "__PROFILE__"
+            )
+
             st.rerun()
 
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
         # NORMAL PAGE
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
 
-        st.session_state.active_page = page_id
+        st.session_state.active_page = (
+            page_id
+        )
+
         st.rerun()
 
 
@@ -319,6 +419,7 @@ def render_menu_item(
 def show_sidebar():
 
     if not is_authenticated():
+
         return
 
     user = st.session_state.get(
@@ -332,17 +433,23 @@ def show_sidebar():
 
     with st.sidebar:
 
-        # --------------------------------------------------
-        # Header
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # HEADER
+        # ----------------------------------------------------------------------
 
-        st.title("🏭 Myanmar ERP")
-        st.caption("Enterprise Edition")
+        st.title(
+            "🏭 Myanmar ERP"
+        )
+
+        st.caption(
+            "Enterprise Edition"
+        )
+
         st.divider()
 
-        # --------------------------------------------------
-        # User Card
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # USER CARD
+        # ----------------------------------------------------------------------
 
         info = get_user_display()
 
@@ -351,18 +458,20 @@ def show_sidebar():
         )
 
         st.caption(
-            f"Username : {info['username']}"
+            f"Username : "
+            f"{info['username']}"
         )
 
         st.caption(
-            f"Role : {info['role']}"
+            f"Role : "
+            f"{info['role']}"
         )
 
         st.divider()
 
-        # --------------------------------------------------
-        # Notification
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # NOTIFICATIONS
+        # ----------------------------------------------------------------------
 
         with st.expander(
             "🔔 Notifications"
@@ -372,30 +481,39 @@ def show_sidebar():
 
         st.divider()
 
-        # --------------------------------------------------
-        # Language
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # LANGUAGE
+        # ----------------------------------------------------------------------
 
         if "language" not in st.session_state:
-            st.session_state.language = "English"
+
+            st.session_state.language = (
+                "English"
+            )
 
         st.session_state.language = st.selectbox(
             "Language",
-            ["English", "မြန်မာ"],
+            [
+                "English",
+                "မြန်မာ"
+            ],
             index=(
                 0
-                if st.session_state.language == "English"
+                if st.session_state.language
+                == "English"
                 else 1
             )
         )
 
         st.divider()
 
-        # --------------------------------------------------
-        # Navigation
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # NAVIGATION
+        # ----------------------------------------------------------------------
 
-        st.subheader("📂 Navigation")
+        st.subheader(
+            "📂 Navigation"
+        )
 
         active = get_active_page()
 
@@ -415,9 +533,9 @@ def show_sidebar():
 
         st.divider()
 
-        # --------------------------------------------------
-        # System Status
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # SYSTEM STATUS
+        # ----------------------------------------------------------------------
 
         st.success(
             "🟢 System Online"
@@ -437,9 +555,9 @@ def show_sidebar():
 
         st.divider()
 
-        # --------------------------------------------------
-        # Logout
-        # --------------------------------------------------
+        # ----------------------------------------------------------------------
+        # LOGOUT
+        # ----------------------------------------------------------------------
 
         if st.button(
             "🚪 Logout",
@@ -457,6 +575,7 @@ def show_sidebar():
 def show_profile_page():
 
     if not is_authenticated():
+
         return
 
     render_profile()
