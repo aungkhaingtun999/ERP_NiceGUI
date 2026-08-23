@@ -372,29 +372,85 @@ except Exception as e:
 
         branches = []
 
-# ----------------------------------------------------------------------
-# STRICT TENANT FILTER
-#
-# Every normal tenant user, including Owner, is restricted
-# to the currently assigned shop.
-# ----------------------------------------------------------------------
+    # ==========================================================================
+    # LOAD USERS
+    # STRICT MULTI-TENANT FILTER
+    #
+    # IMPORTANT:
+    # - Owner is NOT automatically a global owner.
+    # - Every tenant user is restricted to current_shop_id.
+    # - shop003 Owner can only see shop003 users.
+    # ==========================================================================
 
-if current_shop_id is not None:
+    try:
 
-    query = query.eq(
-        "shop_id",
-        current_shop_id,
-    )
+        query = (
+            supabase
+            .table("users")
+            .select(
+                """
+                id,
+                username,
+                full_name,
+                role_id,
+                is_active,
+                shop_id,
+                branch_id,
+                tenant_role,
+                created_at,
+                last_login
+                """
+            )
+        )
 
-else:
+        # ----------------------------------------------------------------------
+        # STRICT TENANT FILTER
+        #
+        # Every normal tenant user, including Owner,
+        # can only see users from the current shop.
+        # ----------------------------------------------------------------------
 
-    st.error(
-        "❌ Tenant shop context is missing. "
-        "User list cannot be loaded."
-    )
+        if current_shop_id is not None:
 
-    return
+            query = query.eq(
+                "shop_id",
+                current_shop_id,
+            )
 
+        else:
+
+            st.error(
+                "❌ Tenant shop context is missing. "
+                "User list cannot be loaded."
+            )
+
+            return
+
+        # ----------------------------------------------------------------------
+        # EXECUTE
+        # ----------------------------------------------------------------------
+
+        users_resp = query.execute()
+
+        users = users_resp.data or []
+
+        users = [
+            safe_dict(user)
+            for user in users
+            if isinstance(user, dict)
+        ]
+
+    except Exception as e:
+
+        st.error(
+            f"User loading failed: {e}"
+        )
+
+        return
+
+    # ==========================================================================
+    # LOAD PENDING CREATE REQUESTS
+    # ==========================================================================
     # ==========================================================================
     # LOAD PENDING CREATE REQUESTS
     # ==========================================================================
