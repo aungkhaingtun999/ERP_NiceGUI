@@ -280,51 +280,60 @@ def run():
 
         st.error("No valid roles were found.")
         return
+# ==========================================================================
+# LOAD SHOPS
+# MULTI-TENANT STRICT
+#
+# IMPORTANT:
+# tenant Owner != Global/SaaS Owner
+#
+# A normal Owner can only see their own shop.
+# ==========================================================================
 
-    # ==========================================================================
-    # LOAD SHOPS
-    # ==========================================================================
+try:
 
-    try:
+    # ----------------------------------------------------------------------
+    # Current tenant shop is mandatory for normal tenant users
+    # ----------------------------------------------------------------------
 
-        if is_owner:
+    if current_shop_id is not None:
 
-            shops_resp = (
-                supabase
-                .table("shops")
-                .select("id,name,code")
-                .execute()
+        shops_resp = (
+            supabase
+            .table("shops")
+            .select("id,name,code")
+            .eq(
+                "id",
+                current_shop_id,
             )
+            .execute()
+        )
 
-        else:
+    else:
 
-            shops_resp = (
-                supabase
-                .table("shops")
-                .select("id,name,code")
-                .eq("id", current_shop_id)
-                .execute()
-            )
+        shops_resp = type(
+            "Response",
+            (),
+            {
+                "data": []
+            }
+        )()
 
-        shops = shops_resp.data or []
+    shops = shops_resp.data or []
 
-        shops = [
-            safe_dict(shop)
-            for shop in shops
-            if isinstance(shop, dict)
-        ]
+    shops = [
+        safe_dict(shop)
+        for shop in shops
+        if isinstance(shop, dict)
+    ]
 
-    except Exception as e:
+except Exception as e:
 
-        shops = []
+    st.error(
+        f"Shop loading failed: {e}"
+    )
 
-    shop_map = {
-        s.get("name"): s.get("id")
-        for s in shops
-        if s.get("name") is not None
-    }
-
-    shop_names = list(shop_map.keys())
+    shops = []
 
     # ==========================================================================
     # LOAD BRANCHES
@@ -363,52 +372,28 @@ def run():
 
         branches = []
 
-    # ==========================================================================
-    # LOAD USERS
-    # ==========================================================================
+# ----------------------------------------------------------------------
+# STRICT TENANT FILTER
+#
+# Every normal tenant user, including Owner, is restricted
+# to the currently assigned shop.
+# ----------------------------------------------------------------------
 
-    try:
+if current_shop_id is not None:
 
-        query = (
-            supabase
-            .table("users")
-            .select(
-                """
-                id,
-                username,
-                full_name,
-                role_id,
-                is_active,
-                shop_id,
-                branch_id,
-                tenant_role,
-                created_at,
-                last_login
-                """
-            )
-        )
+    query = query.eq(
+        "shop_id",
+        current_shop_id,
+    )
 
-        if not is_owner and current_shop_id:
+else:
 
-            query = query.eq(
-                "shop_id",
-                current_shop_id,
-            )
+    st.error(
+        "❌ Tenant shop context is missing. "
+        "User list cannot be loaded."
+    )
 
-        users_resp = query.execute()
-
-        users = users_resp.data or []
-
-        users = [
-            safe_dict(user)
-            for user in users
-            if isinstance(user, dict)
-        ]
-
-    except Exception as e:
-
-        st.error(f"User loading failed: {e}")
-        return
+    return
 
     # ==========================================================================
     # LOAD PENDING CREATE REQUESTS
