@@ -10,7 +10,6 @@ import streamlit as st
 from auth import (
     is_authenticated,
     logout,
-    change_password,
     ROLE_ADMIN,
     ROLE_MANAGER,
     ROLE_CASHIER,
@@ -87,7 +86,7 @@ MENU = {
         ("💰", "Pricing Report", "11_Pricing_Report"),
         ("🔐", "Integrity Check", "14_Integrity"),
 
-        ("👤", "My Profile", "__PROFILE__"),
+        ("👤", "My Profile", "13_Profile"),
     ],
 }
 
@@ -149,82 +148,12 @@ def get_user_display():
 
 
 # ==============================================================================
-# DIRECT PROFILE / PASSWORD CHANGE
+#  PASSWORD CHANGE
 # ==============================================================================
 
-def render_profile():
-
-    user = st.session_state.get(
-        "user",
-        {}
-    )
-
-    if not user:
-
-        st.error(
-            "Please login first."
-        )
-
-        return
-
     # --------------------------------------------------------------------------
-    # PROFILE INFORMATION
-    # --------------------------------------------------------------------------
-
-    st.subheader(
-        "👤 My Profile"
-    )
-
-    st.write(
-        f"**Username :** "
-        f"{user.get('username', '')}"
-    )
-
-    st.write(
-        f"**Full Name :** "
-        f"{user.get('full_name', '')}"
-    )
-
-    st.write(
-        f"**Role :** "
-        f"{user.get('role', '')}"
-    )
-
-    tenant_role = user.get(
-        "tenant_role"
-    )
-
-    if tenant_role:
-
-        st.write(
-            f"**Tenant Role :** "
-            f"{tenant_role}"
-        )
-
-    shop_name = user.get(
-        "shop_name"
-    )
-
-    if shop_name:
-
-        st.write(
-            f"**Shop :** "
-            f"{shop_name}"
-        )
-
-    branch_name = user.get(
-        "branch_name"
-    )
-
-    if branch_name:
-
-        st.write(
-            f"**Branch :** "
-            f"{branch_name}"
-        )
-
-    st.divider()
-
+    
+    
     # --------------------------------------------------------------------------
     # CHANGE PASSWORD
     # --------------------------------------------------------------------------
