@@ -1501,7 +1501,7 @@ def run():
                                         "for last Owner"
                                     )
     
-    # ==========================================================================
+        # ==========================================================================
     # TAB 4: APPROVALS
     # ==========================================================================
 
@@ -1941,10 +1941,563 @@ def run():
                         with col3:
 
                             with st.popover(
-                   
-                        
-                            
-                                                
+                                "❌ Reject"
+                            ):
+
+                                reason = st.text_input(
+                                    "Reason",
+                                    key=(
+                                        f"rej_c_"
+                                        f"{request_id}_"
+                                        f"{idx}"
+                                    ),
+                                )
+
+                                if st.button(
+                                    "Confirm",
+                                    key=(
+                                        f"rej_c_confirm_"
+                                        f"{request_id}_"
+                                        f"{idx}"
+                                    ),
+                                    use_container_width=True,
+                                ):
+
+                                    (
+                                        supabase
+                                        .table(
+                                            "user_create_requests"
+                                        )
+                                        .update(
+                                            {
+                                                "status": "rejected",
+                                                "checked_by": current_user_id,
+                                                "checked_at": datetime.now(
+                                                    timezone.utc
+                                                ).isoformat(),
+                                                "rejection_reason": (
+                                                    reason
+                                                    or "No reason"
+                                                ),
+                                            }
+                                        )
+                                        .eq(
+                                            "id",
+                                            request_id,
+                                        )
+                                        .eq(
+                                            "status",
+                                            "pending",
+                                        )
+                                        .execute()
+                                    )
+
+                                    create_activity_log(
+                                        current_user_id,
+                                        "REJECT_CREATE_USER",
+                                        (
+                                            f"Rejected create request "
+                                            f"for '{username}'. "
+                                            f"Reason: "
+                                            f"{reason or 'No reason'}"
+                                        ),
+                                    )
+
+                                    notify_warning(
+                                        f"❌ "
+                                        f"{username} "
+                                        f"rejected"
+                                    )
+
+                                    st.rerun()
+
+            # ==================================================================
+            # EDIT REQUESTS
+            # ==================================================================
+
+            st.divider()
+
+            st.subheader(
+                f"✏️ Edit Requests "
+                f"({len(pending_edit_requests)})"
+            )
+
+            if not pending_edit_requests:
+
+                st.info(
+                    "No pending edit requests"
+                )
+
+            else:
+
+                for idx, req in enumerate(
+                    pending_edit_requests
+                ):
+
+                    req = safe_dict(req)
+
+                    requested_by = safe_dict(
+                        req.get("requested_by")
+                    )
+
+                    target_user = safe_dict(
+                        req.get("user_id")
+                    )
+
+                    requester_id = (
+                        requested_by.get("id")
+                    )
+
+                    target_id = (
+                        target_user.get("id")
+                    )
+
+                    request_id = (
+                        req.get("id")
+                        or f"unknown_{idx}"
+                    )
+
+                    # ----------------------------------------------------------
+                    # EXTRA TENANT SAFETY
+                    # ----------------------------------------------------------
+
+                    target_shop_id = (
+                        target_user.get("shop_id")
+                    )
+
+                    if (
+                        not is_owner
+                        and current_shop_id
+                        and target_shop_id
+                        != current_shop_id
+                    ):
+
+                        continue
+
+                    with st.container(
+                        border=True
+                    ):
+
+                        col1, col2, col3 = (
+                            st.columns(
+                                [3, 1, 1]
+                            )
+                        )
+
+                        # ------------------------------------------------------
+                        # REQUEST DETAILS
+                        # ------------------------------------------------------
+
+                        with col1:
+
+                            st.write(
+                                f"**Edit: "
+                                f"{target_user.get('username', 'Unknown')}**"
+                            )
+
+                            st.caption(
+                                f"Current: "
+                                f"{req.get('old_full_name', '')} "
+                                f"→ New: "
+                                f"{req.get('new_full_name', '')}"
+                            )
+
+                            st.caption(
+                                f"Role: "
+                                f"{get_role_name(req.get('old_role_id'))} "
+                                f"→ "
+                                f"{get_role_name(req.get('new_role_id'))}"
+                            )
+
+                            st.caption(
+                                f"Tenant: "
+                                f"{req.get('old_tenant_role', 'staff')} "
+                                f"→ "
+                                f"{req.get('new_tenant_role', 'staff')}"
+                            )
+
+                            st.caption(
+                                f"Status: "
+                                f"{'🟢' if req.get('old_is_active') else '🔴'} "
+                                f"→ "
+                                f"{'🟢' if req.get('new_is_active') else '🔴'}"
+                            )
+
+                            st.caption(
+                                f"Shop: "
+                                f"{get_shop_name(target_shop_id)}"
+                            )
+
+                            if requested_by:
+
+                                st.caption(
+                                    f"By: "
+                                    f"{requested_by.get('full_name', 'Unknown')}"
+                                )
+
+                            else:
+
+                                st.caption(
+                                    "By: Unknown requester"
+                                )
+
+                        # ------------------------------------------------------
+                        # APPROVE EDIT
+                        # ------------------------------------------------------
+
+                        with col2:
+
+                            target_user_data = next(
+                                (
+                                    u
+                                    for u in users
+                                    if safe_dict(u).get("id")
+                                    == target_id
+                                ),
+                                None,
+                            )
+
+                            if target_user_data:
+
+                                target_user_data = safe_dict(
+                                    target_user_data
+                                )
+
+                                is_owner_target = (
+                                    target_user_data.get(
+                                        "tenant_role"
+                                    )
+                                    == "owner"
+                                )
+
+                                owner_count = sum(
+                                    1
+                                    for u in users
+                                    if safe_dict(u).get(
+                                        "tenant_role"
+                                    )
+                                    == "owner"
+                                )
+
+                                is_last_owner_target = (
+                                    is_owner_target
+                                    and owner_count <= 1
+                                )
+
+                                # ----------------------------------------------
+                                # LAST OWNER PROTECTION
+                                # ----------------------------------------------
+
+                                if (
+                                    is_last_owner_target
+                                    and req.get(
+                                        "new_tenant_role"
+                                    )
+                                    != "owner"
+                                ):
+
+                                    st.warning(
+                                        "🚫 **Cannot change last Owner!** "
+                                        "Create another Owner first."
+                                    )
+
+                                    st.info(
+                                        "ℹ️ This request cannot be "
+                                        "approved until another Owner "
+                                        "is created."
+                                    )
+
+                                else:
+
+                                    can_approve, msg = (
+                                        can_approve_request(
+                                            requester_id
+                                        )
+                                    )
+
+                                    if can_approve:
+
+                                        if st.button(
+                                            "✅ Approve",
+                                            key=(
+                                                f"tab4_edit_approve_"
+                                                f"{request_id}_"
+                                                f"{target_id}_"
+                                                f"{idx}"
+                                            ),
+                                            use_container_width=True,
+                                            type="primary",
+                                        ):
+
+                                            # ----------------------------------
+                                            # FINAL TENANT SAFETY CHECK
+                                            # ----------------------------------
+
+                                            if (
+                                                not is_owner
+                                                and current_shop_id
+                                                and target_shop_id
+                                                != current_shop_id
+                                            ):
+
+                                                notify_error(
+                                                    "⛔ You cannot approve "
+                                                    "a request from another Shop."
+                                                )
+
+                                                st.stop()
+
+                                            update_data = {}
+
+                                            if req.get(
+                                                "new_full_name"
+                                            ) is not None:
+
+                                                update_data[
+                                                    "full_name"
+                                                ] = req.get(
+                                                    "new_full_name"
+                                                )
+
+                                            if req.get(
+                                                "new_role_id"
+                                            ) is not None:
+
+                                                update_data[
+                                                    "role_id"
+                                                ] = req.get(
+                                                    "new_role_id"
+                                                )
+
+                                            if req.get(
+                                                "new_tenant_role"
+                                            ) is not None:
+
+                                                update_data[
+                                                    "tenant_role"
+                                                ] = req.get(
+                                                    "new_tenant_role"
+                                                )
+
+                                            if req.get(
+                                                "new_is_active"
+                                            ) is not None:
+
+                                                update_data[
+                                                    "is_active"
+                                                ] = req.get(
+                                                    "new_is_active"
+                                                )
+
+                                            # ----------------------------------
+                                            # APPLY USER UPDATE
+                                            # ----------------------------------
+
+                                            if update_data:
+
+                                                try:
+
+                                                    (
+                                                        supabase
+                                                        .table("users")
+                                                        .update(
+                                                            update_data
+                                                        )
+                                                        .eq(
+                                                            "id",
+                                                            target_id,
+                                                        )
+                                                        .eq(
+                                                            "shop_id",
+                                                            current_shop_id
+                                                            if not is_owner
+                                                            else target_shop_id,
+                                                        )
+                                                        .execute()
+                                                    )
+
+                                                except Exception as e:
+
+                                                    notify_error(
+                                                        f"❌ User update failed: "
+                                                        f"{e}"
+                                                    )
+
+                                                    st.stop()
+
+                                            # ----------------------------------
+                                            # MARK REQUEST APPROVED
+                                            # ----------------------------------
+
+                                            try:
+
+                                                (
+                                                    supabase
+                                                    .table(
+                                                        "user_edit_requests"
+                                                    )
+                                                    .update(
+                                                        {
+                                                            "status": "approved",
+                                                            "checked_by": current_user_id,
+                                                            "checked_at": datetime.now(
+                                                                timezone.utc
+                                                            ).isoformat(),
+                                                        }
+                                                    )
+                                                    .eq(
+                                                        "id",
+                                                        request_id,
+                                                    )
+                                                    .eq(
+                                                        "status",
+                                                        "pending",
+                                                    )
+                                                    .execute()
+                                                )
+
+                                            except Exception as e:
+
+                                                notify_error(
+                                                    f"⚠️ User updated, "
+                                                    f"but request status "
+                                                    f"update failed: {e}"
+                                                )
+
+                                                st.stop()
+
+                                            create_activity_log(
+                                                current_user_id,
+                                                "APPROVE_EDIT_USER",
+                                                (
+                                                    f"Approved edit request "
+                                                    f"for user "
+                                                    f"'{target_user.get('username', 'User')}'"
+                                                ),
+                                            )
+
+                                            notify_success(
+                                                f"✅ "
+                                                f"{target_user.get('username', 'User')} "
+                                                f"updated"
+                                            )
+
+                                            st.rerun()
+
+                                    else:
+
+                                        st.warning(
+                                            msg
+                                        )
+
+                            else:
+
+                                st.warning(
+                                    "⚠️ Target user record "
+                                    "could not be found."
+                                )
+
+                                st.caption(
+                                    "This request cannot be safely approved "
+                                    "until the target user exists."
+                                )
+
+                        # ------------------------------------------------------
+                        # REJECT EDIT
+                        # ------------------------------------------------------
+
+                        with col3:
+
+                            with st.popover(
+                                "❌ Reject"
+                            ):
+
+                                reason = st.text_input(
+                                    "Reason",
+                                    key=(
+                                        f"tab4_edit_reject_reason_"
+                                        f"{request_id}_"
+                                        f"{target_id}_"
+                                        f"{idx}"
+                                    ),
+                                )
+
+                                if st.button(
+                                    "Confirm",
+                                    key=(
+                                        f"tab4_edit_reject_confirm_"
+                                        f"{request_id}_"
+                                        f"{target_id}_"
+                                        f"{idx}"
+                                    ),
+                                    use_container_width=True,
+                                ):
+
+                                    # ------------------------------------------
+                                    # FINAL TENANT SAFETY CHECK
+                                    # ------------------------------------------
+
+                                    if (
+                                        not is_owner
+                                        and current_shop_id
+                                        and target_shop_id
+                                        != current_shop_id
+                                    ):
+
+                                        notify_error(
+                                            "⛔ You cannot reject "
+                                            "a request from another Shop."
+                                        )
+
+                                        st.stop()
+
+                                    (
+                                        supabase
+                                        .table(
+                                            "user_edit_requests"
+                                        )
+                                        .update(
+                                            {
+                                                "status": "rejected",
+                                                "checked_by": current_user_id,
+                                                "checked_at": datetime.now(
+                                                    timezone.utc
+                                                ).isoformat(),
+                                                "rejection_reason": (
+                                                    reason
+                                                    or "No reason"
+                                                ),
+                                            }
+                                        )
+                                        .eq(
+                                            "id",
+                                            request_id,
+                                        )
+                                        .eq(
+                                            "status",
+                                            "pending",
+                                        )
+                                        .execute()
+                                    )
+
+                                    create_activity_log(
+                                        current_user_id,
+                                        "REJECT_EDIT_USER",
+                                        (
+                                            f"Rejected edit request "
+                                            f"for user "
+                                            f"'{target_user.get('username', 'User')}'. "
+                                            f"Reason: "
+                                            f"{reason or 'No reason'}"
+                                        ),
+                                    )
+
+                                    notify_warning(
+                                        "❌ Edit request rejected"
+                                    )
+
+                                    st.rerun()
+
 
 # ==============================================================================
 # ENTRY
