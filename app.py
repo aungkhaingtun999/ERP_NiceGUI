@@ -140,37 +140,6 @@ def page_router():
         "1_POS"
     )
 
-    # ------------------------------------------------------------------
-    # LEGACY PROFILE REDIRECT
-    # ------------------------------------------------------------------
-    # Old session may still contain "13_Profile".
-    # Never load erp_pages/13_Profile.py anymore.
-    # ------------------------------------------------------------------
-
-    if page_id == "13_Profile":
-
-        st.session_state.active_page = "__PROFILE__"
-
-        from sidebar import show_profile_page
-
-        show_profile_page()
-        return
-
-    # ------------------------------------------------------------------
-    # DIRECT PROFILE
-    # ------------------------------------------------------------------
-
-    if page_id == "__PROFILE__":
-
-        from sidebar import show_profile_page
-
-        show_profile_page()
-        return
-
-    # ------------------------------------------------------------------
-    # NORMAL ERP PAGE
-    # ------------------------------------------------------------------
-
     load_page(page_id)
 
 # ==============================================================================
