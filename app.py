@@ -128,11 +128,11 @@ def load_page(page_id):
 # ==============================================================================
 # ROUTER
 # ==============================================================================
+
 def page_router():
+
     if not st.session_state.get("user"):
-        st.warning(
-            "Please login first."
-        )
+        st.warning("Please login first.")
         return
 
     page_id = st.session_state.get(
@@ -140,8 +140,38 @@ def page_router():
         "1_POS"
     )
 
-    load_page(page_id)
+    # ------------------------------------------------------------------
+    # LEGACY PROFILE REDIRECT
+    # ------------------------------------------------------------------
+    # Old session may still contain "13_Profile".
+    # Never load erp_pages/13_Profile.py anymore.
+    # ------------------------------------------------------------------
 
+    if page_id == "13_Profile":
+
+        st.session_state.active_page = "__PROFILE__"
+
+        from sidebar import show_profile_page
+
+        show_profile_page()
+        return
+
+    # ------------------------------------------------------------------
+    # DIRECT PROFILE
+    # ------------------------------------------------------------------
+
+    if page_id == "__PROFILE__":
+
+        from sidebar import show_profile_page
+
+        show_profile_page()
+        return
+
+    # ------------------------------------------------------------------
+    # NORMAL ERP PAGE
+    # ------------------------------------------------------------------
+
+    load_page(page_id)
 
 # ==============================================================================
 # MAIN
