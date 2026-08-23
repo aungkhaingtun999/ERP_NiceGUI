@@ -393,7 +393,7 @@ else:
         "User list cannot be loaded."
     )
 
-            return
+    return
 
     # ==========================================================================
     # LOAD PENDING CREATE REQUESTS
