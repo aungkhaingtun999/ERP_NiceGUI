@@ -403,32 +403,6 @@ except Exception as e:
             )
         )
 
-        # ==========================================================================
-    # LOAD USERS
-    # STRICT MULTI-TENANT FILTER
-    # ==========================================================================
-
-    try:
-
-        query = (
-            supabase
-            .table("users")
-            .select(
-                """
-                id,
-                username,
-                full_name,
-                role_id,
-                is_active,
-                shop_id,
-                branch_id,
-                tenant_role,
-                created_at,
-                last_login
-                """
-            )
-        )
-
         # ----------------------------------------------------------------------
         # STRICT TENANT FILTER
         #
