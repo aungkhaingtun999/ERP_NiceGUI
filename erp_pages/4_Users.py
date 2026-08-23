@@ -447,45 +447,6 @@ except Exception as e:
         )
 
         return
-
-    # ==========================================================================
-    # LOAD PENDING CREATE REQUESTS
-    # ==========================================================================
-    # ==========================================================================
-    # LOAD PENDING CREATE REQUESTS
-    # ==========================================================================
-
-    pending_create_requests = []
-
-    if is_checker_user or is_owner:
-
-        try:
-
-            requests_resp = (
-                supabase
-                .table("user_create_requests")
-                .select(
-                    "*, requested_by(id, username, full_name)"
-                )
-                .eq("status", "pending")
-                .order(
-                    "requested_at",
-                    desc=True,
-                )
-                .execute()
-            )
-
-            raw_requests = requests_resp.data or []
-
-            pending_create_requests = [
-                normalize_create_request(req)
-                for req in raw_requests
-            ]
-
-        except Exception:
-
-            pending_create_requests = []
-
     # ==========================================================================
     # LOAD PENDING EDIT REQUESTS
     # ==========================================================================
