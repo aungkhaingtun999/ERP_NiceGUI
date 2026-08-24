@@ -1,14 +1,16 @@
 # ==============================================================================
 # erp_pages/2_Receipt.py
 # ERP ENTERPRISE RECEIPT VIEWER v5.1
+# NICE GUI VERSION
 # ERP CORE CONNECTED
 # PDF + THERMAL PRINT READY
 # Myanmar Time Supported
 # Sale ID Display Added
 # ==============================================================================
 
-import streamlit as st
+from typing import Dict, Any, Optional, List
 import pandas as pd
+from nicegui import ui, app
 
 # ==============================================================================
 # ERP DATABASE BRIDGE
@@ -41,259 +43,466 @@ from utils.thermal_receipt import (
     print_thermal
 )
 
+from auth import is_authenticated
+
+
 # ==============================================================================
-# PAGE
+# SESSION STATE
 # ==============================================================================
 
-def run():
+class ReceiptState:
+    """Session state for receipt viewer."""
+    
+    def __init__(self):
+        self.selected_receipt: Optional[str] = None
+        self.receipt_data: Optional[Dict[str, Any]] = None
+        self.pdf_result: Optional[tuple] = None
 
-    # --------------------------------------------------------------------------
-    # AUTH
-    # --------------------------------------------------------------------------
 
-    if not st.session_state.get("user"):
-        st.warning("⛔ Please login first")
-        st.stop()
+def get_state() -> ReceiptState:
+    """Get or create receipt state."""
+    client_id = app.context.client.id if app.context.client else 'default'
+    
+    if not hasattr(app.storage, 'receipt_state'):
+        app.storage.receipt_state = {}
+    
+    if client_id not in app.storage.receipt_state:
+        app.storage.receipt_state[client_id] = ReceiptState()
+    
+    return app.storage.receipt_state[client_id]
 
-    # --------------------------------------------------------------------------
-    # PAGE TITLE
-    # --------------------------------------------------------------------------
 
-    st.title("🧾 ERP Enterprise Receipt Viewer v5.1")
+# ==============================================================================
+# UI COMPONENTS
+# ==============================================================================
 
-    # --------------------------------------------------------------------------
-    # SESSION
-    # --------------------------------------------------------------------------
+def build_receipt_summary(
+    container: Any,
+    receipt: Dict[str, Any],
+    sale_id: Any
+):
+    """Build receipt summary cards."""
+    container.clear()
+    
+    with container:
+        with ui.row().classes('w-full gap-4 flex-wrap'):
+            # Sale ID
+            with ui.card().classes('p-4 flex-1 min-w-[180px]'):
+                ui.label('Sale ID').classes('text-sm text-gray-600')
+                ui.label(str(sale_id) if sale_id is not None else '-').classes(
+                    'text-xl font-bold font-mono'
+                )
+            
+            # Invoice No
+            with ui.card().classes('p-4 flex-1 min-w-[180px]'):
+                ui.label('Invoice No').classes('text-sm text-gray-600')
+                ui.label(receipt.get("invoice_no", "-")).classes('text-xl font-bold')
+            
+            # Total
+            with ui.card().classes('p-4 flex-1 min-w-[180px]'):
+                ui.label('Total').classes('text-sm text-gray-600')
+                ui.label(f"{float(receipt.get('total', 0)):,.0f} MMK").classes(
+                    'text-xl font-bold text-green-700'
+                )
+            
+            # Status
+            with ui.card().classes('p-4 flex-1 min-w-[180px]'):
+                ui.label('Status').classes('text-sm text-gray-600')
+                status = receipt.get("status", "-")
+                ui.label(status).classes('text-xl font-bold')
+        
+        # Date
+        raw_time = receipt.get("created_at") or receipt.get("date")
+        
+        if raw_time:
+            ui.label(f"📅 Date: {format_db_datetime(raw_time)}").classes('text-sm text-gray-500 mt-2')
+        else:
+            ui.label("📅 Date: -").classes('text-sm text-gray-500 mt-2')
 
-    if "selected_receipt" not in st.session_state:
-        st.session_state.selected_receipt = None
 
-    if "receipt_data" not in st.session_state:
-        st.session_state.receipt_data = None
-
-    if "pdf_result" not in st.session_state:
-        st.session_state.pdf_result = None
-
-    # --------------------------------------------------------------------------
-    # SEARCH RECEIPT
-    # --------------------------------------------------------------------------
-
-    keyword = st.text_input("🔍 Search Invoice No")
-
-    if keyword:
-        results = search_receipts(keyword)
-
-        if not results:
-            st.error("❌ No receipt found")
-            st.stop()
-
-        options = {
-            f"{r.get('invoice_no')} | {float(r.get('total', 0)):,.0f} MMK": r
-            for r in results
-        }
-
-        selected = st.selectbox("Select Receipt", list(options.keys()))
-        selected_receipt_meta = options[selected]
-
-        if st.button("📥 Load Receipt"):
-            receipt = get_receipt(selected_receipt_meta.get("invoice_no"))
-
-            st.session_state.receipt_data = receipt
-            st.session_state.selected_receipt = selected_receipt_meta.get("invoice_no")
-            st.session_state.pdf_result = None
-
-            st.rerun()
-
-    # --------------------------------------------------------------------------
-    # LOAD RECEIPT
-    # --------------------------------------------------------------------------
-
-    receipt = st.session_state.receipt_data
-
-    if not receipt:
-        st.info("Search and load receipt")
-        st.stop()
-
-    # --------------------------------------------------------------------------
-    # SALE ID
-    # --------------------------------------------------------------------------
-    # Primary source: receipt["id"]
-    # This is the database Sale ID associated with the receipt.
-    # --------------------------------------------------------------------------
-
-    sale_id = receipt.get("id")
-
-    # --------------------------------------------------------------------------
-    # LOAD SALE ITEMS
-    # --------------------------------------------------------------------------
-
-    items = []
-    if sale_id:
-        items = get_sale_items(str(sale_id))
-
-    # --------------------------------------------------------------------------
-    # RECEIPT SUMMARY
-    # --------------------------------------------------------------------------
-
-    st.divider()
-    st.subheader("🧾 Receipt Summary")
-
-    # --------------------------------------------------------------------------
-    # SUMMARY CARDS
-    # --------------------------------------------------------------------------
-    # Sale ID is now displayed together with Invoice No, Total, Status
-    # --------------------------------------------------------------------------
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-        st.metric("Sale ID", str(sale_id) if sale_id is not None else "-")
-
-    with c2:
-        st.metric("Invoice No", receipt.get("invoice_no", "-"))
-
-    with c3:
-        st.metric("Total", f"{float(receipt.get('total', 0)):,.0f} MMK")
-
-    with c4:
-        st.metric("Status", receipt.get("status", "-"))
-
-    # --------------------------------------------------------------------------
-    # DATE
-    # --------------------------------------------------------------------------
-
-    raw_time = receipt.get("created_at") or receipt.get("date")
-
-    if raw_time:
-        st.write("📅 Date:", format_db_datetime(raw_time))
-    else:
-        st.write("📅 Date:", "-")
-
-    # --------------------------------------------------------------------------
-    # ITEMS TABLE
-    # --------------------------------------------------------------------------
-
-    st.divider()
-    st.subheader("🛒 Sale Items")
-
+def build_items_table(container: Any, items: List[Dict[str, Any]]):
+    """Build sale items table."""
+    container.clear()
+    
     rows = []
-
+    
     for item in items:
         qty = float(item.get("quantity", 0))
         price = float(item.get("unit_price", 0))
         total = float(item.get("total", qty * price))
-
+        
         product_name = item.get("name", item.get("product_id", "-"))
-
+        
         rows.append({
             "Product": product_name,
-            "Quantity": qty,
+            "Quantity": f"{qty:,.0f}",
             "Unit Price": f"{price:,.0f}",
             "Amount": f"{total:,.0f}"
         })
+    
+    if not rows:
+        with container:
+            with ui.card().classes('w-full p-4 bg-orange-50'):
+                ui.label('No items found').classes('text-orange-700')
+        return
+    
+    with container:
+        columns = [
+            {'name': col, 'label': col, 'field': col, 'sortable': True}
+            for col in rows[0].keys()
+        ]
+        
+        ui.table(
+            columns=columns,
+            rows=rows,
+            row_key='Product',
+            pagination=10,
+            title='Sale Items',
+        ).classes('w-full')
 
-    if rows:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    else:
-        st.warning("No items found")
 
-    # --------------------------------------------------------------------------
-    # PAYMENT DETAILS
-    # --------------------------------------------------------------------------
+def build_payment_details(container: Any, receipt: Dict[str, Any]):
+    """Build payment details section."""
+    container.clear()
+    
+    with container:
+        with ui.row().classes('w-full gap-4 flex-wrap'):
+            # Subtotal
+            with ui.card().classes('p-4 flex-1 min-w-[150px] bg-gray-50'):
+                ui.label('Subtotal').classes('text-sm text-gray-600')
+                ui.label(f"{float(receipt.get('subtotal', 0)):,.0f} MMK").classes('font-semibold')
+            
+            # Tax
+            with ui.card().classes('p-4 flex-1 min-w-[150px] bg-gray-50'):
+                ui.label('Tax').classes('text-sm text-gray-600')
+                ui.label(f"{float(receipt.get('tax', 0)):,.0f} MMK").classes('font-semibold')
+            
+            # Tax Rate
+            with ui.card().classes('p-4 flex-1 min-w-[150px] bg-gray-50'):
+                ui.label('Tax Rate').classes('text-sm text-gray-600')
+                ui.label(f"{float(receipt.get('tax_rate', 0)):,.2f}%").classes('font-semibold')
+            
+            # Grand Total
+            with ui.card().classes('p-4 flex-1 min-w-[150px] bg-green-50'):
+                ui.label('Grand Total').classes('text-sm text-gray-600')
+                ui.label(f"{float(receipt.get('total', 0)):,.0f} MMK").classes(
+                    'font-semibold text-green-700'
+                )
 
-    st.divider()
-    st.subheader("💰 Payment Details")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.write("Subtotal", f"{float(receipt.get('subtotal', 0)):,.0f} MMK")
-
-    with col2:
-        st.write("Tax", f"{float(receipt.get('tax', 0)):,.0f} MMK")
-
-    with col3:
-        st.write("Tax Rate", f"{float(receipt.get('tax_rate', 0)):,.2f}%")
-
-    with col4:
-        st.write("Grand Total", f"{float(receipt.get('total', 0)):,.0f} MMK")
-
-    # --------------------------------------------------------------------------
-    # PDF GENERATE
-    # --------------------------------------------------------------------------
-
-    st.divider()
-
-    if st.button("📄 Generate PDF"):
-        try:
-            data = build_receipt_data(receipt, items)
-            result = generate_pdf(data)
-
-            if result:
-                st.session_state.pdf_result = result
-                st.success("✅ PDF generated successfully")
-            else:
-                st.session_state.pdf_result = None
-                st.error("❌ PDF generation failed")
-        except Exception as e:
-            st.session_state.pdf_result = None
-            st.error(f"❌ PDF generation error: {e}")
-
-    # --------------------------------------------------------------------------
-    # PDF DOWNLOAD
-    # --------------------------------------------------------------------------
-
-    if st.session_state.pdf_result:
-        pdf_bytes, filename = st.session_state.pdf_result
-        st.download_button(
-            "⬇ Download Receipt",
-            pdf_bytes,
-            file_name=f"{filename}.pdf",
-            mime="application/pdf"
-        )
-
-    # --------------------------------------------------------------------------
-    # THERMAL PRINT
-    # --------------------------------------------------------------------------
-
-    st.divider()
-
-    if st.button("🖨 Print Receipt"):
-        try:
-            data = build_receipt_data(receipt, items)
-            result = print_thermal(data)
-
-            if result:
-                st.success("✅ Receipt printed successfully")
-            else:
-                st.error("❌ Print failed")
-        except Exception as e:
-            st.error(f"❌ Print error: {e}")
-
-    # --------------------------------------------------------------------------
-    # REPRINT / DEBUG DATA CHECK
-    # --------------------------------------------------------------------------
-
-    with st.expander("🔎 Debug Receipt Data"):
-        data = build_receipt_data(receipt, items)
-        st.json(data)
-
-    # --------------------------------------------------------------------------
-    # CLEAR
-    # --------------------------------------------------------------------------
-
-    st.divider()
-
-    if st.button("🆕 Clear Receipt"):
-        st.session_state.receipt_data = None
-        st.session_state.selected_receipt = None
-        st.session_state.pdf_result = None
-        st.rerun()
 
 # ==============================================================================
-# MAIN
+# MAIN PAGE
+# ==============================================================================
+
+def run(container: Optional[Any] = None):
+    """Main page entry point."""
+    
+    # Auth check
+    if not is_authenticated():
+        with ui.card().classes('w-full p-4 bg-orange-50'):
+            ui.label('⛔ Please login first').classes('text-orange-700')
+        return
+    
+    state = get_state()
+    target = container or ui.column()
+    
+    with target:
+        # Header
+        ui.label('🧾 ERP Enterprise Receipt Viewer v5.1').classes('text-3xl font-bold mb-4')
+        
+        # ======================================================================
+        # SEARCH SECTION
+        # ======================================================================
+        
+        search_container = ui.column().classes('w-full mb-4')
+        
+        with search_container:
+            search_input = ui.input(
+                '🔍 Search Invoice No',
+                placeholder='Enter invoice number...'
+            ).classes('w-full mb-2')
+            
+            results_container = ui.column().classes('w-full')
+            
+            def handle_search():
+                results_container.clear()
+                
+                keyword = search_input.value or ''
+                
+                if not keyword:
+                    return
+                
+                results = search_receipts(keyword)
+                
+                if not results:
+                    with results_container:
+                        ui.notify('❌ No receipt found', type='error', position='top')
+                    return
+                
+                options = {
+                    f"{r.get('invoice_no')} | {float(r.get('total', 0)):,.0f} MMK": r
+                    for r in results
+                }
+                
+                with results_container:
+                    selected = ui.select(
+                        list(options.keys()),
+                        label='Select Receipt',
+                    ).classes('w-full mb-2')
+                    
+                    load_btn = ui.button(
+                        '📥 Load Receipt',
+                        on_click=lambda: handle_load_receipt(options[selected.value])
+                    ).classes('w-full bg-primary text-white')
+            
+            search_input.on_value_change(lambda e: handle_search())
+        
+        # ======================================================================
+        # RECEIPT DISPLAY CONTAINERS
+        # ======================================================================
+        
+        summary_container = ui.column().classes('w-full mb-4')
+        items_container = ui.column().classes('w-full mb-4')
+        payment_container = ui.column().classes('w-full mb-4')
+        action_container = ui.column().classes('w-full mb-4')
+        
+        def handle_load_receipt(receipt_meta: Dict[str, Any]):
+            """Load receipt data."""
+            receipt = get_receipt(receipt_meta.get("invoice_no"))
+            
+            state.receipt_data = receipt
+            state.selected_receipt = receipt_meta.get("invoice_no")
+            state.pdf_result = None
+            
+            display_receipt()
+        
+        def display_receipt():
+            """Display loaded receipt."""
+            receipt = state.receipt_data
+            
+            if not receipt:
+                with summary_container:
+                    ui.label('Search and load receipt').classes('text-gray-500')
+                return
+            
+            # Sale ID
+            sale_id = receipt.get("id")
+            
+            # Load items
+            items = []
+            if sale_id:
+                items = get_sale_items(str(sale_id))
+            
+            # Build sections
+            build_receipt_summary(summary_container, receipt, sale_id)
+            
+            ui.separator().classes('my-2')
+            build_items_table(items_container, items)
+            
+            ui.separator().classes('my-2')
+            build_payment_details(payment_container, receipt)
+            
+            # Action buttons
+            action_container.clear()
+            with action_container:
+                with ui.row().classes('w-full gap-2 flex-wrap'):
+                    # PDF Generate
+                    pdf_btn = ui.button(
+                        '📄 Generate PDF',
+                        on_click=lambda: handle_generate_pdf(receipt, items, pdf_btn)
+                    ).classes('flex-1 bg-blue-500 text-white')
+                    
+                    # Thermal Print
+                    print_btn = ui.button(
+                        '🖨 Print Receipt',
+                        on_click=lambda: handle_print(receipt, items, print_btn)
+                    ).classes('flex-1 bg-green-500 text-white')
+                    
+                    # Clear
+                    clear_btn = ui.button(
+                        '🆕 Clear Receipt',
+                        on_click=handle_clear
+                    ).classes('flex-1 bg-gray-500 text-white')
+                
+                # PDF Download
+                if state.pdf_result:
+                    pdf_bytes, filename = state.pdf_result
+                    
+                    ui.button(
+                        '⬇ Download Receipt',
+                        on_click=lambda: ui.download(pdf_bytes, f"{filename}.pdf")
+                    ).props('flat').classes('w-full bg-green-50 mt-2')
+                
+                # Debug expander
+                with ui.expansion('🔎 Debug Receipt Data', icon='bug_report').classes('w-full mt-2'):
+                    data = build_receipt_data(receipt, items)
+                    ui.json_editor({'content': {'json': data}}).classes('w-full')
+        
+        def handle_generate_pdf(receipt: Dict, items: List, pdf_btn: Any):
+            """Handle PDF generation."""
+            try:
+                pdf_btn.disable()
+                pdf_btn.text = '⏳ Generating...'
+                
+                data = build_receipt_data(receipt, items)
+                result = generate_pdf(data)
+                
+                if result:
+                    state.pdf_result = result
+                    ui.notify('✅ PDF generated successfully', type='positive', position='top')
+                    display_receipt()
+                else:
+                    state.pdf_result = None
+                    ui.notify('❌ PDF generation failed', type='error', position='top')
+            
+            except Exception as e:
+                state.pdf_result = None
+                ui.notify(f'❌ PDF generation error: {e}', type='error', position='top')
+            
+            finally:
+                pdf_btn.enable()
+                pdf_btn.text = '📄 Generate PDF'
+        
+        def handle_print(receipt: Dict, items: List, print_btn: Any):
+            """Handle thermal print."""
+            try:
+                print_btn.disable()
+                print_btn.text = '⏳ Printing...'
+                
+                data = build_receipt_data(receipt, items)
+                result = print_thermal(data)
+                
+                if result:
+                    ui.notify('✅ Receipt printed successfully', type='positive', position='top')
+                else:
+                    ui.notify('❌ Print failed', type='error', position='top')
+            
+            except Exception as e:
+                ui.notify(f'❌ Print error: {e}', type='error', position='top')
+            
+            finally:
+                print_btn.enable()
+                print_btn.text = '🖨 Print Receipt'
+        
+        def handle_clear():
+            """Clear receipt data."""
+            state.receipt_data = None
+            state.selected_receipt = None
+            state.pdf_result = None
+            
+            summary_container.clear()
+            items_container.clear()
+            payment_container.clear()
+            action_container.clear()
+            
+            with summary_container:
+                ui.label('Search and load receipt').classes('text-gray-500')
+            
+            ui.notify('Cleared', type='info', position='top')
+        
+        # Initial state
+        with summary_container:
+            ui.label('Search and load receipt').classes('text-gray-500')
+
+
+# ==============================================================================
+# ADVANCED VIEW WITH TABS
+# ==============================================================================
+
+def run_advanced(container: Optional[Any] = None):
+    """Advanced view with tabs."""
+    
+    if not is_authenticated():
+        ui.label('⛔ Please login first').classes('text-orange-700')
+        return
+    
+    state = get_state()
+    target = container or ui.column()
+    
+    with target:
+        ui.label('🧾 Receipt Viewer').classes('text-3xl font-bold mb-4')
+        
+        with ui.tabs().classes('w-full mb-4') as tabs:
+            tab_search = ui.tab('🔍 Search', icon='search')
+            tab_view = ui.tab('📄 View Receipt', icon='receipt')
+            tab_print = ui.tab('🖨 Print', icon='print')
+        
+        with ui.tab_panels(tabs, value=tab_search).classes('w-full'):
+            with ui.tab_panel(tab_search):
+                # Search functionality
+                search_input = ui.input('🔍 Search Invoice No').classes('w-full mb-2')
+                results_container = ui.column().classes('w-full')
+                
+                def handle_search():
+                    results_container.clear()
+                    keyword = search_input.value or ''
+                    
+                    if not keyword:
+                        return
+                    
+                    results = search_receipts(keyword)
+                    
+                    if not results:
+                        ui.notify('❌ No receipt found', type='error', position='top')
+                        return
+                    
+                    options = {
+                        f"{r.get('invoice_no')} | {float(r.get('total', 0)):,.0f} MMK": r
+                        for r in results
+                    }
+                    
+                    with results_container:
+                        selected = ui.select(list(options.keys()), label='Select Receipt').classes('w-full mb-2')
+                        ui.button(
+                            '📥 Load Receipt',
+                            on_click=lambda: handle_load(options[selected.value])
+                        ).classes('w-full bg-primary text-white')
+                
+                search_input.on_value_change(lambda e: handle_search())
+            
+            with ui.tab_panel(tab_view):
+                if state.receipt_data:
+                    receipt = state.receipt_data
+                    sale_id = receipt.get("id")
+                    items = get_sale_items(str(sale_id)) if sale_id else []
+                    
+                    build_receipt_summary(ui.column(), receipt, sale_id)
+                    ui.separator()
+                    build_items_table(ui.column(), items)
+                    ui.separator()
+                    build_payment_details(ui.column(), receipt)
+                else:
+                    ui.label('No receipt loaded. Search first.').classes('text-gray-500')
+            
+            with ui.tab_panel(tab_print):
+                if state.receipt_data:
+                    receipt = state.receipt_data
+                    sale_id = receipt.get("id")
+                    items = get_sale_items(str(sale_id)) if sale_id else []
+                    
+                    ui.button(
+                        '🖨 Print Receipt',
+                        on_click=lambda: handle_print(receipt, items, None)
+                    ).classes('w-full bg-green-500 text-white mb-2')
+                    
+                    ui.button(
+                        '📄 Generate PDF',
+                        on_click=lambda: handle_generate_pdf(receipt, items, None)
+                    ).classes('w-full bg-blue-500 text-white')
+                else:
+                    ui.label('No receipt loaded. Search first.').classes('text-gray-500')
+        
+        def handle_load(receipt_meta):
+            receipt = get_receipt(receipt_meta.get("invoice_no"))
+            state.receipt_data = receipt
+            state.selected_receipt = receipt_meta.get("invoice_no")
+            state.pdf_result = None
+            ui.notify('Receipt loaded', type='positive', position='top')
+
+
+# ==============================================================================
+# ENTRY POINT
 # ==============================================================================
 
 if __name__ == "__main__":
     run()
-
