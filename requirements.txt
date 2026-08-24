@@ -1,21 +1,101 @@
-streamlit==1.49.1
-supabase
-postgrest
-pandas
-streamlit-searchbox
-python-escpos
-reportlab
-openpyxl
-python-dotenv
-bcrypt
-qrcode
-plotly
-opencv-python-headless
-Pillow
-streamlit-webrtc
-av
-numpy
-streamlit-javascript
-streamlit-js-eval
-pyzbar
+# ==============================================================================
+# requirements.txt
+# ERP ENTERPRISE - NICE GUI VERSION
+# ==============================================================================
 
+# Core Framework
+nicegui>=2.0.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+
+# Database
+supabase>=2.5.0
+postgrest>=0.13.0
+psycopg2-binary>=2.9.9  # PostgreSQL adapter (if needed)
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Excel/CSV Handling
+openpyxl>=3.1.2
+xlrd>=2.0.1  # For reading older Excel files
+
+# PDF/Receipt Generation
+reportlab>=4.1.0
+python-escpos>=3.1
+
+# Authentication & Security
+bcrypt>=4.1.0
+python-dotenv>=1.0.0
+python-jose[cryptography]>=3.3.0  # JWT tokens
+passlib[bcrypt]>=1.7.4  # Password hashing
+
+# QR Code Generation
+qrcode>=7.4.2
+python-qrcode>=7.4.2  # Alternative
+Pillow>=10.2.0
+
+# Image Processing
+opencv-python-headless>=4.9.0
+pyzbar>=0.1.9  # Barcode/QR detection
+zbar-py>=1.0.4  # Alternative barcode reader
+
+# Data Visualization
+plotly>=5.18.0
+matplotlib>=3.8.0  # Additional plotting support
+
+# HTTP/API Client
+httpx>=0.27.0
+requests>=2.31.0
+
+# Async Support
+aiohttp>=3.9.0
+aiosqlite>=0.19.0
+asyncio-mqtt>=0.17.0
+
+# WebSocket Support
+websockets>=12.0
+
+# Date/Time Handling
+python-dateutil>=2.8.2
+pytz>=2024.1
+
+# File/Media Handling
+python-multipart>=0.0.9
+aiofiles>=23.2.0
+
+# Logging & Monitoring
+loguru>=0.7.2
+sentry-sdk>=1.40.0  # Error tracking
+
+# Development/Debugging
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+black>=24.0.0
+flake8>=7.0.0
+mypy>=1.8.0
+
+# Caching & Performance
+cachetools>=5.3.0
+redis>=5.0.0  # For distributed caching (optional)
+
+# Template Engine
+jinja2>=3.1.0
+
+# Validation
+pydantic>=2.5.0
+email-validator>=2.1.0
+
+# Internationalization
+babel>=2.14.0
+
+# Serialization
+orjson>=3.9.0
+ujson>=5.9.0
+
+# Miscellaneous
+click>=8.1.0  # CLI support
+typer>=0.9.0  # CLI framework
+rich>=13.7.0  # Terminal formatting
+tqdm>=4.66.0  # Progress bars
