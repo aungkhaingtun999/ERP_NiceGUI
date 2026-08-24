@@ -1,80 +1,65 @@
 # ==============================================================================
 # erp_pages/7_Purchase.py
 # ERP ENTERPRISE PURCHASE RECEIVE v4.0
-# PART 1/3
+# NICE GUI VERSION
 # ==============================================================================
 
-import os
-import sys
-
+from typing import Dict, Any, Optional, List
 from decimal import Decimal
+from nicegui import ui, app
 
-import streamlit as st
-
-
-# ==============================================================================
-# ROOT PATH
-# ==============================================================================
-
-sys.path.append(
-    os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            ".."
-        )
-    )
-)
-
-
-# ==============================================================================
-# IMPORTS
-# ==============================================================================
-
-from auth import is_authenticated
-
-from database import (
-    create_audit_log
-)
-
+from auth import is_authenticated, get_current_user
+from database import create_audit_log
 from erp_core import (
     get_products,
     get_suppliers,
     get_warehouses,
     purchase_receive_rpc
 )
-
 from utils.ui import show_table
 
 
-
 # ==============================================================================
-# PAGE CONFIG
+# SESSION STATE
 # ==============================================================================
 
-st.set_page_config(
-    page_title="Enterprise Purchase Receive",
-    page_icon="📦",
-    layout="wide"
-)
+class PurchaseState:
+    """Session state for purchase receive."""
+    
+    def __init__(self):
+        self.cart: List[Dict[str, Any]] = []
+        self.supplier_id: Optional[str] = None
+        self.warehouse_id: Optional[str] = None
+        self.message: Optional[str] = None
 
+
+def get_state() -> PurchaseState:
+    """Get or create purchase state."""
+    client_id = app.context.client.id if app.context.client else 'default'
+    
+    if not hasattr(app.storage, 'purchase_state'):
+        app.storage.purchase_state = {}
+    
+    if client_id not in app.storage.purchase_state:
+        app.storage.purchase_state[client_id] = PurchaseState()
+    
+    return app.storage.purchase_state[client_id]
 
 
 # ==============================================================================
 # HELPERS
 # ==============================================================================
 
-def money(value):
-
+def money(value: Any) -> str:
+    """Format as MMK currency."""
     try:
         return f"{Decimal(str(value)):,.2f} MMK"
-
     except Exception:
         return "0.00 MMK"
 
 
-
-def supplier_name(data):
-
+def supplier_name(data: Dict[str, Any]) -> str:
+    """Get supplier display name."""
     return (
         data.get("company_name")
         or data.get("name")
@@ -83,9 +68,8 @@ def supplier_name(data):
     )
 
 
-
-def warehouse_name(data):
-
+def warehouse_name(data: Dict[str, Any]) -> str:
+    """Get warehouse display name."""
     return (
         data.get("name")
         or data.get("warehouse_name")
@@ -94,9 +78,8 @@ def warehouse_name(data):
     )
 
 
-
-def product_name(data):
-
+def product_name(data: Dict[str, Any]) -> str:
+    """Get product display name."""
     return (
         data.get("name")
         or data.get("product_name")
@@ -104,870 +87,397 @@ def product_name(data):
     )
 
 
-
 # ==============================================================================
-# SESSION INITIALIZE
-# ==============================================================================
-
-def init_session():
-
-    defaults = {
-
-        "purchase_cart": [],
-
-        "purchase_supplier_id": None,
-
-        "purchase_warehouse_id": None,
-
-        "purchase_message": None
-
-    }
-
-
-    for key, value in defaults.items():
-
-        if key not in st.session_state:
-
-            st.session_state[key] = value
-
-
-
-
-# ==============================================================================
-# MAIN
+# MAIN PAGE
 # ==============================================================================
 
-def run():
-
-    # --------------------------------------------------------------------------
-    # AUTH
-    # --------------------------------------------------------------------------
-
+def run(container: Optional[Any] = None):
+    """Main purchase receive page."""
+    
+    # Auth check
     if not is_authenticated():
-
-        st.error(
-            "ကျေးဇူးပြု၍ Login အရင်ဝင်ပါ။"
-        )
-
-        st.stop()
-
-
-
-    init_session()
-
-    if st.session_state.get("purchase_message"):
-
-        st.success(
-            st.session_state.purchase_message
-        )
-
-        st.session_state.purchase_message = None
-
-    st.title(
-        "📦 Enterprise Purchase Receive"
-    )
-
-
-
-    # --------------------------------------------------------------------------
-    # LOAD DATA
-    # --------------------------------------------------------------------------
-
-    try:
-
-        suppliers = get_suppliers()
-
-        warehouses = get_warehouses()
-
-        products = get_products()
-
-
-    except Exception as e:
-
-        st.error(
-            f"Data Loading Error : {e}"
-        )
-
-        st.stop()
-
-
-
-    if not suppliers:
-
-        st.warning(
-            "Supplier မရှိပါ"
-        )
-
+        with ui.card().classes('w-full p-4 bg-orange-50'):
+            ui.label('ကျေးဇူးပြု၍ Login အရင်ဝင်ပါ။').classes('text-orange-700')
         return
-
-
-
-    if not warehouses:
-
-        st.warning(
-            "Warehouse မရှိပါ"
-        )
-
-        return
-
-
-
-    if not products:
-
-        st.warning(
-            "Product မရှိပါ"
-        )
-
-        return
-
-
-
-    cart_exists = (
-        len(
-            st.session_state.purchase_cart
-        ) > 0
-    )
-
-
-
-    # ==========================================================================
-    # PURCHASE INFORMATION
-    # ==========================================================================
-
-    st.subheader(
-        "🏭 Purchase Information"
-    )
-
-
-    supplier_ids = [
-        x["id"]
-        for x in suppliers
-    ]
-
-
-    warehouse_ids = [
-        x["id"]
-        for x in warehouses
-    ]
-
-
-
-    supplier_index = 0
-
-    if (
-        st.session_state.purchase_supplier_id
-        in supplier_ids
-    ):
-
-        supplier_index = supplier_ids.index(
-            st.session_state.purchase_supplier_id
-        )
-
-
-
-    selected_supplier = st.selectbox(
-
-        "Supplier",
-
-        suppliers,
-
-        index=supplier_index,
-
-        format_func=supplier_name,
-
-        disabled=cart_exists
-
-    )
-
-
-
-    warehouse_index = 0
-
-
-    if (
-        st.session_state.purchase_warehouse_id
-        in warehouse_ids
-    ):
-
-        warehouse_index = warehouse_ids.index(
-            st.session_state.purchase_warehouse_id
-        )
-
-
-
-    selected_warehouse = st.selectbox(
-
-        "Warehouse",
-
-        warehouses,
-
-        index=warehouse_index,
-
-        format_func=warehouse_name,
-
-        disabled=cart_exists
-
-    )
-
-
-
-    if not cart_exists:
-
-        st.session_state.purchase_supplier_id = (
-            selected_supplier["id"]
-        )
-
-
-        st.session_state.purchase_warehouse_id = (
-            selected_warehouse["id"]
-        )
-
-
-
-    st.divider()
-
-
-
-    # ==========================================================================
-    # ADD PRODUCT
-    # ==========================================================================
-
-    st.subheader(
-        "➕ Add Product"
-    )
-
-
-
-    with st.container(border=True):
-
-
-        product = st.selectbox(
-
-            "Product",
-
-            products,
-
-            format_func=lambda x:
-
-                f"{product_name(x)} ({x.get('sku','')})"
-
-        )
-
-
-
-        col1, col2 = st.columns(2)
-
-
-
-        with col1:
-
-            quantity_float = st.number_input(
-
-                "Quantity",
-
-                min_value=0.01,
-
-                value=1.00,
-
-                step=1.00
-
-            )
-
-
-
-        with col2:
-
-            cost_float = st.number_input(
-
-                "Cost Price",
-
-                min_value=0.0,
-
-                value=0.0,
-
-                step=0.01
-
-            )
-
-
-
-        if st.button(
-
-            "➕ Add To Cart",
-
-            use_container_width=True
-
-        ):
-
-
-            qty = Decimal(
-                str(quantity_float)
-            )
-
-
-            cost = Decimal(
-                str(cost_float)
-            )
-
-
-
-            found = False
-
-
-            # --------------------------------------------------------------
-            # Duplicate Product Merge
-            # --------------------------------------------------------------
-
-            for item in st.session_state.purchase_cart:
-
-
-                if item["product_id"] == product["id"]:
-
-
-                    item["qty"] += qty
-
-                    item["total"] = (
-                        item["qty"]
-                        *
-                        item["cost"]
-                    )
-
-                    found = True
-
-                    break
-
-
-
-            if not found:
-
-
-                st.session_state.purchase_cart.append(
-
-                    {
-
-                        "product_id":
-                            product["id"],
-
-
-                        "product_name":
-                            product_name(product),
-
-
-                        "sku":
-                            product.get("sku",""),
-
-
-                        "qty":
-                            qty,
-
-
-                        "cost":
-                            cost,
-
-
-                        "total":
-                            qty * cost
-
-                    }
-
-                )
-
-
-
-            st.success(
-                "Product added to purchase cart"
-            )
-
-
-            st.rerun()
-
-
-# ==============================================================================
-# PART 2/3
-# PURCHASE CART + TOTAL + PREVIEW
-# ==============================================================================
-
-
-    # ==========================================================================
-    # PURCHASE CART
-    # ==========================================================================
-
-    st.subheader(
-        "🛒 Purchase Cart"
-    )
-
-
-    cart = st.session_state.purchase_cart
-
-
-
-    if cart:
-
-
-        cart_display = []
-
-
-        total_amount = Decimal("0.00")
-
-
-
-        for idx, item in enumerate(cart):
-
-
-            total_amount += item["total"]
-
-
-
-            cart_display.append(
-
-                {
-
-                    "No":
-                        idx + 1,
-
-
-                    "Product":
-                        item["product_name"],
-
-
-                    "SKU":
-                        item.get("sku",""),
-
-
-                    "Quantity":
-                        item["qty"],
-
-
-                    "Cost":
-                        money(item["cost"]),
-
-
-                    "Total":
-                        money(item["total"])
-
-                }
-
-            )
-
-
-
-        show_table(
-            cart_display
-        )
-
-
-
-        # ----------------------------------------------------------------------
-        # TOTAL PURCHASE AMOUNT
-        # ----------------------------------------------------------------------
-
-        st.divider()
-
-
-        total_col1, total_col2 = st.columns(2)
-
-
-
-        with total_col1:
-
-            st.metric(
-
-                "Total Purchase Amount",
-
-                money(total_amount)
-
-            )
-
-
-
-        with total_col2:
-
-            st.metric(
-
-                "Total Items",
-
-                len(cart)
-
-            )
-
-
-
-        # ----------------------------------------------------------------------
-        # REMOVE ITEM
-        # ----------------------------------------------------------------------
-
-        st.subheader(
-            "🗑 Remove Item"
-        )
-
-
-        remove_options = {
-
-            f"{i+1}. {item['product_name']}":
-                i
-
-            for i, item in enumerate(cart)
-
+    
+    state = get_state()
+    target = container or ui.column()
+    
+    with target:
+        # Show success message if exists
+        if state.message:
+            ui.notify(state.message, type='positive', position='top', timeout=5000)
+            state.message = None
+        
+        ui.label('📦 Enterprise Purchase Receive').classes('text-3xl font-bold mb-4')
+        
+        # Load data
+        try:
+            suppliers = get_suppliers()
+            warehouses = get_warehouses()
+            products = get_products()
+        except Exception as e:
+            ui.notify(f'Data Loading Error: {e}', type='error', position='top')
+            return
+        
+        if not suppliers:
+            ui.notify('Supplier မရှိပါ', type='warning', position='top')
+            return
+        
+        if not warehouses:
+            ui.notify('Warehouse မရှိပါ', type='warning', position='top')
+            return
+        
+        if not products:
+            ui.notify('Product မရှိပါ', type='warning', position='top')
+            return
+        
+        cart_exists = len(state.cart) > 0
+        
+        # ======================================================================
+        # PURCHASE INFORMATION
+        # ======================================================================
+        
+        ui.label('🏭 Purchase Information').classes('text-xl font-bold mb-4')
+        
+        # Supplier selection
+        supplier_options = {
+            supplier_name(s): s
+            for s in suppliers
         }
-
-
-
-        remove_label = st.selectbox(
-
-            "Select item to remove",
-
-            options=list(remove_options.keys())
-
-        )
-
-
-
-        if st.button(
-
-            "Remove Selected Item",
-
-            use_container_width=True
-
-        ):
-
-
-            remove_index = remove_options[
-                remove_label
-            ]
-
-
-            st.session_state.purchase_cart.pop(
-                remove_index
-            )
-
-
-            st.success(
-                "Item removed"
-            )
-
-
-            st.rerun()
-
-
-
-        # ----------------------------------------------------------------------
-        # PURCHASE PREVIEW
-        # ----------------------------------------------------------------------
-
-        st.divider()
-
-
-        st.subheader(
-
-            "📊 Stock Receive Preview"
-
-        )
-
-
-        preview_rows = []
-
-
-
-        for item in cart:
-
-
-            preview_rows.append(
-
-                {
-
-                    "Product":
-                        item["product_name"],
-
-
-                    "Receive Qty":
-                        item["qty"],
-
-
-                    "Warehouse":
-
-                        selected_warehouse["name"],
-
-
-                    "New Stock":
-
-                        f"+{item['qty']}"
-
+        
+        supplier_select = ui.select(
+            list(supplier_options.keys()),
+            label='Supplier',
+            value=next((k for k, v in supplier_options.items() if v.get("id") == state.supplier_id), None) if state.supplier_id else None,
+        ).classes('w-full mb-4')
+        
+        if cart_exists:
+            supplier_select.disable()
+        
+        # Warehouse selection
+        warehouse_options = {
+            warehouse_name(w): w
+            for w in warehouses
+        }
+        
+        warehouse_select = ui.select(
+            list(warehouse_options.keys()),
+            label='Warehouse',
+            value=next((k for k, v in warehouse_options.items() if v.get("id") == state.warehouse_id), None) if state.warehouse_id else None,
+        ).classes('w-full mb-4')
+        
+        if cart_exists:
+            warehouse_select.disable()
+        
+        # Update state if cart empty
+        if not cart_exists:
+            if supplier_select.value:
+                state.supplier_id = supplier_options[supplier_select.value]["id"]
+            if warehouse_select.value:
+                state.warehouse_id = warehouse_options[warehouse_select.value]["id"]
+        
+        ui.separator().classes('my-4')
+        
+        # ======================================================================
+        # ADD PRODUCT SECTION
+        # ======================================================================
+        
+        ui.label('➕ Add Product').classes('text-xl font-bold mb-4')
+        
+        with ui.card().classes('w-full p-4 mb-4'):
+            # Product selection
+            product_options = {
+                f"{product_name(p)} ({p.get('sku','')})": p
+                for p in products
+            }
+            
+            product_select = ui.select(
+                list(product_options.keys()),
+                label='Product',
+            ).classes('w-full mb-4')
+            
+            with ui.row().classes('w-full gap-4 flex-wrap'):
+                with ui.column().classes('flex-1 min-w-[200px]'):
+                    quantity_input = ui.number(
+                        'Quantity',
+                        min=0.01,
+                        value=1.00,
+                        step=1.00,
+                    ).classes('w-full')
+                
+                with ui.column().classes('flex-1 min-w-[200px]'):
+                    cost_input = ui.number(
+                        'Cost Price',
+                        min=0.0,
+                        value=0.0,
+                        step=0.01,
+                    ).classes('w-full')
+            
+            add_btn = ui.button(
+                '➕ Add To Cart',
+                on_click=lambda: handle_add_to_cart(
+                    product_options[product_select.value],
+                    quantity_input.value,
+                    cost_input.value,
+                    state,
+                    add_btn
+                )
+            ).classes('w-full bg-primary text-white mt-4')
+        
+        # ======================================================================
+        # PURCHASE CART
+        # ======================================================================
+        
+        ui.label('🛒 Purchase Cart').classes('text-xl font-bold mb-4')
+        
+        cart_container = ui.column().classes('w-full')
+        
+        def render_cart():
+            """Render purchase cart."""
+            cart_container.clear()
+            
+            cart = state.cart
+            
+            if not cart:
+                with cart_container:
+                    ui.label('Purchase Cart is empty.').classes('text-gray-500')
+                return
+            
+            with cart_container:
+                # Cart table
+                cart_display = []
+                total_amount = Decimal("0.00")
+                
+                for idx, item in enumerate(cart):
+                    total_amount += item["total"]
+                    cart_display.append({
+                        "No": idx + 1,
+                        "Product": item["product_name"],
+                        "SKU": item.get("sku", ""),
+                        "Quantity": f"{item['qty']:,.2f}",
+                        "Cost": money(item["cost"]),
+                        "Total": money(item["total"]),
+                    })
+                
+                columns = [
+                    {'name': col, 'label': col, 'field': col, 'sortable': True}
+                    for col in cart_display[0].keys()
+                ]
+                
+                ui.table(
+                    columns=columns,
+                    rows=cart_display,
+                    row_key='No',
+                ).classes('w-full mb-4')
+                
+                # Total
+                with ui.row().classes('w-full gap-4 flex-wrap mb-4'):
+                    with ui.card().classes('p-4 flex-1 min-w-[200px] bg-blue-50'):
+                        ui.label('Total Purchase Amount').classes('text-sm text-gray-600')
+                        ui.label(money(total_amount)).classes('text-xl font-bold text-blue-700')
+                    
+                    with ui.card().classes('p-4 flex-1 min-w-[150px] bg-green-50'):
+                        ui.label('Total Items').classes('text-sm text-gray-600')
+                        ui.label(str(len(cart))).classes('text-xl font-bold text-green-700')
+                
+                # Remove item
+                ui.label('🗑 Remove Item').classes('font-bold mb-2')
+                
+                remove_options = {
+                    f"{i+1}. {item['product_name']}": i
+                    for i, item in enumerate(cart)
                 }
+                
+                with ui.row().classes('w-full gap-2 items-end'):
+                    remove_select = ui.select(
+                        list(remove_options.keys()),
+                        label='Select item to remove',
+                    ).classes('flex-1')
+                    
+                    remove_btn = ui.button(
+                        'Remove Selected Item',
+                        on_click=lambda: handle_remove(
+                            remove_options[remove_select.value],
+                            state,
+                            render_cart
+                        )
+                    ).classes('bg-red-500 text-white')
+                
+                ui.separator().classes('my-4')
+                
+                # Preview
+                ui.label('📊 Stock Receive Preview').classes('font-bold mb-2')
+                
+                preview_rows = []
+                for item in cart:
+                    preview_rows.append({
+                        "Product": item["product_name"],
+                        "Receive Qty": f"{item['qty']:,.2f}",
+                        "Warehouse": warehouse_select.value or "N/A",
+                        "New Stock": f"+{item['qty']:,.2f}",
+                    })
+                
+                preview_columns = [
+                    {'name': col, 'label': col, 'field': col}
+                    for col in preview_rows[0].keys()
+                ]
+                
+                ui.table(
+                    columns=preview_columns,
+                    rows=preview_rows,
+                    row_key='Product',
+                ).classes('w-full mb-4')
+        
+        # Initial render
+        render_cart()
+        
+        # ======================================================================
+        # COMPLETE PURCHASE
+        # ======================================================================
+        
+        if state.cart:
+            ui.separator().classes('my-4')
+            
+            complete_btn = ui.button(
+                '💾 Complete Purchase',
+                on_click=lambda: handle_complete_purchase(state, complete_btn, render_cart)
+            ).classes('w-full bg-green-500 text-white font-semibold py-2 mb-2')
+        
+        # Clear cart button
+        clear_btn = ui.button(
+            '🗑 Clear Purchase Cart',
+            on_click=lambda: handle_clear_cart(state, render_cart)
+        ).classes('w-full bg-gray-500 text-white')
 
-            )
+
+def handle_add_to_cart(product: Dict, qty_val: float, cost_val: float, state: PurchaseState, add_btn: Any):
+    """Handle add to cart."""
+    try:
+        qty = Decimal(str(qty_val))
+        cost = Decimal(str(cost_val))
+        
+        found = False
+        
+        for item in state.cart:
+            if item["product_id"] == product["id"]:
+                item["qty"] += qty
+                item["total"] = item["qty"] * item["cost"]
+                found = True
+                break
+        
+        if not found:
+            state.cart.append({
+                "product_id": product["id"],
+                "product_name": product_name(product),
+                "sku": product.get("sku", ""),
+                "qty": qty,
+                "cost": cost,
+                "total": qty * cost,
+            })
+        
+        ui.notify('Product added to purchase cart', type='positive', position='top')
+    
+    except Exception as e:
+        ui.notify(f'Error adding product: {e}', type='error', position='top')
 
 
-
-        show_table(
-            preview_rows
-        )
-
-
-
-    else:
-
-
-        st.info(
-            "Purchase Cart is empty."
-        )
+def handle_remove(index: int, state: PurchaseState, render_cart: callable):
+    """Handle remove item from cart."""
+    try:
+        if 0 <= index < len(state.cart):
+            state.cart.pop(index)
+            ui.notify('Item removed', type='positive', position='top')
+            render_cart()
+    except Exception as e:
+        ui.notify(f'Error removing item: {e}', type='error', position='top')
 
 
-# ==============================================================================
-# PART 3/3
-# PURCHASE RECEIVE EXECUTION
-# ==============================================================================
-
-
-    # ==========================================================================
-    # COMPLETE PURCHASE
-    # ==========================================================================
-
-    if cart:
-
-
-        st.divider()
-
-
-        if st.button(
-
-            "💾 Complete Purchase",
-
-            type="primary",
-
-            use_container_width=True
-
-        ):
-
-
-            success = []
-
-            errors = []
-
-
-
-            supplier_id = (
-                st.session_state.purchase_supplier_id
-            )
-
-
-            warehouse_id = (
-                st.session_state.purchase_warehouse_id
-            )
-
-
-
-            if not supplier_id or not warehouse_id:
-
-                st.error(
-                    "Supplier or Warehouse missing."
+def handle_complete_purchase(state: PurchaseState, complete_btn: Any, render_cart: callable):
+    """Handle complete purchase."""
+    try:
+        complete_btn.disable()
+        complete_btn.text = '⏳ Processing...'
+        
+        success = []
+        errors = []
+        
+        supplier_id = state.supplier_id
+        warehouse_id = state.warehouse_id
+        
+        if not supplier_id or not warehouse_id:
+            ui.notify('Supplier or Warehouse missing.', type='error', position='top')
+            return
+        
+        user = get_current_user()
+        user_id = user.get("id") if user else None
+        
+        for item in state.cart:
+            try:
+                result = purchase_receive_rpc(
+                    product_id=int(item["product_id"]),
+                    supplier_id=int(supplier_id),
+                    warehouse_id=int(warehouse_id),
+                    qty=int(item["qty"]),
+                    cost=float(item["cost"]),
+                    remarks="Purchase Receive",
+                    user_id=user_id,
                 )
-
-                st.stop()
-
-
-
-            # --------------------------------------------------------------
-            # RECEIVE EACH ITEM
-            # --------------------------------------------------------------
-
-            for item in cart:
-
-
-                try:
-
-
-                    result = purchase_receive_rpc(
-
-                        product_id=int(item["product_id"]),
-
-                        supplier_id=int(supplier_id),
-
-                        warehouse_id=int(warehouse_id),
-
-                        qty=int(item["qty"]),
-
-                        cost=float(item["cost"]),
-
-                        remarks="Purchase Receive",
-
-                        user_id=st.session_state.get(
-                            "user_id"
-                        )
-
-                    )
-
-
-
-                    # ------------------------------------------------------
-                    # SUCCESS CHECK
-                    # ------------------------------------------------------
-
-                    if isinstance(result, dict):
-
-
-                        if result.get("success"):
-
-
-                            success.append(
-
-                                item["product_name"]
-
-                            )
-
-
-                        else:
-
-
-                            errors.append(
-
-                                f"{item['product_name']} : "
-                                +
-                                str(
-                                    result.get(
-                                        "message",
-                                        "Failed"
-                                    )
-                                )
-
-                            )
-
-
-                    elif result is True:
-
-
-                        success.append(
-
-                            item["product_name"]
-
-                        )
-
-
+                
+                if isinstance(result, dict):
+                    if result.get("success"):
+                        success.append(item["product_name"])
                     else:
-
-
-                        errors.append(
-
-                            f"{item['product_name']} : RPC Failed"
-
-                        )
-
-
-
-                except Exception as e:
-
-
-                    errors.append(
-
-                        f"{item['product_name']} : {e}"
-
-                    )
-
-
-
-            # --------------------------------------------------------------
-            # RESULT
-            # --------------------------------------------------------------
-
-            if success:
-
-
-                try:
-
-
-                    create_audit_log(
-
-                        action="PURCHASE_RECEIVE",
-
-                        details=(
-
-                            "Purchase received products: "
-
-                            +
-
-                            ", ".join(success)
-
-                        )
-
-                    )
-
-
-                except Exception:
-
-                    pass
-
-
-
-                st.session_state.purchase_message = (
-
-                    "✅ Purchase Completed Successfully\n\n"
-
-                    +
-
-                    ", ".join(success)
-
+                        errors.append(f"{item['product_name']} : {result.get('message', 'Failed')}")
+                elif result is True:
+                    success.append(item["product_name"])
+                else:
+                    errors.append(f"{item['product_name']} : RPC Failed")
+            
+            except Exception as e:
+                errors.append(f"{item['product_name']} : {e}")
+        
+        if success:
+            try:
+                create_audit_log(
+                    action="PURCHASE_RECEIVE",
+                    details="Purchase received products: " + ", ".join(success)
                 )
+            except Exception:
+                pass
+            
+            state.message = "✅ Purchase Completed Successfully - " + ", ".join(success)
+            state.cart = []
+            state.supplier_id = None
+            state.warehouse_id = None
+            
+            ui.notify(state.message, type='positive', position='top', timeout=5000)
+            render_cart()
+        
+        if errors:
+            ui.notify('❌ Purchase Errors: ' + " | ".join(errors), type='error', position='top', timeout=10000)
+    
+    except Exception as e:
+        ui.notify(f'Purchase error: {e}', type='error', position='top')
+    
+    finally:
+        complete_btn.enable()
+        complete_btn.text = '💾 Complete Purchase'
 
 
-                st.session_state.purchase_cart = []
-
-                st.session_state.purchase_supplier_id = None
-
-                st.session_state.purchase_warehouse_id = None
-
-
-                st.rerun()
-
-
-
-            if errors:
-
-
-                st.error(
-
-                    "❌ Purchase Errors\n\n"
-
-                    +
-
-                    "\n".join(errors)
-
-                )
-
-
-
-    # ==========================================================================
-    # CLEAR CART
-    # ==========================================================================
-
-
-    if st.button(
-
-        "🗑 Clear Purchase Cart",
-
-        use_container_width=True
-
-    ):
-
-
-        st.session_state.purchase_cart = []
-
-        st.session_state.purchase_supplier_id = None
-
-        st.session_state.purchase_warehouse_id = None
-
-
-        st.success(
-            "Cart cleared"
-        )
-
-
-        st.rerun()
-
+def handle_clear_cart(state: PurchaseState, render_cart: callable):
+    """Handle clear cart."""
+    state.cart = []
+    state.supplier_id = None
+    state.warehouse_id = None
+    
+    ui.notify('Cart cleared', type='info', position='top')
+    render_cart()
 
 
 # ==============================================================================
-# DIRECT RUN
+# ENTRY POINT
 # ==============================================================================
 
 if __name__ == "__main__":
-
     run()
