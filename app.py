@@ -1,9 +1,6 @@
 # ==============================================================================
-# app.py
-# ERP ENTERPRISE APPLICATION CONTROLLER
-# SAFE PAGE ROUTER
-# MULTI-TENANT READY
-# NICE GUI VERSION
+# app.py - ERP ENTERPRISE APPLICATION CONTROLLER
+# NICE GUI VERSION - Hugging Face Compatible
 # ==============================================================================
 
 import os
@@ -367,16 +364,6 @@ def main_page(client: Client):
     else:
         create_main_app(main_container, session)
 
-@ui.page('/login')
-def login_page_route(client: Client):
-    """Login page route"""
-    
-    session = get_session(client)
-    
-    # Create login container
-    with ui.column().classes('w-full min-h-screen bg-gray-100'):
-        create_login_page(ui.column(), session)
-
 # ==============================================================================
 # CLIENT CONNECTION HANDLING
 # ==============================================================================
@@ -402,18 +389,18 @@ def handle_disconnect(client: Client):
         del session_states[client_id]
 
 # ==============================================================================
-# START SERVER
+# START SERVER - Hugging Face Compatible
 # ==============================================================================
 
 if __name__ in {"__main__", "__mp_main__"}:
-    # Configure NiceGUI
+    # Hugging Face configuration
     ui.run(
         title='Myanmar ERP Enterprise',
         favicon='🏭',
         host='0.0.0.0',
-        port=8080,
+        port=7860,  # ✅ Hugging Face port
         reload=False,
-        show=True,
+        show=False,  # ✅ Hugging Face မှာ False ဖြစ်ရမယ်
         uvicorn_logging_level='info',
         dark=False,
     )
