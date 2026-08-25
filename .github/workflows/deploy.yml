@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4  # ✅ v3 ကနေ v4 ပြောင်း
+        uses: actions/checkout@v4
         with:
           lfs: true
       
@@ -30,10 +30,9 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip install huggingface-hub
-          huggingface-cli login --token $HF_TOKEN
           
-          # Clone HF Space
-          git clone https://huggingface.co/spaces/aungkhaingtun/NiceGUI hf-space
+          # Clone HF Space with token
+          git clone https://aungkhaingtun:$HF_TOKEN@huggingface.co/spaces/aungkhaingtun/NiceGUI hf-space
           
           # Copy files
           rsync -av --exclude='.git' --exclude='.github' --exclude='hf-space' ./ hf-space/
@@ -44,4 +43,4 @@ jobs:
           git config user.name "GitHub Actions"
           git add .
           git commit -m "Deploy from GitHub" || echo "No changes"
-          git push
+          git push https://aungkhaingtun:$HF_TOKEN@huggingface.co/spaces/aungkhaingtun/NiceGUI main
